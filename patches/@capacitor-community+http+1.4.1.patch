@@ -1,0 +1,12 @@
+diff --git a/node_modules/@capacitor-community/http/android/build.gradle b/node_modules/@capacitor-community/http/android/build.gradle
+index 35ab45d..9b9b6b3 100644
+--- a/node_modules/@capacitor-community/http/android/build.gradle
++++ b/node_modules/@capacitor-community/http/android/build.gradle
+@@ -17,6 +17,7 @@ buildscript {
+ apply plugin: 'com.android.library'
+ 
+ android {
++     namespace "com.capacitorcommunity.http"
+     compileSdkVersion project.hasProperty('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 29
+     defaultConfig {
+         minSdkVersion project.hasProperty('minSdkVersion') ? rootProject.ext.minSdkVersion : 21

@@ -1,0 +1,16 @@
+.rotate-container {
+
+    width: 100vh;
+    height: 100vw;
+    transform: rotate(90deg) translateY(-100%);
+}
+
+.pdf-inner {
+    transform-origin: top left;
+}
+
+th,
+td {
+    padding: 4px !important;
+    font-size: 10px;
+}

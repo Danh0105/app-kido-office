@@ -43,3 +43,5 @@ src/pages/Display/
 src/pages/Display/
 dist/
 www/
+android/
+ios/

@@ -22,6 +22,7 @@ import {
   suggestNotificationApi,
   weeklyPlanNotificationApi,
 } from "@/service/notification";
+import ReportDetailPopup from "@/components/ReportDetailPopup";
 
 // ================= MENU =================
 type NotificationStats = Record<
@@ -73,6 +74,7 @@ export default function Home() {
 
   const LIMIT = 10;
 
+  const [selectedReportId, setSelectedReportId] = useState<number | null>(null);
   const [tab, setTab] = useState<"unread" | "read">("unread");
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -163,11 +165,11 @@ export default function Home() {
       const requests = [
         policyNotificationApi.getAll(1, LIMIT, tab),
         suggestNotificationApi.getAll(1, LIMIT, tab),
+        reportNotificationApi.getAll(1, LIMIT, tab),
       ];
 
       if (role !== "employee") {
         requests.push(
-          reportNotificationApi.getAll(1, LIMIT, tab),
           weeklyPlanNotificationApi.getAll(1, LIMIT, tab),
         );
       }
@@ -231,6 +233,8 @@ export default function Home() {
 
     socket.on("report-notification:new", handleNew);
 
+    socket.on("notification:new", handleNew);
+
     socket.on("weekly-plan:new", handleNew);
 
     return () => {
@@ -239,6 +243,8 @@ export default function Home() {
       socket.off("suggest-notification:new", handleNew);
 
       socket.off("report-notification:new", handleNew);
+
+      socket.off("notification:new", handleNew);
 
       socket.off("weekly-plan:new", handleNew);
     };
@@ -339,7 +345,9 @@ export default function Home() {
         navigate(`/director/suggest-review/${noti.entityId}`);
         break;
       case "REPORT":
-        navigate(`/director/daily-report/${noti.senderId}`);
+        if (noti.entityId) {
+          setSelectedReportId(noti.entityId);
+        }
         break;
 
       case "WEEKLY_PLAN":
@@ -360,10 +368,21 @@ export default function Home() {
     notificationStats,
   };
 
-  return isDesktop ? (
-    <HomeDesktop {...commonProps} menus={menus} />
-  ) : (
-    <HomeMobile {...commonProps} menus={menus} />
+  return (
+    <>
+      {isDesktop ? (
+        <HomeDesktop {...commonProps} menus={menus} />
+      ) : (
+        <HomeMobile {...commonProps} menus={menus} />
+      )}
+
+      {selectedReportId && (
+        <ReportDetailPopup
+          reportId={selectedReportId}
+          onClose={() => setSelectedReportId(null)}
+        />
+      )}
+    </>
   );
 }
 

@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import BottomNav from "../../layout/BottomNav";
 import AppHeader from "@/layout/Header";
 import BannerSlider from "@/layout/Banner";
+import ReportDetailPopup from "@/components/ReportDetailPopup";
 import expense from "./static/expense.png";
 import { getSocket, getSuggestSocket } from "../../utils/socket";
 import { policiesApi } from "@/service/policy";
@@ -89,6 +90,8 @@ type NotificationStats = Record<
 export default function Home() {
   const navigate = useNavigate();
   const isDesktop = useIsDesktop();
+
+  const [selectedReportId, setSelectedReportId] = useState<number | null>(null);
 
   const LIMIT = 5;
   const [notificationStats, setNotificationStats] = useState<NotificationStats>(
@@ -212,6 +215,8 @@ export default function Home() {
 
     socket.on("report-notification:new", handleNew);
 
+    socket.on("notification:new", handleNew);
+
     socket.on("weekly-plan:new", handleNew);
 
     return () => {
@@ -220,6 +225,8 @@ export default function Home() {
       socket.off("suggest-notification:new", handleNew);
 
       socket.off("report-notification:new", handleNew);
+
+      socket.off("notification:new", handleNew);
 
       socket.off("weekly-plan:new", handleNew);
     };
@@ -291,7 +298,6 @@ export default function Home() {
   // ================= CLICK =================
   const handleClickNotification = async (noti: Notification) => {
     if (!noti.entityId) return;
-    console.log(noti);
     if (!noti.isRead) {
       await notificationApi.markAsRead(noti.id);
       setNotifications((prev) =>
@@ -320,7 +326,9 @@ export default function Home() {
         navigate(`/director/suggest-review/${noti.entityId}`);
         break;
       case "REPORT":
-        navigate(`/director/daily-report/${noti.senderId}`);
+        if (noti.entityId) {
+          setSelectedReportId(noti.entityId);
+        }
         break;
 
       case "WEEKLY_PLAN":
@@ -341,10 +349,21 @@ export default function Home() {
     notificationStats,
   };
 
-  return isDesktop ? (
-    <HomeDesktop {...commonProps} />
-  ) : (
-    <HomeMobile {...commonProps} />
+  return (
+    <>
+      {isDesktop ? (
+        <HomeDesktop {...commonProps} />
+      ) : (
+        <HomeMobile {...commonProps} />
+      )}
+
+      {selectedReportId && (
+        <ReportDetailPopup
+          reportId={selectedReportId}
+          onClose={() => setSelectedReportId(null)}
+        />
+      )}
+    </>
   );
 }
 

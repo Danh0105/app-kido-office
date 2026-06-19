@@ -150,7 +150,7 @@ export default function SchoolList() {
               </div>
               {/* Actions */}
               <div className="pt-2">
-                <button
+                {/*             <button
                   onClick={(e) => {
                     e.stopPropagation();
 
@@ -164,7 +164,7 @@ export default function SchoolList() {
                   className="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded-xl font-medium transition active:scale-95"
                 >
                   QL chi tiền
-                </button>
+                </button> */}
               </div>
             </div>
           ))}

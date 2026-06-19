@@ -15,9 +15,11 @@
     "Samsung >= 5"
   ],
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
+    "dev": "cross-env NODE_ENV=development vite --host 0.0.0.0",
+    "dev:local": "cross-env NODE_ENV=development vite",
+    "build": "cross-env NODE_ENV=production vite build",
+    "build:dev": "cross-env NODE_ENV=development vite build --mode development",
+    "preview": "vite preview --host 0.0.0.0",
     "postinstall": "patch-package",
     "sync:android": "npx cap sync android && rimraf android/capacitor-cordova-android-plugins"
   },

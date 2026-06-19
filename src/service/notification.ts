@@ -158,6 +158,38 @@ export const reportNotificationApi = {
 
         return res.data;
     },
+
+    getGrouped: async (
+        tab?: 'unread' | 'read',
+        date?: string,
+    ) => {
+        const res = await api.get(
+            '/notifications/report/grouped',
+            { params: { tab, date: date || undefined } },
+        );
+        return res.data;
+    },
+
+    getBySender: async (
+        senderId: number,
+        page = 1,
+        limit = 20,
+        tab?: 'unread' | 'read',
+        date?: string,
+    ) => {
+        const res = await api.get(
+            `/notifications/report/sender/${senderId}`,
+            { params: { page, limit, tab, date: date || undefined } },
+        );
+        return res.data;
+    },
+
+    markAllAsReadBySender: async (senderId: number) => {
+        const res = await api.patch(
+            `/notifications/report/sender/${senderId}/read-all`,
+        );
+        return res.data;
+    },
 };
 
 // ==========================================================

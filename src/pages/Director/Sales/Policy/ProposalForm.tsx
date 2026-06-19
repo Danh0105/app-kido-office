@@ -1,175 +1,305 @@
 import { useEffect } from "react";
 
+type ProposalFormData = {
+  subject: string;
+  date: string;
+  consultant: string;
+  phone: string;
+  schoolYear: string;
+  totalLessons: string;
+  totalStudents: string;
+  school: string;
+  address: string;
+  representative: string;
+  scale: string;
+  termHD: number;
+  termPL: number;
+  contractHD?: string;
+  contract3: string;
+  startDate: string;
+  contractNo: string;
+  mst: string;
+  schoolPhone: string;
+};
+
+type ProposalFormProps = {
+  form: ProposalFormData;
+  setForm: React.Dispatch<React.SetStateAction<ProposalFormData>>;
+};
+
 const Input = ({
-    value,
-    onChange,
-    className = "",
+  value,
+  onChange,
+  className = "",
+  placeholder = "",
 }: {
-    value: string;
-    onChange: (v: string) => void;
-    className?: string;
+  value: string;
+  onChange: (v: string) => void;
+  className?: string;
+  placeholder?: string;
 }) => (
-    <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={`border-b border-gray-400 outline-none bg-transparent px-1 ${className}`}
-    />
+  <input
+    value={value || ""}
+    onChange={(e) => onChange(e.target.value)}
+    placeholder={placeholder}
+    className={`min-w-0 border-b border-gray-400 bg-transparent px-1 py-0.5 outline-none focus:border-blue-600 ${className}`}
+  />
 );
 
 const InputY = ({
-    value,
-    onChange,
+  value,
+  onChange,
 }: {
-    value: number;
-    onChange: (v: number) => void;
+  value: number;
+  onChange: (v: number) => void;
 }) => (
-    <input
-        type="number"
-        value={value || ""}
-        onChange={(e) => onChange(Number(e.target.value || 0))}
-        className="w-12 text-center border-b border-gray-400 outline-none bg-transparent"
-    />
+  <input
+    type="number"
+    value={value || ""}
+    onChange={(e) => onChange(Number(e.target.value || 0))}
+    className="mx-1 w-12 border-b border-gray-400 bg-transparent text-center outline-none focus:border-blue-600"
+  />
 );
 
 const InputYearRange = ({
-    value,
-    onChange,
+  value,
+  onChange,
 }: {
-    value: string;
-    onChange: (v: string) => void;
+  value: string;
+  onChange: (v: string) => void;
 }) => (
-    <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="2025 - 2026"
-        className="w-32 text-center border-b border-black outline-none bg-transparent"
-    />
+  <input
+    value={value || ""}
+    onChange={(e) => onChange(e.target.value)}
+    placeholder="2025 - 2026"
+    className="w-32 border-b border-black bg-transparent text-center outline-none focus:border-blue-600"
+  />
 );
 
-export default function ProposalForm({ form, setForm }) {
-    const handleChange = (field: string, value: string) => {
-        setForm((prev) => ({ ...prev, [field]: value }));
-    };
+export default function ProposalForm({ form, setForm }: ProposalFormProps) {
+  const handleChange = (field: keyof ProposalFormData, value: string) => {
+    setForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
 
-    const handleChangeY = (field: string, value: number) => {
-        setForm((prev) => ({ ...prev, [field]: value }));
-    };
-    const getStartYear = (schoolYear: string) => {
-        const match = schoolYear.match(/\d{4}/);
-        return match ? Number(match[0]) : new Date().getFullYear();
-    };
-    const calculateEndYear = (schoolYear: string, termHD: number) => {
-        const startYear = getStartYear(schoolYear);
-        return startYear + termHD;
-    };
-    const endYear = calculateEndYear(form.schoolYear, Number(form.termHD || 0));
-    useEffect(() => {
-        if (!form.schoolYear) return;
+  const handleChangeY = (field: keyof ProposalFormData, value: number) => {
+    setForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
 
-        const startHD = getStartYear(form.schoolYear);
+  const getStartYear = (schoolYear: string) => {
+    const match = schoolYear?.match(/\d{4}/);
+    return match ? Number(match[0]) : new Date().getFullYear();
+  };
 
-        const startPL = startHD;
-        const endPL = startPL + Number(form.termPL || 0);
+  const calculateEndYear = (schoolYear: string, term: number) => {
+    const startYear = getStartYear(schoolYear);
+    return startYear + Number(term || 0);
+  };
 
-        handleChange("contract3", `${startPL} - ${endPL}`);
-    }, [form.schoolYear, form.termHD, form.termPL]);
-    return (
-        <div className="border-2 border-black p-4 text-[14px] bg-white font-serif">
-            {/* HEADER */}
-            <div className="text-center mb-4">
-                <h1 className="text-blue-600 font-bold text-lg tracking-wide">
-                    BẢN ĐỀ NGHỊ CHÍNH SÁCH MÔN{" "}
-                    <Input value={form.subject} onChange={(v) => handleChange("subject", v)} />
-                </h1>
+  const startYear = getStartYear(form.schoolYear);
+  const endHD = calculateEndYear(form.schoolYear, Number(form.termHD || 0));
+  const endPL = calculateEndYear(form.schoolYear, Number(form.termPL || 0));
 
-                <p className="mt-2">
-                    Hôm nay, ngày{" "}
-                    <Input value={form.date} onChange={(v) => handleChange("date", v)} className="w-32 text-center" />
-                </p>
-            </div>
+  useEffect(() => {
+    if (!form.schoolYear) return;
 
-            <div className="grid grid-cols-2 gap-6">
-                {/* LEFT */}
-                <div>
-                    <p className="font-bold mb-1">I. Thông tin người đề nghị :</p>
+    setForm((prev) => ({
+      ...prev,
+      contractHD: `${startYear} - ${endHD}`,
+      contract3: `${startYear} - ${endPL}`,
+    }));
+  }, [
+    form.schoolYear,
+    form.termHD,
+    form.termPL,
+    startYear,
+    endHD,
+    endPL,
+    setForm,
+  ]);
 
-                    <p>
-                        Họ và tên tư vấn :
-                        <Input value={form.consultant} onChange={(v) => handleChange("consultant", v)} className="ml-2" />
-                    </p>
+  return (
+    <div
+      className="w-full overflow-x-auto rounded-md border-2 border-black bg-white p-4 text-[14px]"
+      style={{ fontFamily: "'Times New Roman', Times, serif" }}
+    >
+      <div className="mx-auto min-w-[760px] max-w-[1100px]">
+        {/* HEADER */}
+        <div className="mb-5 text-center">
+          <h1 className="text-lg font-bold tracking-wide text-blue-600">
+            BẢN ĐỀ NGHỊ CHÍNH SÁCH MÔN{" "}
+            <Input
+              value={form.subject}
+              onChange={(v) => handleChange("subject", v)}
+              className="w-48 text-center font-bold uppercase"
+            />
+          </h1>
 
-                    <p>
-                        SĐT liên hệ :
-                        <Input value={form.phone} onChange={(v) => handleChange("phone", v)} className="ml-2" />
-                    </p>
-
-                    <p className="italic mt-1">Xác nhận những thông tin sau:</p>
-
-                    <p className="font-bold mt-2">
-                        II. Thời lượng triển khai chương trình trong năm học:
-                    </p>
-
-                    <div className="ml-2 mt-1 space-y-1">
-                        <p>
-                            Tổng số tiết năm học{" "}
-                            <InputYearRange
-                                value={form.schoolYear}
-                                onChange={(v) => handleChange("schoolYear", v)}
-                            />
-                            :
-                            <Input
-                                value={form.totalLessons}
-                                onChange={(v) => handleChange("totalLessons", v)}
-                                className="ml-2 w-20 text-center"
-                            />
-                        </p>
-
-                        <p>
-                            Tổng số học sinh:
-                            <Input value={form.totalStudents} onChange={(v) => handleChange("totalStudents", v)} className="ml-2 w-28 text-center" />
-                        </p>
-                    </div>
-                </div>
-
-                {/* RIGHT */}
-                <div>
-                    <p className="font-bold mb-1">III. Thông tin Trường / Hợp đồng</p>
-
-                    <div className="grid grid-cols-2 gap-y-2">
-                        <p>Trường:</p>
-                        <Input value={form.school} onChange={(v) => handleChange("school", v)} />
-
-                        <p>Địa chỉ:</p>
-                        <Input value={form.address} onChange={(v) => handleChange("address", v)} />
-
-                        <p>Người đại diện:</p>
-                        <Input value={form.representative} onChange={(v) => handleChange("representative", v)} />
-
-                        <p>Quy mô:</p>
-                        <Input value={form.scale} onChange={(v) => handleChange("scale", v)} />
-
-                        <p>Thời hạn HĐ (<InputY value={form.termHD} onChange={(v) => handleChangeY("termHD", v)} /> năm):</p>
-                        <Input
-                            value={`${getStartYear(form.schoolYear)} - ${endYear}`}
-                            onChange={(v) => handleChange("schoolYear", v)}
-                        />
-                        <p>Thời hạn PL (<InputY value={form.termPL} onChange={(v) => handleChangeY("termPL", v)} /> năm):</p>
-                        <Input value={form.contract3} onChange={(v) => handleChange("schoolYear", v)} />
-
-                        <p>Ngày khai giảng:</p>
-                        <Input value={form.startDate} onChange={(v) => handleChange("startDate", v)} />
-
-                        <p>Hợp đồng số:</p>
-                        <Input value={form.contractNo} onChange={(v) => handleChange("contractNo", v)} />
-
-                        <p>MST:</p>
-                        <Input value={form.mst} onChange={(v) => handleChange("mst", v)} />
-
-                        <p>SĐT:</p>
-                        <Input value={form.schoolPhone} onChange={(v) => handleChange("schoolPhone", v)} />
-                    </div>
-                </div>
-            </div>
+          <p className="mt-2">
+            Hôm nay, ngày{" "}
+            <Input
+              value={form.date}
+              onChange={(v) => handleChange("date", v)}
+              className="w-40 text-center"
+              placeholder="dd/mm/yyyy"
+            />
+          </p>
         </div>
-    );
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* LEFT */}
+          <div className="space-y-3">
+            <p className="font-bold">I. Thông tin người đề nghị:</p>
+
+            <div className="grid grid-cols-[150px_1fr] items-end gap-2">
+              <span>Họ và tên tư vấn:</span>
+              <Input
+                value={form.consultant}
+                onChange={(v) => handleChange("consultant", v)}
+                className="w-full"
+              />
+
+              <span>SĐT liên hệ:</span>
+              <Input
+                value={form.phone}
+                onChange={(v) => handleChange("phone", v)}
+                className="w-full"
+              />
+            </div>
+
+            <p className="italic">Xác nhận những thông tin sau:</p>
+
+            <p className="font-bold">
+              II. Thời lượng triển khai chương trình trong năm học:
+            </p>
+
+            <div className="space-y-3 pl-2">
+              <div className="flex flex-wrap items-end gap-2">
+                <span>Tổng số tiết năm học</span>
+
+                <InputYearRange
+                  value={form.schoolYear}
+                  onChange={(v) => handleChange("schoolYear", v)}
+                />
+
+                <span>:</span>
+
+                <Input
+                  value={form.totalLessons}
+                  onChange={(v) => handleChange("totalLessons", v)}
+                  className="w-24 text-center"
+                />
+              </div>
+
+              <div className="grid grid-cols-[150px_1fr] items-end gap-2">
+                <span>Tổng số học sinh:</span>
+                <Input
+                  value={form.totalStudents}
+                  onChange={(v) => handleChange("totalStudents", v)}
+                  className="w-full text-center"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT */}
+          <div className="space-y-3">
+            <p className="font-bold">III. Thông tin Trường / Hợp đồng</p>
+
+            <div className="grid grid-cols-[145px_1fr] items-end gap-x-3 gap-y-3">
+              <span>Trường:</span>
+              <Input
+                value={form.school}
+                onChange={(v) => handleChange("school", v)}
+                className="w-full"
+              />
+
+              <span>Địa chỉ:</span>
+              <Input
+                value={form.address}
+                onChange={(v) => handleChange("address", v)}
+                className="w-full"
+              />
+
+              <span>Người đại diện:</span>
+              <Input
+                value={form.representative}
+                onChange={(v) => handleChange("representative", v)}
+                className="w-full"
+              />
+
+              <span>Quy mô:</span>
+              <Input
+                value={form.scale}
+                onChange={(v) => handleChange("scale", v)}
+                className="w-full"
+              />
+
+              <span>
+                Thời hạn HĐ (
+                <InputY
+                  value={form.termHD}
+                  onChange={(v) => handleChangeY("termHD", v)}
+                />
+                năm):
+              </span>
+              <Input
+                value={`${startYear} - ${endHD}`}
+                onChange={(v) => handleChange("contractHD", v)}
+                className="w-full text-center"
+              />
+
+              <span>
+                Thời hạn PL (
+                <InputY
+                  value={form.termPL}
+                  onChange={(v) => handleChangeY("termPL", v)}
+                />
+                năm):
+              </span>
+              <Input
+                value={form.contract3 || `${startYear} - ${endPL}`}
+                onChange={(v) => handleChange("contract3", v)}
+                className="w-full text-center"
+              />
+
+              <span>Ngày khai giảng:</span>
+              <Input
+                value={form.startDate}
+                onChange={(v) => handleChange("startDate", v)}
+                className="w-full"
+                placeholder="dd/mm/yyyy"
+              />
+
+              <span>Hợp đồng số:</span>
+              <Input
+                value={form.contractNo}
+                onChange={(v) => handleChange("contractNo", v)}
+                className="w-full"
+              />
+
+              <span>MST:</span>
+              <Input
+                value={form.mst}
+                onChange={(v) => handleChange("mst", v)}
+                className="w-full"
+              />
+
+              <span>SĐT:</span>
+              <Input
+                value={form.schoolPhone}
+                onChange={(v) => handleChange("schoolPhone", v)}
+                className="w-full"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }

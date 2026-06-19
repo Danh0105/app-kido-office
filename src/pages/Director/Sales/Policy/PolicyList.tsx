@@ -74,6 +74,7 @@ export default function PolicyList() {
                                         user: Number(data),
                                         subjectId: item.subjectId,
                                         currentHistoryId: item.currentHistoryId,
+                                        status: item.status,
                                     }
                                 })}
                                 className={`

@@ -87,4 +87,12 @@ export const dailyReportApi = {
         const res = await api.delete(`/daily-reports/task/${taskId}`);
         return res.data;
     },
+    getMessages: async (reportId: number) => {
+        const res = await api.get(`/daily-reports/${reportId}/messages`);
+        return res.data;
+    },
+    sendMessage: async (data: { reportId: number; message: string }) => {
+        const res = await api.post(`/daily-reports/messages`, data);
+        return res.data;
+    },
 };

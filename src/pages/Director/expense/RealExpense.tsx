@@ -216,6 +216,12 @@ export default function RealExpense() {
     }
   };
   useEffect(() => {
+    if (activeSchool && selectedPeriod) {
+      handleOpenSchoolExpense(activeSchool);
+    }
+  }, [selectedPeriod]);
+
+  useEffect(() => {
     if (!selectedSchoolId || !schools.length) return;
 
     const school = schools.find((item) => item.id === selectedSchoolId);

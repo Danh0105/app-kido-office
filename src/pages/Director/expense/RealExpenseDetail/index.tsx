@@ -7,10 +7,13 @@ import Tabs from "./components/Tabs";
 import Pagination from "./components/Pagination";
 import { schoolExpenseApi } from "@/service/schoolExpense";
 import { subjectApi } from "@/service/subject.api";
-import { expenseItemApi } from "@/service/expenseItem";
+
 import { expensePeriodApi } from "@/service/expensePeriod";
+import { suggestApi } from "@/service/suggest";
+import { revenueItemApi } from "@/service/revenueItem";
+import { schoolExpenseItemApi } from "@/service/schoolExpenseItem";
+import { managementExpenseItemApi } from "@/service/managementExpenseItem";
 import ExpenseFormTable from "../component/expense/ExpenseFormTable";
-import ExpenseList from "../component/expense/ExpenseList";
 import DevicePolicyTable from "../component/policy/DevicePolicyTable";
 import CashPolicyTable from "../component/policy/CashPolicyTable";
 import TtcsTable from "../component/policy/TtcsTable";
@@ -49,6 +52,11 @@ const initialRevenueRow: RevenueRow = {
   subjectId: 0,
   invoiceAmount: 0,
   collectedDate: "",
+  paidAmount: 0,
+  paymentDate: "",
+  remainingOutsideExpense: 0,
+  payer: "",
+  note: "",
 };
 
 const initialManagementRow: ManagementRow = {
@@ -70,8 +78,6 @@ export default function RealExpenseDetail({
 
   const [currentPage, setCurrentPage] = useState(1);
 
-  const [selectedPeriod, setSelectedPeriod] = useState<any>(null);
-
   const [periods, setPeriods] = useState<any[]>([]);
 
   const [subjects, setSubjects] = useState<any[]>([]);
@@ -84,8 +90,14 @@ export default function RealExpenseDetail({
 
   const [selectedSchoolYear, setSelectedSchoolYear] = useState("");
   const [subTab, setSubTab] = useState<"expense" | "cash-policy">("expense");
+  const [suggestStats, setSuggestStats] = useState<Record<number, any>>({});
 
-  const [inputData, setInputData] = useState<InputExpenseRow>(initialInputData);
+  const [inputRows, setInputRows] = useState<InputExpenseRow[]>([
+    initialInputData,
+  ]);
+  const [savedRevenues, setSavedRevenues] = useState<any[]>([]);
+  const [savedSchoolItems, setSavedSchoolItems] = useState<any[]>([]);
+  const [savedMgmtItems, setSavedMgmtItems] = useState<any[]>([]);
 
   const [revenueRows, setRevenueRows] = useState<RevenueRow[]>([
     initialRevenueRow,
@@ -135,31 +147,31 @@ export default function RealExpenseDetail({
       console.log(error);
     }
   };
-  // FETCH DATA
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-
-      const res = await schoolExpenseApi.getAll({
-        schoolId: school?.id,
-        periodId: selectedPeriod?.id,
-      });
-
-      if (school?.id) {
-        await fetchSubjects(Number(school.id), selectedSchoolYear);
-      }
-    } catch (error) {
-      console.log(error);
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    if (school?.id) {
+      fetchSubjects(Number(school.id));
     }
-  };
+    fetchPeriods();
+  }, [school?.id]);
 
   useEffect(() => {
-    fetchData();
+    if (school?.id) {
+      fetchSubjects(Number(school.id), selectedSchoolYear || undefined);
+    }
+  }, [selectedSchoolYear]);
 
-    fetchPeriods();
-  }, [selectedPeriod, selectedSchoolYear]);
+  useEffect(() => {
+    suggestApi
+      .getStatsByPolicy()
+      .then((res: any[]) => {
+        const map: Record<number, any> = {};
+        res.forEach((item: any) => {
+          if (item.policyId) map[item.policyId] = item;
+        });
+        setSuggestStats(map);
+      })
+      .catch(() => {});
+  }, []);
 
   // MONEY FORMAT
   const money = (value: number) => {
@@ -227,168 +239,140 @@ export default function RealExpenseDetail({
     setManagementRows((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // SUBMIT EXPENSE
-  const handleSubmit = async () => {
-    /* try {
-      const validRows = revenueRows.filter(
-        (row) =>
-          row.subjectId ||
-          row.invoiceAmount ||
-          row.totalOutsideExpense ||
-          row.paidAmount,
+  // LOAD SAVED EXPENSE DATA
+  const loadExpenseData = async (subId: number) => {
+    if (!schoolExpenseId || !subId) return;
+
+    try {
+      const [revenues, schoolItems, mgmtItems] = await Promise.all([
+        revenueItemApi.getAll({ schoolExpenseId, subjectId: subId }),
+        schoolExpenseItemApi.getAll({ schoolExpenseId, subjectId: subId }),
+        managementExpenseItemApi.getAll({ schoolExpenseId, subjectId: subId }),
+      ]);
+
+      setSavedRevenues(revenues || []);
+      setSavedSchoolItems(schoolItems || []);
+      setSavedMgmtItems(mgmtItems || []);
+
+      const fee = Number(
+        subjects.find((s: any) => s.id === subId)?.policies?.[0]?.data?.fee || 0,
       );
 
-      if (validRows.length === 0) {
-        toast.error("Vui lòng nhập dữ liệu");
-
-        return;
+      if (revenues?.length > 0) {
+        setInputRows(
+          revenues.map((r: any) => ({
+            totalPeriods: r.totalPeriods || 0,
+            unitPrice: r.unitPrice || fee,
+            studentCount: r.studentCount || 0,
+            monthsCount: r.monthsCount || 1,
+            invoiced: r.invoiced || false,
+            invoiceDate: r.invoiceDate || "",
+            paidAmount: r.paidAmount || 0,
+            paymentMethod: r.paymentMethod || "",
+            paymentDate: r.paymentDate || "",
+          })),
+        );
+      } else {
+        setInputRows([{ ...initialInputData, unitPrice: fee }]);
       }
 
+      if (schoolItems?.length > 0) {
+        setRevenueRows(
+          schoolItems.map((r: any) => ({
+            subjectId: r.subjectId || subId,
+            invoiceAmount: r.schoolExpenseAmount || 0,
+            collectedDate: r.expenseDate || "",
+            paidAmount: r.paidAmount || 0,
+            paymentDate: r.expenseDate || "",
+            remainingOutsideExpense: r.remaining || 0,
+            payer: r.payer || "",
+            note: r.note || "",
+          })),
+        );
+      } else {
+        setRevenueRows([initialRevenueRow]);
+      }
+
+      if (mgmtItems?.length > 0) {
+        setManagementRows(
+          mgmtItems.map((r: any) => ({
+            totalOutsideExpense: r.totalOutside || 0,
+            paidAmount: r.paidAmount || 0,
+            remainingOutsideExpense: r.remaining || 0,
+            paymentDate: r.expenseDate || "",
+            payer: r.payer || "",
+            note: r.note || "",
+          })),
+        );
+      } else {
+        setManagementRows([initialManagementRow]);
+      }
+    } catch {
+      console.error("Failed to load expense data");
+    }
+  };
+
+  // SUBMIT EXPENSE
+  const handleSubmit = async () => {
+    if (!schoolExpenseId || !activeSubjectId) {
+      toast.error("Vui lòng chọn môn học");
+      return;
+    }
+
+    try {
       setLoading(true);
 
-      if (editingItem) {
-        const row = validRows[0];
+      const policy = activeSubject?.policies?.[0];
+      const policyData = policy?.data || {};
+      const ttcs = policyData.ttcs?.[0] || {};
 
-        await expenseItemApi.update(editingItem.id, {
-          schoolExpenseId: Number(schoolExpenseId),
-
-          subjectId: Number(subjectId),
-
+      await schoolExpenseApi.saveAll(schoolExpenseId, {
+        subjectId: activeSubjectId,
+        revenueItems: inputRows.map((row) => ({
+          subjectId: activeSubjectId,
           totalPeriods: Number(row.totalPeriods || 0),
-
           studentCount: Number(row.studentCount || 0),
-
-          revenueAmount: Number(row.invoiceAmount || 0),
-
-          invoiceAmount: Number(row.invoiceAmount || 0),
-
-          collectedDate: row.collectedDate || undefined,
-
-          totalOutsideExpense: Number(row.totalOutsideExpense || 0),
-
+          monthsCount: Number(row.monthsCount || 1),
+          unitPrice: Number(row.unitPrice || 0),
+          invoiced: row.invoiced || false,
+          invoiceDate: row.invoiceDate || undefined,
           paidAmount: Number(row.paidAmount || 0),
-
-          remainingOutsideExpense: Number(row.remainingOutsideExpense || 0),
-
-          expenseAmount: Number(row.paidAmount || 0),
-
+          paymentMethod: row.paymentMethod || undefined,
           paymentDate: row.paymentDate || undefined,
-
+        })),
+        schoolExpenseItems: revenueRows.map((row) => ({
+          subjectId: activeSubjectId,
+          totalPeriods: Number(inputRows[0]?.totalPeriods || 0),
+          studentCount: Number(inputRows[0]?.studentCount || 0),
+          monthsCount: Number(inputRows[0]?.monthsCount || 1),
+          csvc: Number(policyData.csvc || 0),
+          paidAmount: Number(row.paidAmount || 0),
+          expenseDate: row.paymentDate || undefined,
           payer: row.payer || "",
-
           note: row.note || "",
-        });
+        })),
+        managementExpenseItems: managementRows.map((row) => ({
+          subjectId: activeSubjectId,
+          totalPeriods: Number(inputRows[0]?.totalPeriods || 0),
+          studentCount: Number(inputRows[0]?.studentCount || 0),
+          monthsCount: Number(inputRows[0]?.monthsCount || 1),
+          ql1UnitPrice: Number((ttcs.ql1Percent || 0) - (ttcs.ql1Tax || 0)),
+          ql2UnitPrice: Number((ttcs.ql2Percent || 0) - (ttcs.ql2Tax || 0)),
+          paidAmount: Number(row.paidAmount || 0),
+          expenseDate: row.paymentDate || undefined,
+          payer: row.payer || "",
+          note: row.note || "",
+        })),
+      });
 
-        toast.success("Cập nhật thành công");
-
-        setEditingItem(null);
-      } else {
-        await Promise.all(
-          validRows.map(async (row) => {
-            return expenseItemApi.create({
-              schoolExpenseId: Number(schoolExpenseId),
-
-              subjectId: Number(subjectId),
-
-              totalPeriods: Number(row.totalPeriods || 0),
-
-              studentCount: Number(row.studentCount || 0),
-
-              revenueAmount: Number(row.invoiceAmount || 0),
-
-              invoiceAmount: Number(row.invoiceAmount || 0),
-
-              collectedDate: row.collectedDate || undefined,
-
-              totalOutsideExpense: Number(row.totalOutsideExpense || 0),
-
-              paidAmount: Number(row.paidAmount || 0),
-
-              remainingOutsideExpense: Number(row.remainingOutsideExpense || 0),
-
-              expenseAmount: Number(row.paidAmount || 0),
-
-              paymentDate: row.paymentDate || undefined,
-
-              payer: row.payer || "",
-
-              note: row.note || "",
-            });
-          }),
-        );
-
-        toast.success("Lưu dữ liệu thành công");
-      }
-
-      setRevenueRows([initialExpenseRow]);
-
-      await fetchData();
+      toast.success("Lưu dữ liệu thành công");
+      await loadExpenseData(activeSubjectId);
     } catch (error: any) {
-      console.log(error);
-
       const message =
         error?.response?.data?.message || error?.message || "Có lỗi xảy ra";
-
       toast.error(Array.isArray(message) ? message.join(", ") : message);
     } finally {
       setLoading(false);
-    } */
-  };
-
-  // EDIT EXPENSE
-  const handleEdit = (item: any) => {
-    setRevenueRows([
-      {
-        subjectId: subjectId || 0,
-
-        totalPeriods: String(item.totalPeriods || ""),
-
-        studentCount: String(item.studentCount || ""),
-
-        invoiceAmount: String(item.invoiceAmount || ""),
-
-        collectedDate: item.collectedDate || "",
-
-        totalOutsideExpense: String(item.totalOutsideExpense || ""),
-
-        paidAmount: String(item.paidAmount || ""),
-
-        remainingOutsideExpense: String(item.remainingOutsideExpense || ""),
-
-        paymentDate: item.paymentDate || "",
-
-        payer: item.payer || "",
-
-        note: item.note || "",
-      },
-    ]);
-
-    setEditingItem(item);
-
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
-  };
-
-  // DELETE EXPENSE
-  const handleDelete = async (id: number) => {
-    const confirmDelete = window.confirm(
-      "Bạn có chắc muốn xoá khoản thu chi này?",
-    );
-
-    if (!confirmDelete) return;
-
-    try {
-      await expenseItemApi.delete(id);
-
-      toast.success("Xoá thành công");
-
-      await fetchData();
-    } catch (error) {
-      console.log(error);
-
-      toast.error("Xoá thất bại");
     }
   };
 
@@ -444,12 +428,55 @@ export default function RealExpenseDetail({
     : null;
 
   const activeSubject = subjects.find((s: any) => s.id === activeSubjectId);
+
+  useEffect(() => {
+    if (activeSubjectId) {
+      loadExpenseData(activeSubjectId);
+    } else {
+      const fee = Number(activeSubject?.policies?.[0]?.data?.fee || 0);
+      setInputRows([{ ...initialInputData, unitPrice: fee || 0 }]);
+      setRevenueRows([initialRevenueRow]);
+      setManagementRows([initialManagementRow]);
+    }
+  }, [activeSubjectId]);
+
+  useEffect(() => {
+    if (activeSubjectId && schoolExpenseId) {
+      loadExpenseData(activeSubjectId);
+    }
+  }, [schoolExpenseId]);
+
+  const schoolYears = useMemo(() => {
+    if (!subjects.length) return [];
+    return [...new Set(subjects.map((s: any) => s.schoolYear).filter(Boolean))];
+  }, [subjects]);
+
   return (
     <div className="min-h-screen bg-slate-100">
       <HeaderWithBack title="Chi tiết thu chi" />
 
       <div className="space-y-5 pb-32">
-        {/* TABS */}
+        {/* STEP 1: NĂM HỌC + THÁNG */}
+        <div className="bg-white rounded-3xl p-4 shadow-sm border border-slate-100 space-y-3">
+          <h3 className="font-semibold text-slate-700 text-sm">
+            📅 Chọn kỳ thu chi
+          </h3>
+
+          <div className="flex gap-3 flex-wrap">
+            <select
+              value={selectedSchoolYear}
+              onChange={(e) => setSelectedSchoolYear(e.target.value)}
+              className="h-11 flex-1 min-w-[160px] rounded-xl border bg-white px-3 text-sm font-medium text-slate-700 outline-none focus:ring-2 focus:ring-blue-200"
+            >
+              <option value="">🎓 Tất cả năm học</option>
+              {schoolYears.map((y: string) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* STEP 2: CHỌN MÔN */}
         <Tabs
           tab={tab}
           setTab={setTab}
@@ -470,6 +497,89 @@ export default function RealExpenseDetail({
                 <CashPolicyTable policy={activeSubject.policies?.[0]} />
 
                 <DevicePolicyTable policy={activeSubject.policies?.[0]} />
+
+                {/* SUGGEST LIST */}
+                {(() => {
+                  const policyId = activeSubject.policies?.[0]?.id;
+                  const stats = policyId ? suggestStats[policyId] : null;
+                  if (!stats?.suggests?.length) return null;
+
+                  return (
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+                      <div className="px-5 py-3 bg-orange-50 border-b border-orange-100 flex items-center gap-2">
+                        <span className="text-sm font-semibold text-orange-700">
+                          📝 Đề xuất ({stats.total})
+                        </span>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-orange-500 text-white">
+                              <th className="px-4 py-2 text-left font-medium">
+                                #
+                              </th>
+                              <th className="px-4 py-2 text-left font-medium">
+                                Nội dung
+                              </th>
+                              <th className="px-4 py-2 text-left font-medium">
+                                Thành phần
+                              </th>
+                              <th className="px-4 py-2 text-left font-medium">
+                                Diễn giải
+                              </th>
+                              <th className="px-4 py-2 text-left font-medium">
+                                Ngày
+                              </th>
+                              <th className="px-4 py-2 text-left font-medium">
+                                File
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {stats.suggests.map((sg: any, idx: number) => (
+                              <tr
+                                key={sg.id}
+                                className={
+                                  idx % 2 === 0 ? "bg-orange-50/50" : "bg-white"
+                                }
+                              >
+                                <td className="px-4 py-2 text-gray-500">
+                                  {sg.id}
+                                </td>
+                                <td className="px-4 py-2 font-medium">
+                                  {sg.content}
+                                </td>
+                                <td className="px-4 py-2 text-gray-600">
+                                  {sg.component || "-"}
+                                </td>
+                                <td className="px-4 py-2 text-gray-600">
+                                  {sg.description || "-"}
+                                </td>
+                                <td className="px-4 py-2 text-gray-500 whitespace-nowrap">
+                                  {sg.issueDate || "-"}
+                                </td>
+                                <td className="px-4 py-2">
+                                  {sg.fileUrl ? (
+                                    <a
+                                      href={`https://sales.kidoedu.vn${sg.fileUrl}`}
+                                      target="_blank"
+                                      className="text-blue-500 text-xs"
+                                    >
+                                      📎 Xem
+                                    </a>
+                                  ) : (
+                                    "-"
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
@@ -508,17 +618,34 @@ export default function RealExpenseDetail({
             {subTab === "expense" && (
               <div className="space-y-5">
                 <InputExpenseTable
-                  data={inputData}
-                  onChange={(field, value) =>
-                    setInputData((prev) => ({
-                      ...prev,
-                      [field]: value,
-                    }))
+                  rows={inputRows}
+                  defaultFee={Number(
+                    activeSubject?.policies?.[0]?.data?.fee || 0,
+                  )}
+                  onUpdate={(index, field, value) =>
+                    setInputRows((prev) =>
+                      prev.map((row, i) =>
+                        i === index ? { ...row, [field]: value } : row,
+                      ),
+                    )
                   }
-                  subjects={activeSubject}
+                  onAdd={() =>
+                    setInputRows((prev) => [
+                      ...prev,
+                      {
+                        ...initialInputData,
+                        unitPrice: Number(
+                          activeSubject?.policies?.[0]?.data?.fee || 0,
+                        ),
+                      },
+                    ])
+                  }
+                  onRemove={(index) =>
+                    setInputRows((prev) => prev.filter((_, i) => i !== index))
+                  }
                 />
                 <ExpenseFormTable
-                  inputData={inputData}
+                  inputData={inputRows[0] || initialInputData}
                   revenueRows={revenueRows}
                   managementRows={managementRows}
                   subjects={activeSubject}
@@ -534,11 +661,143 @@ export default function RealExpenseDetail({
                   handleCancelEdit={handleCancelEdit}
                 />
 
-                <ExpenseList
-                  data={data}
-                  onEdit={handleEdit}
-                  onDelete={handleDelete}
-                />
+                {/* SAVED DATA */}
+                {(savedRevenues.length > 0 || savedSchoolItems.length > 0 || savedMgmtItems.length > 0) && (
+                  <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div className="px-5 py-3 bg-slate-800 text-white font-semibold">
+                      📋 Dữ liệu đã lưu
+                    </div>
+
+                    {/* REVENUE */}
+                    {savedRevenues.length > 0 && (
+                      <div>
+                        <div className="px-5 py-2 bg-indigo-50 text-indigo-700 text-sm font-semibold border-b">
+                          💰 Doanh Thu ({savedRevenues.length})
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm whitespace-nowrap">
+                            <thead>
+                              <tr className="bg-slate-100 text-slate-600">
+                                <th className="px-3 py-2 text-left">Số tiết</th>
+                                <th className="px-3 py-2 text-left">HS</th>
+                                <th className="px-3 py-2 text-left">Tháng</th>
+                                <th className="px-3 py-2 text-right">Đơn giá</th>
+                                <th className="px-3 py-2 text-right">Thành tiền</th>
+                                <th className="px-3 py-2 text-right">Đã thu</th>
+                                <th className="px-3 py-2 text-right">Còn lại</th>
+                                <th className="px-3 py-2 text-left">Hình thức</th>
+                                <th className="px-3 py-2 text-left">Ngày thu</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {savedRevenues.map((r: any) => (
+                                <tr key={r.id} className="border-t hover:bg-slate-50">
+                                  <td className="px-3 py-2">{r.totalPeriods}</td>
+                                  <td className="px-3 py-2">{r.studentCount}</td>
+                                  <td className="px-3 py-2">{r.monthsCount}</td>
+                                  <td className="px-3 py-2 text-right">{Number(r.unitPrice || 0).toLocaleString()}</td>
+                                  <td className="px-3 py-2 text-right font-medium text-blue-700">{Number(r.invoiceAmount || 0).toLocaleString()}</td>
+                                  <td className="px-3 py-2 text-right text-green-700">{Number(r.paidAmount || 0).toLocaleString()}</td>
+                                  <td className="px-3 py-2 text-right text-orange-700">{Number(r.remainingAmount || 0).toLocaleString()}</td>
+                                  <td className="px-3 py-2">{r.paymentMethod === "cash" ? "Tiền mặt" : r.paymentMethod === "bank_transfer" ? "Chuyển khoản" : "-"}</td>
+                                  <td className="px-3 py-2">{r.paymentDate || "-"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* SCHOOL EXPENSE */}
+                    {savedSchoolItems.length > 0 && (
+                      <div>
+                        <div className="px-5 py-2 bg-blue-50 text-blue-700 text-sm font-semibold border-y">
+                          🏫 Chi Trường ({savedSchoolItems.length})
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm whitespace-nowrap">
+                            <thead>
+                              <tr className="bg-slate-100 text-slate-600">
+                                <th className="px-3 py-2 text-left">Số tiết</th>
+                                <th className="px-3 py-2 text-left">HS</th>
+                                <th className="px-3 py-2 text-left">Tháng</th>
+                                <th className="px-3 py-2 text-right">CSVC</th>
+                                <th className="px-3 py-2 text-right">Chi trường</th>
+                                <th className="px-3 py-2 text-right">Đã chi</th>
+                                <th className="px-3 py-2 text-right">Còn lại</th>
+                                <th className="px-3 py-2 text-left">Ngày chi</th>
+                                <th className="px-3 py-2 text-left">Người chi</th>
+                                <th className="px-3 py-2 text-left">Ghi chú</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {savedSchoolItems.map((r: any) => (
+                                <tr key={r.id} className="border-t hover:bg-slate-50">
+                                  <td className="px-3 py-2">{r.totalPeriods}</td>
+                                  <td className="px-3 py-2">{r.studentCount}</td>
+                                  <td className="px-3 py-2">{r.monthsCount}</td>
+                                  <td className="px-3 py-2 text-right">{Number(r.csvc || 0).toLocaleString()}</td>
+                                  <td className="px-3 py-2 text-right font-medium text-blue-700">{Number(r.schoolExpenseAmount || 0).toLocaleString()}</td>
+                                  <td className="px-3 py-2 text-right text-green-700">{Number(r.paidAmount || 0).toLocaleString()}</td>
+                                  <td className="px-3 py-2 text-right text-orange-700">{Number(r.remaining || 0).toLocaleString()}</td>
+                                  <td className="px-3 py-2">{r.expenseDate || "-"}</td>
+                                  <td className="px-3 py-2">{r.payer || "-"}</td>
+                                  <td className="px-3 py-2">{r.note || "-"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* MANAGEMENT */}
+                    {savedMgmtItems.length > 0 && (
+                      <div>
+                        <div className="px-5 py-2 bg-emerald-50 text-emerald-700 text-sm font-semibold border-y">
+                          💸 Chi Ngoài ({savedMgmtItems.length})
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm whitespace-nowrap">
+                            <thead>
+                              <tr className="bg-slate-100 text-slate-600">
+                                <th className="px-3 py-2 text-left">Số tiết</th>
+                                <th className="px-3 py-2 text-left">HS</th>
+                                <th className="px-3 py-2 text-left">Tháng</th>
+                                <th className="px-3 py-2 text-right">Chi QL1</th>
+                                <th className="px-3 py-2 text-right">Chi QL2</th>
+                                <th className="px-3 py-2 text-right">Tổng chi ngoài</th>
+                                <th className="px-3 py-2 text-right">Đã chi</th>
+                                <th className="px-3 py-2 text-right">Còn chi</th>
+                                <th className="px-3 py-2 text-left">Ngày chi</th>
+                                <th className="px-3 py-2 text-left">Người chi</th>
+                                <th className="px-3 py-2 text-left">Ghi chú</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {savedMgmtItems.map((r: any) => (
+                                <tr key={r.id} className="border-t hover:bg-slate-50">
+                                  <td className="px-3 py-2">{r.totalPeriods}</td>
+                                  <td className="px-3 py-2">{r.studentCount}</td>
+                                  <td className="px-3 py-2">{r.monthsCount}</td>
+                                  <td className="px-3 py-2 text-right">{Number(r.ql1Amount || 0).toLocaleString()}</td>
+                                  <td className="px-3 py-2 text-right">{Number(r.ql2Amount || 0).toLocaleString()}</td>
+                                  <td className="px-3 py-2 text-right font-medium text-emerald-700">{Number(r.totalOutside || 0).toLocaleString()}</td>
+                                  <td className="px-3 py-2 text-right text-green-700">{Number(r.paidAmount || 0).toLocaleString()}</td>
+                                  <td className="px-3 py-2 text-right text-orange-700">{Number(r.remaining || 0).toLocaleString()}</td>
+                                  <td className="px-3 py-2">{r.expenseDate || "-"}</td>
+                                  <td className="px-3 py-2">{r.payer || "-"}</td>
+                                  <td className="px-3 py-2">{r.note || "-"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

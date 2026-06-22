@@ -1,41 +1,38 @@
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
+import { Trash2 } from "lucide-react";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
 
 type Props = {
-  data: InputExpenseRow;
-  onChange: <K extends keyof InputExpenseRow>(
-    field: K,
-    value: InputExpenseRow[K],
-  ) => void;
-  subjects: any;
+  rows: InputExpenseRow[];
+  onUpdate: (index: number, field: keyof InputExpenseRow, value: any) => void;
+  onAdd: () => void;
+  onRemove: (index: number) => void;
+  defaultFee?: number;
 };
 
-export default function InputExpenseTable({ data, onChange, subjects }: Props) {
-  const periods = Number(data.totalPeriods || 0);
-  const students = Number(data.studentCount || 0);
-  const months = Number(data.monthsCount || 0);
-  const csvc = Number(subjects?.policies?.[0]?.data?.csvc || 0);
-  const unitPrice = Number(data.unitPrice || 0);
+export default function InputExpenseTable({
+  rows,
+  onUpdate,
+  onAdd,
+  onRemove,
+}: Props) {
+  const totals = useMemo(() => {
+    let totalInvoice = 0;
+    let totalPaid = 0;
 
-  const { invoiceAmount, totalSchoolExpense } = useMemo(() => {
-    const invoiceAmount = students * months * unitPrice;
+    rows.forEach((row) => {
+      const students = Number(row.studentCount || 0);
+      const months = Number(row.monthsCount || 0);
+      const price = Number(row.unitPrice || 0);
+      totalInvoice += students * months * price;
+      totalPaid += Number(row.paidAmount || 0);
+    });
 
-    const totalSchoolExpense = csvc * students + invoiceAmount * 0.02;
+    return { totalInvoice, totalPaid, remaining: totalInvoice - totalPaid };
+  }, [rows]);
 
-    return {
-      invoiceAmount,
-      totalSchoolExpense,
-    };
-  }, [students, months, unitPrice, csvc]);
-  const remainingAmount = invoiceAmount - Number(data.paidAmount || 0);
-  useEffect(() => {
-    if (!data.unitPrice && csvc > 0) {
-      onChange("unitPrice", csvc);
-    }
-  }, [csvc]);
   return (
     <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
-      {/* Title */}
       <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-indigo-600 to-violet-600 text-white">
         <div>
           <h2 className="font-bold text-lg">💰 Doanh Thu</h2>
@@ -47,7 +44,7 @@ export default function InputExpenseTable({ data, onChange, subjects }: Props) {
         <div className="text-right">
           <div className="text-xs text-indigo-100">Thành tiền</div>
           <div className="font-bold text-xl">
-            {invoiceAmount.toLocaleString("vi-VN")}đ
+            {totals.totalInvoice.toLocaleString("vi-VN")}đ
           </div>
         </div>
       </div>
@@ -67,161 +64,205 @@ export default function InputExpenseTable({ data, onChange, subjects }: Props) {
               <th className="p-3 border border-slate-700">🏦 Hình thức</th>
               <th className="p-3 border border-slate-700">📅 Ngày thu</th>
               <th className="p-3 border border-slate-700">📊 Còn lại</th>
+              <th className="p-3 border border-slate-700 w-12">⚙️</th>
             </tr>
           </thead>
 
           <tbody>
-            <tr className="hover:bg-slate-50 transition">
-              <td className="border p-2">
-                <input
-                  type="number"
-                  value={data.totalPeriods}
-                  onChange={(e) => {
-                    const periods = Number(e.target.value || 0);
+            {rows.map((row, idx) => {
+              const students = Number(row.studentCount || 0);
+              const months = Number(row.monthsCount || 0);
+              const price = Number(row.unitPrice || 0);
+              const invoiceAmount = students * months * price;
+              const remaining = invoiceAmount - Number(row.paidAmount || 0);
 
-                    onChange("totalPeriods", periods);
+              return (
+                <tr key={idx} className="hover:bg-slate-50 transition">
+                  <td className="border p-2">
+                    <input
+                      type="number"
+                      value={row.totalPeriods}
+                      onChange={(e) => {
+                        const periods = Number(e.target.value || 0);
+                        onUpdate(idx, "totalPeriods", periods);
+                        onUpdate(
+                          idx,
+                          "studentCount",
+                          Math.round((periods / 4) * 30),
+                        );
+                      }}
+                      className="w-full h-10 text-center border rounded-lg"
+                    />
+                  </td>
 
-                    const students = (periods / 4) * 30;
+                  <td className="border p-2">
+                    <input
+                      type="number"
+                      value={row.studentCount}
+                      onChange={(e) => {
+                        const s = Number(e.target.value || 0);
+                        onUpdate(idx, "studentCount", s);
+                        onUpdate(idx, "totalPeriods", Math.round((s * 4) / 30));
+                      }}
+                      className="w-full h-10 text-center border rounded-lg"
+                    />
+                  </td>
 
-                    onChange("studentCount", Math.round(students));
-                  }}
-                  className="w-full h-10 text-center border rounded-lg"
-                />
-              </td>
+                  <td className="border p-2">
+                    <input
+                      type="number"
+                      value={row.monthsCount}
+                      onChange={(e) =>
+                        onUpdate(
+                          idx,
+                          "monthsCount",
+                          Number(e.target.value || 0),
+                        )
+                      }
+                      className="w-full h-10 text-center border rounded-lg"
+                    />
+                  </td>
 
-              <td className="border p-2">
-                <input
-                  type="number"
-                  value={data.studentCount}
-                  onChange={(e) => {
-                    const students = Number(e.target.value || 0);
+                  <td className="border p-2 bg-emerald-50">
+                    <input
+                      type="text"
+                      value={
+                        row.unitPrice
+                          ? row.unitPrice.toLocaleString("vi-VN")
+                          : ""
+                      }
+                      onChange={(e) => {
+                        const rawValue = e.target.value.replace(/\D/g, "");
+                        onUpdate(idx, "unitPrice", Number(rawValue || 0));
+                      }}
+                      className="w-full h-10 text-center font-bold text-emerald-700 border rounded-lg"
+                    />
+                  </td>
 
-                    onChange("studentCount", students);
+                  <td className="border p-2 bg-blue-50">
+                    <input
+                      readOnly
+                      value={invoiceAmount.toLocaleString("vi-VN")}
+                      className="w-full h-10 text-center font-bold text-blue-700 border rounded-lg"
+                    />
+                  </td>
 
-                    const periods = (students * 4) / 30;
+                  <td className="border p-2 text-center">
+                    <input
+                      type="checkbox"
+                      checked={row.invoiced}
+                      onChange={(e) =>
+                        onUpdate(idx, "invoiced", e.target.checked)
+                      }
+                      className="w-5 h-5"
+                    />
+                  </td>
 
-                    onChange("totalPeriods", Math.round(periods));
-                  }}
-                  className="w-full h-10 text-center border rounded-lg"
-                />
-              </td>
+                  <td className="border p-2">
+                    <input
+                      type="date"
+                      value={row.invoiceDate}
+                      onChange={(e) =>
+                        onUpdate(idx, "invoiceDate", e.target.value)
+                      }
+                      className="w-full h-10 border rounded-lg px-2"
+                    />
+                  </td>
 
-              <td className="border p-2">
-                <input
-                  type="number"
-                  value={data.monthsCount}
-                  onChange={(e) =>
-                    onChange("monthsCount", Number(e.target.value || 0))
-                  }
-                  className="w-full h-10 text-center border rounded-lg"
-                />
-              </td>
+                  <td className="border p-2 bg-green-50">
+                    <input
+                      type="text"
+                      value={
+                        row.paidAmount
+                          ? row.paidAmount.toLocaleString("vi-VN")
+                          : ""
+                      }
+                      onChange={(e) => {
+                        const rawValue = e.target.value.replace(/\D/g, "");
+                        onUpdate(idx, "paidAmount", Number(rawValue || 0));
+                      }}
+                      className="w-full h-10 text-center font-bold text-green-700 border rounded-lg"
+                    />
+                  </td>
 
-              <td className="border p-2 bg-emerald-50">
-                <input
-                  type="number"
-                  value={data.unitPrice}
-                  onChange={(e) =>
-                    onChange("unitPrice", Number(e.target.value || 0))
-                  }
-                  className="w-full h-10 text-center font-bold text-emerald-700 border rounded-lg"
-                />
-              </td>
+                  <td className="border p-2">
+                    <select
+                      value={row.paymentMethod}
+                      onChange={(e) =>
+                        onUpdate(idx, "paymentMethod", e.target.value)
+                      }
+                      className="w-full h-10 border rounded-lg px-2"
+                    >
+                      <option value="">Chọn</option>
+                      <option value="cash">Tiền mặt</option>
+                      <option value="bank_transfer">Chuyển khoản</option>
+                    </select>
+                  </td>
 
-              <td className="border p-2 bg-blue-50">
-                <input
-                  readOnly
-                  value={invoiceAmount.toLocaleString("vi-VN")}
-                  className="w-full h-10 text-center font-bold text-blue-700 border rounded-lg"
-                />
-              </td>
+                  <td className="border p-2">
+                    <input
+                      type="date"
+                      value={row.paymentDate}
+                      onChange={(e) =>
+                        onUpdate(idx, "paymentDate", e.target.value)
+                      }
+                      className="w-full h-10 border rounded-lg px-2"
+                    />
+                  </td>
 
-              <td className="border p-2 text-center">
-                <input
-                  type="checkbox"
-                  checked={data.invoiced}
-                  onChange={(e) => onChange("invoiced", e.target.checked)}
-                  className="w-5 h-5"
-                />
-              </td>
+                  <td className="border p-2 bg-orange-50">
+                    <input
+                      readOnly
+                      value={remaining.toLocaleString("vi-VN")}
+                      className="w-full h-10 text-center font-bold text-orange-700 border rounded-lg"
+                    />
+                  </td>
 
-              <td className="border p-2">
-                <input
-                  type="date"
-                  value={data.invoiceDate}
-                  onChange={(e) => onChange("invoiceDate", e.target.value)}
-                  className="w-full h-10 border rounded-lg px-2"
-                />
-              </td>
-
-              <td className="border p-2 bg-green-50">
-                <input
-                  type="number"
-                  value={data.paidAmount}
-                  onChange={(e) =>
-                    onChange("paidAmount", Number(e.target.value || 0))
-                  }
-                  className="w-full h-10 text-center font-bold text-green-700 border rounded-lg"
-                />
-              </td>
-
-              <td className="border p-2">
-                <select
-                  value={data.paymentMethod}
-                  onChange={(e) =>
-                    onChange(
-                      "paymentMethod",
-                      e.target.value as "cash" | "bank_transfer" | "",
-                    )
-                  }
-                  className="w-full h-10 border rounded-lg px-2"
-                >
-                  <option value="">Chọn</option>
-                  <option value="cash">Tiền mặt</option>
-                  <option value="bank_transfer">Chuyển khoản</option>
-                </select>
-              </td>
-
-              <td className="border p-2">
-                <input
-                  type="date"
-                  value={data.paymentDate}
-                  onChange={(e) => onChange("paymentDate", e.target.value)}
-                  className="w-full h-10 border rounded-lg px-2"
-                />
-              </td>
-
-              <td className="border p-2 bg-orange-50">
-                <input
-                  readOnly
-                  value={remainingAmount.toLocaleString("vi-VN")}
-                  className="w-full h-10 text-center font-bold text-orange-700 border rounded-lg"
-                />
-              </td>
-            </tr>
+                  <td className="border p-2 text-center">
+                    {rows.length > 1 && (
+                      <button
+                        onClick={() => onRemove(idx)}
+                        className="w-9 h-9 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 flex items-center justify-center mx-auto transition"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
+      </div>
+
+      <div className="px-5 py-3 border-t">
+        <button
+          onClick={onAdd}
+          className="h-10 px-4 rounded-xl bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition"
+        >
+          + Thêm dòng doanh thu
+        </button>
       </div>
 
       <div className="grid grid-cols-3 bg-slate-50 border-t">
         <div className="p-4">
           <div className="text-xs text-slate-500">Doanh thu</div>
           <div className="font-bold text-blue-700 text-lg">
-            {invoiceAmount.toLocaleString("vi-VN")}đ
+            {totals.totalInvoice.toLocaleString("vi-VN")}đ
           </div>
         </div>
 
         <div className="p-4 border-l">
           <div className="text-xs text-slate-500">Đã thu</div>
           <div className="font-bold text-green-700 text-lg">
-            {Number(data.paidAmount || 0).toLocaleString("vi-VN")}đ
+            {totals.totalPaid.toLocaleString("vi-VN")}đ
           </div>
         </div>
 
         <div className="p-4 border-l">
           <div className="text-xs text-slate-500">Công nợ</div>
           <div className="font-bold text-orange-700 text-lg">
-            {remainingAmount.toLocaleString("vi-VN")}đ
+            {totals.remaining.toLocaleString("vi-VN")}đ
           </div>
         </div>
       </div>

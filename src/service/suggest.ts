@@ -116,4 +116,9 @@ export const suggestApi = {
         const res = await api.get(`/suggest/employee/${employeeId}`);
         return res.data;
     },
+
+    getStatsByPolicy: async () => {
+        const res = await api.get(`/suggest/stats/by-policy`);
+        return res.data;
+    },
 };

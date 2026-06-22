@@ -4,6 +4,7 @@ import { regionApi } from "@/service/region";
 import { schoolApi } from "@/service/school.api";
 import { subjectApi } from "@/service/subject.api";
 import { policiesApi } from "@/service/policy";
+import { wardApi } from "@/service/ward";
 import { getEmployeeId } from "@/utils/auth";
 import MobileSelect from "./MobileSelect";
 import "./css/suggest.css";
@@ -35,11 +36,14 @@ export default function SuggestPopup({ open, onClose, onSuccess, initialData }: 
 
     const [years, setYears] = useState<Option[]>([]);
     const [regions, setRegions] = useState<Option[]>([]);
+    const [wards, setWards] = useState<Option[]>([]);
+    const [allSchools, setAllSchools] = useState<any[]>([]);
     const [schools, setSchools] = useState<Option[]>([]);
     const [subjects, setSubjects] = useState<Option[]>([]);
     const [policies, setPolicies] = useState<Option[]>([]);
 
     const [selectedRegion, setSelectedRegion] = useState<number | null>(null);
+    const [selectedWard, setSelectedWard] = useState<number | null>(null);
     const [selectedSchool, setSelectedSchool] = useState<number | null>(null);
     const [selectedYear, setSelectedYear] = useState<string | null>(null);
     const [selectedSubject, setSelectedSubject] = useState<number | null>(null);
@@ -59,13 +63,53 @@ export default function SuggestPopup({ open, onClose, onSuccess, initialData }: 
 
     useEffect(() => {
         if (!selectedRegion) return;
+
+        setSelectedWard(null);
+        setSelectedSchool(null);
+        setSelectedYear(null);
+        setSelectedSubject(null);
+        setSelectedPolicy(null);
+        setAllSchools([]);
+        setSchools([]);
+        setSubjects([]);
+        setPolicies([]);
+
+        wardApi.getByEmployee(getEmployeeId(), selectedRegion).then((res) => {
+            const mapped = res.map((item: any) => ({
+                id: item.id,
+                name: item.name,
+            }));
+            setWards(mapped);
+        }).catch(() => setWards([]));
+
         schoolApi.getByEmployeeRegion(Number(selectedRegion)).then((res) => {
+            setAllSchools(res);
             setSchools(res);
-            setSelectedSchool(null);
-            setSubjects([]);
-            setPolicies([]);
         });
     }, [selectedRegion]);
+
+    useEffect(() => {
+        if (allSchools.length === 0) return;
+
+        if (selectedWard) {
+            setSchools(
+                allSchools.filter(
+                    (s: any) => s.ward?.id === selectedWard || s.wardId === selectedWard || s.ward_id === selectedWard,
+                ),
+            );
+        } else {
+            setSchools(allSchools);
+        }
+    }, [selectedWard, allSchools]);
+
+    useEffect(() => {
+        setSelectedSchool(null);
+        setSelectedYear(null);
+        setSelectedSubject(null);
+        setSelectedPolicy(null);
+        setSubjects([]);
+        setPolicies([]);
+    }, [selectedWard]);
 
     useEffect(() => {
         if (!selectedSchool || !selectedYear) return;
@@ -105,7 +149,7 @@ export default function SuggestPopup({ open, onClose, onSuccess, initialData }: 
                 }));
 
                 setPolicies(mapped);
-                setSelectedPolicy(null);
+                setSelectedPolicy(mapped[0]?.id ?? null);
 
             } catch (err) {
                 console.error("Load policy failed", err);
@@ -209,6 +253,17 @@ export default function SuggestPopup({ open, onClose, onSuccess, initialData }: 
                         options={regions}
                         onChange={setSelectedRegion}
                     />
+
+                    {wards.length > 0 && (
+                        <MobileSelect
+                            label="Xã/Phường"
+                            placeholder="Chọn xã/phường"
+                            value={selectedWard}
+                            options={wards}
+                            onChange={setSelectedWard}
+                            disabled={!selectedRegion}
+                        />
+                    )}
 
                     <MobileSelect
                         label="Trường"

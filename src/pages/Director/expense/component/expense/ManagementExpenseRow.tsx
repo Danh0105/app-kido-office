@@ -25,6 +25,7 @@ export default function ManagementExpenseRow({
   const periods = Number(inputData.totalPeriods || 0);
   const students = Number(inputData.studentCount || 0);
   const months = Number(inputData.monthsCount || 0);
+  console.log("subject data", subjects);
 
   const ql1 = Number(subjects?.policies?.[0]?.data?.ttcs?.[0]?.ql1Percent || 0);
 
@@ -39,12 +40,14 @@ export default function ManagementExpenseRow({
   const totalQL2Expense = (ql2 - ql2Tax) * students * months;
 
   const totalOutsideExpense = totalQL1Expense + totalQL2Expense;
+  const paidAmount = Number(row.paidAmount || 0);
+  const remainingOutsideExpense = totalOutsideExpense - paidAmount;
 
   return (
     <div
       className="
         grid
-        grid-cols-[120px_120px_120px_180px_180px_180px_140px_140px_140px_140px_140px_160px_200px_70px]
+        grid-cols-[120px_120px_120px_120px_120px_180px_180px_180px_140px_140px_140px_140px_140px_160px_200px_70px]
         border-b border-slate-100
         hover:bg-slate-50
       "
@@ -63,7 +66,25 @@ export default function ManagementExpenseRow({
       <div className="flex items-center justify-center p-3 text-center flex items-center">
         {months}
       </div>
-
+      {/* Đơn giá  QL1 */}
+      <div className="p-2">
+        <div
+          className="
+            h-11
+            rounded-xl
+            border border-emerald-100
+            bg-emerald-50
+            px-3
+            text-center
+            flex items-center
+            font-bold
+            text-emerald-700
+            flex items-center justify-center
+          "
+        >
+          {ql1.toLocaleString("vi-VN")}
+        </div>
+      </div>
       {/* Chi QL1 */}
       <div className="p-2">
         <div
@@ -83,7 +104,25 @@ export default function ManagementExpenseRow({
           {totalQL1Expense.toLocaleString("vi-VN")}
         </div>
       </div>
-
+      {/* Đơn giá  QL2 */}
+      <div className="p-2">
+        <div
+          className="
+            h-11
+            rounded-xl
+            border border-emerald-100
+            bg-emerald-50
+            px-3
+            text-center
+            flex items-center
+            font-bold
+            text-emerald-700
+            flex items-center justify-center
+          "
+        >
+          {ql2.toLocaleString("vi-VN")}
+        </div>
+      </div>
       {/* Chi QL2 */}
       <div className="p-2">
         <div
@@ -123,21 +162,7 @@ export default function ManagementExpenseRow({
           {totalOutsideExpense.toLocaleString("vi-VN")}
         </div>
       </div>
-      {/* COLLECT DATE */}
-      <div className="p-2 border-r border-slate-100">
-        <input
-          type="date"
-          value={row.collectedDate || ""}
-          onChange={(e) => updateRow(index, "collectedDate", e.target.value)}
-          className="
-            w-full h-11 rounded-lg
-            border border-slate-200
-            px-3 text-sm
-            text-center
 
-          "
-        />
-      </div>
       {/* PAYMENT DATE */}
       <div className="p-2 border-r border-slate-100">
         <input
@@ -176,7 +201,7 @@ export default function ManagementExpenseRow({
       {/* PAID */}
       <div className="p-2 border-r border-slate-100">
         <input
-          value={Number(row.paidAmount || 0).toLocaleString("vi-VN")}
+          value={paidAmount.toLocaleString("vi-VN")}
           onChange={(e) => {
             const raw = e.target.value.replace(/\D/g, "");
 
@@ -197,9 +222,7 @@ export default function ManagementExpenseRow({
       {/* REMAINING */}
       <div className="p-2 border-r border-slate-100">
         <input
-          value={Number(row.remainingOutsideExpense || 0).toLocaleString(
-            "vi-VN",
-          )}
+          value={remainingOutsideExpense.toLocaleString("vi-VN")}
           readOnly
           className="
             w-full h-11 rounded-lg

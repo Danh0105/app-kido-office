@@ -56,6 +56,30 @@ export const schoolExpenseApi = {
 
         return res.data;
     },
+    saveAll: async (
+        id: number,
+        data: {
+            subjectId: number;
+            revenueItems: any[];
+            schoolExpenseItems: any[];
+            managementExpenseItems: any[];
+        },
+    ) => {
+        const res = await api.post(
+            `/school-expenses/${id}/save-all`,
+            data,
+        );
+        return res.data;
+    },
+
+    getSummary: async (id: number, subjectId?: number) => {
+        const res = await api.get(
+            `/school-expenses/${id}/summary`,
+            { params: subjectId ? { subjectId } : {} },
+        );
+        return res.data;
+    },
+
     checkExisted: async (
         schoolId: number,
         periodId: number,

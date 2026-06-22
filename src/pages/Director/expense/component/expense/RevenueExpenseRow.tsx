@@ -42,6 +42,8 @@ export default function RevenueExpenseRow({
       totalSchoolExpense,
     };
   }, [students, months, unitPrice, csvc]);
+  const paidAmount = Number(row.paidAmount || 0);
+  const remainingSchoolExpense = calculations.totalSchoolExpense - paidAmount;
 
   const inputClass = `
     w-full
@@ -133,7 +135,7 @@ export default function RevenueExpenseRow({
       {/* ĐÃ CHI */}
       <div className="p-2 border-r border-slate-200">
         <input
-          value={Number(row.paidAmount || 0).toLocaleString("vi-VN")}
+          value={paidAmount.toLocaleString("vi-VN")}
           onChange={(e) => {
             const raw = e.target.value.replace(/\D/g, "");
 
@@ -156,9 +158,7 @@ export default function RevenueExpenseRow({
       <div className="p-2 border-r border-slate-200">
         <input
           readOnly
-          value={Number(row.remainingOutsideExpense || 0).toLocaleString(
-            "vi-VN",
-          )}
+          value={remainingSchoolExpense.toLocaleString("vi-VN")}
           className="
             w-full h-10
             rounded-lg

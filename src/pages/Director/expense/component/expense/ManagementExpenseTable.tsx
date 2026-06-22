@@ -64,12 +64,12 @@ export default function ManagementExpenseTable({
       </div>
 
       <div className="overflow-x-auto">
-        <div className="min-w-[2300px]">
+        <div className="min-w-[2540px]">
           {/* HEADER TABLE */}
           <div
             className="
               grid
-              grid-cols-[120px_120px_120px_180px_180px_180px_140px_140px_140px_140px_140px_160px_200px_70px]
+              grid-cols-[120px_120px_120px_120px_120px_180px_180px_180px_140px_140px_140px_140px_140px_160px_200px_70px]
               bg-slate-900
               text-white
               text-sm
@@ -93,24 +93,21 @@ export default function ManagementExpenseTable({
             <div className="p-3 text-center border-r border-slate-700">
               📅 Số tháng
             </div>
-
+            <div className="p-3 text-center border-r border-slate-700">
+              💸 Đơn giá QL1
+            </div>
             <div className="p-3 text-center border-r border-slate-700">
               👤 Chi QL1
             </div>
-
+            <div className="p-3 text-center border-r border-slate-700">
+              💸 Đơn giá QL2
+            </div>
             <div className="p-3 text-center border-r border-slate-700">
               👤 Chi QL2
             </div>
 
             <div className="p-3 text-center border-r border-slate-700">
               💸 Chi ngoài
-            </div>
-
-            <div className="p-3 text-center border-r border-slate-700">
-              <div className="flex items-center justify-center gap-2">
-                <CalendarDays size={14} />
-                Ngày thu
-              </div>
             </div>
 
             <div className="p-3 text-center border-r border-slate-700">

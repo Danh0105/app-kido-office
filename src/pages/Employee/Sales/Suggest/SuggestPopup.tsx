@@ -88,17 +88,39 @@ export default function SuggestPopup({
     useEffect(() => {
         if (!selectedRegion) return;
 
+        setSelectedWard(null);
+        setSelectedSchool(null);
+        setSelectedYear(null);
+        setSelectedSubject(null);
+        setSelectedPolicy(null);
+        setSchools([]);
+        setSubjects([]);
+        setPolicies([]);
+
         schoolApi
             .getByEmployeeRegion(selectedRegion)
             .then((res) => {
                 setSchools(res);
-                setSelectedSchool(null);
-                setSubjects([]);
-                setPolicies([]);
             });
 
         fetchWards(selectedRegion);
     }, [selectedRegion]);
+
+    // ===== fetch schools by ward =====
+    useEffect(() => {
+        if (!selectedWard) return;
+
+        setSelectedSchool(null);
+        setSelectedYear(null);
+        setSelectedSubject(null);
+        setSelectedPolicy(null);
+        setSubjects([]);
+        setPolicies([]);
+
+        schoolApi.getByEmployeeAndWard(getEmployeeId(), selectedWard).then((res) => {
+            setSchools(res);
+        });
+    }, [selectedWard]);
 
     // ===== fetch subjects =====
     useEffect(() => {
@@ -148,7 +170,7 @@ export default function SuggestPopup({
                 }));
 
                 setPolicies(mapped);
-                setSelectedPolicy(null);
+                setSelectedPolicy(mapped[0]?.id ?? null);
 
             } catch (err) {
                 console.error("Load policy failed", err);
@@ -258,19 +280,6 @@ export default function SuggestPopup({
 
     // ===== reset =====
     useEffect(() => {
-        setSelectedWard(null);
-        setSelectedSchool(null);
-        setSelectedYear(null);
-        setSelectedSubject(null);
-        setSelectedPolicy(null);
-
-        setSchools([]);
-        setSubjects([]);
-        setPolicies([]);
-    }, [selectedRegion]);
-
-    useEffect(() => {
-        setSelectedYear(null);
         setSelectedSubject(null);
         setSelectedPolicy(null);
 

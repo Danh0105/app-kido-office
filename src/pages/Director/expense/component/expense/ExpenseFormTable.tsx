@@ -5,7 +5,7 @@ import ManagementExpenseTable from "./ManagementExpenseTable";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
 
 type Props = {
-  inputData: InputExpenseRow;
+  inputRows: InputExpenseRow[];
 
   revenueRows: any[];
   managementRows: any[];
@@ -20,6 +20,12 @@ type Props = {
   removeRevenueRow: (index: number) => void;
   removeManagementRow: (index: number) => void;
 
+  updateInputRow: (
+    index: number,
+    field: keyof InputExpenseRow,
+    value: any,
+  ) => void;
+
   updateRevenueRow: (index: number, field: string, value: string) => void;
 
   updateManagementRow: (index: number, field: string, value: string) => void;
@@ -29,7 +35,7 @@ type Props = {
 };
 
 export default function ExpenseFormTable({
-  inputData,
+  inputRows,
   revenueRows,
   managementRows,
 
@@ -44,6 +50,7 @@ export default function ExpenseFormTable({
   removeRevenueRow,
   removeManagementRow,
 
+  updateInputRow,
   updateRevenueRow,
   updateManagementRow,
 
@@ -60,24 +67,13 @@ export default function ExpenseFormTable({
         {/* DOANH THU */}
         <div className="space-y-3">
           <RevenueExpenseTable
-            inputData={inputData}
+            inputRows={inputRows}
             rows={revenueRows}
             subjects={subjects}
+            updateInputRow={updateInputRow}
             updateRow={updateRevenueRow}
             removeRow={removeRevenueRow}
           />
-
-          <button
-            onClick={addRevenueRow}
-            className="
-              h-10 px-4 rounded-xl
-              bg-blue-600 text-white
-              font-medium
-              hover:bg-blue-700
-            "
-          >
-            + Thêm dòng doanh thu
-          </button>
         </div>
 
         {/* CHI QUẢN LÝ */}
@@ -85,22 +81,11 @@ export default function ExpenseFormTable({
           <ManagementExpenseTable
             rows={managementRows}
             subjects={subjects}
-            inputData={inputData}
+            inputRows={inputRows}
+            updateInputRow={updateInputRow}
             updateRow={updateManagementRow}
             removeRow={removeManagementRow}
           />
-
-          <button
-            onClick={addManagementRow}
-            className="
-              h-10 px-4 rounded-xl
-              bg-emerald-600 text-white
-              font-medium
-              hover:bg-emerald-700
-            "
-          >
-            + Thêm dòng chi quản lý
-          </button>
         </div>
       </div>
 

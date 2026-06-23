@@ -7,8 +7,13 @@ import RevenueExpenseRow from "./RevenueExpenseRow";
 type Props = {
   rows: any[];
   subjects: any;
-  inputData: InputExpenseRow;
+  inputRows: InputExpenseRow[];
 
+  updateInputRow: (
+    index: number,
+    field: keyof InputExpenseRow,
+    value: any,
+  ) => void;
   updateRow: (index: number, field: any, value: string) => void;
   removeRow: (index: number) => void;
 };
@@ -16,21 +21,40 @@ type Props = {
 export default function RevenueExpenseTable({
   rows,
   subjects,
-  inputData,
+  inputRows,
+  updateInputRow,
   updateRow,
   removeRow,
 }: Props) {
-  const students = Number(inputData.studentCount || 0);
-  const months = Number(inputData.monthsCount || 0);
+  const policyData = subjects?.policies?.[0]?.data || {};
+  const fallbackInputData = inputRows[0] || ({} as InputExpenseRow);
 
-  const fee = Number(subjects?.policies?.[0]?.data?.fee || 0);
+  const totalSchoolExpense = rows.reduce((sum, row, index) => {
+    const inputData = inputRows[index] || fallbackInputData;
+    const students = Number(inputData.studentCount || 0);
+    const months = Number(inputData.monthsCount || 0);
+    const teacherUnitPrice = Number(
+      row.teacherUnitPrice ?? row.giaovien ?? policyData?.giaovien ?? 0,
+    );
+    const taxUnitPrice = Number(
+      row.taxUnitPrice ??
+        row.thue ??
+        row.tax ??
+        policyData?.thue ??
+        policyData?.tax ??
+        0,
+    );
+    const csvcUnitPrice = Number(
+      row.csvcUnitPrice ?? row.csvc ?? policyData?.csvc ?? 0,
+    );
 
-  const csvc = Number(subjects?.policies?.[0]?.data?.csvc || 0);
-
-  const totalRevenue = rows.length * students * months * fee;
-
-  const totalSchoolExpense =
-    rows.length * (csvc * students + students * months * fee * 0.02);
+    return (
+      sum +
+      students * months * teacherUnitPrice +
+      students * months * taxUnitPrice +
+      students * csvcUnitPrice
+    );
+  }, 0);
 
   return (
     <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
@@ -60,16 +84,16 @@ export default function RevenueExpenseTable({
 
       {/* TABLE */}
       <div className="overflow-x-auto">
-        <div className="min-w-[1900px]">
+        <div className="min-w-[2460px]">
           {/* HEADER ROW */}
           <div
             className="
               grid
-              grid-cols-[90px_90px_90px_120px_180px_150px_150px_160px_160px_160px_180px_180px_70px]
+              grid-cols-[120px_90px_120px_140px_150px_140px_140px_120px_140px_120px_180px_150px_150px_160px_180px_180px_70px]
               bg-slate-900
               text-white
               font-semibold
-              text-sm
+              text-base
               sticky
               top-0
               z-10
@@ -85,6 +109,30 @@ export default function RevenueExpenseTable({
 
             <div className="p-3 text-center border-r border-slate-700">
               📅 Tháng
+            </div>
+
+            <div className="p-3 text-center border-r border-slate-700">
+              💵 Đơn giá
+            </div>
+
+            <div className="p-3 text-center border-r border-slate-700">
+              💵 ĐG giáo viên
+            </div>
+
+            <div className="p-3 text-center border-r border-slate-700">
+              👩‍🏫 Giáo viên
+            </div>
+
+            <div className="p-3 text-center border-r border-slate-700">
+              💵 ĐG thuế
+            </div>
+
+            <div className="p-3 text-center border-r border-slate-700">
+              🧾 Thuế
+            </div>
+
+            <div className="p-3 text-center border-r border-slate-700">
+              💵 ĐG CSVC
             </div>
 
             <div className="p-3 text-center border-r border-slate-700">
@@ -132,7 +180,8 @@ export default function RevenueExpenseTable({
                 row={row}
                 index={index}
                 subjects={subjects}
-                inputData={inputData}
+                inputData={inputRows[index] || fallbackInputData}
+                updateInputRow={updateInputRow}
                 updateRow={updateRow}
                 removeRow={removeRow}
               />
@@ -143,22 +192,19 @@ export default function RevenueExpenseTable({
           <div
             className="
               grid
-              grid-cols-[120px_90px_90px_120px_180px_150px_150px_160px_160px_160px_180px_180px_70px]
+              grid-cols-[120px_90px_120px_140px_150px_140px_140px_120px_140px_120px_180px_150px_150px_160px_180px_180px_70px]
               bg-slate-100
               border-t-2
               border-slate-300
               font-bold
             "
           >
-            <div className="col-span-1 flex items-center justify-center py-4 text-slate-700">
+            <div className="col-span-10 flex items-center justify-center py-4 text-slate-700">
               TỔNG CỘNG
             </div>
-            <div className="col-span-2"></div>
             <div className="flex items-center justify-center py-4 text-amber-700 text-lg">
               {totalSchoolExpense.toLocaleString("vi-VN")}
             </div>
-
-            <div />
 
             <div />
 

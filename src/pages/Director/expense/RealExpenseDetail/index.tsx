@@ -41,11 +41,12 @@ const initialInputData: InputExpenseRow = {
   studentCount: 0,
   monthsCount: 1,
   invoiced: false,
+  invoiceType: "",
+  invoiceOther: "",
   invoiceDate: "",
-  paid: false,
+  paidAmount: 0,
   paymentMethod: "",
   paymentDate: "",
-  remainingAmount: 0,
 };
 
 const initialRevenueRow: RevenueRow = {
@@ -67,6 +68,22 @@ const initialManagementRow: ManagementRow = {
   payer: "",
   note: "",
 };
+
+const padRows = <T extends Record<string, any>>(
+  rows: T[],
+  minLength: number,
+  emptyRow: T,
+) => {
+  const nextRows = rows.map((row) => ({ ...row }));
+  const targetLength = Math.max(minLength, 1);
+
+  while (nextRows.length < targetLength) {
+    nextRows.push({ ...emptyRow });
+  }
+
+  return nextRows.length ? nextRows : [{ ...emptyRow }];
+};
+
 export default function RealExpenseDetail({
   schoolExpenseId,
   school,
@@ -204,11 +221,47 @@ export default function RealExpenseDetail({
   }, [data]);
 
   const addRevenueRow = () => {
-    setRevenueRows((prev) => [...prev, initialRevenueRow]);
+    setRevenueRows((prev) => [...prev, { ...initialRevenueRow }]);
   };
 
   const addManagementRow = () => {
-    setManagementRows((prev) => [...prev, initialManagementRow]);
+    setManagementRows((prev) => [...prev, { ...initialManagementRow }]);
+  };
+
+  const updateInputRow = (
+    index: number,
+    field: keyof InputExpenseRow,
+    value: any,
+  ) => {
+    setInputRows((prev) =>
+      prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)),
+    );
+  };
+
+  const addInputRow = () => {
+    const fee = Number(activeSubject?.policies?.[0]?.data?.fee || 0);
+
+    setInputRows((prev) => [
+      ...prev,
+      {
+        ...initialInputData,
+        unitPrice: fee,
+      },
+    ]);
+    setRevenueRows((prev) => [...prev, { ...initialRevenueRow }]);
+    setManagementRows((prev) => [...prev, { ...initialManagementRow }]);
+  };
+
+  const removeInputRow = (index: number) => {
+    setInputRows((prev) => prev.filter((_, i) => i !== index));
+    setRevenueRows((prev) => {
+      const nextRows = prev.filter((_, i) => i !== index);
+      return nextRows.length ? nextRows : [{ ...initialRevenueRow }];
+    });
+    setManagementRows((prev) => {
+      const nextRows = prev.filter((_, i) => i !== index);
+      return nextRows.length ? nextRows : [{ ...initialManagementRow }];
+    });
   };
 
   const removeRevenueRow = (index: number) => {
@@ -254,58 +307,78 @@ export default function RealExpenseDetail({
       setSavedSchoolItems(schoolItems || []);
       setSavedMgmtItems(mgmtItems || []);
 
-      const fee = Number(
-        subjects.find((s: any) => s.id === subId)?.policies?.[0]?.data?.fee || 0,
-      );
+      const loadedPolicyData =
+        subjects.find((s: any) => s.id === subId)?.policies?.[0]?.data || {};
+      const fee = Number(loadedPolicyData?.fee || 0);
 
-      if (revenues?.length > 0) {
-        setInputRows(
-          revenues.map((r: any) => ({
+      const nextInputRows =
+        revenues?.length > 0
+          ? revenues.map((r: any) => ({
             totalPeriods: r.totalPeriods || 0,
             unitPrice: r.unitPrice || fee,
             studentCount: r.studentCount || 0,
             monthsCount: r.monthsCount || 1,
             invoiced: r.invoiced || false,
+            invoiceType: r.invoiceType || (r.invoiced ? "company" : ""),
+            invoiceOther: r.invoiceOther || "",
             invoiceDate: r.invoiceDate || "",
             paidAmount: r.paidAmount || 0,
             paymentMethod: r.paymentMethod || "",
             paymentDate: r.paymentDate || "",
-          })),
-        );
-      } else {
-        setInputRows([{ ...initialInputData, unitPrice: fee }]);
-      }
+          }))
+          : [{ ...initialInputData, unitPrice: fee }];
+
+      setInputRows(nextInputRows);
 
       if (schoolItems?.length > 0) {
         setRevenueRows(
-          schoolItems.map((r: any) => ({
-            subjectId: r.subjectId || subId,
-            invoiceAmount: r.schoolExpenseAmount || 0,
-            collectedDate: r.expenseDate || "",
-            paidAmount: r.paidAmount || 0,
-            paymentDate: r.expenseDate || "",
-            remainingOutsideExpense: r.remaining || 0,
-            payer: r.payer || "",
-            note: r.note || "",
-          })),
+          padRows(
+            schoolItems.map((r: any) => ({
+              subjectId: r.subjectId || subId,
+              invoiceAmount: r.schoolExpenseAmount || 0,
+              teacherUnitPrice:
+                r.teacherUnitPrice ?? r.giaovien ?? loadedPolicyData.giaovien,
+              taxUnitPrice:
+                r.taxUnitPrice ??
+                r.thue ??
+                r.tax ??
+                loadedPolicyData.thue ??
+                loadedPolicyData.tax,
+              csvcUnitPrice: r.csvcUnitPrice ?? r.csvc ?? loadedPolicyData.csvc,
+              collectedDate: r.expenseDate || "",
+              paidAmount: r.paidAmount || 0,
+              paymentDate: r.expenseDate || "",
+              remainingOutsideExpense: r.remaining || 0,
+              payer: r.payer || "",
+              note: r.note || "",
+            })),
+            nextInputRows.length,
+            initialRevenueRow,
+          ),
         );
       } else {
-        setRevenueRows([initialRevenueRow]);
+        setRevenueRows(padRows([], nextInputRows.length, initialRevenueRow));
       }
 
       if (mgmtItems?.length > 0) {
         setManagementRows(
-          mgmtItems.map((r: any) => ({
-            totalOutsideExpense: r.totalOutside || 0,
-            paidAmount: r.paidAmount || 0,
-            remainingOutsideExpense: r.remaining || 0,
-            paymentDate: r.expenseDate || "",
-            payer: r.payer || "",
-            note: r.note || "",
-          })),
+          padRows(
+            mgmtItems.map((r: any) => ({
+              totalOutsideExpense: r.totalOutside || 0,
+              paidAmount: r.paidAmount || 0,
+              remainingOutsideExpense: r.remaining || 0,
+              paymentDate: r.expenseDate || "",
+              payer: r.payer || "",
+              note: r.note || "",
+            })),
+            nextInputRows.length,
+            initialManagementRow,
+          ),
         );
       } else {
-        setManagementRows([initialManagementRow]);
+        setManagementRows(
+          padRows([], nextInputRows.length, initialManagementRow),
+        );
       }
     } catch {
       console.error("Failed to load expense data");
@@ -328,41 +401,64 @@ export default function RealExpenseDetail({
 
       await schoolExpenseApi.saveAll(schoolExpenseId, {
         subjectId: activeSubjectId,
-        revenueItems: inputRows.map((row) => ({
+        revenueItems: inputRows.map((row, index) => ({
+          rowIndex: index,
           subjectId: activeSubjectId,
           totalPeriods: Number(row.totalPeriods || 0),
           studentCount: Number(row.studentCount || 0),
           monthsCount: Number(row.monthsCount || 1),
           unitPrice: Number(row.unitPrice || 0),
           invoiced: row.invoiced || false,
+          invoiceType: row.invoiceType || undefined,
+          invoiceOther:
+            row.invoiceType === "other" ? row.invoiceOther : undefined,
           invoiceDate: row.invoiceDate || undefined,
           paidAmount: Number(row.paidAmount || 0),
           paymentMethod: row.paymentMethod || undefined,
           paymentDate: row.paymentDate || undefined,
         })),
-        schoolExpenseItems: revenueRows.map((row) => ({
-          subjectId: activeSubjectId,
-          totalPeriods: Number(inputRows[0]?.totalPeriods || 0),
-          studentCount: Number(inputRows[0]?.studentCount || 0),
-          monthsCount: Number(inputRows[0]?.monthsCount || 1),
-          csvc: Number(policyData.csvc || 0),
-          paidAmount: Number(row.paidAmount || 0),
-          expenseDate: row.paymentDate || undefined,
-          payer: row.payer || "",
-          note: row.note || "",
-        })),
-        managementExpenseItems: managementRows.map((row) => ({
-          subjectId: activeSubjectId,
-          totalPeriods: Number(inputRows[0]?.totalPeriods || 0),
-          studentCount: Number(inputRows[0]?.studentCount || 0),
-          monthsCount: Number(inputRows[0]?.monthsCount || 1),
-          ql1UnitPrice: Number((ttcs.ql1Percent || 0) - (ttcs.ql1Tax || 0)),
-          ql2UnitPrice: Number((ttcs.ql2Percent || 0) - (ttcs.ql2Tax || 0)),
-          paidAmount: Number(row.paidAmount || 0),
-          expenseDate: row.paymentDate || undefined,
-          payer: row.payer || "",
-          note: row.note || "",
-        })),
+        schoolExpenseItems: revenueRows.map((row, index) => {
+          const inputRow = inputRows[index] || inputRows[0] || initialInputData;
+
+          return {
+            rowIndex: index,
+            subjectId: activeSubjectId,
+            totalPeriods: Number(inputRow.totalPeriods || 0),
+            studentCount: Number(inputRow.studentCount || 0),
+            monthsCount: Number(inputRow.monthsCount || 1),
+            teacherUnitPrice: Number(
+              row.teacherUnitPrice ?? policyData.giaovien ?? 0,
+            ),
+            taxUnitPrice: Number(
+              row.taxUnitPrice ?? policyData.thue ?? policyData.tax ?? 0,
+            ),
+            csvcUnitPrice: Number(
+              row.csvcUnitPrice ?? policyData.csvc ?? 0,
+            ),
+            paidAmount: Number(row.paidAmount || 0),
+            expenseDate: row.paymentDate || undefined,
+            payer: row.payer || "",
+            note: row.note || "",
+          };
+        }),
+        managementExpenseItems: managementRows.map((row, index) => {
+          const inputRow = inputRows[index] || inputRows[0] || initialInputData;
+
+          return {
+            rowIndex: index,
+            subjectId: activeSubjectId,
+            totalPeriods: Number(inputRow.totalPeriods || 0),
+            studentCount: Number(inputRow.studentCount || 0),
+            monthsCount: Number(inputRow.monthsCount || 1),
+            ql1UnitPrice: Number((ttcs.ql1Percent || 0) - (ttcs.ql1Tax || 0)),
+            ql2UnitPrice: Number((ttcs.ql2Percent || 0) - (ttcs.ql2Tax || 0)),
+            invoiceAmount: Number(row.invoiceAmount || 0),
+            paidAmount: Number(row.paidAmount || 0),
+            expenseDate: row.paymentDate || undefined,
+            payer: row.payer || "",
+            note: row.note || "",
+          };
+        }),
       });
 
       toast.success("Lưu dữ liệu thành công");
@@ -428,7 +524,7 @@ export default function RealExpenseDetail({
     : null;
 
   const activeSubject = subjects.find((s: any) => s.id === activeSubjectId);
-
+  console.log("activeSubject", activeSubject);
   useEffect(() => {
     if (activeSubjectId) {
       loadExpenseData(activeSubjectId);
@@ -470,7 +566,9 @@ export default function RealExpenseDetail({
             >
               <option value="">🎓 Tất cả năm học</option>
               {schoolYears.map((y: string) => (
-                <option key={y} value={y}>{y}</option>
+                <option key={y} value={y}>
+                  {y}
+                </option>
               ))}
             </select>
           </div>
@@ -490,7 +588,10 @@ export default function RealExpenseDetail({
             {/* POLICY OVERVIEW */}
             {!!activeSubject.policies?.length && (
               <div className="space-y-6">
-                <PolicyFinanceTable policy={activeSubject.policies?.[0]} />
+                <PolicyFinanceTable
+                  policy={activeSubject.policies?.[0]}
+                  classCount={activeSubject.classCount}
+                />
 
                 <TtcsTable policy={activeSubject.policies?.[0]} />
 
@@ -506,70 +607,84 @@ export default function RealExpenseDetail({
 
                   return (
                     <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-                      <div className="px-5 py-3 bg-orange-50 border-b border-orange-100 flex items-center gap-2">
-                        <span className="text-sm font-semibold text-orange-700">
-                          📝 Đề xuất ({stats.total})
+                      <div className="px-6 py-4 bg-orange-50 border-b border-orange-100 flex items-center gap-2">
+                        <span className="text-lg font-bold text-orange-700">
+                          📝 Đề xuất ngoài chính sách({stats.total})
                         </span>
                       </div>
 
                       <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
+                        <table className="w-full text-base">
                           <thead>
                             <tr className="bg-orange-500 text-white">
-                              <th className="px-4 py-2 text-left font-medium">
+                              <th className="px-5 py-4 text-left text-sm font-bold uppercase">
                                 #
                               </th>
-                              <th className="px-4 py-2 text-left font-medium">
+
+                              <th className="px-5 py-4 text-left text-sm font-bold uppercase">
                                 Nội dung
                               </th>
-                              <th className="px-4 py-2 text-left font-medium">
+
+                              <th className="px-5 py-4 text-left text-sm font-bold uppercase">
                                 Thành phần
                               </th>
-                              <th className="px-4 py-2 text-left font-medium">
+
+                              <th className="px-5 py-4 text-left text-sm font-bold uppercase">
                                 Diễn giải
                               </th>
-                              <th className="px-4 py-2 text-left font-medium">
+
+                              <th className="px-5 py-4 text-left text-sm font-bold uppercase">
                                 Ngày
                               </th>
-                              <th className="px-4 py-2 text-left font-medium">
+
+                              <th className="px-5 py-4 text-left text-sm font-bold uppercase">
                                 File
                               </th>
                             </tr>
                           </thead>
+
                           <tbody>
                             {stats.suggests.map((sg: any, idx: number) => (
                               <tr
                                 key={sg.id}
                                 className={
-                                  idx % 2 === 0 ? "bg-orange-50/50" : "bg-white"
+                                  idx % 2 === 0 ? "bg-orange-50/40" : "bg-white"
                                 }
                               >
-                                <td className="px-4 py-2 text-gray-500">
+                                <td className="px-5 py-4 text-base font-semibold text-slate-600">
                                   {sg.id}
                                 </td>
-                                <td className="px-4 py-2 font-medium">
+
+                                <td className="px-5 py-4 text-base font-bold text-slate-900">
                                   {sg.content}
                                 </td>
-                                <td className="px-4 py-2 text-gray-600">
+
+                                <td className="px-5 py-4 text-base font-semibold text-slate-800">
                                   {sg.component || "-"}
                                 </td>
-                                <td className="px-4 py-2 text-gray-600">
+
+                                <td className="px-5 py-4 text-base font-semibold text-slate-800">
                                   {sg.description || "-"}
                                 </td>
-                                <td className="px-4 py-2 text-gray-500 whitespace-nowrap">
+
+                                <td className="px-5 py-4 text-base font-semibold text-slate-700 whitespace-nowrap">
                                   {sg.issueDate || "-"}
                                 </td>
-                                <td className="px-4 py-2">
+
+                                <td className="px-5 py-4 text-base font-semibold">
                                   {sg.fileUrl ? (
                                     <a
                                       href={`https://sales.kidoedu.vn${sg.fileUrl}`}
                                       target="_blank"
-                                      className="text-blue-500 text-xs"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center gap-1 text-blue-600 font-bold hover:underline"
                                     >
                                       📎 Xem
                                     </a>
                                   ) : (
-                                    "-"
+                                    <span className="text-slate-500 font-semibold">
+                                      -
+                                    </span>
                                   )}
                                 </td>
                               </tr>
@@ -622,30 +737,13 @@ export default function RealExpenseDetail({
                   defaultFee={Number(
                     activeSubject?.policies?.[0]?.data?.fee || 0,
                   )}
-                  onUpdate={(index, field, value) =>
-                    setInputRows((prev) =>
-                      prev.map((row, i) =>
-                        i === index ? { ...row, [field]: value } : row,
-                      ),
-                    )
-                  }
-                  onAdd={() =>
-                    setInputRows((prev) => [
-                      ...prev,
-                      {
-                        ...initialInputData,
-                        unitPrice: Number(
-                          activeSubject?.policies?.[0]?.data?.fee || 0,
-                        ),
-                      },
-                    ])
-                  }
-                  onRemove={(index) =>
-                    setInputRows((prev) => prev.filter((_, i) => i !== index))
-                  }
+                  onUpdate={updateInputRow}
+                  onAdd={addInputRow}
+                  onRemove={removeInputRow}
+                  classCount={activeSubject.classCount}
                 />
                 <ExpenseFormTable
-                  inputData={inputRows[0] || initialInputData}
+                  inputRows={inputRows}
                   revenueRows={revenueRows}
                   managementRows={managementRows}
                   subjects={activeSubject}
@@ -655,6 +753,7 @@ export default function RealExpenseDetail({
                   addManagementRow={addManagementRow}
                   removeRevenueRow={removeRevenueRow}
                   removeManagementRow={removeManagementRow}
+                  updateInputRow={updateInputRow}
                   updateRevenueRow={updateRevenueRow}
                   updateManagementRow={updateManagementRow}
                   handleSubmit={handleSubmit}
@@ -662,47 +761,107 @@ export default function RealExpenseDetail({
                 />
 
                 {/* SAVED DATA */}
-                {(savedRevenues.length > 0 || savedSchoolItems.length > 0 || savedMgmtItems.length > 0) && (
+                {(savedRevenues.length > 0 ||
+                  savedSchoolItems.length > 0 ||
+                  savedMgmtItems.length > 0) && (
                   <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
-                    <div className="px-5 py-3 bg-slate-800 text-white font-semibold">
+                    <div className="px-6 py-5 bg-slate-800 text-white font-bold text-xl">
                       📋 Dữ liệu đã lưu
                     </div>
 
                     {/* REVENUE */}
                     {savedRevenues.length > 0 && (
                       <div>
-                        <div className="px-5 py-2 bg-indigo-50 text-indigo-700 text-sm font-semibold border-b">
+                        <div className="px-6 py-4 bg-indigo-50 text-indigo-700 text-lg font-bold border-b">
                           💰 Doanh Thu ({savedRevenues.length})
                         </div>
                         <div className="overflow-x-auto">
-                          <table className="w-full text-sm whitespace-nowrap">
+                          <table className="w-full text-lg whitespace-nowrap">
                             <thead>
-                              <tr className="bg-slate-100 text-slate-600">
-                                <th className="px-3 py-2 text-left">Số tiết</th>
-                                <th className="px-3 py-2 text-left">HS</th>
-                                <th className="px-3 py-2 text-left">Tháng</th>
-                                <th className="px-3 py-2 text-right">Đơn giá</th>
-                                <th className="px-3 py-2 text-right">Thành tiền</th>
-                                <th className="px-3 py-2 text-right">Đã thu</th>
-                                <th className="px-3 py-2 text-right">Còn lại</th>
-                                <th className="px-3 py-2 text-left">Hình thức</th>
-                                <th className="px-3 py-2 text-left">Ngày thu</th>
+                              <tr className="bg-slate-900 text-white font-bold">
+                                <th className="px-5 py-4 text-left">Số tiết</th>
+                                <th className="px-5 py-4 text-left">HS</th>
+                                <th className="px-5 py-4 text-left">Tháng</th>
+                                <th className="px-5 py-4 text-right">Đơn giá</th>
+                                <th className="px-5 py-4 text-right">Thành tiền</th>
+                                <th className="px-5 py-4 text-center">HĐ</th>
+                                <th className="px-5 py-4 text-left">Ngày xuất HĐ</th>
+                                <th className="px-5 py-4 text-right">Đã thu</th>
+                                <th className="px-5 py-4 text-left">Hình thức</th>
+                                <th className="px-5 py-4 text-left">Ngày thu</th>
+                                <th className="px-5 py-4 text-right">Còn lại</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {savedRevenues.map((r: any) => (
-                                <tr key={r.id} className="border-t hover:bg-slate-50">
-                                  <td className="px-3 py-2">{r.totalPeriods}</td>
-                                  <td className="px-3 py-2">{r.studentCount}</td>
-                                  <td className="px-3 py-2">{r.monthsCount}</td>
-                                  <td className="px-3 py-2 text-right">{Number(r.unitPrice || 0).toLocaleString()}</td>
-                                  <td className="px-3 py-2 text-right font-medium text-blue-700">{Number(r.invoiceAmount || 0).toLocaleString()}</td>
-                                  <td className="px-3 py-2 text-right text-green-700">{Number(r.paidAmount || 0).toLocaleString()}</td>
-                                  <td className="px-3 py-2 text-right text-orange-700">{Number(r.remainingAmount || 0).toLocaleString()}</td>
-                                  <td className="px-3 py-2">{r.paymentMethod === "cash" ? "Tiền mặt" : r.paymentMethod === "bank_transfer" ? "Chuyển khoản" : "-"}</td>
-                                  <td className="px-3 py-2">{r.paymentDate || "-"}</td>
-                                </tr>
-                              ))}
+                              {savedRevenues.map((r: any) => {
+                                const invoiceAmount =
+                                  Number(r.invoiceAmount || 0) ||
+                                  Number(r.studentCount || 0) *
+                                    Number(r.monthsCount || 0) *
+                                    Number(r.unitPrice || 0);
+                                const remaining =
+                                  invoiceAmount - Number(r.paidAmount || 0);
+
+                                const invoiceLabel =
+                                  r.invoiceType === "company"
+                                    ? "Xuất HĐ Cty"
+                                    : r.invoiceType === "student"
+                                      ? "Xuất HĐ HS"
+                                      : r.invoiceType === "none"
+                                        ? "Không xuất"
+                                        : r.invoiceType === "other"
+                                          ? r.invoiceOther || "Khác"
+                                          : "-";
+
+                                return (
+                                  <tr
+                                    key={r.id}
+                                    className="border-t hover:bg-slate-50"
+                                  >
+                                    <td className="px-5 py-4 font-semibold">
+                                      {r.totalPeriods}
+                                    </td>
+                                    <td className="px-5 py-4 font-semibold">
+                                      {r.studentCount}
+                                    </td>
+                                    <td className="px-5 py-4 font-semibold">
+                                      {r.monthsCount}
+                                    </td>
+                                    <td className="px-5 py-4 text-right font-semibold">
+                                      {Number(
+                                        r.unitPrice || 0,
+                                      ).toLocaleString()}
+                                    </td>
+                                    <td className="px-5 py-4 text-right font-bold text-blue-700">
+                                      {invoiceAmount.toLocaleString()}
+                                    </td>
+                                    <td className="px-5 py-4 text-center font-semibold">
+                                      {invoiceLabel}
+                                    </td>
+                                    <td className="px-5 py-4 font-semibold">
+                                      {r.invoiceDate || "-"}
+                                    </td>
+                                    <td className="px-5 py-4 text-right font-bold text-green-700">
+                                      {Number(
+                                        r.paidAmount || 0,
+                                      ).toLocaleString()}
+                                    </td>
+                                    <td className="px-5 py-4 font-semibold">
+                                      {r.paymentMethod === "cash"
+                                        ? "Tiền mặt"
+                                        : r.paymentMethod === "bank_transfer"
+                                          ? "Chuyển khoản"
+                                          : "-"}
+                                    </td>
+                                    <td className="px-5 py-4 font-semibold">
+                                      {r.paymentDate || "-"}
+                                    </td>
+                                    <td className="px-5 py-4 text-right font-bold text-orange-700">
+                                      {remaining.toLocaleString()}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>
@@ -712,40 +871,107 @@ export default function RealExpenseDetail({
                     {/* SCHOOL EXPENSE */}
                     {savedSchoolItems.length > 0 && (
                       <div>
-                        <div className="px-5 py-2 bg-blue-50 text-blue-700 text-sm font-semibold border-y">
+                        <div className="px-6 py-4 bg-blue-50 text-blue-700 text-lg font-bold border-y">
                           🏫 Chi Trường ({savedSchoolItems.length})
                         </div>
                         <div className="overflow-x-auto">
-                          <table className="w-full text-sm whitespace-nowrap">
+                          <table className="w-full text-lg whitespace-nowrap">
                             <thead>
-                              <tr className="bg-slate-100 text-slate-600">
-                                <th className="px-3 py-2 text-left">Số tiết</th>
-                                <th className="px-3 py-2 text-left">HS</th>
-                                <th className="px-3 py-2 text-left">Tháng</th>
-                                <th className="px-3 py-2 text-right">CSVC</th>
-                                <th className="px-3 py-2 text-right">Chi trường</th>
-                                <th className="px-3 py-2 text-right">Đã chi</th>
-                                <th className="px-3 py-2 text-right">Còn lại</th>
-                                <th className="px-3 py-2 text-left">Ngày chi</th>
-                                <th className="px-3 py-2 text-left">Người chi</th>
-                                <th className="px-3 py-2 text-left">Ghi chú</th>
+                              <tr className="bg-slate-900 text-white font-bold">
+                                <th className="px-5 py-4 text-left">Số tiết</th>
+                                <th className="px-5 py-4 text-left">HS</th>
+                                <th className="px-5 py-4 text-left">Tháng</th>
+                                <th className="px-5 py-4 text-right">ĐG GV</th>
+                                <th className="px-5 py-4 text-right">Giáo viên</th>
+                                <th className="px-5 py-4 text-right">ĐG Thuế</th>
+                                <th className="px-5 py-4 text-right">Thuế</th>
+                                <th className="px-5 py-4 text-right">ĐG CSVC</th>
+                                <th className="px-5 py-4 text-right">CSVC</th>
+                                <th className="px-5 py-4 text-right">Chi trường</th>
+                                <th className="px-5 py-4 text-right">Đã chi</th>
+                                <th className="px-5 py-4 text-right">Còn lại</th>
+                                <th className="px-5 py-4 text-left">Ngày chi</th>
+                                <th className="px-5 py-4 text-left">Người chi</th>
+                                <th className="px-5 py-4 text-left">Ghi chú</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {savedSchoolItems.map((r: any) => (
-                                <tr key={r.id} className="border-t hover:bg-slate-50">
-                                  <td className="px-3 py-2">{r.totalPeriods}</td>
-                                  <td className="px-3 py-2">{r.studentCount}</td>
-                                  <td className="px-3 py-2">{r.monthsCount}</td>
-                                  <td className="px-3 py-2 text-right">{Number(r.csvc || 0).toLocaleString()}</td>
-                                  <td className="px-3 py-2 text-right font-medium text-blue-700">{Number(r.schoolExpenseAmount || 0).toLocaleString()}</td>
-                                  <td className="px-3 py-2 text-right text-green-700">{Number(r.paidAmount || 0).toLocaleString()}</td>
-                                  <td className="px-3 py-2 text-right text-orange-700">{Number(r.remaining || 0).toLocaleString()}</td>
-                                  <td className="px-3 py-2">{r.expenseDate || "-"}</td>
-                                  <td className="px-3 py-2">{r.payer || "-"}</td>
-                                  <td className="px-3 py-2">{r.note || "-"}</td>
-                                </tr>
-                              ))}
+                              {savedSchoolItems.map((r: any) => {
+                                const students = Number(r.studentCount || 0);
+                                const months = Number(r.monthsCount || 0);
+                                const teacherUP = Number(
+                                  r.teacherUnitPrice ?? r.giaovien ?? 0,
+                                );
+                                const taxUP = Number(
+                                  r.taxUnitPrice ?? r.thue ?? r.tax ?? 0,
+                                );
+                                const csvcUP = Number(
+                                  r.csvcUnitPrice ?? r.csvc ?? 0,
+                                );
+                                const teacherAmt = students * months * teacherUP;
+                                const taxAmt = students * months * taxUP;
+                                const csvcAmt = students * csvcUP;
+                                const totalSchool =
+                                  Number(r.schoolExpenseAmount || 0) ||
+                                  teacherAmt + taxAmt + csvcAmt;
+                                const remaining =
+                                  totalSchool - Number(r.paidAmount || 0);
+
+                                return (
+                                  <tr
+                                    key={r.id}
+                                    className="border-t hover:bg-slate-50"
+                                  >
+                                    <td className="px-5 py-4 font-semibold">
+                                      {r.totalPeriods}
+                                    </td>
+                                    <td className="px-5 py-4 font-semibold">
+                                      {r.studentCount}
+                                    </td>
+                                    <td className="px-5 py-4 font-semibold">
+                                      {r.monthsCount}
+                                    </td>
+                                    <td className="px-5 py-4 text-right font-semibold">
+                                      {teacherUP.toLocaleString()}
+                                    </td>
+                                    <td className="px-5 py-4 text-right font-bold text-amber-700">
+                                      {teacherAmt.toLocaleString()}
+                                    </td>
+                                    <td className="px-5 py-4 text-right font-semibold">
+                                      {taxUP.toLocaleString()}
+                                    </td>
+                                    <td className="px-5 py-4 text-right font-bold text-rose-700">
+                                      {taxAmt.toLocaleString()}
+                                    </td>
+                                    <td className="px-5 py-4 text-right font-semibold">
+                                      {csvcUP.toLocaleString()}
+                                    </td>
+                                    <td className="px-5 py-4 text-right font-bold text-emerald-700">
+                                      {csvcAmt.toLocaleString()}
+                                    </td>
+                                    <td className="px-5 py-4 text-right font-bold text-blue-700">
+                                      {totalSchool.toLocaleString()}
+                                    </td>
+                                    <td className="px-5 py-4 text-right font-bold text-green-700">
+                                      {Number(
+                                        r.paidAmount || 0,
+                                      ).toLocaleString()}
+                                    </td>
+                                    <td className="px-5 py-4 text-right font-bold text-orange-700">
+                                      {remaining.toLocaleString()}
+                                    </td>
+                                    <td className="px-5 py-4 font-semibold">
+                                      {r.expenseDate || "-"}
+                                    </td>
+                                    <td className="px-5 py-4 font-semibold">
+                                      {r.payer || "-"}
+                                    </td>
+                                    <td className="px-5 py-4 font-semibold">
+                                      {r.note || "-"}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>
@@ -755,42 +981,101 @@ export default function RealExpenseDetail({
                     {/* MANAGEMENT */}
                     {savedMgmtItems.length > 0 && (
                       <div>
-                        <div className="px-5 py-2 bg-emerald-50 text-emerald-700 text-sm font-semibold border-y">
+                        <div className="px-6 py-4 bg-emerald-50 text-emerald-700 text-lg font-bold border-y">
                           💸 Chi Ngoài ({savedMgmtItems.length})
                         </div>
                         <div className="overflow-x-auto">
-                          <table className="w-full text-sm whitespace-nowrap">
+                          <table className="w-full text-lg whitespace-nowrap">
                             <thead>
-                              <tr className="bg-slate-100 text-slate-600">
-                                <th className="px-3 py-2 text-left">Số tiết</th>
-                                <th className="px-3 py-2 text-left">HS</th>
-                                <th className="px-3 py-2 text-left">Tháng</th>
-                                <th className="px-3 py-2 text-right">Chi QL1</th>
-                                <th className="px-3 py-2 text-right">Chi QL2</th>
-                                <th className="px-3 py-2 text-right">Tổng chi ngoài</th>
-                                <th className="px-3 py-2 text-right">Đã chi</th>
-                                <th className="px-3 py-2 text-right">Còn chi</th>
-                                <th className="px-3 py-2 text-left">Ngày chi</th>
-                                <th className="px-3 py-2 text-left">Người chi</th>
-                                <th className="px-3 py-2 text-left">Ghi chú</th>
+                              <tr className="bg-slate-900 text-white font-bold">
+                                <th className="px-5 py-4 text-left">Số tiết</th>
+                                <th className="px-5 py-4 text-left">HS</th>
+                                <th className="px-5 py-4 text-left">Tháng</th>
+                                <th className="px-5 py-4 text-right">ĐG QL1</th>
+                                <th className="px-5 py-4 text-right">Chi QL1</th>
+                                <th className="px-5 py-4 text-right">ĐG QL2</th>
+                                <th className="px-5 py-4 text-right">Chi QL2</th>
+                                <th className="px-5 py-4 text-right">Tổng chi ngoài</th>
+                                <th className="px-5 py-4 text-right">Tiền HĐ</th>
+                                <th className="px-5 py-4 text-right">Đã chi</th>
+                                <th className="px-5 py-4 text-right">Còn chi</th>
+                                <th className="px-5 py-4 text-left">Ngày chi</th>
+                                <th className="px-5 py-4 text-left">Người chi</th>
+                                <th className="px-5 py-4 text-left">Ghi chú</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {savedMgmtItems.map((r: any) => (
-                                <tr key={r.id} className="border-t hover:bg-slate-50">
-                                  <td className="px-3 py-2">{r.totalPeriods}</td>
-                                  <td className="px-3 py-2">{r.studentCount}</td>
-                                  <td className="px-3 py-2">{r.monthsCount}</td>
-                                  <td className="px-3 py-2 text-right">{Number(r.ql1Amount || 0).toLocaleString()}</td>
-                                  <td className="px-3 py-2 text-right">{Number(r.ql2Amount || 0).toLocaleString()}</td>
-                                  <td className="px-3 py-2 text-right font-medium text-emerald-700">{Number(r.totalOutside || 0).toLocaleString()}</td>
-                                  <td className="px-3 py-2 text-right text-green-700">{Number(r.paidAmount || 0).toLocaleString()}</td>
-                                  <td className="px-3 py-2 text-right text-orange-700">{Number(r.remaining || 0).toLocaleString()}</td>
-                                  <td className="px-3 py-2">{r.expenseDate || "-"}</td>
-                                  <td className="px-3 py-2">{r.payer || "-"}</td>
-                                  <td className="px-3 py-2">{r.note || "-"}</td>
-                                </tr>
-                              ))}
+                              {savedMgmtItems.map((r: any) => {
+                                const students = Number(r.studentCount || 0);
+                                const months = Number(r.monthsCount || 0);
+                                const ql1UP = Number(r.ql1UnitPrice || 0);
+                                const ql2UP = Number(r.ql2UnitPrice || 0);
+                                const ql1Amt =
+                                  Number(r.ql1Amount || 0) ||
+                                  ql1UP * students * months;
+                                const ql2Amt =
+                                  Number(r.ql2Amount || 0) ||
+                                  ql2UP * students * months;
+                                const totalOutside =
+                                  Number(r.totalOutside || 0) ||
+                                  ql1Amt + ql2Amt;
+                                const remaining =
+                                  totalOutside - Number(r.paidAmount || 0);
+
+                                return (
+                                  <tr
+                                    key={r.id}
+                                    className="border-t hover:bg-slate-50"
+                                  >
+                                    <td className="px-5 py-4 font-semibold">
+                                      {r.totalPeriods}
+                                    </td>
+                                    <td className="px-5 py-4 font-semibold">
+                                      {r.studentCount}
+                                    </td>
+                                    <td className="px-5 py-4 font-semibold">
+                                      {r.monthsCount}
+                                    </td>
+                                    <td className="px-5 py-4 text-right font-semibold">
+                                      {ql1UP.toLocaleString()}
+                                    </td>
+                                    <td className="px-5 py-4 text-right font-bold text-emerald-700">
+                                      {ql1Amt.toLocaleString()}
+                                    </td>
+                                    <td className="px-5 py-4 text-right font-semibold">
+                                      {ql2UP.toLocaleString()}
+                                    </td>
+                                    <td className="px-5 py-4 text-right font-bold text-cyan-700">
+                                      {ql2Amt.toLocaleString()}
+                                    </td>
+                                    <td className="px-5 py-4 text-right font-bold text-red-600">
+                                      {totalOutside.toLocaleString()}
+                                    </td>
+                                    <td className="px-5 py-4 text-right font-bold text-blue-600">
+                                      {Number(
+                                        r.invoiceAmount || 0,
+                                      ).toLocaleString()}
+                                    </td>
+                                    <td className="px-5 py-4 text-right font-bold text-green-700">
+                                      {Number(
+                                        r.paidAmount || 0,
+                                      ).toLocaleString()}
+                                    </td>
+                                    <td className="px-5 py-4 text-right font-bold text-orange-700">
+                                      {remaining.toLocaleString()}
+                                    </td>
+                                    <td className="px-5 py-4 font-semibold">
+                                      {r.expenseDate || "-"}
+                                    </td>
+                                    <td className="px-5 py-4 font-semibold">
+                                      {r.payer || "-"}
+                                    </td>
+                                    <td className="px-5 py-4 font-semibold">
+                                      {r.note || "-"}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>

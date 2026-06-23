@@ -38,9 +38,9 @@ export default function CashPolicyTable({ policy }: Props) {
             <tr>
               <TableHead sticky>Loại hỗ trợ</TableHead>
 
-              <TableHead>Nhóm</TableHead>
+              <TableHead align="center">Nhóm</TableHead>
 
-              <TableHead align="right">Số tiền</TableHead>
+              <TableHead align="center">Số tiền</TableHead>
 
               <TableHead align="center">Tháng</TableHead>
 
@@ -74,11 +74,11 @@ export default function CashPolicyTable({ policy }: Props) {
                   </div>
                 </StickyTd>
 
-                <Td>
+                <Td align="center">
                   <BadgeMini color="emerald">Tiền mặt</BadgeMini>
                 </Td>
 
-                <MoneyTd>{item.money}</MoneyTd>
+                <MoneyTd align="center">{item.money}</MoneyTd>
 
                 <CenterTd>{item.months}</CenterTd>
 

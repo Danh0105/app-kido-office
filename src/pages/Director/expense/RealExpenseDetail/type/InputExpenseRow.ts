@@ -1,4 +1,5 @@
 export type PaymentMethod = "cash" | "bank_transfer";
+export type InvoiceType = "" | "company" | "student" | "none" | "other";
 
 export type InputExpenseRow = {
     totalPeriods: number;
@@ -8,6 +9,8 @@ export type InputExpenseRow = {
     unitPrice: number;
 
     invoiced: boolean;
+    invoiceType: InvoiceType;
+    invoiceOther: string;
     invoiceDate: string;
 
     paidAmount: number;

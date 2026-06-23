@@ -8,14 +8,39 @@ type Props = {
   onAdd: () => void;
   onRemove: (index: number) => void;
   defaultFee?: number;
+  classCount: number;
 };
 
+const invoiceOptions: {
+  label: string;
+  value: InputExpenseRow["invoiceType"];
+}[] = [
+  { label: "Chọn", value: "" },
+  { label: "Xuất HĐ Cty", value: "company" },
+  { label: "Xuất HĐ HS", value: "student" },
+  { label: "Không xuất HĐ", value: "none" },
+  { label: "Khác", value: "other" },
+];
+
+const isInvoiceIssued = (value: InputExpenseRow["invoiceType"]) =>
+  value === "company" || value === "student" || value === "other";
+const formatVND = (value?: number | string | null) => {
+  const number = Number(value || 0);
+  if (!number) return "";
+  return number.toLocaleString("vi-VN");
+};
+
+const parseVND = (value: string) => {
+  return Number(value.replace(/\D/g, "") || 0);
+};
 export default function InputExpenseTable({
   rows,
   onUpdate,
   onAdd,
   onRemove,
+  classCount,
 }: Props) {
+  console.log("rowwssss", rows);
   const totals = useMemo(() => {
     let totalInvoice = 0;
     let totalPaid = 0;
@@ -33,37 +58,59 @@ export default function InputExpenseTable({
 
   return (
     <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
-      <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-indigo-600 to-violet-600 text-white">
+      <div className="flex items-center justify-between px-7 py-5 bg-gradient-to-r from-indigo-600 to-violet-600 text-white">
         <div>
           <h2 className="font-bold text-lg">💰 Doanh Thu</h2>
-          <p className="text-xs text-indigo-100">
+          <p className="text-sm text-indigo-100 mt-1">
             Quản lý thu học phí và công nợ
           </p>
         </div>
 
         <div className="text-right">
           <div className="text-xs text-indigo-100">Thành tiền</div>
-          <div className="font-bold text-xl">
+          <div className="font-bold text-2xl">
             {totals.totalInvoice.toLocaleString("vi-VN")}đ
           </div>
         </div>
       </div>
 
       <div className="overflow-auto">
-        <table className="w-full min-w-[1700px] border-collapse">
-          <thead>
-            <tr className="bg-slate-900 text-white text-sm">
-              <th className="p-3 border border-slate-700">🕒 Số tiết</th>
-              <th className="p-3 border border-slate-700">👨‍🎓 HS</th>
-              <th className="p-3 border border-slate-700">📅 Tháng</th>
-              <th className="p-3 border border-slate-700">💵 Đơn giá</th>
-              <th className="p-3 border border-slate-700">🧾 Thành tiền</th>
-              <th className="p-3 border border-slate-700">📄 HĐ</th>
-              <th className="p-3 border border-slate-700">📆 Ngày xuất</th>
-              <th className="p-3 border border-slate-700">💰 Đã thu</th>
-              <th className="p-3 border border-slate-700">🏦 Hình thức</th>
-              <th className="p-3 border border-slate-700">📅 Ngày thu</th>
-              <th className="p-3 border border-slate-700">📊 Còn lại</th>
+        <table className="w-full min-w-[1700px] border-collapse font-semibold text-xl">
+          <thead className="text-xl">
+            <tr className="bg-slate-900 text-white">
+              <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
+                🕒 Số tiết
+              </th>
+              <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
+                👨‍🎓 HS
+              </th>
+              <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
+                📅 Tháng
+              </th>
+              <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
+                💵 Đơn giá
+              </th>
+              <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
+                🧾 Thành tiền
+              </th>
+              <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
+                📄 HĐ
+              </th>
+              <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
+                📆 Ngày xuất
+              </th>
+              <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
+                💰 Đã thu
+              </th>
+              <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
+                🏦 Hình thức
+              </th>
+              <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
+                📅 Ngày thu
+              </th>
+              <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
+                📊 Còn lại
+              </th>
               <th className="p-3 border border-slate-700 w-12">⚙️</th>
             </tr>
           </thead>
@@ -75,40 +122,52 @@ export default function InputExpenseTable({
               const price = Number(row.unitPrice || 0);
               const invoiceAmount = students * months * price;
               const remaining = invoiceAmount - Number(row.paidAmount || 0);
+              const invoiceType =
+                row.invoiceType || (row.invoiced ? "company" : "");
 
               return (
                 <tr key={idx} className="hover:bg-slate-50 transition">
-                  <td className="border p-2">
+                  <td className="border p-3">
                     <input
                       type="number"
-                      value={row.totalPeriods}
+                      value={row.totalPeriods || ""}
                       onChange={(e) => {
                         const periods = Number(e.target.value || 0);
+
                         onUpdate(idx, "totalPeriods", periods);
                         onUpdate(
                           idx,
                           "studentCount",
-                          Math.round((periods / 4) * 30),
+                          classCount > 0
+                            ? Math.round((periods / 4) * classCount)
+                            : 0,
                         );
                       }}
-                      className="w-full h-10 text-center border rounded-lg"
+                      className="w-full h-16 text-center border rounded-lg text-sm font-semibold"
                     />
                   </td>
 
-                  <td className="border p-2">
+                  <td className="border p-3">
                     <input
                       type="number"
-                      value={row.studentCount}
+                      value={row.studentCount || ""}
                       onChange={(e) => {
-                        const s = Number(e.target.value || 0);
-                        onUpdate(idx, "studentCount", s);
-                        onUpdate(idx, "totalPeriods", Math.round((s * 4) / 30));
+                        const students = Number(e.target.value || 0);
+
+                        onUpdate(idx, "studentCount", students);
+                        onUpdate(
+                          idx,
+                          "totalPeriods",
+                          classCount > 0
+                            ? Math.round((students * 4) / classCount)
+                            : 0,
+                        );
                       }}
-                      className="w-full h-10 text-center border rounded-lg"
+                      className="w-full h-16 text-center border rounded-lg text-sm font-semibold"
                     />
                   </td>
 
-                  <td className="border p-2">
+                  <td className="border p-3">
                     <input
                       type="number"
                       value={row.monthsCount}
@@ -119,79 +178,102 @@ export default function InputExpenseTable({
                           Number(e.target.value || 0),
                         )
                       }
-                      className="w-full h-10 text-center border rounded-lg"
+                      className="w-full h-16 text-center border rounded-lg text-sm font-semibold"
                     />
                   </td>
 
                   <td className="border p-2 bg-emerald-50">
                     <input
                       type="text"
-                      value={
-                        row.unitPrice
-                          ? row.unitPrice.toLocaleString("vi-VN")
-                          : ""
-                      }
+                      inputMode="numeric"
+                      value={formatVND(row.unitPrice)}
                       onChange={(e) => {
-                        const rawValue = e.target.value.replace(/\D/g, "");
-                        onUpdate(idx, "unitPrice", Number(rawValue || 0));
+                        onUpdate(idx, "unitPrice", parseVND(e.target.value));
                       }}
-                      className="w-full h-10 text-center font-bold text-emerald-700 border rounded-lg"
+                      placeholder="0"
+                      className="w-full h-14 text-center font-bold text-emerald-700 border rounded-lg text-sm"
                     />
                   </td>
 
                   <td className="border p-2 bg-blue-50">
                     <input
                       readOnly
-                      value={invoiceAmount.toLocaleString("vi-VN")}
-                      className="w-full h-10 text-center font-bold text-blue-700 border rounded-lg"
+                      value={formatVND(invoiceAmount)}
+                      className="w-full h-14 text-center font-bold text-blue-700 border rounded-lg text-sm"
                     />
                   </td>
 
                   <td className="border p-2 text-center">
-                    <input
-                      type="checkbox"
-                      checked={row.invoiced}
-                      onChange={(e) =>
-                        onUpdate(idx, "invoiced", e.target.checked)
-                      }
-                      className="w-5 h-5"
-                    />
+                    <div className="space-y-2">
+                      <select
+                        value={invoiceType}
+                        onChange={(e) => {
+                          const value = e.target
+                            .value as InputExpenseRow["invoiceType"];
+
+                          onUpdate(idx, "invoiceType", value);
+                          onUpdate(idx, "invoiced", isInvoiceIssued(value));
+
+                          if (value !== "other") {
+                            onUpdate(idx, "invoiceOther", "");
+                          }
+                        }}
+                        className="w-full h-14 border rounded-lg px-2 text-sm bg-white"
+                      >
+                        {invoiceOptions.map((option) => (
+                          <option
+                            key={option.value || "empty"}
+                            value={option.value}
+                          >
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+
+                      {invoiceType === "other" && (
+                        <input
+                          value={row.invoiceOther || ""}
+                          onChange={(e) =>
+                            onUpdate(idx, "invoiceOther", e.target.value)
+                          }
+                          placeholder="Nhập HĐ khác"
+                          className="w-full h-11 border rounded-lg px-2 text-sm"
+                        />
+                      )}
+                    </div>
                   </td>
 
-                  <td className="border p-2">
+                  <td className="border p-3">
                     <input
                       type="date"
                       value={row.invoiceDate}
                       onChange={(e) =>
                         onUpdate(idx, "invoiceDate", e.target.value)
                       }
-                      className="w-full h-10 border rounded-lg px-2"
+                      className="w-full h-14 border rounded-lg px-2 text-sm"
                     />
                   </td>
 
                   <td className="border p-2 bg-green-50">
                     <input
                       type="text"
-                      value={
-                        row.paidAmount
-                          ? row.paidAmount.toLocaleString("vi-VN")
-                          : ""
-                      }
+                      inputMode="numeric"
+                      value={formatVND(row.paidAmount)}
                       onChange={(e) => {
-                        const rawValue = e.target.value.replace(/\D/g, "");
-                        onUpdate(idx, "paidAmount", Number(rawValue || 0));
+                        onUpdate(idx, "paidAmount", parseVND(e.target.value));
                       }}
-                      className="w-full h-10 text-center font-bold text-green-700 border rounded-lg"
+                      placeholder="0"
+                      className="w-full h-16 text-center font-bold text-sm text-green-700 border rounded-lg"
                     />
                   </td>
 
-                  <td className="border p-2">
+                  <td className="border p-3">
                     <select
                       value={row.paymentMethod}
                       onChange={(e) =>
                         onUpdate(idx, "paymentMethod", e.target.value)
                       }
-                      className="w-full h-10 border rounded-lg px-2"
+                      className="w-full h-14 border rounded-lg px-2 text-sm"
                     >
                       <option value="">Chọn</option>
                       <option value="cash">Tiền mặt</option>
@@ -199,22 +281,22 @@ export default function InputExpenseTable({
                     </select>
                   </td>
 
-                  <td className="border p-2">
+                  <td className="border p-3">
                     <input
                       type="date"
                       value={row.paymentDate}
                       onChange={(e) =>
                         onUpdate(idx, "paymentDate", e.target.value)
                       }
-                      className="w-full h-10 border rounded-lg px-2"
+                      className="w-full h-14 border rounded-lg px-2 text-sm"
                     />
                   </td>
 
                   <td className="border p-2 bg-orange-50">
                     <input
                       readOnly
-                      value={remaining.toLocaleString("vi-VN")}
-                      className="w-full h-10 text-center font-bold text-orange-700 border rounded-lg"
+                      value={formatVND(remaining)}
+                      className="w-full h-14 text-center font-bold text-orange-700 border rounded-lg text-sm"
                     />
                   </td>
 
@@ -238,7 +320,7 @@ export default function InputExpenseTable({
       <div className="px-5 py-3 border-t">
         <button
           onClick={onAdd}
-          className="h-10 px-4 rounded-xl bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition"
+          className="h-14 px-4 rounded-xl bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition"
         >
           + Thêm dòng doanh thu
         </button>

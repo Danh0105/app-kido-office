@@ -25,7 +25,7 @@ export function TableHead({
   return (
     <th
       className={clsx(
-        "px-5 py-4 text-xs font-bold uppercase tracking-wide text-slate-500 border-b border-slate-200 bg-slate-50 whitespace-nowrap",
+        "px-5 py-4 text-sm font-bold uppercase tracking-wide text-slate-500 border-b border-slate-200 bg-slate-50 whitespace-nowrap",
         align === "center" && "text-center",
         align === "right" && "text-right",
         sticky && "sticky left-0 z-20 bg-slate-50 min-w-[220px]",
@@ -92,9 +92,15 @@ export function CenterTd({ children }: { children: React.ReactNode }) {
 /* MONEY TD */
 /* -------------------------------- */
 
-export function MoneyTd({ children }: { children: React.ReactNode }) {
+export function MoneyTd({
+  children,
+  align = "right",
+}: {
+  children: React.ReactNode;
+  align?: Align;
+}) {
   return (
-    <Td align="right">
+    <Td align={align}>
       <span className="text-sm font-semibold text-slate-900">
         {money(Number(children || 0))}
       </span>

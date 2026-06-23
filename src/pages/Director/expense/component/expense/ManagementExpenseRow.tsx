@@ -10,6 +10,11 @@ type Props = {
 
   inputData: InputExpenseRow;
 
+  updateInputRow: (
+    index: number,
+    field: keyof InputExpenseRow,
+    value: any,
+  ) => void;
   updateRow: (index: number, field: string, value: string) => void;
   removeRow: (index: number) => void;
 };
@@ -19,10 +24,10 @@ export default function ManagementExpenseRow({
   subjects,
   index,
   inputData,
+  updateInputRow,
   updateRow,
   removeRow,
 }: Props) {
-  const periods = Number(inputData.totalPeriods || 0);
   const students = Number(inputData.studentCount || 0);
   const months = Number(inputData.monthsCount || 0);
   console.log("subject data", subjects);
@@ -42,6 +47,22 @@ export default function ManagementExpenseRow({
   const totalOutsideExpense = totalQL1Expense + totalQL2Expense;
   const paidAmount = Number(row.paidAmount || 0);
   const remainingOutsideExpense = totalOutsideExpense - paidAmount;
+  const metricInputClass = `
+    w-full
+    h-11
+    rounded-lg
+    border
+    border-slate-200
+    bg-white
+    text-center
+    text-sm
+    font-semibold
+    outline-none
+    transition-all
+    focus:border-emerald-500
+    focus:ring-2
+    focus:ring-emerald-100
+  `;
 
   return (
     <div
@@ -53,18 +74,39 @@ export default function ManagementExpenseRow({
       "
     >
       {/* Số tiết */}
-      <div className="flex items-center justify-centerp-3 text-center flex items-center">
-        {row.totalPeriods || 0}
+      <div className="flex items-center justify-center p-3 text-center flex items-center">
+        <input
+          type="number"
+          value={inputData.totalPeriods || ""}
+          onChange={(e) =>
+            updateInputRow(index, "totalPeriods", Number(e.target.value || 0))
+          }
+          className={`${metricInputClass} text-slate-700`}
+        />
       </div>
 
       {/* Số HS */}
       <div className="flex items-center justify-center p-3 text-center flex items-center">
-        {students.toLocaleString("vi-VN")}
+        <input
+          type="number"
+          value={inputData.studentCount || ""}
+          onChange={(e) =>
+            updateInputRow(index, "studentCount", Number(e.target.value || 0))
+          }
+          className={`${metricInputClass} text-sky-700`}
+        />
       </div>
 
       {/* Số tháng */}
       <div className="flex items-center justify-center p-3 text-center flex items-center">
-        {months}
+        <input
+          type="number"
+          value={inputData.monthsCount || ""}
+          onChange={(e) =>
+            updateInputRow(index, "monthsCount", Number(e.target.value || 0))
+          }
+          className={`${metricInputClass} text-indigo-700`}
+        />
       </div>
       {/* Đơn giá  QL1 */}
       <div className="p-2">

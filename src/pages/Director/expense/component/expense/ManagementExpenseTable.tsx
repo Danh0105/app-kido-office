@@ -8,7 +8,12 @@ import ManagementExpenseRow from "./ManagementExpenseRow";
 type Props = {
   rows: any[];
   subjects: any;
-  inputData: InputExpenseRow;
+  inputRows: InputExpenseRow[];
+  updateInputRow: (
+    index: number,
+    field: keyof InputExpenseRow,
+    value: any,
+  ) => void;
   updateRow: (index: number, field: any, value: string) => void;
   removeRow: (index: number) => void;
 };
@@ -16,13 +21,11 @@ type Props = {
 export default function ManagementExpenseTable({
   rows,
   subjects,
-  inputData,
+  inputRows,
+  updateInputRow,
   updateRow,
   removeRow,
 }: Props) {
-  const students = Number(inputData.studentCount || 0);
-  const months = Number(inputData.monthsCount || 0);
-
   const ql1 = Number(subjects?.policies?.[0]?.data?.ttcs?.[0]?.ql1Percent || 0);
 
   const ql2 = Number(subjects?.policies?.[0]?.data?.ttcs?.[0]?.ql2Percent || 0);
@@ -30,10 +33,23 @@ export default function ManagementExpenseTable({
   const ql1Tax = Number(subjects?.policies?.[0]?.data?.ttcs?.[0]?.ql1Tax || 0);
 
   const ql2Tax = Number(subjects?.policies?.[0]?.data?.ttcs?.[0]?.ql2Tax || 0);
+  const fallbackInputData = inputRows[0] || ({} as InputExpenseRow);
 
-  const totalQL1 = rows.length * (ql1 - ql1Tax) * students * months;
+  const totalQL1 = rows.reduce((sum, _row, index) => {
+    const inputData = inputRows[index] || fallbackInputData;
+    const students = Number(inputData.studentCount || 0);
+    const months = Number(inputData.monthsCount || 0);
 
-  const totalQL2 = rows.length * (ql2 - ql2Tax) * students * months;
+    return sum + (ql1 - ql1Tax) * students * months;
+  }, 0);
+
+  const totalQL2 = rows.reduce((sum, _row, index) => {
+    const inputData = inputRows[index] || fallbackInputData;
+    const students = Number(inputData.studentCount || 0);
+    const months = Number(inputData.monthsCount || 0);
+
+    return sum + (ql2 - ql2Tax) * students * months;
+  }, 0);
 
   const totalOutside = totalQL1 + totalQL2;
 
@@ -154,7 +170,8 @@ export default function ManagementExpenseTable({
                 row={row}
                 subjects={subjects}
                 index={index}
-                inputData={inputData}
+                inputData={inputRows[index] || fallbackInputData}
+                updateInputRow={updateInputRow}
                 removeRow={removeRow}
                 updateRow={updateRow}
               />
@@ -165,7 +182,7 @@ export default function ManagementExpenseTable({
           <div
             className="
               grid
-              grid-cols-[120px_120px_120px_180px_180px_180px_140px_140px_140px_140px_140px_160px_200px_70px]
+              grid-cols-[120px_120px_120px_120px_120px_180px_180px_180px_140px_140px_140px_140px_140px_160px_200px_70px]
               bg-slate-100
               border-t-2
               border-slate-300
@@ -175,10 +192,13 @@ export default function ManagementExpenseTable({
             <div className="col-span-1 flex items-center justify-center py-4 text-slate-700">
               TỔNG CỘNG
             </div>
+
             <div className="col-span-2"></div>
+            <div />
             <div className="flex items-center justify-center py-4 text-emerald-700 text-lg">
               {totalQL1.toLocaleString("vi-VN")}
             </div>
+            <div />
 
             <div className="flex items-center justify-center py-4 text-cyan-700 text-lg">
               {totalQL2.toLocaleString("vi-VN")}

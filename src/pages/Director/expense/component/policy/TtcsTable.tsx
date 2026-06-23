@@ -97,9 +97,8 @@ export default function TtcsTable({ policy }: Props) {
 
                 <MoneyTd>
                   {item.ql1Percent +
-                    item.ql2Percent +
-                    item.ql1Tax +
-                    item.ql2Tax}
+                    item.ql2Percent -
+                    (item.ql1Tax + item.ql2Tax)}
                 </MoneyTd>
               </tr>
             ))}

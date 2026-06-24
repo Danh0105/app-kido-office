@@ -25,13 +25,15 @@ const invoiceOptions: {
 const isInvoiceIssued = (value: InputExpenseRow["invoiceType"]) =>
   value === "company" || value === "student" || value === "other";
 const formatVND = (value?: number | string | null) => {
-  const number = Number(value || 0);
-  if (!number) return "";
-  return number.toLocaleString("vi-VN");
+  const num = Number(value || 0);
+  if (!num) return "";
+  return num.toLocaleString("vi-VN", { maximumFractionDigits: 10 });
 };
 
 const parseVND = (value: string) => {
-  return Number(value.replace(/\D/g, "") || 0);
+  const cleaned = value.replace(/[^\d,.]/g, "");
+  const normalized = cleaned.replace(/\./g, "").replace(",", ".");
+  return Number(normalized || 0);
 };
 export default function InputExpenseTable({
   rows,
@@ -75,9 +77,12 @@ export default function InputExpenseTable({
       </div>
 
       <div className="overflow-auto">
-        <table className="w-full min-w-[1700px] border-collapse font-semibold text-xl">
+        <table className="w-full min-w-[1900px] border-collapse font-semibold text-xl">
           <thead className="text-xl">
             <tr className="bg-slate-900 text-white">
+              <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
+                📄 Nội dung
+              </th>
               <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
                 🕒 Số tiết
               </th>
@@ -129,6 +134,16 @@ export default function InputExpenseTable({
                 <tr key={idx} className="hover:bg-slate-50 transition">
                   <td className="border p-3">
                     <input
+                      type="text"
+                      value={row.content || ""}
+                      onChange={(e) => onUpdate(idx, "content", e.target.value)}
+                      placeholder="Nhập nội dung..."
+                      className="w-full h-16 border rounded-lg px-3 text-sm"
+                    />
+                  </td>
+
+                  <td className="border p-3">
+                    <input
                       type="number"
                       value={row.totalPeriods || ""}
                       onChange={(e) => {
@@ -152,32 +167,22 @@ export default function InputExpenseTable({
                       type="number"
                       value={row.studentCount || ""}
                       onChange={(e) => {
-                        const students = Number(e.target.value || 0);
-
-                        onUpdate(idx, "studentCount", students);
-                        onUpdate(
-                          idx,
-                          "totalPeriods",
-                          classCount > 0
-                            ? Math.round((students * 4) / classCount)
-                            : 0,
-                        );
+                        onUpdate(idx, "studentCount", Number(e.target.value || 0));
                       }}
                       className="w-full h-16 text-center border rounded-lg text-sm font-semibold"
                     />
                   </td>
-
                   <td className="border p-3">
                     <input
                       type="number"
-                      value={row.monthsCount}
-                      onChange={(e) =>
-                        onUpdate(
-                          idx,
-                          "monthsCount",
-                          Number(e.target.value || 0),
-                        )
-                      }
+                      step="0.1"
+                      min="0"
+                      value={row.monthsCount ?? ""}
+                      onChange={(e) => {
+                        const value = e.target.value;
+
+                        onUpdate(idx, "monthsCount", value === "" ? "" : value);
+                      }}
                       className="w-full h-16 text-center border rounded-lg text-sm font-semibold"
                     />
                   </td>
@@ -186,7 +191,7 @@ export default function InputExpenseTable({
                     <input
                       type="text"
                       inputMode="numeric"
-                      value={formatVND(row.unitPrice)}
+                      value={formatVND(row.unitPrice) || ""}
                       onChange={(e) => {
                         onUpdate(idx, "unitPrice", parseVND(e.target.value));
                       }}
@@ -198,7 +203,7 @@ export default function InputExpenseTable({
                   <td className="border p-2 bg-blue-50">
                     <input
                       readOnly
-                      value={formatVND(invoiceAmount)}
+                      value={formatVND(invoiceAmount) || ""}
                       className="w-full h-14 text-center font-bold text-blue-700 border rounded-lg text-sm"
                     />
                   </td>
@@ -258,7 +263,7 @@ export default function InputExpenseTable({
                     <input
                       type="text"
                       inputMode="numeric"
-                      value={formatVND(row.paidAmount)}
+                      value={formatVND(row.paidAmount) || ""}
                       onChange={(e) => {
                         onUpdate(idx, "paidAmount", parseVND(e.target.value));
                       }}
@@ -295,7 +300,7 @@ export default function InputExpenseTable({
                   <td className="border p-2 bg-orange-50">
                     <input
                       readOnly
-                      value={formatVND(remaining)}
+                      value={formatVND(remaining) || ""}
                       className="w-full h-14 text-center font-bold text-orange-700 border rounded-lg text-sm"
                     />
                   </td>

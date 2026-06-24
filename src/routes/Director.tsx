@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 
 import Home from "../pages/Director/Home";
 import Department from "../pages/Director/Department";
@@ -16,33 +16,68 @@ import SuggestReview from "@/pages/Director/Sales/Suggest/SuggestReview";
 import PolicyStatsPage from "@/pages/Director/Sales/Statistics/PolicyStatsPage";
 import RealExpense from "@/pages/Director/expense/RealExpense";
 import RealExpenseDetail from "@/pages/Director/expense/RealExpenseDetail";
+import { getEmployeeRole } from "@/utils/auth";
+
+const EXPENSE_HOME = "/director/expense-management";
+const DIRECTOR_HOME = "/director";
+
+function AccountantGuard({ children }: { children: React.ReactNode }) {
+  const role = getEmployeeRole();
+  if (role !== "accountant" && role !== "director") {
+    return <Navigate to={DIRECTOR_HOME} replace />;
+  }
+  return <>{children}</>;
+}
+
+function DirectorOnlyGuard({ children }: { children: React.ReactNode }) {
+  const role = getEmployeeRole();
+  if (role === "accountant") {
+    return <Navigate to={EXPENSE_HOME} replace />;
+  }
+  return <>{children}</>;
+}
+
+const directorOnly = (children: React.ReactNode) => (
+  <DirectorOnlyGuard>{children}</DirectorOnlyGuard>
+);
+
+function DirectorFallback() {
+  const role = getEmployeeRole();
+  return (
+    <Navigate
+      to={role === "accountant" ? EXPENSE_HOME : DIRECTOR_HOME}
+      replace
+    />
+  );
+}
 
 export default function DirectorRoutes() {
   return (
     <Routes>
-      <Route index element={<Home />} />
-      <Route path="subject-list/:id" element={<SubjectList />} />
-      <Route path="school-list/:employeeId" element={<SchoolList />} />
-      <Route path="statistics/:employeeId" element={<PolicyStatsPage />} />
-      <Route path="phong-ban" element={<Department />} />
-      <Route path="region/:employeeId" element={<Region />} />
-      <Route path="nhan-vien" element={<EmployeeList />} />
-      <Route path="nhan-vien/profile/:userId" element={<Profile />} />
-      <Route path="daily-report/:employeeId" element={<DailyReportPage />} />
-      <Route path="suggest/:employeeId" element={<SuggestPage />} />
-      <Route path="suggest-review/:suggestId" element={<SuggestReview />} />
-      <Route path="policy-list/:subject" element={<PolicyList />} />
+      <Route index element={directorOnly(<Home />)} />
+      <Route path="subject-list/:id" element={directorOnly(<SubjectList />)} />
+      <Route path="school-list/:employeeId" element={directorOnly(<SchoolList />)} />
+      <Route path="statistics/:employeeId" element={directorOnly(<PolicyStatsPage />)} />
+      <Route path="phong-ban" element={directorOnly(<Department />)} />
+      <Route path="region/:employeeId" element={directorOnly(<Region />)} />
+      <Route path="nhan-vien" element={directorOnly(<EmployeeList />)} />
+      <Route path="nhan-vien/profile/:userId" element={directorOnly(<Profile />)} />
+      <Route path="daily-report/:employeeId" element={directorOnly(<DailyReportPage />)} />
+      <Route path="suggest/:employeeId" element={directorOnly(<SuggestPage />)} />
+      <Route path="suggest-review/:suggestId" element={directorOnly(<SuggestReview />)} />
+      <Route path="policy-list/:subject" element={directorOnly(<PolicyList />)} />
       <Route
         path="policy-history-list/:policyId"
-        element={<PolicyHistoryList />}
+        element={directorOnly(<PolicyHistoryList />)}
       />
-      <Route path="policy/:id" element={<PolicyGD />} />
-      <Route path="expense-management" element={<RealExpense />} />
-      <Route path="real-expense/:schoolId" element={<RealExpenseDetail />} />
+      <Route path="policy/:id" element={directorOnly(<PolicyGD />)} />
+      <Route path="expense-management" element={<AccountantGuard><RealExpense /></AccountantGuard>} />
+      <Route path="real-expense/:schoolId" element={<AccountantGuard><RealExpenseDetail /></AccountantGuard>} />
       <Route
         path="real-expense-detail/:schoolExpenseId"
-        element={<RealExpenseDetail />}
+        element={<AccountantGuard><RealExpenseDetail /></AccountantGuard>}
       />
+      <Route path="*" element={<DirectorFallback />} />
     </Routes>
   );
 }

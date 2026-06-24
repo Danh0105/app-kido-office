@@ -13,6 +13,11 @@ export default function HeaderWithBack({ title = "Danh sách trường" }: Props
     const goHome = () => {
         const role = getEmployeeRole();
 
+        if (role === "accountant") {
+            navigate("/director/expense-management");
+            return;
+        }
+
         if (role === "director" || role === "saleadmin" || role === "salesadmin_la" || role === "director_la") {
             navigate("/director");
         } else {

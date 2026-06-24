@@ -1,4 +1,4 @@
-import { Pencil, Save } from "lucide-react";
+import { History, Save } from "lucide-react";
 
 import RevenueExpenseTable from "./RevenueExpenseTable";
 import ManagementExpenseTable from "./ManagementExpenseTable";
@@ -32,6 +32,9 @@ type Props = {
 
   handleSubmit: () => void;
   handleCancelEdit: () => void;
+  handleViewHistory?: () => void;
+  historyLoading?: boolean;
+  historyCount?: number;
 };
 
 export default function ExpenseFormTable({
@@ -56,6 +59,9 @@ export default function ExpenseFormTable({
 
   handleSubmit,
   handleCancelEdit,
+  handleViewHistory,
+  historyLoading = false,
+  historyCount = 0,
 }: Props) {
   return (
     <div className="bg-white rounded-3xl shadow-sm border border-slate-200">
@@ -91,6 +97,34 @@ export default function ExpenseFormTable({
 
       <div className="border-t border-slate-200 bg-slate-50 px-5 py-5">
         <div className="flex flex-wrap items-center gap-3 justify-end">
+          {handleViewHistory && (
+            <button
+              onClick={handleViewHistory}
+              disabled={historyLoading}
+              className={`
+                h-12 px-5 rounded-2xl
+                border border-slate-200
+                bg-white
+                text-slate-700 font-bold
+                flex items-center gap-2
+                transition-all
+                ${
+                  historyLoading
+                    ? "opacity-60 cursor-not-allowed"
+                    : "hover:border-slate-300 hover:bg-slate-100"
+                }
+              `}
+            >
+              <History size={18} />
+              <span>{historyLoading ? "Đang tải..." : "Xem lịch sử"}</span>
+              {historyCount > 0 && (
+                <span className="min-w-6 h-6 px-2 rounded-full bg-slate-800 text-white text-xs font-bold flex items-center justify-center">
+                  {historyCount}
+                </span>
+              )}
+            </button>
+          )}
+
           {editingItem && (
             <button
               onClick={handleCancelEdit}

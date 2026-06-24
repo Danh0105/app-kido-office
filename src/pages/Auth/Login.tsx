@@ -67,6 +67,8 @@ export default function Login({ onSuccess }: Props) {
 
       if (data.user.role === "employee" || data.user.role === "probation") {
         navigate("/employee/home");
+      } else if (data.user.role === "accountant") {
+        navigate("/director/expense-management");
       } else {
         navigate("/director");
       }
@@ -188,6 +190,8 @@ export default function Login({ onSuccess }: Props) {
 
                 if (user.role === "employee" || user.role === "probation") {
                   navigate("/employee/home");
+                } else if (user.role === "accountant") {
+                  navigate("/director/expense-management");
                 } else {
                   navigate("/director");
                 }

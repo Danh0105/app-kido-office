@@ -2,6 +2,7 @@ export type PaymentMethod = "cash" | "bank_transfer";
 export type InvoiceType = "" | "company" | "student" | "none" | "other";
 
 export type InputExpenseRow = {
+    content: string;
     totalPeriods: number;
     studentCount: number;
     monthsCount: number;

@@ -35,23 +35,42 @@ export default function ManagementExpenseTable({
   const ql2Tax = Number(subjects?.policies?.[0]?.data?.ttcs?.[0]?.ql2Tax || 0);
   const fallbackInputData = inputRows[0] || ({} as InputExpenseRow);
 
-  const totalQL1 = rows.reduce((sum, _row, index) => {
-    const inputData = inputRows[index] || fallbackInputData;
-    const students = Number(inputData.studentCount || 0);
-    const months = Number(inputData.monthsCount || 0);
+  const totals = rows.reduce(
+    (sum, row, index) => {
+      const inputData = inputRows[index] || fallbackInputData;
+      const students = Number(inputData.studentCount || 0);
+      const months = Number(inputData.monthsCount || 0);
+      const totalQL1Expense = (ql1 - ql1Tax) * students * months;
+      const totalQL2Expense = (ql2 - ql2Tax) * students * months;
+      const totalOutsideExpense = totalQL1Expense + totalQL2Expense;
+      const paidAmount = Number(row.paidAmount || 0);
 
-    return sum + (ql1 - ql1Tax) * students * months;
-  }, 0);
+      return {
+        ql1UnitPrice: sum.ql1UnitPrice + ql1,
+        ql1Expense: sum.ql1Expense + totalQL1Expense,
+        ql2UnitPrice: sum.ql2UnitPrice + ql2,
+        ql2Expense: sum.ql2Expense + totalQL2Expense,
+        totalOutsideExpense: sum.totalOutsideExpense + totalOutsideExpense,
+        paidAmount: sum.paidAmount + paidAmount,
+        remainingOutsideExpense:
+          sum.remainingOutsideExpense + totalOutsideExpense - paidAmount,
+      };
+    },
+    {
+      ql1UnitPrice: 0,
+      ql1Expense: 0,
+      ql2UnitPrice: 0,
+      ql2Expense: 0,
+      totalOutsideExpense: 0,
+      paidAmount: 0,
+      remainingOutsideExpense: 0,
+    },
+  );
 
-  const totalQL2 = rows.reduce((sum, _row, index) => {
-    const inputData = inputRows[index] || fallbackInputData;
-    const students = Number(inputData.studentCount || 0);
-    const months = Number(inputData.monthsCount || 0);
+  const formatVND = (value: number) => value.toLocaleString("vi-VN");
 
-    return sum + (ql2 - ql2Tax) * students * months;
-  }, 0);
-
-  const totalOutside = totalQL1 + totalQL2;
+  const footerCellClass =
+    "flex min-h-[72px] flex-col items-center justify-center border-r border-slate-300 px-2 py-3 text-center";
 
   return (
     <div className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
@@ -73,19 +92,19 @@ export default function ManagementExpenseTable({
             <div className="text-xs text-emerald-100">Tổng chi ngoài</div>
 
             <div className="font-bold text-2xl">
-              {totalOutside.toLocaleString("vi-VN")}đ
+              {formatVND(totals.totalOutsideExpense)}đ
             </div>
           </div>
         </div>
       </div>
 
       <div className="overflow-x-auto">
-        <div className="min-w-[2540px]">
+        <div className="min-w-[2190px]">
           {/* HEADER TABLE */}
           <div
             className="
               grid
-              grid-cols-[120px_120px_120px_120px_120px_180px_180px_180px_140px_140px_140px_140px_140px_160px_200px_70px]
+              grid-cols-[200px_120px_120px_120px_120px_120px_180px_180px_180px_140px_140px_140px_160px_200px_70px]
               bg-slate-900
               text-white
               text-sm
@@ -95,6 +114,10 @@ export default function ManagementExpenseTable({
               z-10
             "
           >
+            <div className="p-3 text-center border-r border-slate-700">
+              📄 Nội dung
+            </div>
+
             <div className="p-3 text-center border-r border-slate-700">
               🕒 Số tiết
             </div>
@@ -130,13 +153,6 @@ export default function ManagementExpenseTable({
               <div className="flex items-center justify-center gap-2">
                 <CalendarDays size={14} />
                 Ngày chi
-              </div>
-            </div>
-
-            <div className="p-3 text-center border-r border-slate-700">
-              <div className="flex items-center justify-center gap-2">
-                <Receipt size={14} />
-                Tiền HĐ
               </div>
             </div>
 
@@ -181,41 +197,68 @@ export default function ManagementExpenseTable({
           {/* FOOTER */}
           <div
             className="
-              grid
-              grid-cols-[120px_120px_120px_120px_120px_180px_180px_180px_140px_140px_140px_140px_140px_160px_200px_70px]
-              bg-slate-100
-              border-t-2
-              border-slate-300
-              font-bold
-            "
+    grid
+    grid-cols-[200px_120px_120px_120px_120px_120px_180px_180px_180px_140px_140px_140px_160px_200px_70px]
+    bg-slate-100
+    border-t-2
+    border-slate-300
+    font-bold
+  "
           >
-            <div className="col-span-1 flex items-center justify-center py-4 text-slate-700">
-              TỔNG CỘNG
+            {/* Nội dung + Số tiết + Số HS + Số tháng */}
+            <div className={`${footerCellClass} col-span-4 text-slate-700`}>
+              <span className="text-sm uppercase tracking-wide">Tổng cộng</span>
+              <span className="text-xs font-medium text-slate-500">
+                Theo dữ liệu hiện tại
+              </span>
             </div>
 
-            <div className="col-span-2"></div>
-            <div />
-            <div className="flex items-center justify-center py-4 text-emerald-700 text-lg">
-              {totalQL1.toLocaleString("vi-VN")}
-            </div>
-            <div />
+            {/* Đơn giá QL1 */}
+            <div className={footerCellClass} />
 
-            <div className="flex items-center justify-center py-4 text-cyan-700 text-lg">
-              {totalQL2.toLocaleString("vi-VN")}
+            {/* Chi QL1 */}
+            <div className={`${footerCellClass} text-emerald-700`}>
+              <span className="text-lg">{formatVND(totals.ql1Expense)}</span>
             </div>
 
-            <div className="flex items-center justify-center py-4 text-red-600 text-lg">
-              {totalOutside.toLocaleString("vi-VN")}
+            {/* Đơn giá QL2 */}
+            <div className={footerCellClass} />
+
+            {/* Chi QL2 */}
+            <div className={`${footerCellClass} text-cyan-700`}>
+              <span className="text-lg">{formatVND(totals.ql2Expense)}</span>
             </div>
 
-            <div />
-            <div />
-            <div />
-            <div />
-            <div />
-            <div />
-            <div />
-            <div />
+            {/* Chi ngoài */}
+            <div className={`${footerCellClass} text-red-600`}>
+              <span className="text-lg">
+                {formatVND(totals.totalOutsideExpense)}
+              </span>
+            </div>
+
+            {/* Ngày chi */}
+            <div className={footerCellClass} />
+
+            {/* Đã chi */}
+            <div className={`${footerCellClass} text-orange-600`}>
+              <span className="text-lg">{formatVND(totals.paidAmount)}</span>
+            </div>
+
+            {/* Còn chi */}
+            <div className={`${footerCellClass} text-purple-600`}>
+              <span className="text-lg">
+                {formatVND(totals.remainingOutsideExpense)}
+              </span>
+            </div>
+
+            {/* Người chi */}
+            <div className={footerCellClass} />
+
+            {/* Ghi chú */}
+            <div className={footerCellClass} />
+
+            {/* Action */}
+            <div className="min-h-[72px]" />
           </div>
         </div>
       </div>

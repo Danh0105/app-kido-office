@@ -47,6 +47,18 @@ export default function ManagementExpenseRow({
   const totalOutsideExpense = totalQL1Expense + totalQL2Expense;
   const paidAmount = Number(row.paidAmount || 0);
   const remainingOutsideExpense = totalOutsideExpense - paidAmount;
+
+  const formatVND = (value?: number | string | null) => {
+    const num = Number(value || 0);
+    if (!num) return "";
+    return num.toLocaleString("vi-VN", { maximumFractionDigits: 10 });
+  };
+
+  const parseVND = (value: string) => {
+    const cleaned = value.replace(/[^\d,.]/g, "");
+    return cleaned.replace(/\./g, "").replace(",", ".");
+  };
+
   const metricInputClass = `
     w-full
     h-11
@@ -68,11 +80,21 @@ export default function ManagementExpenseRow({
     <div
       className="
         grid
-        grid-cols-[120px_120px_120px_120px_120px_180px_180px_180px_140px_140px_140px_140px_140px_160px_200px_70px]
+        grid-cols-[200px_120px_120px_120px_120px_120px_180px_180px_180px_140px_140px_140px_160px_200px_70px]
         border-b border-slate-100
         hover:bg-slate-50
       "
     >
+      {/* Nội dung */}
+      <div className="flex items-center p-3">
+        <input
+          value={inputData.content || ""}
+          onChange={(e) => updateInputRow(index, "content", e.target.value)}
+          placeholder="Nhập nội dung..."
+          className="w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+        />
+      </div>
+
       {/* Số tiết */}
       <div className="flex items-center justify-center p-3 text-center flex items-center">
         <input
@@ -220,34 +242,13 @@ export default function ManagementExpenseRow({
           "
         />
       </div>
-      {/* INVOICE */}
-      <div className="p-2 border-r border-slate-100">
-        <input
-          value={Number(row.invoiceAmount || 0).toLocaleString("vi-VN")}
-          onChange={(e) => {
-            const raw = e.target.value.replace(/\D/g, "");
 
-            updateRow(index, "invoiceAmount", raw);
-          }}
-          placeholder="0"
-          className="
-            w-full h-11 rounded-lg
-            border border-slate-200
-            px-3 text-sm font-semibold
-            text-blue-600
-            text-center
-
-          "
-        />
-      </div>
       {/* PAID */}
       <div className="p-2 border-r border-slate-100">
         <input
-          value={paidAmount.toLocaleString("vi-VN")}
+          value={formatVND(paidAmount) || ''}
           onChange={(e) => {
-            const raw = e.target.value.replace(/\D/g, "");
-
-            updateRow(index, "paidAmount", raw);
+            updateRow(index, "paidAmount", parseVND(e.target.value));
           }}
           placeholder="0"
           className="
@@ -264,7 +265,7 @@ export default function ManagementExpenseRow({
       {/* REMAINING */}
       <div className="p-2 border-r border-slate-100">
         <input
-          value={remainingOutsideExpense.toLocaleString("vi-VN")}
+          value={formatVND(remainingOutsideExpense) || ''}
           readOnly
           className="
             w-full h-11 rounded-lg

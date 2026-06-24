@@ -38,7 +38,7 @@ const menus = [
   },
   { title: "Đề xuất", icon: suggest, path: "nhan-vien", from: "suggest" },
   {
-    title: "QL thực chi",
+    title: "QL thu chi",
     icon: expense,
     path: "expense-management",
     from: "expense",

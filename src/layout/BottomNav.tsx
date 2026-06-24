@@ -7,9 +7,12 @@ export default function BottomNav() {
   const location = useLocation();
 
   const role = getEmployeeRole();
+  const isAccountant = role === "accountant";
 
   const basePath =
-    role === "director_la" ||
+    isAccountant
+      ? "/director/expense-management"
+      : role === "director_la" ||
     role === "director" ||
     role === "saleadmin" ||
     role === "salesadmin_la"
@@ -43,19 +46,25 @@ export default function BottomNav() {
           }`}
         >
           <Home size={20} />
-          <span className="text-xs">Trang chủ</span>
+          <span className="text-xs">
+            {isAccountant ? "Thu chi" : "Trang chủ"}
+          </span>
         </button>
 
         {/* PROFILE */}
-        <button
-          onClick={() => navigate(`/employee/profile`)}
-          className={`flex flex-col items-center ${
-            isActive("/employee/profile") ? "text-orange-500" : "text-gray-400"
-          }`}
-        >
-          <User size={20} />
-          <span className="text-xs">Cá nhân</span>
-        </button>
+        {!isAccountant && (
+          <button
+            onClick={() => navigate(`/employee/profile`)}
+            className={`flex flex-col items-center ${
+              isActive("/employee/profile")
+                ? "text-orange-500"
+                : "text-gray-400"
+            }`}
+          >
+            <User size={20} />
+            <span className="text-xs">Cá nhân</span>
+          </button>
+        )}
       </div>
     </div>
   );

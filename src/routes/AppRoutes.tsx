@@ -1,13 +1,24 @@
-import { Routes, Route } from "react-router-dom";
+import { Navigate, Routes, Route } from "react-router-dom";
 import EmployeeRoutes from "./Employee";
 import DirectorRoutes from "./Director";
 import Login from "../pages/Auth/Login";
 import UploadApk from "@/pages/UploadApk";
 import ProtectedRoute from "./ProtectedRoute";
 import RegisterFace from "@/pages/FaceId/RegisterFace";
+import { getEmployeeRole } from "@/utils/auth";
 /* import TabletPage from "@/pages/Display/TabletPage";
  */ /* import Display from "@/pages/Display/Display";
  */ /* import INTRO from "@/pages/Display"; */
+
+function BlockAccountantOutsideExpense({ children }: any) {
+  const role = getEmployeeRole();
+
+  if (role === "accountant") {
+    return <Navigate to="/director/expense-management" replace />;
+  }
+
+  return children;
+}
 
 export default function AppRoutes() {
   return (
@@ -23,7 +34,9 @@ export default function AppRoutes() {
         path="/employee/*"
         element={
           <ProtectedRoute>
-            <EmployeeRoutes />
+            <BlockAccountantOutsideExpense>
+              <EmployeeRoutes />
+            </BlockAccountantOutsideExpense>
           </ProtectedRoute>
         }
       />

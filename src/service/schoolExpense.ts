@@ -80,6 +80,11 @@ export const schoolExpenseApi = {
         return res.data;
     },
 
+    getHistory: async (id: number, params?: { subjectId?: number }) => {
+        const res = await api.get(`/school-expenses/${id}/history`, { params });
+        return res.data;
+    },
+
     checkExisted: async (
         schoolId: number,
         periodId: number,

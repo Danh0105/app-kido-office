@@ -1,6 +1,7 @@
 // pages/RealExpenseDetail/index.tsx
 
 import { useEffect, useMemo, useState } from "react";
+import { useParams } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import HeaderWithBack from "@/components/HeaderWithBack";
 import Tabs from "./components/Tabs";
@@ -32,10 +33,11 @@ type CashPolicyRowType = {
 };
 
 type RealExpenseDetailProps = {
-  schoolExpenseId: number | null;
-  school: any;
+  schoolExpenseId?: number | null;
+  school?: any;
 };
 const initialInputData: InputExpenseRow = {
+  content: "",
   totalPeriods: 0,
   unitPrice: 0,
   studentCount: 0,
@@ -69,6 +71,8 @@ const initialManagementRow: ManagementRow = {
   note: "",
 };
 
+const ALL_HISTORY_EMPLOYEES = "__all__";
+
 const padRows = <T extends Record<string, any>>(
   rows: T[],
   minLength: number,
@@ -88,6 +92,8 @@ export default function RealExpenseDetail({
   schoolExpenseId,
   school,
 }: RealExpenseDetailProps) {
+  const { schoolId: schoolIdParam, schoolExpenseId: schoolExpenseIdParam } =
+    useParams();
   const [tab, setTab] = useState<string>("expense");
   const [loading, setLoading] = useState(false);
 
@@ -115,6 +121,16 @@ export default function RealExpenseDetail({
   const [savedRevenues, setSavedRevenues] = useState<any[]>([]);
   const [savedSchoolItems, setSavedSchoolItems] = useState<any[]>([]);
   const [savedMgmtItems, setSavedMgmtItems] = useState<any[]>([]);
+  const [historyList, setHistoryList] = useState<any[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [selectedHistoryEmployee, setSelectedHistoryEmployee] = useState(
+    ALL_HISTORY_EMPLOYEES,
+  );
+  const [routeSchool, setRouteSchool] = useState<any>(null);
+  const [routeSchoolExpenseId, setRouteSchoolExpenseId] = useState<
+    number | null
+  >(null);
 
   const [revenueRows, setRevenueRows] = useState<RevenueRow[]>([
     initialRevenueRow,
@@ -125,6 +141,14 @@ export default function RealExpenseDetail({
   ]);
 
   const pageSize = 5;
+  const resolvedSchoolExpenseId =
+    schoolExpenseId ??
+    routeSchoolExpenseId ??
+    Number(schoolExpenseIdParam || 0) ??
+    null;
+  const resolvedSchool = school || routeSchool;
+  const resolvedSchoolId =
+    Number(resolvedSchool?.id || schoolIdParam || 0) || null;
 
   // FETCH PERIODS
   const fetchPeriods = async () => {
@@ -165,17 +189,35 @@ export default function RealExpenseDetail({
     }
   };
   useEffect(() => {
-    if (school?.id) {
-      fetchSubjects(Number(school.id));
+    if (resolvedSchoolId) {
+      fetchSubjects(resolvedSchoolId);
     }
     fetchPeriods();
-  }, [school?.id]);
+  }, [resolvedSchoolId]);
 
   useEffect(() => {
-    if (school?.id) {
-      fetchSubjects(Number(school.id), selectedSchoolYear || undefined);
+    if (resolvedSchoolId) {
+      fetchSubjects(resolvedSchoolId, selectedSchoolYear || undefined);
     }
-  }, [selectedSchoolYear]);
+  }, [resolvedSchoolId, selectedSchoolYear]);
+
+  useEffect(() => {
+    const fetchRouteExpense = async () => {
+      const routeExpenseId = Number(schoolExpenseIdParam || 0);
+      if (!routeExpenseId || schoolExpenseId || school) return;
+
+      try {
+        const detail = await schoolExpenseApi.getById(routeExpenseId);
+        setRouteSchoolExpenseId(Number(detail?.id || routeExpenseId));
+        setRouteSchool(detail?.school || null);
+      } catch (error) {
+        console.log(error);
+        setRouteSchoolExpenseId(routeExpenseId);
+      }
+    };
+
+    fetchRouteExpense();
+  }, [schoolExpenseIdParam, schoolExpenseId, school]);
 
   useEffect(() => {
     suggestApi
@@ -193,6 +235,262 @@ export default function RealExpenseDetail({
   // MONEY FORMAT
   const money = (value: number) => {
     return Number(value || 0).toLocaleString("vi-VN");
+  };
+
+  const normalizeHistory = (history: any) => {
+    const list = Array.isArray(history)
+      ? history
+      : Array.isArray(history?.data)
+      ? history.data
+      : [];
+
+    return [...list].sort((a: any, b: any) => {
+      const left = new Date(a?.createdAt || 0).getTime();
+      const right = new Date(b?.createdAt || 0).getTime();
+      return right - left;
+    });
+  };
+
+  const parseHistoryPayload = (payload: any) => {
+    if (!payload) return null;
+    if (typeof payload !== "string") return payload;
+
+    try {
+      return JSON.parse(payload);
+    } catch {
+      return payload;
+    }
+  };
+
+  const historyFieldLabels: Record<string, string> = {
+    id: "ID",
+    rowIndex: "Dòng",
+    subjectId: "Môn",
+    content: "Nội dung",
+    totalPeriods: "Số tiết",
+    studentCount: "HS",
+    monthsCount: "Tháng",
+    unitPrice: "ĐG học phí",
+    teacherUnitPrice: "ĐG giáo viên",
+    taxUnitPrice: "ĐG thuế",
+    csvcUnitPrice: "ĐG CSVC",
+    ql1UnitPrice: "ĐG QL1",
+    ql2UnitPrice: "ĐG QL2",
+    invoiceAmount: "Tiền HĐ",
+    schoolExpenseAmount: "Chi trường",
+    totalOutside: "Chi ngoài",
+    remaining: "Còn lại",
+    paidAmount: "Đã thu/chi",
+    invoiced: "Xuất HĐ",
+    invoiceType: "Loại HĐ",
+    invoiceOther: "HĐ khác",
+    invoiceDate: "Ngày HĐ",
+    paymentMethod: "PT thanh toán",
+    paymentDate: "Ngày thanh toán",
+    expenseDate: "Ngày chi",
+    payer: "Người thực hiện",
+    note: "Ghi chú",
+  };
+
+  const historySectionLabels: Record<string, string> = {
+    revenueItems: "Doanh thu",
+    revenueItem: "Doanh thu",
+    schoolExpenseItems: "Chi trường",
+    schoolExpenseItem: "Chi trường",
+    managementExpenseItems: "Chi ngoài",
+    managementExpenseItem: "Chi ngoài",
+  };
+
+  const historyActionMap: Record<string, { label: string; color: string }> = {
+    CREATE: { label: "Tạo mới", color: "bg-green-100 text-green-700" },
+    UPDATE: { label: "Cập nhật", color: "bg-blue-100 text-blue-700" },
+    DELETE: { label: "Xoá", color: "bg-red-100 text-red-700" },
+    SAVE_ALL: { label: "Lưu tất cả", color: "bg-indigo-100 text-indigo-700" },
+  };
+
+  const hiddenHistoryFields = new Set([
+    "createdAt",
+    "updatedAt",
+    "deletedAt",
+    "schoolExpenseId",
+  ]);
+
+  const formatHistoryValue = (value: any) => {
+    if (value === null || value === undefined || value === "") return "-";
+    if (typeof value === "boolean") return value ? "Có" : "Không";
+    if (typeof value === "number") {
+      return value.toLocaleString("vi-VN", { maximumFractionDigits: 2 });
+    }
+    if (typeof value === "string") {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return new Date(value).toLocaleDateString("vi-VN");
+      }
+      return value;
+    }
+    return JSON.stringify(value);
+  };
+
+  const formatHistoryKey = (key: string) => historyFieldLabels[key] || key;
+
+  const getHistoryEmployeeName = (history: any) =>
+    history?.updatedByName ||
+    history?.updatedBy?.name ||
+    history?.employee?.name ||
+    "Hệ thống";
+
+  const getHistoryActionInfo = (action: string) =>
+    historyActionMap[action] || {
+      label: action || "Thao tác",
+      color: "bg-slate-100 text-slate-700",
+    };
+
+  const formatHistoryTime = (createdAt: any) =>
+    createdAt
+      ? new Date(createdAt).toLocaleString("vi-VN", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : "";
+
+  const renderHistoryRecord = (record: any, index = 0) => {
+    const entries = Object.entries(record || {}).filter(
+      ([key]) => !hiddenHistoryFields.has(key),
+    );
+
+    if (!entries.length) {
+      return (
+        <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-500">
+          Không có dữ liệu
+        </div>
+      );
+    }
+
+    const title =
+      record?.content ||
+      record?.payer ||
+      (record?.rowIndex !== undefined
+        ? `Dòng ${Number(record.rowIndex) + 1}`
+        : `Dòng ${index + 1}`);
+
+    return (
+      <div
+        key={record?.id ?? record?.rowIndex ?? index}
+        className="rounded-xl border border-slate-100 bg-slate-50 p-3"
+      >
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <p className="text-sm font-bold text-slate-800">{title}</p>
+          {record?.id && (
+            <span className="rounded-full bg-white px-2 py-1 text-xs font-bold text-slate-500">
+              #{record.id}
+            </span>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {entries.map(([key, value]) => (
+            <div
+              key={key}
+              className="rounded-lg border border-slate-100 bg-white px-3 py-2"
+            >
+              <p className="text-[11px] font-bold uppercase text-slate-400">
+                {formatHistoryKey(key)}
+              </p>
+              <p className="mt-0.5 break-words text-sm font-semibold text-slate-800">
+                {formatHistoryValue(value)}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderHistoryPayload = (payload: any, emptyText: string) => {
+    const parsed = parseHistoryPayload(payload);
+    if (!parsed) {
+      return (
+        <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-500">
+          {emptyText}
+        </p>
+      );
+    }
+
+    if (Array.isArray(parsed)) {
+      return (
+        <div className="space-y-2">
+          {parsed.map((item, index) =>
+            typeof item === "object" && item !== null ? (
+              renderHistoryRecord(item, index)
+            ) : (
+              <p
+                key={`${item}-${index}`}
+                className="rounded-xl bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700"
+              >
+                {formatHistoryValue(item)}
+              </p>
+            ),
+          )}
+        </div>
+      );
+    }
+
+    if (typeof parsed !== "object") {
+      return (
+        <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
+          {formatHistoryValue(parsed)}
+        </p>
+      );
+    }
+
+    const entries = Object.entries(parsed);
+    const scalarEntries = entries.filter(
+      ([, value]) => value === null || typeof value !== "object",
+    );
+    const objectEntries = entries.filter(
+      ([, value]) => value && typeof value === "object",
+    );
+
+    return (
+      <div className="space-y-3">
+        {scalarEntries.length > 0 &&
+          renderHistoryRecord(Object.fromEntries(scalarEntries))}
+
+        {objectEntries.map(([key, value]) => (
+          <div key={key} className="space-y-2">
+            <p className="text-xs font-black uppercase text-slate-500">
+              {historySectionLabels[key] || formatHistoryKey(key)}
+              {Array.isArray(value) ? ` (${value.length})` : ""}
+            </p>
+
+            {Array.isArray(value) ? (
+              value.length > 0 ? (
+                value.map((item: any, index: number) =>
+                  typeof item === "object" && item !== null ? (
+                    renderHistoryRecord(item, index)
+                  ) : (
+                    <p
+                      key={`${key}-${index}`}
+                      className="rounded-xl bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700"
+                    >
+                      {formatHistoryValue(item)}
+                    </p>
+                  ),
+                )
+              ) : (
+                <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-500">
+                  Không có dữ liệu
+                </p>
+              )
+            ) : (
+              renderHistoryPayload(value, "Không có dữ liệu")
+            )}
+          </div>
+        ))}
+      </div>
+    );
   };
 
   // TOTALS
@@ -294,17 +592,30 @@ export default function RealExpenseDetail({
 
   // LOAD SAVED EXPENSE DATA
   const loadExpenseData = async (subId: number) => {
-    if (!schoolExpenseId || !subId) return;
+    if (!resolvedSchoolExpenseId || !subId) return;
 
     try {
-      const [revenues, schoolItems, mgmtItems] = await Promise.all([
-        revenueItemApi.getAll({ schoolExpenseId, subjectId: subId }),
-        schoolExpenseItemApi.getAll({ schoolExpenseId, subjectId: subId }),
-        managementExpenseItemApi.getAll({ schoolExpenseId, subjectId: subId }),
+      const [revenues, schoolItems, mgmtItems, history] = await Promise.all([
+        revenueItemApi.getAll({
+          schoolExpenseId: resolvedSchoolExpenseId,
+          subjectId: subId,
+        }),
+        schoolExpenseItemApi.getAll({
+          schoolExpenseId: resolvedSchoolExpenseId,
+          subjectId: subId,
+        }),
+        managementExpenseItemApi.getAll({
+          schoolExpenseId: resolvedSchoolExpenseId,
+          subjectId: subId,
+        }),
+        schoolExpenseApi
+          .getHistory(resolvedSchoolExpenseId, { subjectId: subId })
+          .catch(() => []),
       ]);
 
       setSavedRevenues(revenues || []);
       setSavedSchoolItems(schoolItems || []);
+      setHistoryList(normalizeHistory(history));
       setSavedMgmtItems(mgmtItems || []);
 
       const loadedPolicyData =
@@ -314,18 +625,19 @@ export default function RealExpenseDetail({
       const nextInputRows =
         revenues?.length > 0
           ? revenues.map((r: any) => ({
-            totalPeriods: r.totalPeriods || 0,
-            unitPrice: r.unitPrice || fee,
-            studentCount: r.studentCount || 0,
-            monthsCount: r.monthsCount || 1,
-            invoiced: r.invoiced || false,
-            invoiceType: r.invoiceType || (r.invoiced ? "company" : ""),
-            invoiceOther: r.invoiceOther || "",
-            invoiceDate: r.invoiceDate || "",
-            paidAmount: r.paidAmount || 0,
-            paymentMethod: r.paymentMethod || "",
-            paymentDate: r.paymentDate || "",
-          }))
+              content: r.content || "",
+              totalPeriods: r.totalPeriods || 0,
+              unitPrice: r.unitPrice || fee,
+              studentCount: r.studentCount || 0,
+              monthsCount: r.monthsCount || 1,
+              invoiced: r.invoiced || false,
+              invoiceType: r.invoiceType || (r.invoiced ? "company" : ""),
+              invoiceOther: r.invoiceOther || "",
+              invoiceDate: r.invoiceDate || "",
+              paidAmount: r.paidAmount || 0,
+              paymentMethod: r.paymentMethod || "",
+              paymentDate: r.paymentDate || "",
+            }))
           : [{ ...initialInputData, unitPrice: fee }];
 
       setInputRows(nextInputRows);
@@ -387,7 +699,7 @@ export default function RealExpenseDetail({
 
   // SUBMIT EXPENSE
   const handleSubmit = async () => {
-    if (!schoolExpenseId || !activeSubjectId) {
+    if (!resolvedSchoolExpenseId || !activeSubjectId) {
       toast.error("Vui lòng chọn môn học");
       return;
     }
@@ -399,11 +711,12 @@ export default function RealExpenseDetail({
       const policyData = policy?.data || {};
       const ttcs = policyData.ttcs?.[0] || {};
 
-      await schoolExpenseApi.saveAll(schoolExpenseId, {
+      await schoolExpenseApi.saveAll(resolvedSchoolExpenseId, {
         subjectId: activeSubjectId,
         revenueItems: inputRows.map((row, index) => ({
           rowIndex: index,
           subjectId: activeSubjectId,
+          content: row.content || "",
           totalPeriods: Number(row.totalPeriods || 0),
           studentCount: Number(row.studentCount || 0),
           monthsCount: Number(row.monthsCount || 1),
@@ -432,9 +745,7 @@ export default function RealExpenseDetail({
             taxUnitPrice: Number(
               row.taxUnitPrice ?? policyData.thue ?? policyData.tax ?? 0,
             ),
-            csvcUnitPrice: Number(
-              row.csvcUnitPrice ?? policyData.csvc ?? 0,
-            ),
+            csvcUnitPrice: Number(row.csvcUnitPrice ?? policyData.csvc ?? 0),
             paidAmount: Number(row.paidAmount || 0),
             expenseDate: row.paymentDate || undefined,
             payer: row.payer || "",
@@ -452,7 +763,7 @@ export default function RealExpenseDetail({
             monthsCount: Number(inputRow.monthsCount || 1),
             ql1UnitPrice: Number((ttcs.ql1Percent || 0) - (ttcs.ql1Tax || 0)),
             ql2UnitPrice: Number((ttcs.ql2Percent || 0) - (ttcs.ql2Tax || 0)),
-            invoiceAmount: Number(row.invoiceAmount || 0),
+            invoiceAmount: 0,
             paidAmount: Number(row.paidAmount || 0),
             expenseDate: row.paymentDate || undefined,
             payer: row.payer || "",
@@ -472,11 +783,36 @@ export default function RealExpenseDetail({
     }
   };
 
+  const handleViewHistory = async () => {
+    if (!resolvedSchoolExpenseId) {
+      toast.error("Không tìm thấy kỳ thu chi");
+      return;
+    }
+
+    try {
+      setHistoryLoading(true);
+      const history = await schoolExpenseApi.getHistory(
+        resolvedSchoolExpenseId,
+      );
+      console.log("handleViewHistory", history);
+      setHistoryList(normalizeHistory(history));
+      setShowHistory(true);
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Không thể tải lịch sử thao tác";
+      toast.error(Array.isArray(message) ? message.join(", ") : message);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
   // CANCEL EDIT
   const handleCancelEdit = () => {
     setEditingItem(null);
 
-    setRevenueRows([initialExpenseRow]);
+    setRevenueRows([initialRevenueRow]);
   };
 
   // CASH POLICY
@@ -537,15 +873,55 @@ export default function RealExpenseDetail({
   }, [activeSubjectId]);
 
   useEffect(() => {
-    if (activeSubjectId && schoolExpenseId) {
+    if (activeSubjectId && resolvedSchoolExpenseId) {
       loadExpenseData(activeSubjectId);
     }
-  }, [schoolExpenseId]);
+  }, [activeSubjectId, resolvedSchoolExpenseId]);
 
   const schoolYears = useMemo(() => {
     if (!subjects.length) return [];
     return [...new Set(subjects.map((s: any) => s.schoolYear).filter(Boolean))];
   }, [subjects]);
+
+  const historyEmployeeGroups = useMemo(() => {
+    const groupMap = new Map<string, any[]>();
+
+    historyList.forEach((item) => {
+      const employeeName = getHistoryEmployeeName(item);
+      groupMap.set(employeeName, [...(groupMap.get(employeeName) || []), item]);
+    });
+
+    return Array.from(groupMap.entries()).map(([employeeName, items]) => ({
+      employeeName,
+      items,
+    }));
+  }, [historyList]);
+
+  const selectedHistoryGroups = useMemo(() => {
+    if (selectedHistoryEmployee === ALL_HISTORY_EMPLOYEES) {
+      return historyEmployeeGroups;
+    }
+
+    return historyEmployeeGroups.filter(
+      (group) => group.employeeName === selectedHistoryEmployee,
+    );
+  }, [historyEmployeeGroups, selectedHistoryEmployee]);
+
+  const selectedHistoryCount = selectedHistoryGroups.reduce(
+    (sum, group) => sum + group.items.length,
+    0,
+  );
+
+  useEffect(() => {
+    if (
+      selectedHistoryEmployee !== ALL_HISTORY_EMPLOYEES &&
+      !historyEmployeeGroups.some(
+        (group) => group.employeeName === selectedHistoryEmployee,
+      )
+    ) {
+      setSelectedHistoryEmployee(ALL_HISTORY_EMPLOYEES);
+    }
+  }, [historyEmployeeGroups, selectedHistoryEmployee]);
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -758,6 +1134,9 @@ export default function RealExpenseDetail({
                   updateManagementRow={updateManagementRow}
                   handleSubmit={handleSubmit}
                   handleCancelEdit={handleCancelEdit}
+                  handleViewHistory={handleViewHistory}
+                  historyLoading={historyLoading}
+                  historyCount={historyList.length}
                 />
 
                 {/* SAVED DATA */}
@@ -782,14 +1161,26 @@ export default function RealExpenseDetail({
                                 <th className="px-5 py-4 text-left">Số tiết</th>
                                 <th className="px-5 py-4 text-left">HS</th>
                                 <th className="px-5 py-4 text-left">Tháng</th>
-                                <th className="px-5 py-4 text-right">Đơn giá</th>
-                                <th className="px-5 py-4 text-right">Thành tiền</th>
+                                <th className="px-5 py-4 text-right">
+                                  Đơn giá
+                                </th>
+                                <th className="px-5 py-4 text-right">
+                                  Thành tiền
+                                </th>
                                 <th className="px-5 py-4 text-center">HĐ</th>
-                                <th className="px-5 py-4 text-left">Ngày xuất HĐ</th>
+                                <th className="px-5 py-4 text-left">
+                                  Ngày xuất HĐ
+                                </th>
                                 <th className="px-5 py-4 text-right">Đã thu</th>
-                                <th className="px-5 py-4 text-left">Hình thức</th>
-                                <th className="px-5 py-4 text-left">Ngày thu</th>
-                                <th className="px-5 py-4 text-right">Còn lại</th>
+                                <th className="px-5 py-4 text-left">
+                                  Hình thức
+                                </th>
+                                <th className="px-5 py-4 text-left">
+                                  Ngày thu
+                                </th>
+                                <th className="px-5 py-4 text-right">
+                                  Còn lại
+                                </th>
                               </tr>
                             </thead>
                             <tbody>
@@ -806,12 +1197,12 @@ export default function RealExpenseDetail({
                                   r.invoiceType === "company"
                                     ? "Xuất HĐ Cty"
                                     : r.invoiceType === "student"
-                                      ? "Xuất HĐ HS"
-                                      : r.invoiceType === "none"
-                                        ? "Không xuất"
-                                        : r.invoiceType === "other"
-                                          ? r.invoiceOther || "Khác"
-                                          : "-";
+                                    ? "Xuất HĐ HS"
+                                    : r.invoiceType === "none"
+                                    ? "Không xuất"
+                                    : r.invoiceType === "other"
+                                    ? r.invoiceOther || "Khác"
+                                    : "-";
 
                                 return (
                                   <tr
@@ -850,8 +1241,8 @@ export default function RealExpenseDetail({
                                       {r.paymentMethod === "cash"
                                         ? "Tiền mặt"
                                         : r.paymentMethod === "bank_transfer"
-                                          ? "Chuyển khoản"
-                                          : "-"}
+                                        ? "Chuyển khoản"
+                                        : "-"}
                                     </td>
                                     <td className="px-5 py-4 font-semibold">
                                       {r.paymentDate || "-"}
@@ -882,16 +1273,30 @@ export default function RealExpenseDetail({
                                 <th className="px-5 py-4 text-left">HS</th>
                                 <th className="px-5 py-4 text-left">Tháng</th>
                                 <th className="px-5 py-4 text-right">ĐG GV</th>
-                                <th className="px-5 py-4 text-right">Giáo viên</th>
-                                <th className="px-5 py-4 text-right">ĐG Thuế</th>
+                                <th className="px-5 py-4 text-right">
+                                  Giáo viên
+                                </th>
+                                <th className="px-5 py-4 text-right">
+                                  ĐG Thuế
+                                </th>
                                 <th className="px-5 py-4 text-right">Thuế</th>
-                                <th className="px-5 py-4 text-right">ĐG CSVC</th>
+                                <th className="px-5 py-4 text-right">
+                                  ĐG CSVC
+                                </th>
                                 <th className="px-5 py-4 text-right">CSVC</th>
-                                <th className="px-5 py-4 text-right">Chi trường</th>
+                                <th className="px-5 py-4 text-right">
+                                  Chi trường
+                                </th>
                                 <th className="px-5 py-4 text-right">Đã chi</th>
-                                <th className="px-5 py-4 text-right">Còn lại</th>
-                                <th className="px-5 py-4 text-left">Ngày chi</th>
-                                <th className="px-5 py-4 text-left">Người chi</th>
+                                <th className="px-5 py-4 text-right">
+                                  Còn lại
+                                </th>
+                                <th className="px-5 py-4 text-left">
+                                  Ngày chi
+                                </th>
+                                <th className="px-5 py-4 text-left">
+                                  Người chi
+                                </th>
                                 <th className="px-5 py-4 text-left">Ghi chú</th>
                               </tr>
                             </thead>
@@ -908,7 +1313,8 @@ export default function RealExpenseDetail({
                                 const csvcUP = Number(
                                   r.csvcUnitPrice ?? r.csvc ?? 0,
                                 );
-                                const teacherAmt = students * months * teacherUP;
+                                const teacherAmt =
+                                  students * months * teacherUP;
                                 const taxAmt = students * months * taxUP;
                                 const csvcAmt = students * csvcUP;
                                 const totalSchool =
@@ -992,15 +1398,29 @@ export default function RealExpenseDetail({
                                 <th className="px-5 py-4 text-left">HS</th>
                                 <th className="px-5 py-4 text-left">Tháng</th>
                                 <th className="px-5 py-4 text-right">ĐG QL1</th>
-                                <th className="px-5 py-4 text-right">Chi QL1</th>
+                                <th className="px-5 py-4 text-right">
+                                  Chi QL1
+                                </th>
                                 <th className="px-5 py-4 text-right">ĐG QL2</th>
-                                <th className="px-5 py-4 text-right">Chi QL2</th>
-                                <th className="px-5 py-4 text-right">Tổng chi ngoài</th>
-                                <th className="px-5 py-4 text-right">Tiền HĐ</th>
+                                <th className="px-5 py-4 text-right">
+                                  Chi QL2
+                                </th>
+                                <th className="px-5 py-4 text-right">
+                                  Tổng chi ngoài
+                                </th>
+                                <th className="px-5 py-4 text-right">
+                                  Tiền HĐ
+                                </th>
                                 <th className="px-5 py-4 text-right">Đã chi</th>
-                                <th className="px-5 py-4 text-right">Còn chi</th>
-                                <th className="px-5 py-4 text-left">Ngày chi</th>
-                                <th className="px-5 py-4 text-left">Người chi</th>
+                                <th className="px-5 py-4 text-right">
+                                  Còn chi
+                                </th>
+                                <th className="px-5 py-4 text-left">
+                                  Ngày chi
+                                </th>
+                                <th className="px-5 py-4 text-left">
+                                  Người chi
+                                </th>
                                 <th className="px-5 py-4 text-left">Ghi chú</th>
                               </tr>
                             </thead>
@@ -1114,6 +1534,181 @@ export default function RealExpenseDetail({
           }
         />
       </div>
+
+      {/* HISTORY POPUP */}
+      {showHistory && (
+        <div
+          className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center"
+          onClick={() => setShowHistory(false)}
+        >
+          <div
+            className="bg-white w-[95%] max-w-5xl max-h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-800 text-white">
+              <span className="font-bold text-lg">
+                📜 Lịch sử thao tác thu chi ({historyList.length})
+              </span>
+              <button
+                onClick={() => setShowHistory(false)}
+                className="w-8 h-8 rounded-full hover:bg-slate-600 flex items-center justify-center transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            {historyList.length > 0 && (
+              <div className="border-b border-slate-100 bg-slate-50 px-5 py-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <label className="block flex-1">
+                    <span className="mb-1 block text-xs font-bold uppercase text-slate-500">
+                      Nhân viên thao tác
+                    </span>
+                    <select
+                      value={selectedHistoryEmployee}
+                      onChange={(event) =>
+                        setSelectedHistoryEmployee(event.target.value)
+                      }
+                      className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                    >
+                      <option value={ALL_HISTORY_EMPLOYEES}>
+                        Tất cả nhân viên ({historyList.length})
+                      </option>
+                      {historyEmployeeGroups.map((group) => (
+                        <option
+                          key={group.employeeName}
+                          value={group.employeeName}
+                        >
+                          {group.employeeName} ({group.items.length})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600">
+                    {selectedHistoryCount} thao tác
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex-1 overflow-y-auto bg-white p-5">
+              {historyList.length === 0 ? (
+                <div className="py-10 text-center">
+                  <p className="text-sm font-bold text-slate-500">
+                    Chưa có lịch sử thao tác thu chi
+                  </p>
+                </div>
+              ) : selectedHistoryGroups.length === 0 ? (
+                <div className="py-10 text-center">
+                  <p className="text-sm font-bold text-slate-500">
+                    Không có thao tác của nhân viên này
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {selectedHistoryGroups.map((group) => (
+                    <details
+                      key={group.employeeName}
+                      open={
+                        selectedHistoryEmployee !== ALL_HISTORY_EMPLOYEES ||
+                        historyEmployeeGroups.length === 1
+                      }
+                      className="rounded-2xl border border-slate-200 bg-white shadow-sm"
+                    >
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4">
+                        <div>
+                          <p className="text-base font-black text-slate-800">
+                            {group.employeeName}
+                          </p>
+                          <p className="mt-0.5 text-xs font-semibold text-slate-400">
+                            Chọn để xem chi tiết thao tác
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-bold text-white">
+                          {group.items.length} thao tác
+                        </span>
+                      </summary>
+
+                      <div className="space-y-3 border-t border-slate-100 bg-slate-50 p-4">
+                        {group.items.map((h: any, idx: number) => {
+                          const info = getHistoryActionInfo(h.action);
+                          const time = formatHistoryTime(h.createdAt);
+
+                          return (
+                            <article
+                              key={h.id || `${group.employeeName}-${idx}`}
+                              className="rounded-2xl border border-slate-100 bg-white p-4"
+                            >
+                              <div className="flex flex-wrap items-center gap-3">
+                                <span
+                                  className={`px-2.5 py-1 rounded-full text-xs font-bold ${info.color}`}
+                                >
+                                  {info.label}
+                                </span>
+                                <span className="text-xs font-semibold text-slate-400">
+                                  {time || "-"}
+                                </span>
+                              </div>
+
+                              {h.oldData && h.newData && (
+                                <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+                                  <div className="rounded-xl bg-red-50 p-3">
+                                    <div className="mb-2 font-bold text-red-600">
+                                      Trước
+                                    </div>
+                                    {renderHistoryPayload(
+                                      h.oldData,
+                                      "Không có dữ liệu trước",
+                                    )}
+                                  </div>
+                                  <div className="rounded-xl bg-green-50 p-3">
+                                    <div className="mb-2 font-bold text-green-600">
+                                      Sau
+                                    </div>
+                                    {renderHistoryPayload(
+                                      h.newData,
+                                      "Không có dữ liệu sau",
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {!h.oldData && h.newData && (
+                                <div className="mt-3 rounded-xl bg-green-50 p-3">
+                                  <div className="mb-2 font-bold text-green-600">
+                                    Dữ liệu mới
+                                  </div>
+                                  {renderHistoryPayload(
+                                    h.newData,
+                                    "Không có dữ liệu mới",
+                                  )}
+                                </div>
+                              )}
+
+                              {h.oldData && !h.newData && (
+                                <div className="mt-3 rounded-xl bg-red-50 p-3">
+                                  <div className="mb-2 font-bold text-red-600">
+                                    Dữ liệu đã xoá
+                                  </div>
+                                  {renderHistoryPayload(
+                                    h.oldData,
+                                    "Không có dữ liệu đã xoá",
+                                  )}
+                                </div>
+                              )}
+                            </article>
+                          );
+                        })}
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

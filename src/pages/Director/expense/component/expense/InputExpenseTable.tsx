@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import { Trash2 } from "lucide-react";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
+import { formatDecimal } from "@/utils/decimal";
+import DecimalInput from "@/components/DecimalInput";
 
 type Props = {
   rows: InputExpenseRow[];
@@ -24,17 +26,6 @@ const invoiceOptions: {
 
 const isInvoiceIssued = (value: InputExpenseRow["invoiceType"]) =>
   value === "company" || value === "student" || value === "other";
-const formatVND = (value?: number | string | null) => {
-  const num = Number(value || 0);
-  if (!num) return "";
-  return num.toLocaleString("vi-VN", { maximumFractionDigits: 10 });
-};
-
-const parseVND = (value: string) => {
-  const cleaned = value.replace(/[^\d,.]/g, "");
-  const normalized = cleaned.replace(/\./g, "").replace(",", ".");
-  return Number(normalized || 0);
-};
 export default function InputExpenseTable({
   rows,
   onUpdate,
@@ -42,7 +33,6 @@ export default function InputExpenseTable({
   onRemove,
   classCount,
 }: Props) {
-  console.log("rowwssss", rows);
   const totals = useMemo(() => {
     let totalInvoice = 0;
     let totalPaid = 0;
@@ -136,7 +126,10 @@ export default function InputExpenseTable({
                     <input
                       type="text"
                       value={row.content || ""}
-                      onChange={(e) => onUpdate(idx, "content", e.target.value)}
+                      maxLength={500}
+                      onChange={(e) =>
+                        onUpdate(idx, "content", e.target.value.slice(0, 500))
+                      }
                       placeholder="Nhập nội dung..."
                       className="w-full h-16 border rounded-lg px-3 text-sm"
                     />
@@ -145,7 +138,9 @@ export default function InputExpenseTable({
                   <td className="border p-3">
                     <input
                       type="number"
-                      value={row.totalPeriods || ""}
+                      min="0"
+                      step="0.01"
+                      value={row.totalPeriods ?? ""}
                       onChange={(e) => {
                         const periods = Number(e.target.value || 0);
 
@@ -165,7 +160,9 @@ export default function InputExpenseTable({
                   <td className="border p-3">
                     <input
                       type="number"
-                      value={row.studentCount || ""}
+                      min="0"
+                      step="0.01"
+                      value={row.studentCount ?? ""}
                       onChange={(e) => {
                         onUpdate(idx, "studentCount", Number(e.target.value || 0));
                       }}
@@ -175,26 +172,28 @@ export default function InputExpenseTable({
                   <td className="border p-3">
                     <input
                       type="number"
-                      step="0.1"
+                      step="0.01"
                       min="0"
                       value={row.monthsCount ?? ""}
                       onChange={(e) => {
                         const value = e.target.value;
 
-                        onUpdate(idx, "monthsCount", value === "" ? "" : value);
+                        onUpdate(
+                          idx,
+                          "monthsCount",
+                          value === "" ? 0 : Number(value),
+                        );
                       }}
                       className="w-full h-16 text-center border rounded-lg text-sm font-semibold"
                     />
                   </td>
 
                   <td className="border p-2 bg-emerald-50">
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={formatVND(row.unitPrice) || ""}
-                      onChange={(e) => {
-                        onUpdate(idx, "unitPrice", parseVND(e.target.value));
-                      }}
+                    <DecimalInput
+                      value={row.unitPrice}
+                      onValueChange={(value) =>
+                        onUpdate(idx, "unitPrice", value)
+                      }
                       placeholder="0"
                       className="w-full h-14 text-center font-bold text-emerald-700 border rounded-lg text-sm"
                     />
@@ -203,7 +202,7 @@ export default function InputExpenseTable({
                   <td className="border p-2 bg-blue-50">
                     <input
                       readOnly
-                      value={formatVND(invoiceAmount) || ""}
+                      value={formatDecimal(invoiceAmount) || ""}
                       className="w-full h-14 text-center font-bold text-blue-700 border rounded-lg text-sm"
                     />
                   </td>
@@ -260,13 +259,11 @@ export default function InputExpenseTable({
                   </td>
 
                   <td className="border p-2 bg-green-50">
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={formatVND(row.paidAmount) || ""}
-                      onChange={(e) => {
-                        onUpdate(idx, "paidAmount", parseVND(e.target.value));
-                      }}
+                    <DecimalInput
+                      value={row.paidAmount}
+                      onValueChange={(value) =>
+                        onUpdate(idx, "paidAmount", value)
+                      }
                       placeholder="0"
                       className="w-full h-16 text-center font-bold text-sm text-green-700 border rounded-lg"
                     />
@@ -300,7 +297,7 @@ export default function InputExpenseTable({
                   <td className="border p-2 bg-orange-50">
                     <input
                       readOnly
-                      value={formatVND(remaining) || ""}
+                      value={formatDecimal(remaining) || ""}
                       className="w-full h-14 text-center font-bold text-orange-700 border rounded-lg text-sm"
                     />
                   </td>

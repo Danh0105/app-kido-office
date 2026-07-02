@@ -4,7 +4,7 @@ const buildFormData = (data: any) => {
     const formData = new FormData();
 
     Object.keys(data).forEach((key) => {
-        if (key !== "file" && data[key] !== undefined) {
+        if (key !== "file" && data[key] !== undefined && data[key] !== null) {
             formData.append(key, data[key]);
         }
     });
@@ -23,6 +23,7 @@ export const suggestApi = {
         component?: string;
         description?: string;
         issueDate?: string;
+        amount?: number | null;
         file?: File;
         policyId?: number;
     }) => {
@@ -44,6 +45,7 @@ export const suggestApi = {
             component?: string;
             description?: string;
             issueDate?: string;
+            amount?: number | null;
             policyId?: number;
             file?: File;
         }

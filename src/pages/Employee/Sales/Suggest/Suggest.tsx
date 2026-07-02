@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import HeaderWithBack from "@/components/HeaderWithBack";
 import SuggestPopup from "./SuggestPopup";
 import { suggestApi } from "@/service/suggest";
+import { formatVnd } from "@/utils/decimal";
 
 type Suggest = {
   id: number;
@@ -9,6 +10,7 @@ type Suggest = {
   component?: string;
   description?: string;
   issueDate?: string;
+  amount?: number | null;
   fileUrl?: string;
   status: "PENDING" | "REVIEWED" | "APPROVED" | "REJECTED";
   rejectReason?: string;
@@ -164,6 +166,12 @@ export default function SuggestPage() {
               <div className="mt-2 space-y-1">
                 {item.component && (
                   <p className="text-xs text-gray-500">🧩 {item.component}</p>
+                )}
+
+                {!!item.amount && (
+                  <p className="text-xs text-gray-500">
+                    💰 {formatVnd(item.amount)} đ
+                  </p>
                 )}
 
                 {item.issueDate && (

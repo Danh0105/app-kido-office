@@ -9,11 +9,10 @@ import statistics from "./static/statistics.png";
 import HDKH2 from "./static/HDKH2.png";
 import HDKH3 from "./static/HDKH3.png";
 
-import { getEmployeeId, getEmployeeRole } from "@/utils/auth";
+import { getEmployeeId, hasRole } from "@/utils/auth";
 import AppHeader from "@/layout/Header";
 import BannerSlider from "@/layout/Banner";
 
-import { policiesApi } from "@/service/policy";
 import { getSocket } from "@/utils/socket";
 import {
   notificationApi,
@@ -23,6 +22,7 @@ import {
   weeklyPlanNotificationApi,
 } from "@/service/notification";
 import ReportDetailPopup from "@/components/ReportDetailPopup";
+import { toast } from "react-hot-toast";
 
 // ================= MENU =================
 type NotificationStats = Record<
@@ -40,9 +40,16 @@ type Notification = {
   message: string;
   createdAt: string;
   isRead: boolean;
-  senderId: number;
+  senderId?: number;
   createdBy: number;
-  meta?: { subjectId?: number };
+  subjectId?: number;
+  meta?: {
+    subjectId?: number;
+    regionName?: string;
+    schoolName?: string;
+    subjectName?: string;
+    schoolYear?: string;
+  };
 };
 type NotificationCategory = "POLICY" | "SUGGEST" | "REPORT" | "WEEKLY_PLAN";
 
@@ -72,13 +79,12 @@ export default function Home() {
   const navigate = useNavigate();
   const isDesktop = useIsDesktop();
 
-  const LIMIT = 10;
+  const LIMIT = 5;
 
   const [selectedReportId, setSelectedReportId] = useState<number | null>(null);
   const [tab, setTab] = useState<"unread" | "read">("unread");
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const role = getEmployeeRole();
   const [notificationStats, setNotificationStats] = useState<NotificationStats>(
     {
       POLICY: { unread: 0, read: 0 },
@@ -88,7 +94,7 @@ export default function Home() {
     },
   );
   const menus =
-    role === "probation"
+    hasRole("probation")
       ? [
           {
             title: "Training",
@@ -158,31 +164,34 @@ export default function Home() {
 
   // ================= INIT =================
   useEffect(() => {
-    const init = async () => {
-      const statsRes = await notificationApi.getStats();
-      setNotificationStats(statsRes.types || statsRes);
+    notificationApi.getStats().then((res) => {
+      setNotificationStats(res.types || res);
+    });
+  }, []);
 
+  useEffect(() => {
+    const loadNotifications = async () => {
+      setNotifications([]);
       const requests = [
         policyNotificationApi.getAll(1, LIMIT, tab),
         suggestNotificationApi.getAll(1, LIMIT, tab),
         reportNotificationApi.getAll(1, LIMIT, tab),
       ];
-
-      if (role !== "employee") {
-        requests.push(
-          weeklyPlanNotificationApi.getAll(1, LIMIT, tab),
-        );
+      if (!hasRole("employee")) {
+        requests.push(weeklyPlanNotificationApi.getAll(1, LIMIT, tab));
       }
-
       const responses = await Promise.all(requests);
-
       const merged = responses.flatMap((item: any) => item.data || []);
-
       setNotifications(merged);
+      setPage({
+        POLICY: { unread: 1, read: 1 },
+        SUGGEST: { unread: 1, read: 1 },
+        REPORT: { unread: 1, read: 1 },
+        WEEKLY_PLAN: { unread: 1, read: 1 },
+      });
     };
-
-    init();
-  }, []);
+    loadNotifications();
+  }, [tab]);
 
   // ================= SOCKET =================
   useEffect(() => {
@@ -215,16 +224,24 @@ export default function Home() {
           return prev;
         }
 
+        setNotificationStats((currentStats) => ({
+          ...currentStats,
+          [data.type]: {
+            ...currentStats[data.type],
+            unread: currentStats[data.type].unread + 1,
+          },
+        }));
+
         return [data, ...prev];
       });
+    };
 
-      setNotificationStats((prev) => ({
-        ...prev,
-        [data.type]: {
-          ...prev[data.type],
-          unread: prev[data.type].unread + 1,
-        },
-      }));
+    const handleRealtimeNotification = (data: Notification) => {
+      handleNew(data);
+
+      if (data.type === "POLICY") {
+        toast.success(data.message || "Chính sách vừa được cập nhật.");
+      }
     };
 
     socket.on("policy-notification:new", handleNew);
@@ -233,7 +250,7 @@ export default function Home() {
 
     socket.on("report-notification:new", handleNew);
 
-    socket.on("notification:new", handleNew);
+    socket.on("notification:new", handleRealtimeNotification);
 
     socket.on("weekly-plan:new", handleNew);
 
@@ -244,7 +261,7 @@ export default function Home() {
 
       socket.off("report-notification:new", handleNew);
 
-      socket.off("notification:new", handleNew);
+      socket.off("notification:new", handleRealtimeNotification);
 
       socket.off("weekly-plan:new", handleNew);
     };
@@ -332,13 +349,7 @@ export default function Home() {
     }
     switch (noti.type) {
       case "POLICY": {
-        const res = await policiesApi.findOne(noti.entityId);
-        navigate(`/director/policy/${noti.entityId}`, {
-          state: {
-            ...res,
-            user: noti.senderId,
-          },
-        });
+        navigate(`/employee/policy/${noti.entityId}`);
         break;
       }
       case "SUGGEST":
@@ -351,7 +362,7 @@ export default function Home() {
         break;
 
       case "WEEKLY_PLAN":
-        navigate(`/director/daily-report/${noti.senderId}`);
+        navigate(`/director/daily-report/${noti.senderId || noti.createdBy}`);
         break;
     }
   };

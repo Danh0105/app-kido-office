@@ -25,3 +25,51 @@ export type RowType = {
     otherCosts?: OtherCost[];
     durationMonths?: number;
 };
+
+export type PolicyData = Record<string, any>;
+
+export type PolicyDiffValue = {
+    old: any;
+    new: any;
+};
+
+export type PolicyDiff = {
+    [fieldName: string]: PolicyDiffValue | PolicyDiff;
+};
+
+export type PolicyHistoryEntry = {
+    id: number;
+    policyId?: number;
+    action: string;
+    updatedBy?: string | { id?: number; name?: string };
+    updatedByName?: string;
+    oldData?: PolicyData | null;
+    newData?: PolicyData | null;
+    diff?: PolicyDiff | null;
+    note?: string | null;
+    status?: string | number;
+    createdAt: string;
+};
+
+export type DirectorPolicyUpdatePayload = {
+    employeeId: number;
+    data: PolicyData;
+    note?: string;
+    durationMonths?: number;
+};
+
+export type DirectorPolicyUpdateResponse = {
+    policy: {
+        id: number;
+        subjectId: number;
+        data: PolicyData;
+        status: string;
+        note?: string | null;
+        currentHistoryId?: number;
+        durationMonths?: number;
+        createdAt?: string;
+        createdBy?: number | { id?: number; name?: string };
+        employeeId?: number;
+    };
+    histories: PolicyHistoryEntry[];
+};

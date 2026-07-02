@@ -14,7 +14,7 @@ export const employeeApi = {
         phone?: string;
         password?: string;
         departmentId?: number;
-        role?: string;
+        roles?: string[];
     }) => {
         const res = await api.post(`/employees`, data);
         return res.data;

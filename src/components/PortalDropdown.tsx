@@ -12,7 +12,7 @@ import {
   Calendar,
 } from "lucide-react";
 
-import { getEmployeeRole } from "@/utils/auth";
+import { hasRole } from "@/utils/auth";
 import { reportNotificationApi } from "@/service/notification";
 
 type NotificationType = "POLICY" | "SUGGEST" | "REPORT" | "WEEKLY_PLAN";
@@ -66,11 +66,13 @@ export default function NotificationDropdown({
   notificationStats,
   onClickNotification,
 }: Props) {
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [typeTab, setTypeTab] = useState<NotificationType>("POLICY");
+  const isEmployee = hasRole("employee");
+  const isSuggestOnlyRole = hasRole("ketoan_congno", "ketoan_truong", "troly_gd");
 
-  const role = getEmployeeRole();
-  const isEmployee = role === "employee";
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [typeTab, setTypeTab] = useState<NotificationType>(
+    isSuggestOnlyRole ? "SUGGEST" : "POLICY",
+  );
 
   const unreadPolicyCount = notificationStats?.POLICY.unread;
   const unreadSuggestCount = notificationStats?.SUGGEST.unread;
@@ -82,36 +84,45 @@ export default function NotificationDropdown({
     icon: any;
     count: number;
     activeClass: string;
-  }[] = [
-    {
-      key: "POLICY",
-      icon: FileText,
-      count: unreadPolicyCount,
-      activeClass: "bg-blue-100 text-blue-600",
-    },
-    {
-      key: "SUGGEST",
-      icon: Lightbulb,
-      count: unreadSuggestCount,
-      activeClass: "bg-green-100 text-green-600",
-    },
-    {
-      key: "REPORT" as NotificationType,
-      icon: ClipboardList,
-      count: unreadReportCount,
-      activeClass: "bg-orange-100 text-orange-600",
-    },
-    ...(isEmployee
-      ? []
-      : [
-          {
-            key: "WEEKLY_PLAN" as NotificationType,
-            icon: CalendarDays,
-            count: unreadPlanCount,
-            activeClass: "bg-purple-100 text-purple-600",
-          },
-        ]),
-  ];
+  }[] = isSuggestOnlyRole
+    ? [
+        {
+          key: "SUGGEST",
+          icon: Lightbulb,
+          count: unreadSuggestCount,
+          activeClass: "bg-green-100 text-green-600",
+        },
+      ]
+    : [
+        {
+          key: "POLICY",
+          icon: FileText,
+          count: unreadPolicyCount,
+          activeClass: "bg-blue-100 text-blue-600",
+        },
+        {
+          key: "SUGGEST",
+          icon: Lightbulb,
+          count: unreadSuggestCount,
+          activeClass: "bg-green-100 text-green-600",
+        },
+        {
+          key: "REPORT" as NotificationType,
+          icon: ClipboardList,
+          count: unreadReportCount,
+          activeClass: "bg-orange-100 text-orange-600",
+        },
+        ...(isEmployee
+          ? []
+          : [
+              {
+                key: "WEEKLY_PLAN" as NotificationType,
+                icon: CalendarDays,
+                count: unreadPlanCount,
+                activeClass: "bg-purple-100 text-purple-600",
+              },
+            ]),
+      ];
 
   // =================== REPORT GROUPED (director) ===================
   type DaySection = {
@@ -234,10 +245,12 @@ export default function NotificationDropdown({
   // =================== HOOKS GUARD ===================
 
   useEffect(() => {
-    if (isEmployee && typeTab === "WEEKLY_PLAN") {
+    if (isSuggestOnlyRole && typeTab !== "SUGGEST") {
+      setTypeTab("SUGGEST");
+    } else if (isEmployee && typeTab === "WEEKLY_PLAN") {
       setTypeTab("POLICY");
     }
-  }, [isEmployee, typeTab]);
+  }, [isEmployee, isSuggestOnlyRole, typeTab]);
 
   const filtered =
     tab === "unread"

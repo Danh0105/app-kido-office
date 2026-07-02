@@ -1,5 +1,59 @@
 import api from "./api";
 
+export type RevenueItemPayload = {
+    rowIndex: number;
+    subjectId: number;
+    content?: string;
+    totalPeriods: number;
+    studentCount: number;
+    monthsCount: number;
+    unitPrice: number;
+    invoiced?: boolean;
+    invoiceType?: string;
+    invoiceOther?: string;
+    invoiceDate?: string;
+    paidAmount: number;
+    paymentMethod?: string;
+    paymentDate?: string;
+};
+
+export type SchoolExpenseItemPayload = {
+    rowIndex: number;
+    subjectId: number;
+    totalPeriods: number;
+    studentCount: number;
+    monthsCount: number;
+    teacherUnitPrice: number;
+    taxUnitPrice: number;
+    csvcUnitPrice: number;
+    paidAmount: number;
+    expenseDate?: string;
+    payer?: string;
+    note?: string;
+};
+
+export type ManagementExpenseItemPayload = {
+    rowIndex: number;
+    subjectId: number;
+    totalPeriods: number;
+    studentCount: number;
+    monthsCount: number;
+    ql1UnitPrice: number;
+    ql2UnitPrice: number;
+    invoiceAmount?: number;
+    paidAmount: number;
+    expenseDate?: string;
+    payer?: string;
+    note?: string;
+};
+
+export type SaveSchoolExpensePayload = {
+    subjectId: number;
+    revenueItems: RevenueItemPayload[];
+    schoolExpenseItems: SchoolExpenseItemPayload[];
+    managementExpenseItems: ManagementExpenseItemPayload[];
+};
+
 export const schoolExpenseApi = {
     // GET ALL
     getAll: async (params?: any) => {
@@ -58,12 +112,7 @@ export const schoolExpenseApi = {
     },
     saveAll: async (
         id: number,
-        data: {
-            subjectId: number;
-            revenueItems: any[];
-            schoolExpenseItems: any[];
-            managementExpenseItems: any[];
-        },
+        data: SaveSchoolExpensePayload,
     ) => {
         const res = await api.post(
             `/school-expenses/${id}/save-all`,
@@ -75,6 +124,14 @@ export const schoolExpenseApi = {
     getSummary: async (id: number, subjectId?: number) => {
         const res = await api.get(
             `/school-expenses/${id}/summary`,
+            { params: subjectId ? { subjectId } : {} },
+        );
+        return res.data;
+    },
+
+    getItems: async (id: number, subjectId?: number) => {
+        const res = await api.get(
+            `/school-expenses/${id}/items`,
             { params: subjectId ? { subjectId } : {} },
         );
         return res.data;

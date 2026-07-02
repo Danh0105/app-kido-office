@@ -2,6 +2,8 @@
 
 import { Trash2 } from "lucide-react";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
+import { formatDecimal } from "@/utils/decimal";
+import DecimalInput from "@/components/DecimalInput";
 
 type Props = {
   row: any;
@@ -15,7 +17,7 @@ type Props = {
     field: keyof InputExpenseRow,
     value: any,
   ) => void;
-  updateRow: (index: number, field: string, value: string) => void;
+  updateRow: (index: number, field: string, value: string | number) => void;
   removeRow: (index: number) => void;
 };
 
@@ -32,32 +34,28 @@ export default function ManagementExpenseRow({
   const months = Number(inputData.monthsCount || 0);
   console.log("subject data", subjects);
 
-  const ql1 = Number(subjects?.policies?.[0]?.data?.ttcs?.[0]?.ql1Percent || 0);
+  const policyQl1 = Number(
+    subjects?.policies?.[0]?.data?.ttcs?.[0]?.ql1Percent || 0,
+  );
 
-  const ql2 = Number(subjects?.policies?.[0]?.data?.ttcs?.[0]?.ql2Percent || 0);
+  const policyQl2 = Number(
+    subjects?.policies?.[0]?.data?.ttcs?.[0]?.ql2Percent || 0,
+  );
 
   const ql1Tax = Number(subjects?.policies?.[0]?.data?.ttcs?.[0]?.ql1Tax || 0);
 
   const ql2Tax = Number(subjects?.policies?.[0]?.data?.ttcs?.[0]?.ql2Tax || 0);
 
-  const totalQL1Expense = (ql1 - ql1Tax) * students * months;
+  const ql1UnitPrice = Number(row.ql1UnitPrice ?? policyQl1 - ql1Tax);
+  const ql2UnitPrice = Number(row.ql2UnitPrice ?? policyQl2 - ql2Tax);
 
-  const totalQL2Expense = (ql2 - ql2Tax) * students * months;
+  const totalQL1Expense = ql1UnitPrice * students * months;
+
+  const totalQL2Expense = ql2UnitPrice * students * months;
 
   const totalOutsideExpense = totalQL1Expense + totalQL2Expense;
   const paidAmount = Number(row.paidAmount || 0);
   const remainingOutsideExpense = totalOutsideExpense - paidAmount;
-
-  const formatVND = (value?: number | string | null) => {
-    const num = Number(value || 0);
-    if (!num) return "";
-    return num.toLocaleString("vi-VN", { maximumFractionDigits: 10 });
-  };
-
-  const parseVND = (value: string) => {
-    const cleaned = value.replace(/[^\d,.]/g, "");
-    return cleaned.replace(/\./g, "").replace(",", ".");
-  };
 
   const metricInputClass = `
     w-full
@@ -89,7 +87,10 @@ export default function ManagementExpenseRow({
       <div className="flex items-center p-3">
         <input
           value={inputData.content || ""}
-          onChange={(e) => updateInputRow(index, "content", e.target.value)}
+          maxLength={500}
+          onChange={(e) =>
+            updateInputRow(index, "content", e.target.value.slice(0, 500))
+          }
           placeholder="Nhập nội dung..."
           className="w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
         />
@@ -99,7 +100,9 @@ export default function ManagementExpenseRow({
       <div className="flex items-center justify-center p-3 text-center flex items-center">
         <input
           type="number"
-          value={inputData.totalPeriods || ""}
+          min="0"
+          step="0.01"
+          value={inputData.totalPeriods ?? ""}
           onChange={(e) =>
             updateInputRow(index, "totalPeriods", Number(e.target.value || 0))
           }
@@ -111,7 +114,9 @@ export default function ManagementExpenseRow({
       <div className="flex items-center justify-center p-3 text-center flex items-center">
         <input
           type="number"
-          value={inputData.studentCount || ""}
+          min="0"
+          step="0.01"
+          value={inputData.studentCount ?? ""}
           onChange={(e) =>
             updateInputRow(index, "studentCount", Number(e.target.value || 0))
           }
@@ -123,7 +128,9 @@ export default function ManagementExpenseRow({
       <div className="flex items-center justify-center p-3 text-center flex items-center">
         <input
           type="number"
-          value={inputData.monthsCount || ""}
+          min="0"
+          step="0.01"
+          value={inputData.monthsCount ?? ""}
           onChange={(e) =>
             updateInputRow(index, "monthsCount", Number(e.target.value || 0))
           }
@@ -132,22 +139,13 @@ export default function ManagementExpenseRow({
       </div>
       {/* Đơn giá  QL1 */}
       <div className="p-2">
-        <div
-          className="
-            h-11
-            rounded-xl
-            border border-emerald-100
-            bg-emerald-50
-            px-3
-            text-center
-            flex items-center
-            font-bold
-            text-emerald-700
-            flex items-center justify-center
-          "
-        >
-          {ql1.toLocaleString("vi-VN")}
-        </div>
+        <DecimalInput
+          value={ql1UnitPrice}
+          onValueChange={(value) =>
+            updateRow(index, "ql1UnitPrice", value)
+          }
+          className={`${metricInputClass} text-emerald-700`}
+        />
       </div>
       {/* Chi QL1 */}
       <div className="p-2">
@@ -170,22 +168,13 @@ export default function ManagementExpenseRow({
       </div>
       {/* Đơn giá  QL2 */}
       <div className="p-2">
-        <div
-          className="
-            h-11
-            rounded-xl
-            border border-emerald-100
-            bg-emerald-50
-            px-3
-            text-center
-            flex items-center
-            font-bold
-            text-emerald-700
-            flex items-center justify-center
-          "
-        >
-          {ql2.toLocaleString("vi-VN")}
-        </div>
+        <DecimalInput
+          value={ql2UnitPrice}
+          onValueChange={(value) =>
+            updateRow(index, "ql2UnitPrice", value)
+          }
+          className={`${metricInputClass} text-cyan-700`}
+        />
       </div>
       {/* Chi QL2 */}
       <div className="p-2">
@@ -245,10 +234,10 @@ export default function ManagementExpenseRow({
 
       {/* PAID */}
       <div className="p-2 border-r border-slate-100">
-        <input
-          value={formatVND(paidAmount) || ''}
-          onChange={(e) => {
-            updateRow(index, "paidAmount", parseVND(e.target.value));
+        <DecimalInput
+          value={paidAmount}
+          onValueChange={(value) => {
+            updateRow(index, "paidAmount", value);
           }}
           placeholder="0"
           className="
@@ -265,7 +254,7 @@ export default function ManagementExpenseRow({
       {/* REMAINING */}
       <div className="p-2 border-r border-slate-100">
         <input
-          value={formatVND(remainingOutsideExpense) || ''}
+          value={formatDecimal(remainingOutsideExpense) || ''}
           readOnly
           className="
             w-full h-11 rounded-lg

@@ -14,6 +14,7 @@ import policy from "./static/policy.png";
 import statistics from "./static/statistics.png";
 import HDKH2 from "./static/HDKH2.png";
 import HDKH3 from "./static/HDKH3.png";
+import team from "./static/team.png";
 import report from "./static/report.png";
 import suggest from "./static/suggest.png";
 import {
@@ -24,10 +25,10 @@ import {
   weeklyPlanNotificationApi,
 } from "@/service/notification";
 import { get } from "firebase/database";
-import { getEmployeeRole } from "@/utils/auth";
+import { hasRole } from "@/utils/auth";
 
 // ================= MENU =================
-const menus = [
+const ALL_MENUS = [
   { title: "Chính sách", icon: policy, path: "nhan-vien", from: "policy" },
   { title: "Báo cáo", icon: report, path: "nhan-vien", from: "report" },
   {
@@ -43,6 +44,22 @@ const menus = [
     path: "expense-management",
     from: "expense",
   },
+  {
+    title: "Nhân viên",
+    icon: team,
+    path: "employee-management",
+    from: "management",
+  },
+];
+
+const LIMITED_MENUS = [
+  {
+    title: "QL thu chi",
+    icon: expense,
+    path: "expense-management",
+    from: "expense",
+  },
+  { title: "Đề xuất", icon: suggest, path: "nhan-vien", from: "suggest" },
 ];
 
 // ================= TYPES =================
@@ -143,29 +160,40 @@ export default function Home() {
 
   // ================= INIT =================
   useEffect(() => {
-    const init = async () => {
-      const statsRes = await notificationApi.getStats();
-      setNotificationStats(statsRes.types || statsRes);
-      const requests = [
-        policyNotificationApi.getAll(1, LIMIT, tab),
-        suggestNotificationApi.getAll(1, LIMIT, tab),
-      ];
-      const role = getEmployeeRole();
-      if (role !== "employee") {
+    notificationApi.getStats().then((res) => {
+      setNotificationStats(res.types || res);
+    });
+  }, []);
+
+  const isSuggestOnlyRole = hasRole("ketoan_congno", "ketoan_truong", "troly_gd");
+
+  useEffect(() => {
+    const loadNotifications = async () => {
+      setNotifications([]);
+      const requests = isSuggestOnlyRole
+        ? [suggestNotificationApi.getAll(1, LIMIT, tab)]
+        : [
+            policyNotificationApi.getAll(1, LIMIT, tab),
+            suggestNotificationApi.getAll(1, LIMIT, tab),
+          ];
+      if (!isSuggestOnlyRole && !hasRole("employee")) {
         requests.push(
           reportNotificationApi.getAll(1, LIMIT, tab),
           weeklyPlanNotificationApi.getAll(1, LIMIT, tab),
         );
       }
       const responses = await Promise.all(requests);
-
       const merged = responses.flatMap((item: any) => item.data || []);
-
       setNotifications(merged);
+      setPage({
+        POLICY: { unread: 1, read: 1 },
+        SUGGEST: { unread: 1, read: 1 },
+        REPORT: { unread: 1, read: 1 },
+        WEEKLY_PLAN: { unread: 1, read: 1 },
+      });
     };
-
-    init();
-  }, []);
+    loadNotifications();
+  }, [tab]);
 
   // ================= SOCKET =================
   useEffect(() => {
@@ -193,6 +221,7 @@ export default function Home() {
     const socket = getSocket();
 
     const handleNew = (data: Notification) => {
+      if (isSuggestOnlyRole && data.type !== "SUGGEST") return;
       setNotifications((prev) => {
         if (prev.find((n) => n.id === data.id)) {
           return prev;
@@ -337,6 +366,10 @@ export default function Home() {
     }
   };
 
+  const menus = hasRole("ketoan_congno", "ketoan_truong", "troly_gd", "thuquy")
+    ? LIMITED_MENUS
+    : ALL_MENUS;
+
   const commonProps = {
     navigate,
     notifications,
@@ -347,6 +380,7 @@ export default function Home() {
     hasMore,
     onClickNotification: handleClickNotification,
     notificationStats,
+    menus,
   };
 
   return (
@@ -393,6 +427,7 @@ function HomeMobile(props: any) {
 
 function HomeDesktop(props: any) {
   const navigate = props.navigate;
+  const menus = props.menus;
 
   return (
     <div className="min-h-screen bg-gray-100 flex">
@@ -401,7 +436,7 @@ function HomeDesktop(props: any) {
         <h2 className="text-lg font-bold mb-6">Menu</h2>
 
         <div className="flex flex-col gap-3">
-          {menus.map((item, i) => (
+          {menus.map((item: any, i: number) => (
             <div
               key={i}
               onClick={() =>
@@ -436,7 +471,7 @@ function HomeDesktop(props: any) {
 // ================= SHARED CONTENT =================
 //////////////////////////////////////////////////////////
 
-function Content({ navigate, desktop }: any) {
+function Content({ navigate, desktop, menus }: any) {
   return (
     <div className="mt-4 pb-10">
       {/* MENU */}
@@ -448,7 +483,7 @@ function Content({ navigate, desktop }: any) {
             desktop ? "grid-cols-6 gap-6" : "grid-cols-3 gap-y-6"
           } text-center`}
         >
-          {menus.map((item, i) => (
+          {menus.map((item: any, i: number) => (
             <div
               key={i}
               onClick={() =>

@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { App as CapacitorApp } from "@capacitor/app";
 import { HomeIcon, ArrowLeftIcon } from "@heroicons/react/24/outline";
-import { getEmployeeRole } from "@/utils/auth";
+import { hasRole } from "@/utils/auth";
 type Props = {
     title?: string;
 };
@@ -11,14 +11,12 @@ export default function HeaderWithBack({ title = "Danh sách trường" }: Props
     const navigate = useNavigate();
 
     const goHome = () => {
-        const role = getEmployeeRole();
-
-        if (role === "accountant") {
+        if (hasRole("accountant")) {
             navigate("/director/expense-management");
             return;
         }
 
-        if (role === "director" || role === "saleadmin" || role === "salesadmin_la" || role === "director_la") {
+        if (hasRole("director", "saleadmin", "salesadmin_la", "director_la")) {
             navigate("/director");
         } else {
             navigate("/employee");
@@ -67,10 +65,10 @@ export default function HeaderWithBack({ title = "Danh sách trường" }: Props
             {/* Home */}
             <button
                 onClick={goHome}
-                className="ml-auto flex items-center gap-2 text-white bg-blue-500 px-3 py-2 rounded-xl shadow-sm active:scale-95 transition"
+                className="ml-auto flex items-center gap-1.5 text-blue-600 bg-white px-3 py-1.5 rounded-xl font-medium text-sm active:scale-95 transition shadow-sm"
             >
-                <HomeIcon className="w-5 h-5" />
-                <span className="text-sm font-medium">Trang chủ</span>
+                <HomeIcon className="w-4 h-4" />
+                Trang chủ
             </button>
         </div>
     );

@@ -1,5 +1,9 @@
 import { PolicyStatus } from "@/pages/Director/enum/PolicyStatus";
 import api from "./api";
+import {
+    DirectorPolicyUpdatePayload,
+    DirectorPolicyUpdateResponse,
+} from "@/types/policy";
 
 export const policiesApi = {
     getBySubject: async (subjectId: number) => {
@@ -50,6 +54,14 @@ export const policiesApi = {
 
     update: async (id: number, data: any) => {
         const res = await api.patch(`/policies/${id}`, data);
+        return res.data;
+    },
+
+    directorUpdate: async (
+        id: number,
+        data: DirectorPolicyUpdatePayload,
+    ): Promise<DirectorPolicyUpdateResponse> => {
+        const res = await api.patch(`/policies/${id}/director-update`, data);
         return res.data;
     },
 

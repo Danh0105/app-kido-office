@@ -3,6 +3,8 @@
 import { Trash2 } from "lucide-react";
 import { useMemo } from "react";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
+import { formatDecimal } from "@/utils/decimal";
+import DecimalInput from "@/components/DecimalInput";
 
 type Props = {
   row: any;
@@ -15,7 +17,7 @@ type Props = {
     field: keyof InputExpenseRow,
     value: any,
   ) => void;
-  updateRow: (index: number, field: string, value: string) => void;
+  updateRow: (index: number, field: string, value: string | number) => void;
   removeRow: (index: number) => void;
 };
 
@@ -108,18 +110,6 @@ export default function RevenueExpenseRow({
     focus:ring-blue-100
   `;
 
-  const formatVND = (value?: number | string | null) => {
-    const num = Number(value || 0);
-    if (!num) return "";
-    return num.toLocaleString("vi-VN", { maximumFractionDigits: 10 });
-  };
-
-  const parseVND = (value: string) => {
-    const cleaned = value.replace(/[^\d,.]/g, "");
-    const normalized = cleaned.replace(/\./g, "").replace(",", ".");
-    return normalized;
-  };
-
   return (
     <div
       className={`
@@ -135,7 +125,10 @@ export default function RevenueExpenseRow({
       <div className="flex items-center border-r border-slate-200 px-2 py-2">
         <input
           value={inputData.content || ""}
-          onChange={(e) => updateInputRow(index, "content", e.target.value)}
+          maxLength={500}
+          onChange={(e) =>
+            updateInputRow(index, "content", e.target.value.slice(0, 500))
+          }
           placeholder="Nhập nội dung..."
           className={`${inputClass}`}
         />
@@ -145,7 +138,9 @@ export default function RevenueExpenseRow({
       <div className="flex text-center items-center justify-center border-r border-slate-200 px-2 py-2 font-semibold text-slate-700">
         <input
           type="number"
-          value={inputData.totalPeriods || ""}
+          min="0"
+          step="0.01"
+          value={inputData.totalPeriods ?? ""}
           onChange={(e) =>
             updateInputRow(index, "totalPeriods", Number(e.target.value || 0))
           }
@@ -157,7 +152,9 @@ export default function RevenueExpenseRow({
       <div className="flex text-center items-center justify-center border-r border-slate-200 px-2 py-2 font-semibold text-sky-700">
         <input
           type="number"
-          value={inputData.studentCount || ""}
+          min="0"
+          step="0.01"
+          value={inputData.studentCount ?? ""}
           onChange={(e) =>
             updateInputRow(index, "studentCount", Number(e.target.value || 0))
           }
@@ -169,7 +166,9 @@ export default function RevenueExpenseRow({
       <div className="flex text-center items-center justify-center border-r border-slate-200 px-2 py-2 font-semibold text-indigo-700">
         <input
           type="number"
-          value={inputData.monthsCount || ""}
+          min="0"
+          step="0.01"
+          value={inputData.monthsCount ?? ""}
           onChange={(e) =>
             updateInputRow(index, "monthsCount", Number(e.target.value || 0))
           }
@@ -178,10 +177,10 @@ export default function RevenueExpenseRow({
       </div>
       {/* ĐƠN GIÁ CSVC */}
       <div className="p-2 border-r border-slate-200">
-        <input
-          value={formatVND(csvcUnitPrice) || ""}
-          onChange={(e) =>
-            updateRow(index, "csvcUnitPrice", parseVND(e.target.value))
+        <DecimalInput
+          value={csvcUnitPrice}
+          onValueChange={(value) =>
+            updateRow(index, "csvcUnitPrice", value)
           }
           placeholder="0"
           className={`${metricInputClass} text-emerald-700`}
@@ -204,10 +203,12 @@ export default function RevenueExpenseRow({
       </div>
       {/* ĐƠN GIÁ GIÁO VIÊN (= đơn giá × tháng) */}
       <div className="p-2 border-r border-slate-200">
-        <input
-          readOnly
-          value={formatVND(teacherUnitPrice) || ""}
-          className={`${metricInputClass} text-amber-700 bg-amber-50 border-0`}
+        <DecimalInput
+          value={teacherUnitPrice}
+          onValueChange={(value) =>
+            updateRow(index, "teacherUnitPrice", value)
+          }
+          className={`${metricInputClass} text-amber-700`}
         />
       </div>
 
@@ -229,10 +230,10 @@ export default function RevenueExpenseRow({
 
       {/* ĐƠN GIÁ THUẾ */}
       <div className="p-2 border-r border-slate-200">
-        <input
-          value={formatVND(taxUnitPrice) || ""}
-          onChange={(e) =>
-            updateRow(index, "taxUnitPrice", parseVND(e.target.value))
+        <DecimalInput
+          value={taxUnitPrice}
+          onValueChange={(value) =>
+            updateRow(index, "taxUnitPrice", value)
           }
           placeholder="0"
           className={`${metricInputClass} text-rose-700`}
@@ -259,7 +260,7 @@ export default function RevenueExpenseRow({
       <div className="p-2 border-r border-slate-200">
         <input
           readOnly
-          value={formatVND(calculations.totalSchoolExpense) || ""}
+          value={formatDecimal(calculations.totalSchoolExpense) || ""}
           className="
             w-full h-10
             rounded-lg
@@ -286,10 +287,10 @@ export default function RevenueExpenseRow({
 
       {/* ĐÃ CHI */}
       <div className="p-2 border-r border-slate-200">
-        <input
-          value={formatVND(paidAmount) || ""}
-          onChange={(e) => {
-            updateRow(index, "paidAmount", parseVND(e.target.value));
+        <DecimalInput
+          value={paidAmount}
+          onValueChange={(value) => {
+            updateRow(index, "paidAmount", value);
           }}
           placeholder="0"
           className="
@@ -308,7 +309,7 @@ export default function RevenueExpenseRow({
       <div className="p-2 border-r border-slate-200">
         <input
           readOnly
-          value={formatVND(remainingSchoolExpense) || ""}
+          value={formatDecimal(remainingSchoolExpense) || ""}
           className="
             w-full h-10
             rounded-lg

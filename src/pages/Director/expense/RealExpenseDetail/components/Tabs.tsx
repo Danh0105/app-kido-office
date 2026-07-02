@@ -18,6 +18,12 @@ const staticTabs = [
   },
 ];
 
+const policyYearTab = {
+  key: "policy-year",
+  label: "Chính sách năm",
+  activeClass: "bg-blue-600 text-white shadow-lg",
+};
+
 export default function Tabs({ tab, setTab, subjects, setSubjectId }: Props) {
   console.log("Rendering Tabs with subjects:", subjects);
   const subjectTabs = subjects.map((subject: any) => ({
@@ -28,7 +34,7 @@ export default function Tabs({ tab, setTab, subjects, setSubjectId }: Props) {
     activeClass: "bg-purple-600 text-white shadow-lg",
   }));
 
-  const tabs = [...staticTabs, ...subjectTabs];
+  const tabs = [...staticTabs, ...subjectTabs, policyYearTab];
 
   return (
     <div
@@ -50,6 +56,8 @@ export default function Tabs({ tab, setTab, subjects, setSubjectId }: Props) {
             if (item.key.startsWith("subject-")) {
               const subjectId = Number(item.key.replace("subject-", ""));
               setSubjectId(subjectId);
+            } else {
+              setSubjectId(0);
             }
           }}
           className={`

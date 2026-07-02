@@ -3,7 +3,8 @@ import HeaderWithBack from "@/components/HeaderWithBack";
 import { suggestApi } from "@/service/suggest";
 import { policiesApi } from "@/service/policy";
 import { useParams } from "react-router-dom";
-import { getEmployeeRole } from "@/utils/auth";
+import { hasRole } from "@/utils/auth";
+import { formatVnd } from "@/utils/decimal";
 
 type Suggest = {
   id: number;
@@ -11,6 +12,7 @@ type Suggest = {
   component?: string;
   description?: string;
   issueDate?: string;
+  amount?: number | null;
   fileUrl?: string;
   status: "DRAFT" | "PENDING" | "REVIEWED" | "APPROVED" | "REJECTED";
   policyId?: number;
@@ -73,8 +75,6 @@ export default function SuggestPage() {
   const [data, setData] = useState<Suggest[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedSuggest, setSelectedSuggest] = useState<Suggest | null>(null);
-  const role = getEmployeeRole();
-
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -155,7 +155,6 @@ export default function SuggestPage() {
           <SuggestCard
             key={item.id}
             item={item}
-            role={role}
             onClick={() => handleCardClick(item)}
             onReview={handleReview}
             onApprove={handleApprove}
@@ -179,13 +178,11 @@ export default function SuggestPage() {
 
 function SuggestCard({
   item,
-  role,
   onClick,
   onReview,
   onApprove,
 }: {
   item: Suggest;
-  role: string;
   onClick: () => void;
   onReview: (id: number, s: "REVIEWED" | "REJECTED") => void;
   onApprove: (id: number, s: "APPROVED" | "REJECTED") => void;
@@ -215,6 +212,7 @@ function SuggestCard({
 
       <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-gray-400">
         {item.component && <span>🧩 {item.component}</span>}
+        {!!item.amount && <span>💰 {formatVnd(item.amount)} đ</span>}
         {item.issueDate && <span>📅 {item.issueDate}</span>}
       </div>
 
@@ -248,7 +246,7 @@ function SuggestCard({
       </div>
 
       <div className="flex gap-2 mt-4" onClick={(e) => e.stopPropagation()}>
-        {role === "saleadmin" && item.status === "PENDING" && (
+        {hasRole("saleadmin") && item.status === "PENDING" && (
           <>
             <button
               onClick={() => onReview(item.id, "REVIEWED")}
@@ -265,7 +263,7 @@ function SuggestCard({
           </>
         )}
 
-        {role === "director" &&
+        {hasRole("director") &&
           (item.status === "PENDING" || item.status === "REVIEWED") && (
             <>
               <button
@@ -498,6 +496,11 @@ function SuggestDetailPopup({
               {suggest.component && (
                 <p className="text-xs text-gray-500">
                   Thành phần: {suggest.component}
+                </p>
+              )}
+              {!!suggest.amount && (
+                <p className="text-xs text-gray-500">
+                  Số tiền: {formatVnd(suggest.amount)} đ
                 </p>
               )}
               {suggest.fileUrl && (

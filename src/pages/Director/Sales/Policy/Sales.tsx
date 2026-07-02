@@ -6,7 +6,7 @@ import "./css/Sales.css";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { policiesApi } from "../../../../service/policy";
 import { PolicyStatus } from "../../enum/PolicyStatus";
-import { getEmployeeRole } from "../../../../utils/auth";
+import { hasRole } from "../../../../utils/auth";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import HeaderWithBack from "@/components/HeaderWithBack";
 import { subjectApi } from "@/service/subject.api";
@@ -14,6 +14,9 @@ import ProposalForm from "./ProposalForm";
 import { mapToProposalForm } from "../../../../utils/mapToProposalForm";
 import { employeeApi } from "@/service/employee";
 import PolicyPie from "@/components/PolicyPie";
+import DirectorEditPolicy from "@/components/policy/DirectorEditPolicy";
+import PolicyHistoryTimeline from "@/components/policy/PolicyHistoryTimeline";
+import { PolicyHistoryEntry } from "@/types/policy";
 type OtherCost = {
   id: string;
   name: string;
@@ -56,13 +59,14 @@ export default function Sales({ onLogout }: Props) {
   const [policy, setPolicy] = useState<any>(null);
 
   const [loading, setLoading] = useState(false);
-  useEffect(() => {
-    if (data) return;
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editHistories, setEditHistories] = useState<PolicyHistoryEntry[]>([]);
 
+  useEffect(() => {
     if (!id) return;
 
     fetchPolicy();
-  }, [id, data]);
+  }, [id]);
 
   const fetchPolicy = async () => {
     try {
@@ -79,15 +83,38 @@ export default function Sales({ onLogout }: Props) {
       setLoading(false);
     }
   };
-  const finalData = data || policy?.data;
+  useEffect(() => {
+    const fetchHistory = async () => {
+      if (!id) return;
 
-  const finalUser = user || policy?.createdBy;
+      try {
+        const histories = await policiesApi.getHistoryByPolicy(Number(id));
+        setEditHistories(
+          Array.isArray(histories) ? histories : histories?.data || [],
+        );
+      } catch (error) {
+        console.error("Load policy history failed", error);
+      }
+    };
 
-  const finalSubjectId = subjectId || policy?.subjectId;
+    fetchHistory();
+  }, [id]);
 
-  const finalCurrentHistoryId = currentHistoryId || policy?.currentHistoryId;
+  const finalData = policy?.data || data;
 
-  const finalStatus = status || policy?.status;
+  const policyOwner =
+    policy?.employeeId ??
+    policy?.createdById ??
+    (typeof policy?.createdBy === "object"
+      ? policy?.createdBy?.id
+      : policy?.createdBy);
+  const finalUser = user || policyOwner;
+
+  const finalSubjectId = policy?.subjectId || subjectId;
+
+  const finalCurrentHistoryId = policy?.currentHistoryId || currentHistoryId;
+
+  const finalStatus = policy?.status || status;
 
   const statusConfig: Record<
     string,
@@ -134,6 +161,8 @@ export default function Sales({ onLogout }: Props) {
   const showActions = !isApproved && !isRejected;
   useEffect(() => {
     const fetchData = async () => {
+      if (!finalCurrentHistoryId) return;
+
       try {
         const res = await policiesApi.getByCurrentHistoryId(
           Number(finalCurrentHistoryId),
@@ -145,8 +174,8 @@ export default function Sales({ onLogout }: Props) {
       }
     };
 
-    if (finalData) fetchData();
-  }, [finalData]);
+    if (finalData && finalCurrentHistoryId) fetchData();
+  }, [finalCurrentHistoryId, finalData]);
   const maxLength = Math.max(
     finalData?.httienmat?.length || 0,
     finalData?.htthietbi?.length || 0,
@@ -488,15 +517,26 @@ export default function Sales({ onLogout }: Props) {
             periods={finalData?.periods}
           />
           {renderLogNote()}
+          {editHistories.length > 0 && (
+            <div className="mx-4 mb-24 mt-4 lg:mx-0">
+              <PolicyHistoryTimeline histories={editHistories} />
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
+  const isDirectorRole = hasRole("director", "director_la");
+
+  const handleOpenEdit = () => {
+    if (!finalData) return;
+    setShowEditModal(true);
+  };
+
   const handleApprove = async () => {
     try {
       let status = PolicyStatus.DIRECTOR_APPROVED;
-      const role = getEmployeeRole();
-      if (role === "salesadmin" || role === "salesadmin_la") {
+      if (hasRole("salesadmin", "salesadmin_la")) {
         status = PolicyStatus.SALE_ADMIN_APPROVED;
       }
 
@@ -548,24 +588,34 @@ export default function Sales({ onLogout }: Props) {
       <div className="hidden lg:block pt-16 pb-24 overflow-auto min-h-screen">
         {renderContent()}
 
-        {showActions && (
-          <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur border-t border-gray-200 shadow-lg">
-            <div className="max-w-[1400px] mx-auto px-6 py-3 flex justify-end gap-4">
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur border-t border-gray-200 shadow-lg">
+          <div className="max-w-[1400px] mx-auto px-6 py-3 flex justify-end gap-4">
+            {isDirectorRole && (
               <button
-                onClick={() => setShowRejectModal(true)}
-                className="px-8 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl font-semibold transition"
+                onClick={handleOpenEdit}
+                className="px-8 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-semibold transition"
               >
-                Từ chối
+                Chỉnh sửa chính sách
               </button>
-              <button
-                onClick={() => setShowApproveModal(true)}
-                className="px-8 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-semibold transition"
-              >
-                Duyệt
-              </button>
-            </div>
+            )}
+            {showActions && (
+              <>
+                <button
+                  onClick={() => setShowRejectModal(true)}
+                  className="px-8 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl font-semibold transition"
+                >
+                  Từ chối
+                </button>
+                <button
+                  onClick={() => setShowApproveModal(true)}
+                  className="px-8 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-semibold transition"
+                >
+                  Duyệt
+                </button>
+              </>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       {/* MOBILE */}
@@ -601,6 +651,14 @@ export default function Sales({ onLogout }: Props) {
                     className="flex-1 max-w-[160px] py-3 bg-red-500 text-white rounded-xl shadow font-semibold"
                   >
                     Từ chối
+                  </button>
+                )}
+                {isDirectorRole && (
+                  <button
+                    onClick={handleOpenEdit}
+                    className="px-4 py-3 bg-amber-500 text-white rounded-full shadow font-semibold"
+                  >
+                    Sửa chính sách
                   </button>
                 )}
                 <button
@@ -723,6 +781,23 @@ export default function Sales({ onLogout }: Props) {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {showEditModal && (
+        <div className="fixed inset-0 z-[100] overflow-auto bg-white">
+          <DirectorEditPolicy
+            policyId={Number(id)}
+            employeeId={Number(finalUser)}
+            defaultData={finalData}
+            onClose={() => setShowEditModal(false)}
+            onSuccess={() => {
+              fetchPolicy();
+              policiesApi.getHistoryByPolicy(Number(id)).then((res) => {
+                setEditHistories(Array.isArray(res) ? res : res?.data || []);
+              });
+            }}
+          />
         </div>
       )}
     </div>

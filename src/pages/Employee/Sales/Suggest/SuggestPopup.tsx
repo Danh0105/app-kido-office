@@ -8,6 +8,7 @@ import MobileSelect from "./MobileSelect";
 import "./css/suggest.css";
 import { provinceApi } from "@/service/province";
 import { wardApi } from "@/service/ward";
+import { formatVnd, parseVnd } from "@/utils/decimal";
 
 type Suggest = {
     id?: number;
@@ -15,6 +16,7 @@ type Suggest = {
     component?: string;
     description?: string;
     issueDate?: string;
+    amount?: number | null;
     file?: File | null;
 };
 
@@ -36,6 +38,7 @@ export default function SuggestPopup({
         component: "",
         description: "",
         issueDate: "",
+        amount: null,
         file: null,
     });
 
@@ -208,6 +211,7 @@ export default function SuggestPopup({
                 component: initialData.component || "",
                 description: initialData.description || "",
                 issueDate: initialData.issueDate || "",
+                amount: initialData.amount ?? null,
                 file: null,
             });
 
@@ -220,6 +224,7 @@ export default function SuggestPopup({
                 component: "",
                 description: "",
                 issueDate: "",
+                amount: null,
                 file: null,
             });
 
@@ -337,6 +342,27 @@ export default function SuggestPopup({
                         }
                         className={inputClass}
                     />
+
+                    {/* amount */}
+                    <div className="relative">
+                        <input
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="Số tiền"
+                            value={formatVnd(form.amount)}
+                            onChange={(e) =>
+                                setForm({
+                                    ...form,
+                                    amount: parseVnd(e.target.value),
+                                })
+                            }
+                            className={`${inputClass} pr-10 text-right`}
+                        />
+
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-500">
+                            đ
+                        </span>
+                    </div>
 
                     {/* description */}
                     <textarea

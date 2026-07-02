@@ -5,15 +5,13 @@ import Login from "../pages/Auth/Login";
 import UploadApk from "@/pages/UploadApk";
 import ProtectedRoute from "./ProtectedRoute";
 import RegisterFace from "@/pages/FaceId/RegisterFace";
-import { getEmployeeRole } from "@/utils/auth";
+import { hasRole } from "@/utils/auth";
 /* import TabletPage from "@/pages/Display/TabletPage";
  */ /* import Display from "@/pages/Display/Display";
  */ /* import INTRO from "@/pages/Display"; */
 
 function BlockAccountantOutsideExpense({ children }: any) {
-  const role = getEmployeeRole();
-
-  if (role === "accountant") {
+  if (hasRole("accountant")) {
     return <Navigate to="/director/expense-management" replace />;
   }
 

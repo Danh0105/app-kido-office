@@ -14,7 +14,7 @@ type Props = {
     field: keyof InputExpenseRow,
     value: any,
   ) => void;
-  updateRow: (index: number, field: any, value: string) => void;
+  updateRow: (index: number, field: any, value: string | number) => void;
   removeRow: (index: number) => void;
 };
 

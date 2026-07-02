@@ -31,10 +31,14 @@ export const getEmployeeId = () => {
     return user?.sub;
 };
 
-export const getEmployeeRole = () => {
-
+export const getEmployeeRoles = (): string[] => {
     const user = getUserFromToken();
-    return user?.role;
+    return user?.roles ?? [];
+};
+
+export const hasRole = (...roles: string[]): boolean => {
+    const userRoles = getEmployeeRoles();
+    return roles.some((r) => userRoles.includes(r));
 };
 
 export const getEmployeeName = () => {

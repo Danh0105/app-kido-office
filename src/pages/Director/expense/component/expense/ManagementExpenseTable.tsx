@@ -14,7 +14,7 @@ type Props = {
     field: keyof InputExpenseRow,
     value: any,
   ) => void;
-  updateRow: (index: number, field: any, value: string) => void;
+  updateRow: (index: number, field: any, value: string | number) => void;
   removeRow: (index: number) => void;
 };
 
@@ -40,15 +40,17 @@ export default function ManagementExpenseTable({
       const inputData = inputRows[index] || fallbackInputData;
       const students = Number(inputData.studentCount || 0);
       const months = Number(inputData.monthsCount || 0);
-      const totalQL1Expense = (ql1 - ql1Tax) * students * months;
-      const totalQL2Expense = (ql2 - ql2Tax) * students * months;
+      const ql1UnitPrice = Number(row.ql1UnitPrice ?? ql1 - ql1Tax);
+      const ql2UnitPrice = Number(row.ql2UnitPrice ?? ql2 - ql2Tax);
+      const totalQL1Expense = ql1UnitPrice * students * months;
+      const totalQL2Expense = ql2UnitPrice * students * months;
       const totalOutsideExpense = totalQL1Expense + totalQL2Expense;
       const paidAmount = Number(row.paidAmount || 0);
 
       return {
-        ql1UnitPrice: sum.ql1UnitPrice + ql1,
+        ql1UnitPrice: sum.ql1UnitPrice + ql1UnitPrice,
         ql1Expense: sum.ql1Expense + totalQL1Expense,
-        ql2UnitPrice: sum.ql2UnitPrice + ql2,
+        ql2UnitPrice: sum.ql2UnitPrice + ql2UnitPrice,
         ql2Expense: sum.ql2Expense + totalQL2Expense,
         totalOutsideExpense: sum.totalOutsideExpense + totalOutsideExpense,
         paidAmount: sum.paidAmount + paidAmount,

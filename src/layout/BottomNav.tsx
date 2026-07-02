@@ -1,48 +1,62 @@
 import { Home, User } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { getEmployeeRole } from "@/utils/auth";
+import { hasRole } from "@/utils/auth";
 
 export default function BottomNav() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const role = getEmployeeRole();
-  const isAccountant = role === "accountant";
+  const isAccountant = hasRole("accountant");
+  const isEmployeeType = hasRole(
+    "employee",
+    "probation",
+    "employee_la",
+    "sales",
+  );
+  const isDirectorType = hasRole(
+    "director",
+    "director_la",
+    "saleadmin",
+    "salesadmin_la",
+    "ketoan_congno",
+    "thuquy",
+    "ketoan_truong",
+    "troly_gd",
+  );
 
-  const basePath =
-    isAccountant
-      ? "/director/expense-management"
-      : role === "director_la" ||
-    role === "director" ||
-    role === "saleadmin" ||
-    role === "salesadmin_la"
-      ? "/director"
-      : role === "employee" || role === "probation"
-      ? "/employee"
-      : "/login";
+  const homePath = isAccountant
+    ? "/director/expense-management"
+    : isDirectorType
+    ? "/director"
+    : isEmployeeType
+    ? "/employee/home"
+    : "/";
 
-  const isActive = (path: string) =>
-    location.pathname === path || location.pathname.startsWith(path + "/");
+  const profilePath = "/employee/profile";
+
+  const pathname = location.pathname;
+  const homeActive =
+    pathname === homePath ||
+    pathname === "/director" ||
+    pathname === "/employee/home" ||
+    pathname === "/director/expense-management";
 
   return (
     <div className="fixed bottom-0 left-0 w-full z-50 bg-transparent">
       <div
         className="
-                    w-full 
-                    md:max-w-6xl md:mx-auto
-
-                    bg-white border-t md:border
-                    flex justify-around py-2
-
-                    md:rounded-xl md:shadow
-                    md:mb-2
-                "
+          w-full
+          md:max-w-6xl md:mx-auto
+          bg-white border-t md:border
+          flex justify-around py-2
+          md:rounded-xl md:shadow md:mb-2
+        "
       >
         {/* HOME */}
         <button
-          onClick={() => navigate(`${basePath}/`)}
+          onClick={() => navigate(homePath)}
           className={`flex flex-col items-center ${
-            isActive(basePath) ? "text-orange-500" : "text-gray-400"
+            homeActive ? "text-orange-500" : "text-gray-400"
           }`}
         >
           <Home size={20} />
@@ -54,11 +68,9 @@ export default function BottomNav() {
         {/* PROFILE */}
         {!isAccountant && (
           <button
-            onClick={() => navigate(`/employee/profile`)}
+            onClick={() => navigate(profilePath)}
             className={`flex flex-col items-center ${
-              isActive("/employee/profile")
-                ? "text-orange-500"
-                : "text-gray-400"
+              pathname === profilePath ? "text-orange-500" : "text-gray-400"
             }`}
           >
             <User size={20} />

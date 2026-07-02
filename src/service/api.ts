@@ -26,6 +26,10 @@ api.interceptors.response.use(
             window.location.href = '/login';
         }
 
+        if (status === 403) {
+            alert('Bạn không có quyền truy cập chức năng này');
+        }
+
         return Promise.reject(error);
     },
 );

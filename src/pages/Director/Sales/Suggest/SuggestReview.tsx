@@ -3,7 +3,8 @@ import HeaderWithBack from "@/components/HeaderWithBack";
 import { suggestApi } from "@/service/suggest";
 import { policiesApi } from "@/service/policy";
 import { useParams } from "react-router-dom";
-import { getEmployeeRole } from "@/utils/auth";
+import { hasRole } from "@/utils/auth";
+import { formatVnd } from "@/utils/decimal";
 
 type Suggest = {
   id: number;
@@ -11,6 +12,7 @@ type Suggest = {
   component?: string;
   description?: string;
   issueDate?: string;
+  amount?: number | null;
   fileUrl?: string;
   status: "DRAFT" | "PENDING" | "REVIEWED" | "APPROVED" | "REJECTED";
   policyId?: number;
@@ -69,8 +71,6 @@ export default function SuggestReview() {
   const suggestId = useParams().suggestId;
   const [data, setData] = useState<Suggest | null>(null);
   const [loading, setLoading] = useState(false);
-  const role = getEmployeeRole();
-
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -309,6 +309,11 @@ export default function SuggestReview() {
               Thành phần: {data.component}
             </p>
           )}
+          {!!data.amount && (
+            <p className="text-xs text-gray-500">
+              Số tiền: {formatVnd(data.amount)} đ
+            </p>
+          )}
           {data.fileUrl && (
             <a
               href={`https://sales.kidoedu.vn${data.fileUrl}`}
@@ -321,7 +326,7 @@ export default function SuggestReview() {
 
           {/* ACTION */}
           <div className="flex gap-2 pt-2">
-            {role === "saleadmin" && data.status === "PENDING" && (
+            {hasRole("saleadmin") && data.status === "PENDING" && (
               <>
                 <button
                   onClick={() => handleReview(data.id, "REVIEWED")}
@@ -338,7 +343,7 @@ export default function SuggestReview() {
               </>
             )}
 
-            {role === "director" &&
+            {hasRole("director") &&
               (data.status === "PENDING" || data.status === "REVIEWED") && (
                 <>
                   <button

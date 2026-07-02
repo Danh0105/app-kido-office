@@ -5,7 +5,7 @@ import SchoolList from "../pages/Employee/Sales/School/SchoolList";
 import SubjectList from "../pages/Employee/Sales/School/SubjectList";
 import PolicyList from "../pages/Employee/Sales/Policy/PolicyList";
 import PolicyView from "../pages/Employee/Sales/PolicyView/Sales";
-import PolicyHistoryList from "../pages/Employee/Sales/Policy/PolicyHistoryList";
+import PolicyHistoryPage from "@/pages/Policy/PolicyHistoryPage";
 import SchoolYearPage from "../pages/Employee/Sales/School/SchoolYear";
 import Profile from "../pages/Employee/Profile";
 import DailyReportPage from "@/pages/Employee/Sales/report/DailyReportPage";
@@ -29,9 +29,10 @@ export default function EmployeeRoutes() {
       <Route path="policy-list/:subject" element={<PolicyList />} />
       <Route
         path="policy-history-list/:policyId"
-        element={<PolicyHistoryList />}
+        element={<PolicyHistoryPage audience="employee" />}
       />
       <Route path="policy/view" element={<PolicyView />} />
+      <Route path="policy/:policyId" element={<PolicyView />} />
       <Route path="region/:employeeId" element={<Region />} />
       <Route index element={<Home />} />
       <Route path="/suggest" element={<Suggest />} />

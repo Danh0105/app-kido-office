@@ -65,9 +65,11 @@ export default function Login({ onSuccess }: Props) {
 
       await initWebPush();
 
-      if (data.user.role === "employee" || data.user.role === "probation") {
+      const roles: string[] = data.user.roles ?? [];
+      const EMPLOYEE_ROLES = ["employee", "probation", "employee_la", "sales"];
+      if (EMPLOYEE_ROLES.some((r) => roles.includes(r))) {
         navigate("/employee/home");
-      } else if (data.user.role === "accountant") {
+      } else if (roles.includes("accountant")) {
         navigate("/director/expense-management");
       } else {
         navigate("/director");
@@ -188,9 +190,11 @@ export default function Login({ onSuccess }: Props) {
               onSuccess={async (user: any) => {
                 await initWebPush();
 
-                if (user.role === "employee" || user.role === "probation") {
+                const roles: string[] = user.roles ?? [];
+                const EMPLOYEE_ROLES = ["employee", "probation", "employee_la", "sales"];
+                if (EMPLOYEE_ROLES.some((r) => roles.includes(r))) {
                   navigate("/employee/home");
-                } else if (user.role === "accountant") {
+                } else if (roles.includes("accountant")) {
                   navigate("/director/expense-management");
                 } else {
                   navigate("/director");

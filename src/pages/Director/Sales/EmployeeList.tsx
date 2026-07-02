@@ -13,7 +13,7 @@ type Employee = {
   name: string;
   email: string;
   phone: string;
-  role: string;
+  roles: string[];
 };
 
 export default function EmployeeList() {
@@ -22,9 +22,6 @@ export default function EmployeeList() {
   const from = location.state?.from;
   const [showHandover, setShowHandover] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [showForm, setShowForm] = useState(false);
-  const [availableEmployees, setAvailableEmployees] = useState<Employee[]>([]);
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
   const [showRegionModal, setShowRegionModal] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(
@@ -48,20 +45,6 @@ export default function EmployeeList() {
   const [wardName, setWardName] = useState("");
   const [wardInputs, setWardInputs] = useState([""]);
   const [selectedProvince, setSelectedProvince] = useState<any>(null);
-
-  const [form, setForm] = useState({
-    name: "",
-    phone: "",
-    email: "",
-    password: "",
-    role: "",
-  });
-
-  const toggleSelect = (id: number) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
-    );
-  };
 
   const fetchProvinces = async (employeeId: number) => {
     const data = await provinceApi.getProvincesByEmployee(employeeId);
@@ -111,53 +94,11 @@ export default function EmployeeList() {
     }
   }, []);
 
-  const handleCreate = async () => {
-    try {
-      const res = await employeeApi.create({
-        ...form,
-        departmentId: 1,
-      });
-
-      console.log(res);
-
-      alert("Tạo nhân viên thành công");
-
-      setShowForm(false);
-
-      setForm({
-        name: "",
-        phone: "",
-        email: "",
-        password: "",
-        role: "",
-      });
-
-      fetchData();
-    } catch (err: any) {
-      console.error("Create employee failed", err);
-
-      // render message từ backend
-      const message = err?.response?.data?.message;
-
-      if (Array.isArray(message)) {
-        alert(message.join("\n"));
-      } else {
-        alert(message || "Tạo nhân viên thất bại");
-      }
-    }
-  };
-
   return (
     <div className="bg-gray-100 min-h-screen">
       <HeaderWithBack title="Danh sách nhân viên" />
       {from === "policy" ? (
         <div className="p-4 mt-[60px] flex flex-col gap-3">
-          <button
-            onClick={() => setShowForm(true)}
-            className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg font-medium transition"
-          >
-            + Thêm nhân viên
-          </button>
           <div className="flex gap-3">
             <button
               onClick={() => setShowAssign(true)}
@@ -401,100 +342,6 @@ export default function EmployeeList() {
         </div>
       )}
 
-      {/* FORM */}
-      {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div
-            className="absolute inset-0 bg-black/40"
-            onClick={() => setShowForm(false)}
-          />
-
-          <div className="relative bg-white w-[90%] max-w-md rounded-2xl shadow-lg p-4 space-y-3">
-            <h2 className="text-lg font-semibold">Tạo nhân viên</h2>
-
-            <div className="space-y-3 max-h-[70vh] overflow-y-auto">
-              <input
-                placeholder="Tên"
-                value={form.name}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    name: e.target.value,
-                  })
-                }
-                className="w-full p-3 rounded-xl border"
-              />
-
-              <input
-                placeholder="Số điện thoại"
-                value={form.phone}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    phone: e.target.value,
-                  })
-                }
-                className="w-full p-3 rounded-xl border"
-              />
-
-              <input
-                type="password"
-                placeholder="Mật khẩu"
-                value={form.password || ""}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    password: e.target.value,
-                  })
-                }
-                className="w-full p-3 rounded-xl border"
-              />
-
-              <input
-                placeholder="Email"
-                value={form.email}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    email: e.target.value,
-                  })
-                }
-                className="w-full p-3 rounded-xl border"
-              />
-            </div>
-            <select
-              value={form.role || ""}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  role: e.target.value,
-                })
-              }
-              className="w-full p-3 rounded-xl border"
-            >
-              <option value="">Chọn bộ phận</option>
-              <option value="employee">Kinh doanh</option>
-              <option value="probation">Thử việc</option>
-              <option value="employee_la">Long An</option>
-            </select>
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={() => setShowForm(false)}
-                className="flex-1 bg-gray-300 py-3 rounded-xl"
-              >
-                Huỷ
-              </button>
-              <button
-                onClick={handleCreate}
-                className="flex-1 bg-blue-500 text-white py-3 rounded-xl"
-              >
-                Lưu
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* LIST */}
       <div className="p-4 space-y-3">
         {employees.map((item) => (
@@ -537,41 +384,38 @@ export default function EmployeeList() {
               <div>
                 <p className="font-semibold text-gray-800">{item.name}</p>
 
-                <div className="flex items-center gap-2 mt-1">
-                  <span
-                    className={`text-[11px] px-2 py-[2px] rounded-full font-medium
-        ${
-          item.role === "employee"
-            ? "bg-blue-100 text-blue-600"
-            : item.role === "probation"
-            ? "bg-yellow-100 text-yellow-700"
-            : item.role === "employee_la"
-            ? "bg-green-100 text-green-600"
-            : item.role === "director_la"
-            ? "bg-red-100 text-gray-600"
-            : item.role === "saleadmin"
-            ? "bg-green-100 text-gray-600"
-            : "bg-red-100 text-gray-600"
-        }
-      `}
-                  >
-                    {item.role === "employee"
-                      ? "Kinh doanh"
-                      : item.role === "probation"
-                      ? "Thử việc"
-                      : item.role === "employee_la"
-                      ? "Long An"
-                      : item.role === "director_la"
-                      ? "Giám đốc Long An"
-                      : item.role}
-                  </span>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  {(item.roles ?? []).map((r) => (
+                    <span
+                      key={r}
+                      className={`text-[11px] px-2 py-[2px] rounded-full font-medium
+                        ${r === "employee" ? "bg-blue-100 text-blue-600"
+                          : r === "probation" ? "bg-yellow-100 text-yellow-700"
+                          : r === "employee_la" ? "bg-green-100 text-green-600"
+                          : r === "director_la" ? "bg-red-100 text-red-700"
+                          : r === "director" ? "bg-purple-100 text-purple-700"
+                          : r === "saleadmin" ? "bg-green-100 text-green-700"
+                          : r === "accountant" ? "bg-orange-100 text-orange-700"
+                          : "bg-gray-100 text-gray-600"}`}
+                    >
+                      {r === "employee" ? "Kinh doanh"
+                        : r === "probation" ? "Thử việc"
+                        : r === "employee_la" ? "Long An"
+                        : r === "director_la" ? "Giám đốc LA"
+                        : r === "director" ? "Giám đốc"
+                        : r === "saleadmin" ? "Sale Admin"
+                        : r === "salesadmin_la" ? "Sale Admin LA"
+                        : r === "accountant" ? "Kế toán"
+                        : r}
+                    </span>
+                  ))}
 
                   <p className="text-sm text-gray-500">{item.phone}</p>
                 </div>
               </div>
             </div>
 
-            {from === "report" ? (
+            {from === "report" && (
               reportedIds.includes(item.id) ? (
                 <span className="text-xs bg-green-100 text-green-600 px-3 py-1 rounded-full">
                   ✅ Đã báo cáo
@@ -581,81 +425,10 @@ export default function EmployeeList() {
                   ❌ Chưa báo cáo
                 </span>
               )
-            ) : (
-              <div className="flex items-center gap-2">
-                {item.role === "probation" && (
-                  <button
-                    onClick={async (e) => {
-                      e.stopPropagation();
-
-                      const confirmApprove = window.confirm(
-                        `Chuyển ${item.name} thành nhân viên chính thức?`,
-                      );
-
-                      if (!confirmApprove) return;
-
-                      try {
-                        await employeeApi.update(item.id, {
-                          role: "employee",
-                        });
-
-                        fetchData();
-
-                        alert("Đã chuyển sang nhân viên chính thức");
-                      } catch (err) {
-                        console.error(err);
-
-                        alert("Cập nhật thất bại");
-                      }
-                    }}
-                    className="bg-green-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-green-600"
-                  >
-                    Duyệt
-                  </button>
-                )}
-
-                <button
-                  onClick={async (e) => {
-                    e.stopPropagation();
-
-                    const confirmDelete = window.confirm("Xoá nhân viên này?");
-
-                    if (!confirmDelete) return;
-
-                    await employeeApi.delete(item.id);
-
-                    fetchData();
-                  }}
-                  className="text-red-500 px-3 py-1 rounded-lg hover:bg-red-50"
-                >
-                  Xoá
-                </button>
-              </div>
             )}
           </div>
         ))}
       </div>
-
-      {/* SELECT EMPLOYEE */}
-      {showForm && (
-        <div className="p-4 space-y-3">
-          {availableEmployees.map((emp) => (
-            <div
-              key={emp.id}
-              onClick={() => toggleSelect(emp.id)}
-              className={`p-3 rounded-xl border ${
-                selectedIds.includes(emp.id)
-                  ? "bg-blue-100 border-blue-500"
-                  : "bg-white"
-              }`}
-            >
-              <p className="font-semibold">{emp.name}</p>
-
-              <p className="text-sm text-gray-500">{emp.phone}</p>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* REGION MODAL */}
       {showRegionModal && (

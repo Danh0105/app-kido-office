@@ -122,6 +122,16 @@ export default function PolicyList() {
                             className: "bg-gray-100 text-gray-500",
                         };
 
+                        const actionLabels: Record<string, string> = {
+                            DIRECTOR_UPDATE: "GĐ chỉnh sửa",
+                            CREATE: "Tạo mới",
+                            UPDATE: "Cập nhật",
+                            ADMIN_UPDATE: "Admin duyệt",
+                            AUTO_APPROVED: "Tự động duyệt",
+                            SAVE_DRAFT: "Lưu nháp",
+                        };
+                        const actionLabel = actionLabels[item.action] || item.action;
+
                         return (
                             <div
                                 key={item.id}
@@ -168,8 +178,12 @@ export default function PolicyList() {
                                                     <p className="font-semibold text-gray-900 text-[13px] dark:text-white">
                                                         {formatDate(item.createdAt)}
                                                     </p>
-                                                    <p className="text-xs text-gray-400 dark:text-white">
-                                                        {item?.action}
+                                                    <p className={`text-xs dark:text-white ${
+                                                        item.action === "DIRECTOR_UPDATE"
+                                                            ? "text-amber-600 font-medium"
+                                                            : "text-gray-400"
+                                                    }`}>
+                                                        {actionLabel}
                                                     </p>
                                                 </div>
                                             </div>
@@ -214,6 +228,30 @@ export default function PolicyList() {
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* INLINE DIFF for DIRECTOR_UPDATE */}
+                                {item.action === "DIRECTOR_UPDATE" && item.diff && Object.keys(item.diff).length > 0 && (
+                                    <div className="mt-2 bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-1">
+                                        <p className="text-xs font-semibold text-amber-700 mb-1">Thay đổi:</p>
+                                        {Object.entries(item.diff).map(([key, val]: [string, any]) => {
+                                            if (val && typeof val === "object" && "old" in val && "new" in val) {
+                                                return (
+                                                    <div key={key} className="flex items-center gap-2 text-xs">
+                                                        <span className="font-medium text-gray-700 min-w-[80px]">{key}:</span>
+                                                        <span className="text-red-500 line-through">
+                                                            {typeof val.old === "number" ? val.old.toLocaleString("vi-VN") : String(val.old ?? "—")}
+                                                        </span>
+                                                        <span className="text-gray-400">→</span>
+                                                        <span className="text-green-600 font-semibold">
+                                                            {typeof val.new === "number" ? val.new.toLocaleString("vi-VN") : String(val.new ?? "—")}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        })}
+                                    </div>
+                                )}
                             </div>
                         );
                     })}

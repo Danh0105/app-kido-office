@@ -1,6 +1,12 @@
 // components/policy/TtcsTable.tsx
 
-import { MoneyTd, StickyTd, TableHead } from "./TableUI";
+import {
+  getOtherCostKey,
+  getOtherCostsTotal,
+  getOtherCostUnitPrice,
+  normalizeOtherCosts,
+} from "../../utils/policyOtherCosts";
+import { MoneyTd, StickyTd, TableHead, Td } from "./TableUI";
 
 type Props = {
   policy: any;
@@ -49,59 +55,86 @@ export default function TtcsTable({ policy }: Props) {
 
               <TableHead align="right">Thuế</TableHead>
 
+              <TableHead align="right">Chi khác</TableHead>
+
               <TableHead align="right">Tổng</TableHead>
             </tr>
           </thead>
 
           <tbody>
-            {ttcs.map((item: any, index: number) => (
-              <tr
-                key={index}
-                className="
+            {ttcs.map((item: any, index: number) => {
+              const otherCosts = normalizeOtherCosts(item.otherCosts);
+              const otherCostsTotal = getOtherCostsTotal(otherCosts);
+
+              return (
+                <tr
+                  key={index}
+                  className="
                     border-b border-slate-100
                     hover:bg-cyan-50/40
                     transition-colors
                   "
-              >
-                <StickyTd>
-                  <div>
-                    <p className="font-semibold text-slate-800">{item.name}</p>
+                >
+                  <StickyTd>
+                    <div>
+                      <p className="font-semibold text-slate-800">{item.name}</p>
 
-                    <p className="text-xs text-slate-400 mt-1">
-                      Thông tin cơ cấu
-                    </p>
-                  </div>
-                </StickyTd>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Thông tin cơ cấu
+                      </p>
+                    </div>
+                  </StickyTd>
 
-                <MoneyTd>{item.fee}</MoneyTd>
+                  <MoneyTd>{item.fee}</MoneyTd>
 
-                <MoneyTd>{item.qlCsvc}</MoneyTd>
+                  <MoneyTd>{item.qlCsvc}</MoneyTd>
 
-                <MoneyTd>{item.tax}</MoneyTd>
+                  <MoneyTd>{item.tax}</MoneyTd>
 
-                <MoneyTd>{item.teacher}</MoneyTd>
+                  <MoneyTd>{item.teacher}</MoneyTd>
 
-                <MoneyTd>{item.totalPercent}</MoneyTd>
+                  <MoneyTd>{item.totalPercent}</MoneyTd>
 
-                <MoneyTd>
-                  {item.fee - item.qlCsvc - item.tax - item.teacher}
-                </MoneyTd>
+                  <MoneyTd>
+                    {item.fee - item.qlCsvc - item.tax - item.teacher}
+                  </MoneyTd>
 
-                <MoneyTd>{item.ql1Percent}</MoneyTd>
+                  <MoneyTd>{item.ql1Percent}</MoneyTd>
 
-                <MoneyTd>{item.ql1Tax}</MoneyTd>
+                  <MoneyTd>{item.ql1Tax}</MoneyTd>
 
-                <MoneyTd>{item.ql2Percent}</MoneyTd>
+                  <MoneyTd>{item.ql2Percent}</MoneyTd>
 
-                <MoneyTd>{item.ql2Tax}</MoneyTd>
+                  <MoneyTd>{item.ql2Tax}</MoneyTd>
 
-                <MoneyTd>
-                  {item.ql1Percent +
-                    item.ql2Percent -
-                    (item.ql1Tax + item.ql2Tax)}
-                </MoneyTd>
-              </tr>
-            ))}
+                  <Td align="right">
+                    {otherCosts.length ? (
+                      <div className="space-y-1">
+                        {otherCosts.map((cost, costIndex) => (
+                          <div
+                            key={getOtherCostKey(cost, costIndex)}
+                            className="whitespace-nowrap text-xs font-semibold text-fuchsia-700"
+                          >
+                            {cost.name || `Chi khác ${costIndex + 1}`}:{" "}
+                            {getOtherCostUnitPrice(cost).toLocaleString("vi-VN")}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-slate-400">-</span>
+                    )}
+                  </Td>
+
+                  <MoneyTd>
+                    {Number(item.ql1Percent || 0) +
+                      Number(item.ql2Percent || 0) -
+                      (Number(item.ql1Tax || 0) +
+                        Number(item.ql2Tax || 0)) +
+                      otherCostsTotal}
+                  </MoneyTd>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

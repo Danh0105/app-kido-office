@@ -140,7 +140,7 @@ export default function InputExpenseTable({
                       type="number"
                       min="0"
                       step="0.01"
-                      value={row.totalPeriods ?? ""}
+                      value={row.totalPeriods || ""}
                       onChange={(e) => {
                         const periods = Number(e.target.value || 0);
 
@@ -162,7 +162,7 @@ export default function InputExpenseTable({
                       type="number"
                       min="0"
                       step="0.01"
-                      value={row.studentCount ?? ""}
+                      value={row.studentCount || ""}
                       onChange={(e) => {
                         onUpdate(idx, "studentCount", Number(e.target.value || 0));
                       }}
@@ -174,7 +174,7 @@ export default function InputExpenseTable({
                       type="number"
                       step="0.01"
                       min="0"
-                      value={row.monthsCount ?? ""}
+                      value={row.monthsCount || ""}
                       onChange={(e) => {
                         const value = e.target.value;
 

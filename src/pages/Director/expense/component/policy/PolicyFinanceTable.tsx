@@ -43,6 +43,7 @@ export default function PolicyFinanceTable({ policy, classCount }: Props) {
   if (!data) return null;
 
   const fee = Number(data?.fee || 0);
+  const companyProfitPerStudent = Number(data?.companyProfitPerHS || 0);
   const items: FinanceItem[] = [
     {
       name: "Học phí",
@@ -129,6 +130,18 @@ export default function PolicyFinanceTable({ policy, classCount }: Props) {
       highlight: true,
       note: data?.notes?.companyProfit,
     },
+    ...(companyProfitPerStudent !== 0
+      ? [
+          {
+            name: "Lợi nhuận trên học sinh",
+            group: "Kết quả",
+            value: companyProfitPerStudent,
+            color: "emerald",
+            highlight: true,
+            note: data?.notes?.companyProfitPerHS,
+          },
+        ]
+      : []),
     {
       name: "Tổng số tiết",
       group: "Tổng quan",

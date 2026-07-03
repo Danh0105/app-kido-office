@@ -2,6 +2,11 @@
 
 import { Trash2 } from "lucide-react";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
+import {
+  getOtherCostKey,
+  getOtherCostUnitPrice,
+  type PolicyOtherCost,
+} from "../../utils/policyOtherCosts";
 import { formatDecimal } from "@/utils/decimal";
 import DecimalInput from "@/components/DecimalInput";
 
@@ -11,6 +16,8 @@ type Props = {
   index: number;
 
   inputData: InputExpenseRow;
+  otherCosts: PolicyOtherCost[];
+  gridTemplateColumns: string;
 
   updateInputRow: (
     index: number,
@@ -26,6 +33,8 @@ export default function ManagementExpenseRow({
   subjects,
   index,
   inputData,
+  otherCosts,
+  gridTemplateColumns,
   updateInputRow,
   updateRow,
   removeRow,
@@ -53,7 +62,20 @@ export default function ManagementExpenseRow({
 
   const totalQL2Expense = ql2UnitPrice * students * months;
 
-  const totalOutsideExpense = totalQL1Expense + totalQL2Expense;
+  const otherCostValues = otherCosts.map((item) => {
+    const unitPrice = getOtherCostUnitPrice(item);
+
+    return {
+      unitPrice,
+      expense: unitPrice * students * months,
+    };
+  });
+  const totalOtherCostExpense = otherCostValues.reduce(
+    (total, item) => total + item.expense,
+    0,
+  );
+  const totalOutsideExpense =
+    totalQL1Expense + totalQL2Expense + totalOtherCostExpense;
   const paidAmount = Number(row.paidAmount || 0);
   const remainingOutsideExpense = totalOutsideExpense - paidAmount;
 
@@ -78,10 +100,10 @@ export default function ManagementExpenseRow({
     <div
       className="
         grid
-        grid-cols-[200px_120px_120px_120px_120px_120px_180px_180px_180px_140px_140px_140px_160px_200px_70px]
         border-b border-slate-100
         hover:bg-slate-50
       "
+      style={{ gridTemplateColumns }}
     >
       {/* Nội dung */}
       <div className="flex items-center p-3">
@@ -102,7 +124,7 @@ export default function ManagementExpenseRow({
           type="number"
           min="0"
           step="0.01"
-          value={inputData.totalPeriods ?? ""}
+          value={inputData.totalPeriods || ""}
           onChange={(e) =>
             updateInputRow(index, "totalPeriods", Number(e.target.value || 0))
           }
@@ -116,7 +138,7 @@ export default function ManagementExpenseRow({
           type="number"
           min="0"
           step="0.01"
-          value={inputData.studentCount ?? ""}
+          value={inputData.studentCount || ""}
           onChange={(e) =>
             updateInputRow(index, "studentCount", Number(e.target.value || 0))
           }
@@ -130,7 +152,7 @@ export default function ManagementExpenseRow({
           type="number"
           min="0"
           step="0.01"
-          value={inputData.monthsCount ?? ""}
+          value={inputData.monthsCount || ""}
           onChange={(e) =>
             updateInputRow(index, "monthsCount", Number(e.target.value || 0))
           }
@@ -195,6 +217,27 @@ export default function ManagementExpenseRow({
           {totalQL2Expense.toLocaleString("vi-VN")}
         </div>
       </div>
+
+      {otherCosts.map((item, otherCostIndex) => {
+        const key = getOtherCostKey(item, otherCostIndex);
+        const values = otherCostValues[otherCostIndex];
+
+        return [
+          <div key={`${key}-unit`} className="p-2">
+            <DecimalInput
+              value={values.unitPrice}
+              disabled
+              onValueChange={() => undefined}
+              className={`${metricInputClass} bg-slate-100 text-fuchsia-700`}
+            />
+          </div>,
+          <div key={`${key}-expense`} className="p-2">
+            <div className="flex h-11 items-center justify-center rounded-xl border border-fuchsia-100 bg-fuchsia-50 px-3 text-center font-bold text-fuchsia-700">
+              {values.expense.toLocaleString("vi-VN")}
+            </div>
+          </div>,
+        ];
+      })}
 
       {/* Chi ngoài */}
       <div className="p-2">

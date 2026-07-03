@@ -16,6 +16,13 @@ type PolicySummaryCardsProps = {
 export default function PolicySummaryCards({
   summary,
 }: PolicySummaryCardsProps) {
+  const remainingAmount = Number(summary.totalRemaining || 0);
+  const remainingLabel =
+    remainingAmount > 0
+      ? "Còn lại chi"
+      : remainingAmount < 0
+        ? "Chi vượt dự kiến"
+        : "Đã chi đủ";
   const cards = [
     {
       label: "Tổng lượt học sinh",
@@ -58,17 +65,21 @@ export default function PolicySummaryCards({
       iconClassName: "bg-orange-100 text-orange-700",
     },
     {
-      label: "Còn lại chi",
-      value: formatCurrency(Math.round(summary.totalRemaining)),
+      label: remainingLabel,
+      value: formatCurrency(Math.abs(Math.round(remainingAmount))),
       suffix: "đ",
       icon: TriangleAlert,
       className:
-        summary.totalRemaining > 0
+        remainingAmount > 0
           ? "border-rose-200 bg-rose-50/70 text-rose-800"
+          : remainingAmount < 0
+            ? "border-red-200 bg-red-50/70 text-red-800"
           : "border-emerald-200 bg-emerald-50/70 text-emerald-800",
       iconClassName:
-        summary.totalRemaining > 0
+        remainingAmount > 0
           ? "bg-rose-100 text-rose-700"
+          : remainingAmount < 0
+            ? "bg-red-100 text-red-700"
           : "bg-emerald-100 text-emerald-700",
     },
   ];
@@ -107,4 +118,3 @@ export default function PolicySummaryCards({
     </div>
   );
 }
-

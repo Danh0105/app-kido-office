@@ -58,14 +58,7 @@ export default function PolicyMonthlyRow({
           onChange={(value) => setField("studentCount", value)}
         />
       </td>
-      <td className="bg-slate-50/70 px-2 py-2.5">
-        <MoneyInput
-          ariaLabel="Đơn giá"
-          value={row.unitPrice}
-          disabled={disabled}
-          onChange={(value) => setField("unitPrice", value)}
-        />
-      </td>
+
       <td className="bg-slate-50/70 px-2 py-2.5">
         <NumberInput
           ariaLabel="Số tháng thu"
@@ -77,32 +70,11 @@ export default function PolicyMonthlyRow({
         />
       </td>
 
-      <td className={`bg-emerald-50/60 px-3 py-2.5 ${moneyClassName(calculated.schoolRevenue, "text-emerald-700")}`}>
-        {formatCurrency(calculated.schoolRevenue)}
-      </td>
-      <td className={`bg-emerald-50/60 px-3 py-2.5 ${moneyClassName(calculated.tkdAmount)}`}>
-        {formatCurrency(calculated.tkdAmount)}
-      </td>
-      <td className={`bg-blue-50/60 px-3 py-2.5 ${moneyClassName(calculated.schoolRetainAmount, "text-blue-700")}`}>
-        {formatCurrency(calculated.schoolRetainAmount)}
-      </td>
-      <td className={`bg-violet-50/60 px-3 py-2.5 ${moneyClassName(calculated.companyPaymentAmount, "text-violet-700")}`}>
-        {formatCurrency(calculated.companyPaymentAmount)}
-      </td>
-
-      <td className="bg-orange-50/50 px-2 py-2.5">
-        <MoneyInput
-          ariaLabel="Chi hiệu trưởng"
-          value={row.principalPolicyAmount}
-          disabled={disabled}
-          onChange={(value) => setField("principalPolicyAmount", value)}
-        />
-      </td>
       <td className="bg-orange-50/50 px-2 py-2.5">
         <MoneyInput
           ariaLabel="Chi tiền mặt"
           value={row.cashPolicyAmount}
-          disabled={disabled}
+          disabled={disabled || databaseFieldsReadonly}
           onChange={(value) => setField("cashPolicyAmount", value)}
         />
       </td>
@@ -110,56 +82,24 @@ export default function PolicyMonthlyRow({
         <MoneyInput
           ariaLabel="Chi thiết bị"
           value={row.equipmentPolicyAmount}
-          disabled={disabled}
+          disabled={disabled || databaseFieldsReadonly}
           onChange={(value) => setField("equipmentPolicyAmount", value)}
         />
       </td>
-      <td className={`bg-orange-50/80 px-3 py-2.5 ${moneyClassName(calculated.totalInitialPolicyAmount, "text-orange-700")}`}>
-        {formatCurrency(calculated.totalInitialPolicyAmount)}
-      </td>
-
-      <td className={`bg-amber-50/60 px-3 py-2.5 ${moneyClassName(calculated.calculatedPolicyAmount)}`}>
+      <td
+        className={`bg-amber-50/60 px-3 py-2.5 ${moneyClassName(
+          calculated.calculatedPolicyAmount,
+        )}`}
+      >
         {formatCurrency(Math.round(calculated.calculatedPolicyAmount))}
       </td>
-      <td className={`bg-amber-50/60 px-3 py-2.5 ${moneyClassName(calculated.policyAfterTaxAmount, "text-amber-700")}`}>
+      <td
+        className={`bg-amber-50/60 px-3 py-2.5 ${moneyClassName(
+          calculated.policyAfterTaxAmount,
+          "text-amber-700",
+        )}`}
+      >
         {formatCurrency(Math.round(calculated.policyAfterTaxAmount))}
-      </td>
-
-      <td className="bg-rose-50/40 px-2 py-2.5">
-        <MoneyInput
-          ariaLabel="Đã chi tiền mặt"
-          value={row.paidCashAmount}
-          disabled={disabled}
-          onChange={(value) => setField("paidCashAmount", value)}
-        />
-      </td>
-      <td className="bg-rose-50/40 px-2 py-2.5">
-        <MoneyInput
-          ariaLabel="Đã chi thiết bị"
-          value={row.paidEquipmentAmount}
-          disabled={disabled}
-          onChange={(value) => setField("paidEquipmentAmount", value)}
-        />
-      </td>
-      <td className={`bg-rose-50/60 px-3 py-2.5 ${moneyClassName(calculated.totalPaidAmount)}`}>
-        {formatCurrency(calculated.totalPaidAmount)}
-      </td>
-      <td className="bg-rose-50/60 px-3 py-2.5 text-right">
-        {calculated.remainingAmount === 0 ? (
-          <span className="inline-flex whitespace-nowrap rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-black text-emerald-700">
-            Đã chi đủ
-          </span>
-        ) : (
-          <span
-            className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-black ${
-              calculated.remainingAmount > 0
-                ? "bg-rose-100 text-rose-700"
-                : "bg-red-100 text-red-700"
-            }`}
-          >
-            {formatCurrency(Math.round(calculated.remainingAmount))}
-          </span>
-        )}
       </td>
 
       <td className="min-w-[180px] px-2 py-2.5">

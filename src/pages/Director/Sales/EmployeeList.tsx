@@ -16,6 +16,37 @@ type Employee = {
   roles: string[];
 };
 
+const SALES_EMPLOYEE_SCOPES = ["policy", "report", "statistics"];
+
+const roleColor = (role: string) => {
+  if (role === "employee" || role === "sales")
+    return "bg-blue-100 text-blue-600";
+  if (role === "probation") return "bg-yellow-100 text-yellow-700";
+  if (role === "employee_la") return "bg-green-100 text-green-600";
+  if (role === "director") return "bg-purple-100 text-purple-700";
+  if (role === "director_la") return "bg-red-100 text-red-700";
+  if (role === "saleadmin" || role === "salesadmin_la")
+    return "bg-indigo-100 text-indigo-700";
+  if (role === "accountant") return "bg-orange-100 text-orange-700";
+  return "bg-gray-100 text-gray-600";
+};
+
+const roleLabel = (role: string) => {
+  const labels: Record<string, string> = {
+    employee: "Kinh doanh",
+    sales: "Nhân viên KD",
+    probation: "Thử việc",
+    employee_la: "Long An",
+    director_la: "Giám đốc LA",
+    director: "Giám đốc",
+    saleadmin: "Sale Admin",
+    salesadmin_la: "Sale Admin LA",
+    accountant: "Kế toán",
+  };
+
+  return labels[role] || role;
+};
+
 export default function EmployeeList() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -64,11 +95,18 @@ export default function EmployeeList() {
   };
   const fetchData = async () => {
     try {
-      const data = await employeeApi.getAll();
-      console.log(data);
+      const response = SALES_EMPLOYEE_SCOPES.includes(from)
+        ? await employeeApi.getSales()
+        : await employeeApi.getAll();
+      const data = Array.isArray(response)
+        ? response
+        : Array.isArray(response?.data)
+        ? response.data
+        : [];
       setEmployees(data);
     } catch (err) {
       console.error("Load employees failed", err);
+      setEmployees([]);
     }
   };
 
@@ -92,11 +130,35 @@ export default function EmployeeList() {
     if (from === "report") {
       fetchReportedToday();
     }
-  }, []);
+  }, [from]);
+
+  const handleEmployeeClick = async (item: Employee) => {
+    if (from === "policy") {
+      setSelectedEmployeeId(item.id);
+      setSelectedProvince(null);
+      setWards([]);
+
+      const provinceData = await fetchProvinces(item.id);
+      const firstProvince = provinceData?.[0];
+      if (firstProvince) setSelectedProvince(firstProvince);
+
+      setShowRegionModal(true);
+    } else if (from === "report") {
+      navigate(`/director/daily-report/${item.id}`);
+    } else if (from === "statistics") {
+      navigate(`/director/statistics/${item.id}`);
+    }
+  };
 
   return (
     <div className="bg-gray-100 min-h-screen">
-      <HeaderWithBack title="Danh sách nhân viên" />
+      <HeaderWithBack
+        title={
+          SALES_EMPLOYEE_SCOPES.includes(from)
+            ? "Danh sách nhân viên kinh doanh"
+            : "Danh sách nhân viên"
+        }
+      />
       {from === "policy" ? (
         <div className="p-4 mt-[60px] flex flex-col gap-3">
           <div className="flex gap-3">
@@ -343,91 +405,103 @@ export default function EmployeeList() {
       )}
 
       {/* LIST */}
-      <div className="p-4 space-y-3">
-        {employees.map((item) => (
-          <div
-            key={item.id}
-            className="bg-white rounded-2xl p-4 flex items-center justify-between shadow-sm"
-          >
+      <div
+        className={
+          from === "policy"
+            ? "px-3 pb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2"
+            : "p-4 space-y-3"
+        }
+      >
+        {employees.map((item) =>
+          from === "policy" ? (
             <div
-              onClick={async () => {
-                if (from === "policy") {
-                  setSelectedEmployeeId(item.id);
-
-                  setSelectedProvince(null);
-
-                  setWards([]);
-
-                  const provinceData = await fetchProvinces(item.id);
-
-                  const firstProvince = provinceData?.[0];
-
-                  if (firstProvince) {
-                    setSelectedProvince(firstProvince);
-                  }
-
-                  setShowRegionModal(true);
-                } else if (from === "report") {
-                  navigate(`/director/daily-report/${item.id}`);
-                } else if (from === "suggest") {
-                  navigate(`/director/suggest/${item.id}`);
-                } else if (from === "statistics") {
-                  navigate(`/director/statistics/${item.id}`);
-                }
-              }}
-              className="flex items-center gap-3 flex-1 cursor-pointer"
+              key={item.id}
+              className="bg-white rounded-2xl shadow-sm overflow-hidden flex flex-col"
             >
-              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-xl">
-                👤
+              <button
+                type="button"
+                onClick={() => void handleEmployeeClick(item)}
+                className="flex flex-col items-center px-3 pt-4 pb-2 text-center hover:bg-blue-50/40 transition"
+              >
+                <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-2xl">
+                  👤
+                </div>
+                <p className="mt-1.5 w-full line-clamp-2 text-xs font-semibold leading-tight text-gray-800">
+                  {item.name}
+                </p>
+                <p className="mt-0.5 text-[11px] text-gray-400">
+                  {item.phone || "Chưa có số điện thoại"}
+                </p>
+              </button>
+
+              <div className="min-h-[28px] px-2 pb-2 flex flex-wrap justify-center gap-1">
+                {(item.roles ?? []).map((role) => (
+                  <span
+                    key={role}
+                    className={`rounded-full px-1.5 py-[2px] text-[11px] font-medium leading-tight ${roleColor(
+                      role,
+                    )}`}
+                  >
+                    {roleLabel(role)}
+                  </span>
+                ))}
               </div>
 
-              <div>
-                <p className="font-semibold text-gray-800">{item.name}</p>
-
-                <div className="flex items-center gap-2 mt-1 flex-wrap">
-                  {(item.roles ?? []).map((r) => (
-                    <span
-                      key={r}
-                      className={`text-[11px] px-2 py-[2px] rounded-full font-medium
-                        ${r === "employee" ? "bg-blue-100 text-blue-600"
-                          : r === "probation" ? "bg-yellow-100 text-yellow-700"
-                          : r === "employee_la" ? "bg-green-100 text-green-600"
-                          : r === "director_la" ? "bg-red-100 text-red-700"
-                          : r === "director" ? "bg-purple-100 text-purple-700"
-                          : r === "saleadmin" ? "bg-green-100 text-green-700"
-                          : r === "accountant" ? "bg-orange-100 text-orange-700"
-                          : "bg-gray-100 text-gray-600"}`}
-                    >
-                      {r === "employee" ? "Kinh doanh"
-                        : r === "probation" ? "Thử việc"
-                        : r === "employee_la" ? "Long An"
-                        : r === "director_la" ? "Giám đốc LA"
-                        : r === "director" ? "Giám đốc"
-                        : r === "saleadmin" ? "Sale Admin"
-                        : r === "salesadmin_la" ? "Sale Admin LA"
-                        : r === "accountant" ? "Kế toán"
-                        : r}
-                    </span>
-                  ))}
-
-                  <p className="text-sm text-gray-500">{item.phone}</p>
-                </div>
+              <div className="mt-auto border-t border-gray-100 px-2 py-2">
+                <button
+                  type="button"
+                  onClick={() => void handleEmployeeClick(item)}
+                  className="w-full rounded-lg bg-blue-500 py-1.5 text-xs font-medium text-white hover:bg-blue-600"
+                >
+                  Xem khu vực và chính sách
+                </button>
               </div>
             </div>
+          ) : (
+            <div
+              key={item.id}
+              className="bg-white rounded-2xl p-4 flex items-center justify-between shadow-sm"
+            >
+              <button
+                type="button"
+                onClick={() => void handleEmployeeClick(item)}
+                className="flex items-center gap-3 flex-1 cursor-pointer text-left"
+              >
+                <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-xl">
+                  👤
+                </div>
 
-            {from === "report" && (
-              reportedIds.includes(item.id) ? (
-                <span className="text-xs bg-green-100 text-green-600 px-3 py-1 rounded-full">
-                  ✅ Đã báo cáo
-                </span>
-              ) : (
-                <span className="text-xs bg-red-100 text-red-600 px-3 py-1 rounded-full">
-                  ❌ Chưa báo cáo
-                </span>
-              )
-            )}
-          </div>
-        ))}
+                <div>
+                  <p className="font-semibold text-gray-800">{item.name}</p>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    {(item.roles ?? []).map((role) => (
+                      <span
+                        key={role}
+                        className={`text-[11px] px-2 py-[2px] rounded-full font-medium ${roleColor(
+                          role,
+                        )}`}
+                      >
+                        {roleLabel(role)}
+                      </span>
+                    ))}
+                    <p className="text-sm text-gray-500">{item.phone}</p>
+                  </div>
+                </div>
+              </button>
+
+              {from === "report" &&
+                (reportedIds.includes(item.id) ? (
+                  <span className="text-xs bg-green-100 text-green-600 px-3 py-1 rounded-full">
+                    ✅ Đã báo cáo
+                  </span>
+                ) : (
+                  <span className="text-xs bg-red-100 text-red-600 px-3 py-1 rounded-full">
+                    ❌ Chưa báo cáo
+                  </span>
+                ))}
+            </div>
+          ),
+        )}
       </div>
 
       {/* REGION MODAL */}

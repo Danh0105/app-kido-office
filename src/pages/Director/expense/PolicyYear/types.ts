@@ -10,6 +10,9 @@ export type PolicySubject = {
   policyStudentBase: number;
   policyMonthBase: number;
   taxPercent: number;
+  companyProfitPerHS?: number;
+  cashSupportAmount?: number;
+  equipmentSupportAmount?: number;
 };
 
 export type PolicyMonthlyInput = {
@@ -61,4 +64,3 @@ export type PolicySummary = {
   totalPaid: number;
   totalRemaining: number;
 };
-

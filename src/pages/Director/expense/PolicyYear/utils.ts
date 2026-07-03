@@ -42,22 +42,14 @@ export const calculatePolicyRow = (
     Number(subject.schoolRetainUnit || 0) * studentCount * monthsCount;
   const companyPaymentAmount = schoolRevenue - schoolRetainAmount;
   const totalInitialPolicyAmount =
-    Number(row.principalPolicyAmount || 0) +
     Number(row.cashPolicyAmount || 0) +
     Number(row.equipmentPolicyAmount || 0);
-  const policyStudentBase = Number(subject.policyStudentBase || 0);
-  const policyMonthBase = Number(subject.policyMonthBase || 0);
+  const policyDivisor = Number(subject.companyProfitPerHS || 0) === 0 ? 9 : 35;
   const calculatedPolicyAmount =
-    policyStudentBase > 0 && policyMonthBase > 0
-      ? (Number(subject.policyTotalAmount || 0) /
-          policyStudentBase /
-          policyMonthBase) *
-        studentCount *
-        monthsCount
-      : 0;
-  const policyAfterTaxAmount =
-    calculatedPolicyAmount *
-    ((100 - Number(subject.taxPercent || 0)) / 100);
+    (Number(row.cashPolicyAmount || 0) / 1000 / policyDivisor) *
+    studentCount *
+    monthsCount;
+  const policyAfterTaxAmount = calculatedPolicyAmount * 0.9;
   const totalPaidAmount =
     Number(row.paidCashAmount || 0) + Number(row.paidEquipmentAmount || 0);
 

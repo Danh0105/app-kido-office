@@ -66,24 +66,24 @@ export default function PolicyMonthlyFormModal({
   ) => setDraft((current) => ({ ...current, [field]: value }));
 
   const fields = [
-    {
-      label: "Chi hiệu trưởng",
-      field: "principalPolicyAmount" as const,
-    },
     { label: "Chi tiền mặt", field: "cashPolicyAmount" as const },
     { label: "Chi thiết bị", field: "equipmentPolicyAmount" as const },
-    { label: "Đã chi tiền mặt", field: "paidCashAmount" as const },
-    { label: "Đã chi thiết bị", field: "paidEquipmentAmount" as const },
   ];
+  const databasePolicyFields = new Set<keyof PolicyMonthlyInput>([
+    "cashPolicyAmount",
+    "equipmentPolicyAmount",
+  ]);
 
   const previewItems = preview
     ? [
         ["Doanh thu trường", preview.schoolRevenue, "text-emerald-700"],
         ["Để lại trường", preview.schoolRetainAmount, "text-blue-700"],
         ["Công ty nhận", preview.companyPaymentAmount, "text-violet-700"],
-        ["Chính sách sau thuế", preview.policyAfterTaxAmount, "text-orange-700"],
-        ["Đã chi", preview.totalPaidAmount, "text-slate-700"],
-        ["Còn lại chi", preview.remainingAmount, "text-rose-700"],
+        [
+          "Phần chi (đã trừ thuế 10%)",
+          preview.policyAfterTaxAmount,
+          "text-orange-700",
+        ],
       ]
     : [];
 
@@ -199,6 +199,10 @@ export default function PolicyMonthlyFormModal({
                 </span>
                 <MoneyInput
                   value={draft[field.field]}
+                  disabled={
+                    databaseFieldsReadonly &&
+                    databasePolicyFields.has(field.field)
+                  }
                   onChange={(value) => setField(field.field, value)}
                   className="h-11 w-full"
                 />

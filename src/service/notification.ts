@@ -89,9 +89,10 @@ export const suggestNotificationApi = {
         tab?: 'unread' | 'read',
     ) => {
         const res = await api.get(
-            '/notifications/suggest',
+            '/notifications',
             {
                 params: {
+                    type: 'SUGGEST',
                     page,
                     limit,
                     tab,

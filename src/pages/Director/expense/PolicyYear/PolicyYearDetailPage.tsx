@@ -23,9 +23,11 @@ import PolicyMonthlyTable from "./components/PolicyMonthlyTable";
 import PolicyMonthlyFormModal from "./components/PolicyMonthlyFormModal";
 import PolicySubjectFormModal from "./components/PolicySubjectFormModal";
 import StatusBadge from "./components/StatusBadge";
+import SpentExpenseRequestsSection from "./components/SpentExpenseRequestsSection";
 
 type PolicyYearDetailPageProps = {
   policy: PolicyYear;
+  schoolId?: number | null;
   databaseFieldsReadonly?: boolean;
   onBack: () => void;
   onSave: (policy: PolicyYear) => void;
@@ -33,6 +35,7 @@ type PolicyYearDetailPageProps = {
 
 export default function PolicyYearDetailPage({
   policy,
+  schoolId,
   databaseFieldsReadonly = false,
   onBack,
   onSave,
@@ -44,7 +47,7 @@ export default function PolicyYearDetailPage({
   }));
   const [subjectFilter, setSubjectFilter] = useState<number | "all">("all");
   const [monthFilter, setMonthFilter] = useState("");
-  const [onlyRemaining, setOnlyRemaining] = useState(false);
+  const [spentExpenseTotal, setSpentExpenseTotal] = useState(0);
   const [rowModalOpen, setRowModalOpen] = useState(false);
   const [editingRow, setEditingRow] = useState<PolicyMonthlyInput | null>(null);
   const [subjectModalOpen, setSubjectModalOpen] = useState(false);
@@ -57,6 +60,17 @@ export default function PolicyYearDetailPage({
     () => calculatePolicySummary(draft.monthlyRows, draft.subjects),
     [draft.monthlyRows, draft.subjects],
   );
+  const displayedSummary = useMemo(
+    () =>
+      schoolId
+        ? {
+            ...summary,
+            totalPaid: spentExpenseTotal,
+            totalRemaining: summary.totalPolicyAfterTax - spentExpenseTotal,
+          }
+        : summary,
+    [schoolId, spentExpenseTotal, summary],
+  );
 
   const months = useMemo(
     () =>
@@ -67,30 +81,14 @@ export default function PolicyYearDetailPage({
   );
 
   const filteredRows = useMemo(() => {
-    const subjectMap = new Map(
-      draft.subjects.map((subject) => [subject.id, subject]),
-    );
-
     return draft.monthlyRows.filter((row) => {
       if (subjectFilter !== "all" && row.subjectId !== subjectFilter) {
         return false;
       }
       if (monthFilter && row.month !== monthFilter) return false;
-      if (onlyRemaining) {
-        const subject = subjectMap.get(row.subjectId);
-        if (!subject || calculatePolicyRow(row, subject).remainingAmount <= 0) {
-          return false;
-        }
-      }
       return true;
     });
-  }, [
-    draft.monthlyRows,
-    draft.subjects,
-    subjectFilter,
-    monthFilter,
-    onlyRemaining,
-  ]);
+  }, [draft.monthlyRows, subjectFilter, monthFilter]);
 
   const filteredSummary = useMemo(
     () => calculatePolicySummary(filteredRows, draft.subjects),
@@ -273,7 +271,16 @@ export default function PolicyYearDetailPage({
         </section>
       )}
 
-      <PolicySummaryCards summary={summary} />
+      <PolicySummaryCards summary={displayedSummary} />
+
+      {schoolId && (
+        <SpentExpenseRequestsSection
+          schoolId={schoolId}
+          schoolYear={draft.schoolYear}
+          policyAfterTaxAmount={summary.totalPolicyAfterTax}
+          onTotalChange={setSpentExpenseTotal}
+        />
+      )}
 
       <section className="space-y-4">
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -348,15 +355,6 @@ export default function PolicyYearDetailPage({
                 </option>
               ))}
             </select>
-            <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600">
-              <input
-                type="checkbox"
-                checked={onlyRemaining}
-                onChange={(event) => setOnlyRemaining(event.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 text-rose-600"
-              />
-              Chỉ xem còn lại chi &gt; 0
-            </label>
             <span className="ml-auto text-sm font-bold text-slate-400">
               {filteredRows.length}/{draft.monthlyRows.length} dòng
             </span>

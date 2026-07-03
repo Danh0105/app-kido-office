@@ -11,12 +11,15 @@ import PolicyList from "../pages/Director/Sales/Policy/PolicyList";
 import PolicyHistoryPage from "@/pages/Policy/PolicyHistoryPage";
 import Region from "@/pages/Director/Region/ListRegion";
 import DailyReportPage from "@/pages/Director/Sales/Report/DailyReportPage";
-import SuggestPage from "@/pages/Director/Sales/Suggest/Suggest";
-import SuggestReview from "@/pages/Director/Sales/Suggest/SuggestReview";
 import PolicyStatsPage from "@/pages/Director/Sales/Statistics/PolicyStatsPage";
 import RealExpense from "@/pages/Director/expense/RealExpense";
 import RealExpenseDetail from "@/pages/Director/expense/RealExpenseDetail";
 import EmployeeManagement from "@/pages/Director/EmployeeManagement";
+import ExpenseRequestList from "@/pages/ExpenseRequest/ExpenseRequestList";
+import ExpenseRequestDetail from "@/pages/ExpenseRequest/ExpenseRequestDetail";
+import ExpenseTasks from "@/pages/ExpenseRequest/ExpenseTasks";
+import ExpenseNotifications from "@/pages/ExpenseRequest/ExpenseNotifications";
+import ReminderSettings from "@/pages/ExpenseRequest/ReminderSettings";
 import { hasRole } from "@/utils/auth";
 
 const EXPENSE_HOME = "/director/expense-management";
@@ -48,20 +51,32 @@ function DirectorOnlyGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// Suggest + employee list: only block accountant (ketoan_congno allowed)
-function SuggestAccessGuard({ children }: { children: React.ReactNode }) {
-  if (hasRole("accountant")) {
-    return <Navigate to={EXPENSE_HOME} replace />;
+// Expense-request module: director, saleadmin, ketoan_congno, thuquy (+ variants)
+function ExpenseRequestGuard({ children }: { children: React.ReactNode }) {
+  if (
+    !hasRole(
+      "accountant",
+      "director",
+      "director_la",
+      "saleadmin",
+      "salesadmin_la",
+      "ketoan_congno",
+      "ketoan_truong",
+      "troly_gd",
+      "thuquy",
+    )
+  ) {
+    return <Navigate to={DIRECTOR_HOME} replace />;
   }
   return <>{children}</>;
 }
 
-const directorOnly = (children: React.ReactNode) => (
-  <DirectorOnlyGuard>{children}</DirectorOnlyGuard>
+const expenseAccess = (children: React.ReactNode) => (
+  <ExpenseRequestGuard>{children}</ExpenseRequestGuard>
 );
 
-const suggestAccess = (children: React.ReactNode) => (
-  <SuggestAccessGuard>{children}</SuggestAccessGuard>
+const directorOnly = (children: React.ReactNode) => (
+  <DirectorOnlyGuard>{children}</DirectorOnlyGuard>
 );
 
 function DirectorFallback() {
@@ -88,7 +103,7 @@ export default function DirectorRoutes() {
       />
       <Route path="phong-ban" element={directorOnly(<Department />)} />
       <Route path="region/:employeeId" element={directorOnly(<Region />)} />
-      <Route path="nhan-vien" element={suggestAccess(<EmployeeList />)} />
+      <Route path="nhan-vien" element={directorOnly(<EmployeeList />)} />
       <Route
         path="employee-management"
         element={directorOnly(<EmployeeManagement />)}
@@ -103,11 +118,11 @@ export default function DirectorRoutes() {
       />
       <Route
         path="suggest/:employeeId"
-        element={suggestAccess(<SuggestPage />)}
+        element={<Navigate to="/director/expense-requests" replace />}
       />
       <Route
         path="suggest-review/:suggestId"
-        element={suggestAccess(<SuggestReview />)}
+        element={<Navigate to="/director/expense-requests" replace />}
       />
       <Route
         path="policy-list/:subject"
@@ -142,6 +157,25 @@ export default function DirectorRoutes() {
           </AccountantGuard>
         }
       />
+      {/* Đề xuất chi (director / kế toán công nợ / thủ quỹ / sales admin) */}
+      <Route
+        path="expense-requests"
+        element={expenseAccess(<ExpenseRequestList />)}
+      />
+      <Route
+        path="expense-requests/:id"
+        element={expenseAccess(<ExpenseRequestDetail />)}
+      />
+      <Route path="expense-tasks" element={expenseAccess(<ExpenseTasks />)} />
+      <Route
+        path="expense-notifications"
+        element={expenseAccess(<ExpenseNotifications />)}
+      />
+      <Route
+        path="expense-reminder-settings"
+        element={expenseAccess(<ReminderSettings />)}
+      />
+
       <Route path="*" element={<DirectorFallback />} />
     </Routes>
   );

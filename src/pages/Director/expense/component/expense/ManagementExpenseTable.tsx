@@ -3,6 +3,11 @@
 import { Building2, CalendarDays, Wallet, Receipt, Users } from "lucide-react";
 
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
+import {
+  getOtherCostKey,
+  getOtherCostUnitPrice,
+  getPolicyOtherCosts,
+} from "../../utils/policyOtherCosts";
 import ManagementExpenseRow from "./ManagementExpenseRow";
 
 type Props = {
@@ -34,6 +39,26 @@ export default function ManagementExpenseTable({
 
   const ql2Tax = Number(subjects?.policies?.[0]?.data?.ttcs?.[0]?.ql2Tax || 0);
   const fallbackInputData = inputRows[0] || ({} as InputExpenseRow);
+  const otherCosts = getPolicyOtherCosts(subjects);
+  const gridTemplateColumns = [
+    "200px",
+    "120px",
+    "120px",
+    "120px",
+    "120px",
+    "120px",
+    "180px",
+    "180px",
+    ...otherCosts.flatMap(() => ["150px", "160px"]),
+    "180px",
+    "140px",
+    "140px",
+    "140px",
+    "160px",
+    "200px",
+    "70px",
+  ].join(" ");
+  const tableMinWidth = 2190 + otherCosts.length * 310;
 
   const totals = rows.reduce(
     (sum, row, index) => {
@@ -44,7 +69,15 @@ export default function ManagementExpenseTable({
       const ql2UnitPrice = Number(row.ql2UnitPrice ?? ql2 - ql2Tax);
       const totalQL1Expense = ql1UnitPrice * students * months;
       const totalQL2Expense = ql2UnitPrice * students * months;
-      const totalOutsideExpense = totalQL1Expense + totalQL2Expense;
+      const otherCostExpenses = otherCosts.map(
+        (item) => getOtherCostUnitPrice(item) * students * months,
+      );
+      const totalOtherCostExpense = otherCostExpenses.reduce(
+        (total, value) => total + value,
+        0,
+      );
+      const totalOutsideExpense =
+        totalQL1Expense + totalQL2Expense + totalOtherCostExpense;
       const paidAmount = Number(row.paidAmount || 0);
 
       return {
@@ -52,6 +85,10 @@ export default function ManagementExpenseTable({
         ql1Expense: sum.ql1Expense + totalQL1Expense,
         ql2UnitPrice: sum.ql2UnitPrice + ql2UnitPrice,
         ql2Expense: sum.ql2Expense + totalQL2Expense,
+        otherCostExpenses: sum.otherCostExpenses.map(
+          (value, otherCostIndex) =>
+            value + Number(otherCostExpenses[otherCostIndex] || 0),
+        ),
         totalOutsideExpense: sum.totalOutsideExpense + totalOutsideExpense,
         paidAmount: sum.paidAmount + paidAmount,
         remainingOutsideExpense:
@@ -63,6 +100,7 @@ export default function ManagementExpenseTable({
       ql1Expense: 0,
       ql2UnitPrice: 0,
       ql2Expense: 0,
+      otherCostExpenses: otherCosts.map(() => 0),
       totalOutsideExpense: 0,
       paidAmount: 0,
       remainingOutsideExpense: 0,
@@ -101,12 +139,11 @@ export default function ManagementExpenseTable({
       </div>
 
       <div className="overflow-x-auto">
-        <div className="min-w-[2190px]">
+        <div style={{ minWidth: `${tableMinWidth}px` }}>
           {/* HEADER TABLE */}
           <div
             className="
               grid
-              grid-cols-[200px_120px_120px_120px_120px_120px_180px_180px_180px_140px_140px_140px_160px_200px_70px]
               bg-slate-900
               text-white
               text-sm
@@ -115,6 +152,7 @@ export default function ManagementExpenseTable({
               top-0
               z-10
             "
+            style={{ gridTemplateColumns }}
           >
             <div className="p-3 text-center border-r border-slate-700">
               📄 Nội dung
@@ -146,6 +184,25 @@ export default function ManagementExpenseTable({
             <div className="p-3 text-center border-r border-slate-700">
               👤 Chi QL2
             </div>
+
+            {otherCosts.map((item, index) => {
+              const label = item.name || `Chi khác ${index + 1}`;
+
+              return [
+                <div
+                  key={`${getOtherCostKey(item, index)}-unit`}
+                  className="p-3 text-center border-r border-slate-700"
+                >
+                  💸 Đơn giá {label}
+                </div>,
+                <div
+                  key={`${getOtherCostKey(item, index)}-expense`}
+                  className="p-3 text-center border-r border-slate-700"
+                >
+                  👤 Chi {label}
+                </div>,
+              ];
+            })}
 
             <div className="p-3 text-center border-r border-slate-700">
               💸 Chi ngoài
@@ -189,6 +246,8 @@ export default function ManagementExpenseTable({
                 subjects={subjects}
                 index={index}
                 inputData={inputRows[index] || fallbackInputData}
+                otherCosts={otherCosts}
+                gridTemplateColumns={gridTemplateColumns}
                 updateInputRow={updateInputRow}
                 removeRow={removeRow}
                 updateRow={updateRow}
@@ -200,12 +259,12 @@ export default function ManagementExpenseTable({
           <div
             className="
     grid
-    grid-cols-[200px_120px_120px_120px_120px_120px_180px_180px_180px_140px_140px_140px_160px_200px_70px]
     bg-slate-100
     border-t-2
     border-slate-300
     font-bold
   "
+            style={{ gridTemplateColumns }}
           >
             {/* Nội dung + Số tiết + Số HS + Số tháng */}
             <div className={`${footerCellClass} col-span-4 text-slate-700`}>
@@ -230,6 +289,20 @@ export default function ManagementExpenseTable({
             <div className={`${footerCellClass} text-cyan-700`}>
               <span className="text-lg">{formatVND(totals.ql2Expense)}</span>
             </div>
+
+            {otherCosts.map((item, index) => (
+              <div
+                key={`${getOtherCostKey(item, index)}-footer`}
+                className="contents"
+              >
+                <div className={footerCellClass} />
+                <div className={`${footerCellClass} text-fuchsia-700`}>
+                  <span className="text-lg">
+                    {formatVND(totals.otherCostExpenses[index] || 0)}
+                  </span>
+                </div>
+              </div>
+            ))}
 
             {/* Chi ngoài */}
             <div className={`${footerCellClass} text-red-600`}>

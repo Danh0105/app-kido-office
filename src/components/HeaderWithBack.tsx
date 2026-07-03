@@ -10,17 +10,34 @@ type Props = {
 export default function HeaderWithBack({ title = "Danh sách trường" }: Props) {
     const navigate = useNavigate();
 
-    const goHome = () => {
-        if (hasRole("accountant")) {
-            navigate("/director/expense-management");
-            return;
-        }
+    const isAccountant = hasRole("accountant");
+    const isEmployeeType = hasRole(
+        "employee",
+        "probation",
+        "employee_la",
+        "sales",
+    );
+    const isDirectorType = hasRole(
+        "director",
+        "director_la",
+        "saleadmin",
+        "salesadmin_la",
+        "ketoan_congno",
+        "thuquy",
+        "ketoan_truong",
+        "troly_gd",
+    );
 
-        if (hasRole("director", "saleadmin", "salesadmin_la", "director_la")) {
-            navigate("/director");
-        } else {
-            navigate("/employee");
-        }
+    const homePath = isAccountant
+        ? "/director/expense-management"
+        : isDirectorType
+        ? "/director"
+        : isEmployeeType
+        ? "/employee/home"
+        : "/";
+
+    const goHome = () => {
+        navigate(homePath);
     };
 
     const goBack = () => {

@@ -49,6 +49,7 @@ type Notification = {
     schoolName?: string;
     subjectName?: string;
     schoolYear?: string;
+    suggestType?: string;
   };
 };
 type NotificationCategory = "POLICY" | "SUGGEST" | "REPORT" | "WEEKLY_PLAN";
@@ -93,45 +94,47 @@ export default function Home() {
       WEEKLY_PLAN: { unread: 0, read: 0 },
     },
   );
-  const menus =
-    hasRole("probation")
-      ? [
-          {
-            title: "Training",
-            icon: policy,
-            path: "/training",
-            from: "training",
-          },
-        ]
-      : [
-          {
-            title: "Chính sách",
-            icon: policy,
-            path: `/region/${getEmployeeId()}`,
-            from: "policy",
-          },
+  const menus = hasRole("probation")
+    ? [
+        {
+          title: "Training",
+          icon: policy,
+          path: "/training",
+          from: "training",
+        },
+      ]
+    : [
+        {
+          title: "Chính sách",
+          icon: policy,
+          path: `/region/${getEmployeeId()}`,
+          from: "policy",
+        },
 
-          {
-            title: "Báo cáo tuần",
-            icon: report,
-            path: "/daily-report",
-            from: "report",
-          },
+        {
+          title: "Báo cáo tuần",
+          icon: report,
+          path: "/daily-report",
+          from: "report",
+        },
 
-          {
-            title: "Đề xuất",
-            icon: suggest,
-            path: "/suggest",
-            from: "suggest",
-          },
-
-          {
-            title: "Thống kê",
-            icon: statistics,
-            path: "statistics",
-            from: "statistics",
-          },
-        ];
+        {
+          title: "Thống kê",
+          icon: statistics,
+          path: "statistics",
+          from: "statistics",
+        },
+        ...(hasRole("sales")
+          ? [
+              {
+                title: "Đề xuất chi",
+                icon: suggest,
+                path: "expense-requests",
+                from: "expense-request",
+              },
+            ]
+          : []),
+      ];
   const [page, setPage] = useState<PageState>({
     POLICY: { unread: 1, read: 1 },
     SUGGEST: { unread: 1, read: 1 },
@@ -333,19 +336,29 @@ export default function Home() {
   // ================= CLICK =================
   const handleClickNotification = async (noti: Notification) => {
     if (!noti.entityId) return;
-    console.log(noti);
     if (!noti.isRead) {
-      await notificationApi.markAsRead(noti.id);
-      setNotifications((prev) =>
-        prev.map((n) =>
-          n.id === noti.id
-            ? {
-                ...n,
-                isRead: true,
-              }
-            : n,
-        ),
-      );
+      try {
+        await notificationApi.markAsRead(noti.id);
+        setNotifications((prev) =>
+          prev.map((n) =>
+            n.id === noti.id
+              ? {
+                  ...n,
+                  isRead: true,
+                }
+              : n,
+          ),
+        );
+        setNotificationStats((prev) => ({
+          ...prev,
+          [noti.type]: {
+            unread: Math.max(0, prev[noti.type].unread - 1),
+            read: prev[noti.type].read + 1,
+          },
+        }));
+      } catch (error) {
+        console.error("Failed to mark notification as read:", error);
+      }
     }
     switch (noti.type) {
       case "POLICY": {
@@ -353,7 +366,11 @@ export default function Home() {
         break;
       }
       case "SUGGEST":
-        navigate(`/director/suggest-review/${noti.entityId}`);
+        navigate(
+          noti.meta?.suggestType === "EXPENSE_REQUEST"
+            ? `/employee/expense-requests/${noti.entityId}`
+            : "/employee/expense-requests",
+        );
         break;
       case "REPORT":
         if (noti.entityId) {

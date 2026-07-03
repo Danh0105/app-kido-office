@@ -32,6 +32,7 @@ type Notification = {
     schoolName?: string;
     schoolYear?: string;
     subjectName?: string;
+    suggestType?: string;
   };
 };
 

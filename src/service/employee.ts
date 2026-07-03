@@ -8,6 +8,11 @@ export const employeeApi = {
         return res.data;
     },
 
+    getSales: async () => {
+        const res = await api.get(`/employees/sales`);
+        return res.data;
+    },
+
     create: async (data: {
         name: string;
         email?: string;

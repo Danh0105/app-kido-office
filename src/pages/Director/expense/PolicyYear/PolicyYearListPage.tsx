@@ -43,6 +43,34 @@ const listFromResponse = (response: any): any[] => {
   return [];
 };
 
+const getCashSupportAmount = (policyData: any) => {
+  const items = Array.isArray(policyData?.httienmat)
+    ? policyData.httienmat
+    : [];
+
+  return items.reduce(
+    (total: number, item: any) =>
+      total + Number(item?.money ?? item?.amount ?? 0),
+    0,
+  );
+};
+
+const getEquipmentSupportAmount = (policyData: any) => {
+  const items = Array.isArray(policyData?.htthietbi)
+    ? policyData.htthietbi
+    : [];
+
+  return items.reduce((total: number, item: any) => {
+    const explicitAmount = Number(
+      item?.totalAmount ?? item?.total ?? item?.amount ?? 0,
+    );
+    const calculatedAmount =
+      Number(item?.qty || 0) * Number(item?.price || 0);
+
+    return total + (explicitAmount || calculatedAmount);
+  }, 0);
+};
+
 const mapDatabaseSubjects = (subjects: any[]) =>
   subjects.map((subject, index) => {
     const policyData = subject?.policies?.[0]?.data || {};
@@ -68,6 +96,9 @@ const mapDatabaseSubjects = (subjects: any[]) =>
       taxPercent: Number(
         policyData.taxPercent ?? fallback?.taxPercent ?? 10,
       ),
+      companyProfitPerHS: Number(policyData.companyProfitPerHS || 0),
+      cashSupportAmount: getCashSupportAmount(policyData),
+      equipmentSupportAmount: getEquipmentSupportAmount(policyData),
     };
   });
 
@@ -145,6 +176,10 @@ export default function PolicyYearListPage({
         setDatabaseLoading(true);
         setDatabaseError("");
 
+        const mappedSubjects = mapDatabaseSubjects(databaseSubjects);
+        const mappedSubjectMap = new Map(
+          mappedSubjects.map((subject) => [subject.id, subject]),
+        );
         const response = await schoolExpenseApi.getAll({
           page: 1,
           limit: 500,
@@ -188,6 +223,7 @@ export default function PolicyYearListPage({
                   item?.subjectId || item?.subject?.id || 0,
                 );
                 if (!subjectId) return [];
+                const mappedSubject = mappedSubjectMap.get(subjectId);
 
                 return [
                   {
@@ -200,8 +236,12 @@ export default function PolicyYearListPage({
                     unitPrice: Number(item?.unitPrice || 0),
                     monthsCount: Number(item?.monthsCount ?? 1),
                     principalPolicyAmount: 0,
-                    cashPolicyAmount: 0,
-                    equipmentPolicyAmount: 0,
+                    cashPolicyAmount: Number(
+                      mappedSubject?.cashSupportAmount || 0,
+                    ),
+                    equipmentPolicyAmount: Number(
+                      mappedSubject?.equipmentSupportAmount || 0,
+                    ),
                     paidCashAmount: 0,
                     paidEquipmentAmount: 0,
                     note: item?.note || item?.content || "",
@@ -211,7 +251,6 @@ export default function PolicyYearListPage({
             }),
           )
         ).flat();
-        const mappedSubjects = mapDatabaseSubjects(databaseSubjects);
 
         if (active) {
           setPolicies((current) =>
@@ -318,6 +357,7 @@ export default function PolicyYearListPage({
     return (
       <PolicyYearDetailPage
         policy={activePolicy}
+        schoolId={schoolId}
         databaseFieldsReadonly={Boolean(schoolId)}
         onBack={() => setActivePolicyId(null)}
         onSave={(savedPolicy) =>

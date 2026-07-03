@@ -5,6 +5,7 @@ import { useCheckUpdate } from "../utils/useUpdate";
 import UpdateModal from "../pages/UpdateModal";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/pages/Employee/Sales/Statistics/hooks/queryClient";
+import ScrollToTop from "@/components/ScrollToTop";
 
 
 export default function Index() {
@@ -13,6 +14,7 @@ export default function Index() {
 
   return (
     <HashRouter>
+      <ScrollToTop />
       <QueryClientProvider client={queryClient}>
         <ExportProvider>
           <AppRoutes />

@@ -1,0 +1,154 @@
+// Types & metadata for the "Đề xuất chi" (expense request) module.
+// Không có DRAFT: tạo đề xuất là vào thẳng PENDING_APPROVAL.
+
+export type ExpenseStatus =
+  | "PENDING_APPROVAL"
+  | "APPROVED"
+  | "PAYMENT_ORDERED"
+  | "CASH_RELEASED"
+  | "CASH_RECEIVED"
+  | "SPENT"
+  | "NOT_SPENT"
+  | "FUND_RETURNED"
+  | "REJECTED";
+
+export type PaymentMethod = "CASH" | "BANK_TRANSFER";
+
+export type ExpenseAttachment = {
+  id: number;
+  fileUrl: string;
+  fileName?: string;
+  uploadedBy?: number;
+  createdAt?: string;
+};
+
+export type ExpenseLog = {
+  id: number;
+  action: string;
+  fromStatus?: ExpenseStatus | null;
+  toStatus?: ExpenseStatus | null;
+  note?: string | null;
+  reason?: string | null;
+  userId?: number;
+  actorName?: string;
+  actor?: { id: number; name?: string; roles?: string[] };
+  createdAt?: string;
+  snapshotAt?: string;
+};
+
+export type PaymentOrder = {
+  id: number;
+  code: string;
+  amount: number;
+  paymentMethod: PaymentMethod;
+  note?: string | null;
+  createdBy?: number;
+  creator?: { id: number; name?: string };
+  createdAt?: string;
+};
+
+export type ExpenseRequest = {
+  id: number;
+  code: string;
+  content: string; // tiêu đề/nội dung (dùng chung cột suggest.content)
+  description?: string;
+  amount: number;
+  expectedPaymentDate?: string;
+  participants?: string; // thành phần tham gia
+  schoolId?: number;
+  school?: { id: number; name: string };
+  schoolYear?: string;
+  status: ExpenseStatus;
+  isOverdue?: boolean;
+  rejectReason?: string;
+  notSpentReason?: string;
+  createdBy?: number;
+  creator?: { id: number; name?: string; phone?: string };
+  approvedBy?: number;
+  approvedAt?: string;
+  cashReleasedBy?: number;
+  cashReleasedAt?: string | null;
+  cashReceivedAt?: string | null;
+  spentAt?: string | null;
+  fundReturnedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  paymentOrder?: PaymentOrder | null;
+  logs?: ExpenseLog[];
+  attachments?: ExpenseAttachment[];
+};
+
+export type ExpenseListResponse = {
+  data: ExpenseRequest[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+};
+
+export type ExpenseListQuery = {
+  status?: ExpenseStatus;
+  createdBy?: number;
+  schoolId?: number;
+  schoolYear?: string;
+  fromDate?: string;
+  toDate?: string;
+  overdue?: boolean;
+  page?: number;
+  limit?: number;
+};
+
+// Visual metadata for each status: Vietnamese label + Tailwind badge classes.
+export const STATUS_META: Record<
+  ExpenseStatus,
+  { label: string; badge: string; done?: boolean }
+> = {
+  PENDING_APPROVAL: { label: "Chờ duyệt", badge: "bg-yellow-100 text-yellow-700" },
+  APPROVED: { label: "Đã duyệt", badge: "bg-blue-100 text-blue-700" },
+  PAYMENT_ORDERED: { label: "Đã lên lệnh chi", badge: "bg-purple-100 text-purple-700" },
+  CASH_RELEASED: { label: "Đã xuất tiền", badge: "bg-orange-100 text-orange-700" },
+  CASH_RECEIVED: { label: "Đã nhận tiền", badge: "bg-lime-100 text-lime-700" },
+  SPENT: { label: "Đã chi ✓", badge: "bg-green-100 text-green-700", done: true },
+  NOT_SPENT: { label: "Chưa chi", badge: "bg-amber-100 text-amber-700" },
+  FUND_RETURNED: { label: "Đã hoàn quỹ", badge: "bg-green-100 text-green-700" },
+  REJECTED: { label: "Từ chối ✗", badge: "bg-red-100 text-red-700", done: true },
+};
+
+export const STATUS_LABEL = (s?: string) =>
+  (s && STATUS_META[s as ExpenseStatus]?.label) || s || "";
+
+// Timeline action labels (best-effort mapping of backend log action codes).
+export const ACTION_LABEL: Record<string, string> = {
+  CREATE: "Tạo đề xuất",
+  CREATE_EXPENSE_REQUEST: "Tạo đề xuất",
+  SUBMIT: "Gửi duyệt",
+  APPROVE: "Duyệt",
+  APPROVED: "Duyệt",
+  APPROVE_EXPENSE_REQUEST: "Duyệt đề xuất",
+  REJECT: "Từ chối",
+  REJECTED: "Từ chối",
+  REJECT_EXPENSE_REQUEST: "Từ chối đề xuất",
+  PAYMENT_ORDER: "Lên lệnh chi",
+  PAYMENT_ORDERED: "Lên lệnh chi",
+  CREATE_PAYMENT_ORDER: "Lên lệnh chi",
+  CASH_RELEASE: "Xuất tiền",
+  CASH_RELEASED: "Xuất tiền",
+  CONFIRM_CASH_RELEASED: "Xác nhận xuất tiền",
+  CASH_RECEIVE: "Nhận tiền",
+  CASH_RECEIVED: "Nhận tiền",
+  CONFIRM_CASH_RECEIVED: "Xác nhận nhận tiền",
+  CONFIRM_SPENT: "Xác nhận đã chi",
+  SPENT: "Xác nhận đã chi",
+  CONFIRM_NOT_SPENT: "Xác nhận chưa chi",
+  NOT_SPENT: "Xác nhận chưa chi",
+  FUND_RETURN: "Nhận lại quỹ",
+  FUND_RETURNED: "Nhận lại quỹ",
+  CONFIRM_FUND_RETURNED: "Xác nhận hoàn quỹ",
+  REMINDER: "Báo động",
+  OVERDUE: "Quá hạn",
+};
+
+export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
+  CASH: "Tiền mặt",
+  BANK_TRANSFER: "Chuyển khoản",
+};

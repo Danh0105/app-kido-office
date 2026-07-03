@@ -140,7 +140,7 @@ export default function RevenueExpenseRow({
           type="number"
           min="0"
           step="0.01"
-          value={inputData.totalPeriods ?? ""}
+          value={inputData.totalPeriods || ""}
           onChange={(e) =>
             updateInputRow(index, "totalPeriods", Number(e.target.value || 0))
           }
@@ -154,7 +154,7 @@ export default function RevenueExpenseRow({
           type="number"
           min="0"
           step="0.01"
-          value={inputData.studentCount ?? ""}
+          value={inputData.studentCount || ""}
           onChange={(e) =>
             updateInputRow(index, "studentCount", Number(e.target.value || 0))
           }
@@ -168,7 +168,7 @@ export default function RevenueExpenseRow({
           type="number"
           min="0"
           step="0.01"
-          value={inputData.monthsCount ?? ""}
+          value={inputData.monthsCount || ""}
           onChange={(e) =>
             updateInputRow(index, "monthsCount", Number(e.target.value || 0))
           }

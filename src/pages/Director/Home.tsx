@@ -6,6 +6,7 @@ import AppHeader from "@/layout/Header";
 import BannerSlider from "@/layout/Banner";
 import ReportDetailPopup from "@/components/ReportDetailPopup";
 import expense from "./static/expense.png";
+import suggest from "./static/suggest.png";
 import { getSocket, getSuggestSocket } from "../../utils/socket";
 import { policiesApi } from "@/service/policy";
 
@@ -16,7 +17,6 @@ import HDKH2 from "./static/HDKH2.png";
 import HDKH3 from "./static/HDKH3.png";
 import team from "./static/team.png";
 import report from "./static/report.png";
-import suggest from "./static/suggest.png";
 import {
   notificationApi,
   policyNotificationApi,
@@ -37,7 +37,6 @@ const ALL_MENUS = [
     path: "nhan-vien",
     from: "statistics",
   },
-  { title: "Đề xuất", icon: suggest, path: "nhan-vien", from: "suggest" },
   {
     title: "QL thu chi",
     icon: expense,
@@ -50,6 +49,12 @@ const ALL_MENUS = [
     path: "employee-management",
     from: "management",
   },
+  {
+    title: "Đề xuất chi",
+    icon: suggest,
+    path: "expense-requests",
+    from: "expense-request",
+  },
 ];
 
 const LIMITED_MENUS = [
@@ -59,7 +64,12 @@ const LIMITED_MENUS = [
     path: "expense-management",
     from: "expense",
   },
-  { title: "Đề xuất", icon: suggest, path: "nhan-vien", from: "suggest" },
+  {
+    title: "Đề xuất chi",
+    icon: suggest,
+    path: "expense-requests",
+    from: "expense-request",
+  },
 ];
 
 // ================= TYPES =================
@@ -72,7 +82,10 @@ type Notification = {
   isRead: boolean;
   senderId: number;
   createdBy: number;
-  meta?: { subjectId?: number };
+  meta?: {
+    subjectId?: number;
+    suggestType?: string;
+  };
 };
 
 // ================= HOOK: detect desktop =================
@@ -165,7 +178,11 @@ export default function Home() {
     });
   }, []);
 
-  const isSuggestOnlyRole = hasRole("ketoan_congno", "ketoan_truong", "troly_gd");
+  const isSuggestOnlyRole = hasRole(
+    "ketoan_congno",
+    "ketoan_truong",
+    "troly_gd",
+  );
 
   useEffect(() => {
     const loadNotifications = async () => {
@@ -328,17 +345,28 @@ export default function Home() {
   const handleClickNotification = async (noti: Notification) => {
     if (!noti.entityId) return;
     if (!noti.isRead) {
-      await notificationApi.markAsRead(noti.id);
-      setNotifications((prev) =>
-        prev.map((n) =>
-          n.id === noti.id
-            ? {
-                ...n,
-                isRead: true,
-              }
-            : n,
-        ),
-      );
+      try {
+        await notificationApi.markAsRead(noti.id);
+        setNotifications((prev) =>
+          prev.map((n) =>
+            n.id === noti.id
+              ? {
+                  ...n,
+                  isRead: true,
+                }
+              : n,
+          ),
+        );
+        setNotificationStats((prev) => ({
+          ...prev,
+          [noti.type]: {
+            unread: Math.max(0, prev[noti.type].unread - 1),
+            read: prev[noti.type].read + 1,
+          },
+        }));
+      } catch (error) {
+        console.error("Failed to mark notification as read:", error);
+      }
     }
     switch (noti.type) {
       case "POLICY": {
@@ -352,7 +380,11 @@ export default function Home() {
         break;
       }
       case "SUGGEST":
-        navigate(`/director/suggest-review/${noti.entityId}`);
+        navigate(
+          noti.meta?.suggestType === "EXPENSE_REQUEST"
+            ? `/director/expense-requests/${noti.entityId}`
+            : "/director/expense-requests",
+        );
         break;
       case "REPORT":
         if (noti.entityId) {

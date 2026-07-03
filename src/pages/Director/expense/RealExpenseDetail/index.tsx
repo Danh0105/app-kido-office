@@ -25,6 +25,11 @@ import { InputExpenseRow } from "./type/InputExpenseRow";
 import { RevenueRow } from "./type/RevenueRow";
 import { ManagementRow } from "./type/ManagementRow";
 import { getApiErrorMessage } from "@/utils/apiError";
+import {
+  getOtherCostKey,
+  getOtherCostUnitPrice,
+  getPolicyOtherCosts,
+} from "../utils/policyOtherCosts";
 
 type CashPolicyRowType = {
   payer: string;
@@ -901,6 +906,7 @@ export default function RealExpenseDetail({
     : null;
 
   const activeSubject = subjects.find((s: any) => s.id === activeSubjectId);
+  const activeOtherCosts = getPolicyOtherCosts(activeSubject);
   console.log("activeSubject", activeSubject);
   useEffect(() => {
     if (activeSubjectId) {
@@ -1423,6 +1429,26 @@ export default function RealExpenseDetail({
                               <th className="px-5 py-4 text-right">Chi QL1</th>
                               <th className="px-5 py-4 text-right">ĐG QL2</th>
                               <th className="px-5 py-4 text-right">Chi QL2</th>
+                              {activeOtherCosts.map((item, index) => {
+                                const label =
+                                  item.name || `Chi khác ${index + 1}`;
+                                const key = getOtherCostKey(item, index);
+
+                                return [
+                                  <th
+                                    key={`${key}-unit`}
+                                    className="px-5 py-4 text-right"
+                                  >
+                                    ĐG {label}
+                                  </th>,
+                                  <th
+                                    key={`${key}-expense`}
+                                    className="px-5 py-4 text-right"
+                                  >
+                                    Chi {label}
+                                  </th>,
+                                ];
+                              })}
                               <th className="px-5 py-4 text-right">
                                 Tổng chi ngoài
                               </th>
@@ -1446,8 +1472,28 @@ export default function RealExpenseDetail({
                               const ql2Amt =
                                 Number(r.ql2Amount || 0) ||
                                 ql2UP * students * months;
+                              const otherCostValues = activeOtherCosts.map(
+                                (item) => {
+                                  const unitPrice =
+                                    getOtherCostUnitPrice(item);
+
+                                  return {
+                                    unitPrice,
+                                    expense: unitPrice * students * months,
+                                  };
+                                },
+                              );
+                              const otherCostTotal = otherCostValues.reduce(
+                                (total, item) => total + item.expense,
+                                0,
+                              );
+                              const calculatedTotalOutside =
+                                ql1Amt + ql2Amt + otherCostTotal;
                               const totalOutside =
-                                Number(r.totalOutside || 0) || ql1Amt + ql2Amt;
+                                activeOtherCosts.length > 0
+                                  ? calculatedTotalOutside
+                                  : Number(r.totalOutside || 0) ||
+                                    calculatedTotalOutside;
                               const remaining =
                                 totalOutside - Number(r.paidAmount || 0);
 
@@ -1477,6 +1523,27 @@ export default function RealExpenseDetail({
                                   <td className="px-5 py-4 text-right font-bold text-cyan-700">
                                     {ql2Amt.toLocaleString()}
                                   </td>
+                                  {activeOtherCosts.map((item, index) => {
+                                    const key = getOtherCostKey(item, index);
+                                    const values = otherCostValues[index];
+
+                                    return [
+                                      <td
+                                        key={`${key}-unit`}
+                                        className="px-5 py-4 text-right font-semibold text-fuchsia-700"
+                                      >
+                                        {values.unitPrice.toLocaleString(
+                                          "vi-VN",
+                                        )}
+                                      </td>,
+                                      <td
+                                        key={`${key}-expense`}
+                                        className="px-5 py-4 text-right font-bold text-fuchsia-700"
+                                      >
+                                        {values.expense.toLocaleString("vi-VN")}
+                                      </td>,
+                                    ];
+                                  })}
                                   <td className="px-5 py-4 text-right font-bold text-red-600">
                                     {totalOutside.toLocaleString()}
                                   </td>

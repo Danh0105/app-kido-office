@@ -26,9 +26,11 @@ import StatusBadge from "./components/StatusBadge";
 import Timeline from "./components/Timeline";
 import ActionModal, { type ActionPayload } from "./components/ActionModal";
 import PaymentOrderModal from "./components/PaymentOrderModal";
+import { enrichExpenseRequestWithCreator } from "./creatorProfiles";
 import { useExpenseSocket } from "./useExpenseSocket";
 import {
   availableActions,
+  creatorDetails,
   creatorName,
   formatDate,
   waitingMessage,
@@ -218,8 +220,9 @@ export default function ExpenseRequestDetail() {
   const load = useCallback(async () => {
     try {
       const res = await expenseRequestApi.getById(reqId);
-      setData(res);
-      void loadSchoolContext(res);
+      const enrichedRequest = await enrichExpenseRequestWithCreator(res);
+      setData(enrichedRequest);
+      void loadSchoolContext(enrichedRequest);
     } catch (e) {
       console.error(e);
       toast.error("Không tải được đề xuất");
@@ -353,10 +356,11 @@ export default function ExpenseRequestDetail() {
             <p className="text-sm text-gray-600 whitespace-pre-wrap">{data.description}</p>
           )}
 
+          <RequesterInfo request={data} />
+
           <div className="grid grid-cols-2 gap-y-2 gap-x-3 pt-1 text-sm">
             <Field label="Số tiền" value={`${formatVnd(data.amount)} đ`} strong />
             <Field label="Ngày dự kiến chi" value={formatDate(data.expectedPaymentDate)} />
-            <Field label="Người đề xuất" value={creatorName(data)} />
             {data.school?.name && <Field label="Trường" value={data.school.name} />}
             {data.schoolYear && (
               <Field label="Năm học" value={data.schoolYear} />
@@ -908,6 +912,33 @@ function DetailField({
       <div className="text-sm text-gray-800 break-words">
         {typeof value === "number" ? value.toLocaleString("vi-VN") : value}
       </div>
+    </div>
+  );
+}
+
+function RequesterInfo({ request }: { request: ExpenseRequest }) {
+  const details = creatorDetails(request);
+
+  return (
+    <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-blue-600">
+        Người đề xuất
+      </div>
+      <div className="mt-1 text-base font-semibold text-blue-950">
+        {creatorName(request)}
+      </div>
+      {details.length > 0 && (
+        <div className="mt-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
+          {details.map((detail) => (
+            <div key={detail.label}>
+              <div className="text-blue-500">{detail.label}</div>
+              <div className="font-semibold text-blue-800 break-words">
+                {detail.value}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -8,17 +8,16 @@ import { expenseRequestApi } from "@/service/expenseRequest";
 import type { ExpenseRequest } from "@/types/expenseRequest";
 
 import ExpenseCard from "./components/ExpenseCard";
+import { enrichExpenseRequestsWithCreators } from "./creatorProfiles";
 import { useExpenseSocket } from "./useExpenseSocket";
 import {
   expenseBasePath,
-  isApproverSide,
   isDebtAccountant,
 } from "./lib";
 
 export default function ExpenseTasks() {
   const navigate = useNavigate();
   const base = expenseBasePath();
-  const approverSide = isApproverSide();
 
   const [items, setItems] = useState<ExpenseRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,13 +46,13 @@ export default function ExpenseTasks() {
         uniqueItems.set(item.id, item);
       });
 
-      setItems(
-        [...uniqueItems.values()].sort(
+      const sortedItems = [...uniqueItems.values()].sort(
           (first, second) =>
             new Date(second.updatedAt || second.createdAt || 0).getTime() -
             new Date(first.updatedAt || first.createdAt || 0).getTime(),
-        ),
-      );
+        );
+
+      setItems(await enrichExpenseRequestsWithCreators(sortedItems));
     } catch (e) {
       console.error(e);
       toast.error("Không tải được việc cần làm");
@@ -85,7 +84,6 @@ export default function ExpenseTasks() {
           <ExpenseCard
             key={item.id}
             item={item}
-            showCreator={approverSide}
             onClick={() => navigate(`${base}/${item.id}`)}
           />
         ))}

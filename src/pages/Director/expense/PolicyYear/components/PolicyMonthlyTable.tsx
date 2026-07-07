@@ -32,7 +32,7 @@ export default function PolicyMonthlyTable({
 
     return subjectRows.length ? [{ subject, rows: subjectRows }] : [];
   });
-
+  console.log("groupedRows", groupedRows);
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="max-h-[620px] overflow-auto">

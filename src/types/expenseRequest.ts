@@ -47,6 +47,16 @@ export type PaymentOrder = {
   createdAt?: string;
 };
 
+export type ExpenseCreator = {
+  id: number;
+  name?: string;
+  phone?: string;
+  email?: string;
+  department?: { id?: number; name?: string } | string;
+  departmentName?: string;
+  roles?: string[];
+};
+
 export type ExpenseRequest = {
   id: number;
   code: string;
@@ -62,8 +72,8 @@ export type ExpenseRequest = {
   isOverdue?: boolean;
   rejectReason?: string;
   notSpentReason?: string;
-  createdBy?: number;
-  creator?: { id: number; name?: string; phone?: string };
+  createdBy?: number | string | ExpenseCreator;
+  creator?: ExpenseCreator;
   approvedBy?: number;
   approvedAt?: string;
   cashReleasedBy?: number;

@@ -1,17 +1,19 @@
 import { formatVnd } from "@/utils/decimal";
 import type { ExpenseRequest } from "@/types/expenseRequest";
 import StatusBadge from "./StatusBadge";
-import { creatorName, formatDate } from "../lib";
+import { creatorDetails, creatorName, formatDate } from "../lib";
 
 export default function ExpenseCard({
   item,
   onClick,
-  showCreator,
+  showCreator = true,
 }: {
   item: ExpenseRequest;
   onClick: () => void;
   showCreator?: boolean;
 }) {
+  const requesterDetails = creatorDetails(item);
+
   return (
     <div
       onClick={onClick}
@@ -46,8 +48,27 @@ export default function ExpenseCard({
         )}
         {item.school?.name && <span>🏫 {item.school.name}</span>}
         {item.schoolYear && <span>🎓 {item.schoolYear}</span>}
-        {showCreator && <span>👤 {creatorName(item)}</span>}
       </div>
+
+      {showCreator && (
+        <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-blue-600">
+            Người đề xuất
+          </div>
+          <div className="mt-0.5 text-sm font-semibold text-blue-950">
+            {creatorName(item)}
+          </div>
+          {requesterDetails.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs font-medium text-blue-700">
+              {requesterDetails.map((detail) => (
+                <span key={detail.label}>
+                  {detail.label}: {detail.value}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

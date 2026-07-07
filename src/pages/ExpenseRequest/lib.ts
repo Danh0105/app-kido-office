@@ -1,6 +1,10 @@
 import { getEmployeeId, hasRole } from "@/utils/auth";
 import type { ExpenseRequest, ExpenseStatus } from "@/types/expenseRequest";
 
+type CreatorLike = NonNullable<ExpenseRequest["creator"]> & {
+  department?: { name?: string } | string;
+};
+
 // Roles that live under the /director route tree (approvers / accounting / treasury).
 export const isApproverSide = () =>
   hasRole(
@@ -28,7 +32,7 @@ export const expenseTasksPath = () =>
 export const isOwner = (req?: Pick<ExpenseRequest, "createdBy" | "creator">) => {
   const me = Number(getEmployeeId());
   if (!me || !req) return false;
-  return Number(req.createdBy ?? req.creator?.id) === me;
+  return creatorId(req) === me;
 };
 
 export type ActionKey =
@@ -127,5 +131,76 @@ export const todayISO = () => {
   return new Date(d.getTime() - off * 60000).toISOString().slice(0, 10);
 };
 
-export const creatorName = (req: ExpenseRequest) =>
-  req.creator?.name || (req.createdBy ? `#${req.createdBy}` : "—");
+const cleanText = (value: unknown) =>
+  typeof value === "string" && value.trim() ? value.trim() : "";
+
+const getCreator = (req?: Pick<ExpenseRequest, "createdBy" | "creator">) => {
+  if (!req) return undefined;
+  const createdBy =
+    typeof req.createdBy === "object"
+      ? (req.createdBy as CreatorLike)
+      : undefined;
+  return (req.creator || createdBy) as CreatorLike | undefined;
+};
+
+export const creatorId = (
+  req?: Pick<ExpenseRequest, "createdBy" | "creator">,
+) => {
+  if (!req) return undefined;
+  const creator = getCreator(req);
+  const rawId =
+    creator?.id ??
+    (typeof req.createdBy === "number" || typeof req.createdBy === "string"
+      ? req.createdBy
+      : undefined);
+  const id = Number(rawId);
+  return Number.isFinite(id) && id > 0 ? id : undefined;
+};
+
+export const creatorName = (
+  req: Pick<ExpenseRequest, "createdBy" | "creator">,
+) => {
+  const name = cleanText(getCreator(req)?.name);
+  if (name) return name;
+
+  const id = creatorId(req);
+  return id ? `#${id}` : "—";
+};
+
+export const creatorPhone = (
+  req: Pick<ExpenseRequest, "createdBy" | "creator">,
+) => cleanText(getCreator(req)?.phone);
+
+export const creatorEmail = (
+  req: Pick<ExpenseRequest, "createdBy" | "creator">,
+) => cleanText(getCreator(req)?.email);
+
+export const creatorDepartment = (
+  req: Pick<ExpenseRequest, "createdBy" | "creator">,
+) => {
+  const creator = getCreator(req);
+  if (!creator) return "";
+  if (typeof creator.department === "string") return cleanText(creator.department);
+  return cleanText(creator.department?.name) || cleanText(creator.departmentName);
+};
+
+export const creatorDetails = (
+  req: Pick<ExpenseRequest, "createdBy" | "creator">,
+) => {
+  const details: { label: string; value: string }[] = [];
+  const phone = creatorPhone(req);
+  const email = creatorEmail(req);
+  const id = creatorId(req);
+  const department = creatorDepartment(req);
+
+  if (phone) details.push({ label: "SĐT", value: phone });
+  if (email) details.push({ label: "Email", value: email });
+  if (id) details.push({ label: "Mã NV", value: String(id) });
+  if (department) details.push({ label: "Phòng ban", value: department });
+
+  return details;
+};
+
+export const creatorInlineDetails = (
+  req: Pick<ExpenseRequest, "createdBy" | "creator">,
+) => creatorDetails(req).map((item) => `${item.label}: ${item.value}`);

@@ -5,8 +5,13 @@ import { useNavigate } from "react-router-dom";
 import { expenseRequestApi } from "@/service/expenseRequest";
 import type { ExpenseRequest } from "@/types/expenseRequest";
 import { formatVnd } from "@/utils/decimal";
+import { enrichExpenseRequestsWithCreators } from "@/pages/ExpenseRequest/creatorProfiles";
 import { useExpenseSocket } from "@/pages/ExpenseRequest/useExpenseSocket";
-import { creatorName, formatDate } from "@/pages/ExpenseRequest/lib";
+import {
+  creatorInlineDetails,
+  creatorName,
+  formatDate,
+} from "@/pages/ExpenseRequest/lib";
 
 type Props = {
   schoolId: number;
@@ -81,9 +86,8 @@ export default function SpentExpenseRequestsSection({
         page += 1;
       } while (page <= totalPages && page <= 50);
 
-      setItems(
-        allItems
-          .filter(
+      const filteredItems = allItems
+        .filter(
             (item) =>
               Number(item.school?.id || (item as any).schoolId || 0) ===
                 Number(schoolId) &&
@@ -91,12 +95,13 @@ export default function SpentExpenseRequestsSection({
                 ? item.schoolYear === schoolYear
                 : isInSchoolYear(getSpentDate(item), schoolYear)),
           )
-          .sort(
+        .sort(
             (first, second) =>
               new Date(getSpentDate(second)).getTime() -
               new Date(getSpentDate(first)).getTime(),
-          ),
-      );
+          );
+
+      setItems(await enrichExpenseRequestsWithCreators(filteredItems));
     } catch (loadError) {
       console.error(loadError);
       setItems([]);
@@ -254,44 +259,55 @@ export default function SpentExpenseRequestsSection({
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
-                <tr
-                  key={item.id}
-                  className="border-t border-slate-100 hover:bg-emerald-50/40"
-                >
-                  <td className="whitespace-nowrap px-4 py-3 font-bold text-slate-500">
-                    {item.code || `#${item.id}`}
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="font-bold text-slate-800">{item.content}</p>
-                    {item.participants && (
-                      <p className="mt-1 text-xs text-slate-400">
-                        Thành phần: {item.participants}
+              {items.map((item) => {
+                const requesterDetails = creatorInlineDetails(item);
+
+                return (
+                  <tr
+                    key={item.id}
+                    className="border-t border-slate-100 hover:bg-emerald-50/40"
+                  >
+                    <td className="whitespace-nowrap px-4 py-3 font-bold text-slate-500">
+                      {item.code || `#${item.id}`}
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="font-bold text-slate-800">{item.content}</p>
+                      {item.participants && (
+                        <p className="mt-1 text-xs text-slate-400">
+                          Thành phần: {item.participants}
+                        </p>
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      <p className="font-bold text-slate-700">
+                        {creatorName(item)}
                       </p>
-                    )}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 font-semibold text-slate-600">
-                    {creatorName(item)}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 font-semibold text-slate-600">
-                    {formatDate(getSpentDate(item))}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-right font-black text-emerald-700">
-                    {formatVnd(item.amount)} đ
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        navigate(`/director/expense-requests/${item.id}`)
-                      }
-                      className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-black text-blue-700 hover:bg-blue-100"
-                    >
-                      Xem chi tiết
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                      {requesterDetails.length > 0 && (
+                        <p className="mt-1 text-xs font-semibold text-slate-400">
+                          {requesterDetails.join(" • ")}
+                        </p>
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 font-semibold text-slate-600">
+                      {formatDate(getSpentDate(item))}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right font-black text-emerald-700">
+                      {formatVnd(item.amount)} đ
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigate(`/director/expense-requests/${item.id}`)
+                        }
+                        className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-black text-blue-700 hover:bg-blue-100"
+                      >
+                        Xem chi tiết
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

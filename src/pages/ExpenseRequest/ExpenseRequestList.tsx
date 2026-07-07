@@ -10,6 +10,7 @@ import { expenseRequestApi } from "@/service/expenseRequest";
 import { STATUS_META, type ExpenseRequest, type ExpenseStatus } from "@/types/expenseRequest";
 
 import ExpenseCard from "./components/ExpenseCard";
+import { enrichExpenseRequestsWithCreators } from "./creatorProfiles";
 import { useExpenseSocket } from "./useExpenseSocket";
 import { expenseBasePath, expenseTasksPath, isApproverSide } from "./lib";
 
@@ -50,7 +51,8 @@ export default function ExpenseRequestList() {
         page,
         limit: PAGE_SIZE,
       });
-      setItems(res.data || []);
+      const enrichedItems = await enrichExpenseRequestsWithCreators(res.data || []);
+      setItems(enrichedItems);
       setTotalPages(res.totalPages || 1);
     } catch (e) {
       console.error(e);
@@ -169,7 +171,6 @@ export default function ExpenseRequestList() {
           <ExpenseCard
             key={item.id}
             item={item}
-            showCreator={approverSide}
             onClick={() => navigate(`${base}/${item.id}`)}
           />
         ))}

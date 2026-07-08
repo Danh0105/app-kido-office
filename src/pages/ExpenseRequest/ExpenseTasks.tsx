@@ -4,6 +4,7 @@ import { toast } from "react-hot-toast";
 
 import HeaderWithBack from "@/components/HeaderWithBack";
 import BottomNav from "@/layout/BottomNav";
+import { hasRole } from "@/utils/auth";
 import { expenseRequestApi } from "@/service/expenseRequest";
 import type { ExpenseRequest } from "@/types/expenseRequest";
 
@@ -18,6 +19,8 @@ import {
 export default function ExpenseTasks() {
   const navigate = useNavigate();
   const base = expenseBasePath();
+  const isSaleAdmin = hasRole("saleadmin", "salesadmin_la");
+  const title = isSaleAdmin ? "Cần kiểm duyệt" : "Việc của tôi";
 
   const [items, setItems] = useState<ExpenseRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,7 +72,7 @@ export default function ExpenseTasks() {
 
   return (
     <div className="bg-gray-100 min-h-screen flex flex-col">
-      <HeaderWithBack title="Việc của tôi" />
+      <HeaderWithBack title={title} />
 
       <div className="flex-1 mt-[60px] px-3 pb-28 space-y-3 pt-2">
         {loading && (
@@ -77,7 +80,7 @@ export default function ExpenseTasks() {
         )}
         {!loading && items.length === 0 && (
           <div className="text-center text-gray-400 text-sm py-16">
-            🎉 Không có việc cần xử lý
+            {isSaleAdmin ? "🎉 Không có đề xuất cần kiểm duyệt" : "🎉 Không có việc cần xử lý"}
           </div>
         )}
         {items.map((item) => (

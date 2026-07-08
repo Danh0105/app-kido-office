@@ -14,6 +14,8 @@ export type ExpenseStatus =
 
 export type PaymentMethod = "CASH" | "BANK_TRANSFER";
 
+export type SaleAdminReviewStatus = "REVIEWED" | "REJECTED";
+
 export type ExpenseAttachment = {
   id: number;
   fileUrl: string;
@@ -86,6 +88,11 @@ export type ExpenseRequest = {
   paymentOrder?: PaymentOrder | null;
   logs?: ExpenseLog[];
   attachments?: ExpenseAttachment[];
+  // Kiểm duyệt song song của Sales Admin (cố vấn, không chặn giám đốc duyệt).
+  saleadminReviewStatus?: SaleAdminReviewStatus | null;
+  saleadminNote?: string | null;
+  saleadminReviewedBy?: number | null;
+  saleadminReviewedAt?: string | null;
 };
 
 export type ExpenseListResponse = {
@@ -106,6 +113,23 @@ export type ExpenseListQuery = {
   overdue?: boolean;
   page?: number;
   limit?: number;
+};
+
+// Danh sách đề xuất chi gom nhóm theo nhân viên (page/limit phân trang theo nhân viên).
+export type ExpenseEmployeeGroup = {
+  employeeId: number;
+  employee: { id: number; name?: string; phone?: string };
+  total: number;
+  totalAmount: number;
+  requests: ExpenseRequest[];
+};
+
+export type ExpenseGroupedByEmployeeResponse = {
+  data: ExpenseEmployeeGroup[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 };
 
 // Visual metadata for each status: Vietnamese label + Tailwind badge classes.
@@ -156,6 +180,8 @@ export const ACTION_LABEL: Record<string, string> = {
   CONFIRM_FUND_RETURNED: "Xác nhận hoàn quỹ",
   REMINDER: "Báo động",
   OVERDUE: "Quá hạn",
+  SALE_ADMIN_REVIEW: "Sales Admin kiểm duyệt đạt",
+  SALE_ADMIN_REJECT: "Sales Admin từ chối chính sách",
 };
 
 export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {

@@ -118,6 +118,15 @@ const isPeriodInSchoolYear = (
   return month >= 8 ? year === startYear : year === endYear;
 };
 
+const getCurrentSchoolYear = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth() + 1;
+  const startYear = month >= 8 ? year : year - 1;
+
+  return `${startYear}-${startYear + 1}`;
+};
+
 const clonePolicies = (
   schoolName?: string,
   schoolYear?: string,
@@ -161,7 +170,9 @@ export default function PolicyYearListPage({
     schoolName ? MOCK_POLICY_YEARS[0].id : null,
   );
   const [keyword, setKeyword] = useState("");
-  const [schoolYear, setSchoolYear] = useState("");
+  const [schoolYear, setSchoolYear] = useState(
+    () => scopedSchoolYear || getCurrentSchoolYear(),
+  );
   const [status, setStatus] = useState<PolicyYearStatus | "">("");
   const [databaseLoading, setDatabaseLoading] = useState(Boolean(schoolId));
   const [databaseError, setDatabaseError] = useState("");
@@ -295,6 +306,9 @@ export default function PolicyYearListPage({
 
   const activePolicy = policies.find((policy) => policy.id === activePolicyId);
   const schoolYears = [...new Set(policies.map((policy) => policy.schoolYear))];
+  const schoolYearOptions = schoolYears.includes(schoolYear)
+    ? schoolYears
+    : [schoolYear, ...schoolYears].filter(Boolean);
   const filteredPolicies = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLocaleLowerCase("vi");
 
@@ -432,7 +446,7 @@ export default function PolicyYearListPage({
                   const newPolicy: PolicyYear = {
                     id: nextId,
                     schoolName: schoolName || "CHÍNH SÁCH NĂM MỚI",
-                    schoolYear: scopedSchoolYear || "2026-2027",
+                    schoolYear: scopedSchoolYear || getCurrentSchoolYear(),
                     status: "DRAFT",
                     subjects: MOCK_POLICY_SUBJECTS.slice(0, 2).map(
                       (subject) => ({ ...subject }),
@@ -470,7 +484,7 @@ export default function PolicyYearListPage({
             className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 outline-none focus:border-blue-400"
           >
             <option value="">Tất cả năm học</option>
-            {schoolYears.map((item) => (
+            {schoolYearOptions.map((item) => (
               <option key={item} value={item}>
                 Năm học {item}
               </option>
@@ -506,7 +520,7 @@ export default function PolicyYearListPage({
               type="button"
               onClick={() => {
                 setKeyword("");
-                setSchoolYear("");
+                setSchoolYear(scopedSchoolYear || getCurrentSchoolYear());
                 setStatus("");
               }}
               className="text-sm font-bold text-blue-600 hover:text-blue-700"

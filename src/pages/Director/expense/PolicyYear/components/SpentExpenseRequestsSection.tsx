@@ -17,6 +17,7 @@ type Props = {
   schoolId: number;
   schoolYear: string;
   policyAfterTaxAmount: number;
+  equipmentInputAmount?: number;
   onTotalChange?: (total: number) => void;
 };
 
@@ -50,6 +51,7 @@ export default function SpentExpenseRequestsSection({
   schoolId,
   schoolYear,
   policyAfterTaxAmount,
+  equipmentInputAmount = 0,
   onTotalChange,
 }: Props) {
   const navigate = useNavigate();
@@ -88,18 +90,18 @@ export default function SpentExpenseRequestsSection({
 
       const filteredItems = allItems
         .filter(
-            (item) =>
-              Number(item.school?.id || (item as any).schoolId || 0) ===
-                Number(schoolId) &&
-              (item.schoolYear
-                ? item.schoolYear === schoolYear
-                : isInSchoolYear(getSpentDate(item), schoolYear)),
-          )
+          (item) =>
+            Number(item.school?.id || (item as any).schoolId || 0) ===
+              Number(schoolId) &&
+            (item.schoolYear
+              ? item.schoolYear === schoolYear
+              : isInSchoolYear(getSpentDate(item), schoolYear)),
+        )
         .sort(
-            (first, second) =>
-              new Date(getSpentDate(second)).getTime() -
-              new Date(getSpentDate(first)).getTime(),
-          );
+          (first, second) =>
+            new Date(getSpentDate(second)).getTime() -
+            new Date(getSpentDate(first)).getTime(),
+        );
 
       setItems(await enrichExpenseRequestsWithCreators(filteredItems));
     } catch (loadError) {
@@ -123,13 +125,14 @@ export default function SpentExpenseRequestsSection({
     () => items.reduce((sum, item) => sum + Number(item.amount || 0), 0),
     [items],
   );
+  const equipmentTotalAmount = Number(equipmentInputAmount || 0);
   const remainingAmount = Number(policyAfterTaxAmount || 0) - totalAmount;
   const coveragePercent =
     policyAfterTaxAmount > 0
       ? (totalAmount / policyAfterTaxAmount) * 100
       : totalAmount > 0
-        ? 100
-        : 0;
+      ? 100
+      : 0;
   const progressWidth = Math.min(100, Math.max(0, coveragePercent));
 
   useEffect(() => {
@@ -152,19 +155,10 @@ export default function SpentExpenseRequestsSection({
             </p>
           </div>
         </div>
-
-        <div className="rounded-2xl bg-white px-4 py-2 text-right shadow-sm">
-          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
-            Tổng đã chi
-          </p>
-          <p className="font-black text-emerald-700">
-            {displayAmount(totalAmount)} đ
-          </p>
-        </div>
       </div>
 
       <div className="border-b border-emerald-100 bg-white p-5">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
           <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4">
             <p className="text-[11px] font-black uppercase tracking-wide text-orange-600">
               Phần chi sau thuế
@@ -179,6 +173,14 @@ export default function SpentExpenseRequestsSection({
             </p>
             <p className="mt-2 text-xl font-black text-emerald-800">
               {displayAmount(totalAmount)} đ
+            </p>
+          </div>
+          <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4">
+            <p className="text-[11px] font-black uppercase tracking-wide text-violet-600">
+              Tiền chi thiết bị
+            </p>
+            <p className="mt-2 text-xl font-black text-violet-800">
+              {displayAmount(equipmentTotalAmount)} đ
             </p>
           </div>
           <div
@@ -237,16 +239,21 @@ export default function SpentExpenseRequestsSection({
         </div>
       ) : items.length === 0 ? (
         <div className="p-8 text-center">
-          <CircleDollarSign
-            size={34}
-            className="mx-auto text-emerald-200"
-          />
+          <CircleDollarSign size={34} className="mx-auto text-emerald-200" />
           <p className="mt-3 text-sm font-bold text-slate-500">
             Chưa có đề xuất chi đã hoàn tất trong năm học này
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto border-t border-slate-100">
+          <div className="flex flex-col gap-1 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <h4 className="text-sm font-black text-emerald-700">
+              Đề xuất chi đã xác nhận chi
+            </h4>
+            <p className="text-xs font-black text-slate-500">
+              {items.length} đề xuất
+            </p>
+          </div>
           <table className="min-w-[980px] w-full text-sm">
             <thead>
               <tr className="bg-slate-50 text-[11px] font-black uppercase tracking-wide text-slate-500">

@@ -33,6 +33,15 @@ const getSchoolYearRange = (schoolYear: string) => {
   };
 };
 
+const getCurrentSchoolYear = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth() + 1;
+  const startYear = month >= 8 ? year : year - 1;
+
+  return `${startYear}-${startYear + 1}`;
+};
+
 const getExpensePeriodYear = (
   schoolYear: string,
   month: number,
@@ -46,18 +55,15 @@ const getExpensePeriodYear = (
 };
 
 const getPreferredSchoolYear = (schoolYears: string[]) => {
-  if (!schoolYears.length) return "";
+  const defaultSchoolYear = getCurrentSchoolYear();
+  if (!schoolYears.length) return defaultSchoolYear;
 
-  const today = new Date();
-  const currentYear = today.getFullYear();
-  const currentStartYear =
-    today.getMonth() + 1 >= 8 ? currentYear : currentYear - 1;
   const currentSchoolYear = schoolYears.find((schoolYear) => {
     const range = getSchoolYearRange(schoolYear);
 
     return (
-      range?.startYear === currentStartYear &&
-      range.endYear === currentStartYear + 1
+      range?.startYear === Number(defaultSchoolYear.slice(0, 4)) &&
+      range.endYear === Number(defaultSchoolYear.slice(5))
     );
   });
 
@@ -77,7 +83,9 @@ export default function RealExpense() {
   const [employees, setEmployees] = useState<any[]>([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | "">("");
   const [schoolYears, setSchoolYears] = useState<string[]>([]);
-  const [selectedSchoolYear, setSelectedSchoolYear] = useState("");
+  const [selectedSchoolYear, setSelectedSchoolYear] = useState(() =>
+    getCurrentSchoolYear(),
+  );
   const today = new Date();
 
   const currentMonth = today.getMonth() + 1;
@@ -437,7 +445,7 @@ export default function RealExpense() {
                     setActiveExpenseId(null);
                     setActiveSchool(null);
                     setSchoolYears([]);
-                    setSelectedSchoolYear("");
+                    setSelectedSchoolYear(getCurrentSchoolYear());
                   }}
                   className="
         fixed bottom-[1vh] right-6 z-50

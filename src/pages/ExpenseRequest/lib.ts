@@ -38,6 +38,8 @@ export const isOwner = (req?: Pick<ExpenseRequest, "createdBy" | "creator">) => 
 export type ActionKey =
   | "approve"
   | "reject"
+  | "saleadminReview"
+  | "saleadminReject"
   | "paymentOrder"
   | "cashReleased"
   | "cashReceived"
@@ -54,6 +56,13 @@ export const availableActions = (req: ExpenseRequest): ActionKey[] => {
   switch (req.status) {
     case "PENDING_APPROVAL":
       if (hasRole("director", "director_la")) actions.push("approve", "reject");
+      // Kiểm duyệt của Sales Admin chạy song song, không chặn giám đốc duyệt.
+      if (
+        hasRole("saleadmin", "salesadmin_la") &&
+        !req.saleadminReviewStatus
+      ) {
+        actions.push("saleadminReview", "saleadminReject");
+      }
       break;
     case "APPROVED":
       if (isDebtAccountant()) actions.push("paymentOrder");

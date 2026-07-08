@@ -39,6 +39,8 @@ import {
 
 type ModalKind =
   | "reject"
+  | "saleadminReview"
+  | "saleadminReject"
   | "cashReleased"
   | "cashReceived"
   | "confirmSpent"
@@ -272,6 +274,26 @@ export default function ExpenseRequestDetail() {
       case "reject":
         run(() => expenseRequestApi.reject(reqId, payload.reason || ""), "Đã từ chối");
         break;
+      case "saleadminReview":
+        run(
+          () =>
+            expenseRequestApi.saleAdminReview(reqId, {
+              status: "REVIEWED",
+              note: payload.note,
+            }),
+          "Đã kiểm duyệt",
+        );
+        break;
+      case "saleadminReject":
+        run(
+          () =>
+            expenseRequestApi.saleAdminReview(reqId, {
+              status: "REJECTED",
+              note: payload.reason || "",
+            }),
+          "Đã từ chối chính sách",
+        );
+        break;
       case "cashReleased":
         run(
           () => expenseRequestApi.cashReleased(reqId, { note: payload.note, files: payload.files }),
@@ -340,11 +362,21 @@ export default function ExpenseRequestDetail() {
         {/* ===== Header card ===== */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-2">
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <StatusBadge status={data.status} />
               {data.isOverdue && (
                 <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-red-100 text-red-700">
                   ⚠️ Quá hạn
+                </span>
+              )}
+              {data.saleadminReviewStatus === "REVIEWED" && (
+                <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-green-100 text-green-700">
+                  ✅ Sales Admin đã kiểm duyệt
+                </span>
+              )}
+              {data.saleadminReviewStatus === "REJECTED" && (
+                <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-red-100 text-red-700">
+                  ⚠️ Sales Admin từ chối chính sách
                 </span>
               )}
             </div>
@@ -370,6 +402,12 @@ export default function ExpenseRequestDetail() {
             )}
           </div>
 
+          {data.saleadminReviewStatus === "REJECTED" && (
+            <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              <span className="font-semibold">⚠️ Sales Admin từ chối chính sách</span>
+              {data.saleadminNote && <p className="mt-1">{data.saleadminNote}</p>}
+            </div>
+          )}
           {data.status === "REJECTED" && data.rejectReason && (
             <div className="mt-2 p-3 bg-red-50 rounded-lg text-sm text-red-700">
               <span className="font-medium">Lý do từ chối: </span>
@@ -451,16 +489,24 @@ export default function ExpenseRequestDetail() {
 
       {/* ===== Action bar ===== */}
       {actions.length > 0 && (
-        <div className="fixed bottom-0 left-0 w-full bg-white border-t px-3 py-2 flex gap-2 z-40 md:max-w-6xl md:mx-auto md:left-1/2 md:-translate-x-1/2">
-          {actions.map((a) => (
-            <ActionButton
-              key={a}
-              action={a}
-              status={data.status}
-              onApprove={handleApprove}
-              onOpenModal={setModal}
-            />
-          ))}
+        <div className="fixed bottom-0 left-0 w-full bg-white border-t px-3 py-2 z-40 md:max-w-6xl md:mx-auto md:left-1/2 md:-translate-x-1/2">
+          {actions.includes("approve") && data.saleadminReviewStatus === "REJECTED" && (
+            <div className="mb-2 p-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">
+              <span className="font-semibold">⚠️ Sales Admin từ chối chính sách: </span>
+              {data.saleadminNote || "Không có ghi chú"}
+            </div>
+          )}
+          <div className="flex gap-2">
+            {actions.map((a) => (
+              <ActionButton
+                key={a}
+                action={a}
+                status={data.status}
+                onApprove={handleApprove}
+                onOpenModal={setModal}
+              />
+            ))}
+          </div>
         </div>
       )}
 
@@ -472,6 +518,30 @@ export default function ExpenseRequestDetail() {
           submitColor="bg-red-500"
           requireReason
           reasonLabel="Lý do từ chối"
+          loading={submitting}
+          onClose={() => setModal(null)}
+          onSubmit={onModalSubmit}
+        />
+      )}
+      {modal === "saleadminReview" && (
+        <ActionModal
+          title="Kiểm duyệt đạt"
+          submitLabel="Kiểm duyệt đạt"
+          submitColor="bg-emerald-500"
+          showNote
+          noteLabel="Ghi chú (không bắt buộc)"
+          loading={submitting}
+          onClose={() => setModal(null)}
+          onSubmit={onModalSubmit}
+        />
+      )}
+      {modal === "saleadminReject" && (
+        <ActionModal
+          title="Từ chối chính sách"
+          submitLabel="Từ chối chính sách"
+          submitColor="bg-red-500"
+          requireReason
+          reasonLabel="Ghi chú từ chối chính sách"
           loading={submitting}
           onClose={() => setModal(null)}
           onSubmit={onModalSubmit}
@@ -977,6 +1047,16 @@ function ActionButton({
   const cfg: Record<ActionKey, { label: string; color: string; onClick: () => void }> = {
     approve: { label: "✔️ Duyệt", color: "bg-blue-500", onClick: onApprove },
     reject: { label: "❌ Từ chối", color: "bg-red-500", onClick: () => onOpenModal("reject") },
+    saleadminReview: {
+      label: "🔍 Kiểm duyệt đạt",
+      color: "bg-emerald-500",
+      onClick: () => onOpenModal("saleadminReview"),
+    },
+    saleadminReject: {
+      label: "🚫 Từ chối chính sách",
+      color: "bg-red-600",
+      onClick: () => onOpenModal("saleadminReject"),
+    },
     paymentOrder: {
       label:
         status === "FUND_RETURNED"

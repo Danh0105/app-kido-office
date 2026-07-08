@@ -107,6 +107,67 @@ export const calculatePolicySummary = (
   );
 };
 
+export const buildPolicyYearSavePayload = (policy: PolicyYear) => {
+  const summary = calculatePolicySummary(policy.monthlyRows, policy.subjects);
+  const subjectMap = new Map(policy.subjects.map((subject) => [subject.id, subject]));
+
+  return {
+    id: policy.id,
+    schoolName: policy.schoolName,
+    schoolYear: policy.schoolYear,
+    status: policy.status,
+    subjects: policy.subjects.map((subject) => ({
+      id: subject.id,
+      code: subject.code,
+      name: subject.name,
+      tuitionPrice: Number(subject.tuitionPrice || 0),
+      schoolRetainUnit: Number(subject.schoolRetainUnit || 0),
+      policyTotalAmount: Number(subject.policyTotalAmount || 0),
+      policyStudentBase: Number(subject.policyStudentBase || 0),
+      policyMonthBase: Number(subject.policyMonthBase || 0),
+      taxPercent: Number(subject.taxPercent || 0),
+      companyProfitPerHS: Number(subject.companyProfitPerHS || 0),
+      cashSupportAmount: Number(subject.cashSupportAmount || 0),
+      equipmentSupportAmount: Number(subject.equipmentSupportAmount || 0),
+    })),
+    monthlyRows: policy.monthlyRows.map((row, index) => {
+      const subject = subjectMap.get(row.subjectId);
+      const calculated = subject ? calculatePolicyRow(row, subject) : null;
+
+      return {
+        id: row.id,
+        rowIndex: index,
+        subjectId: row.subjectId,
+        month: row.month,
+        studentCount: Number(row.studentCount || 0),
+        unitPrice: Number(row.unitPrice || 0),
+        monthsCount: Number(row.monthsCount || 0),
+        principalPolicyAmount: Number(row.principalPolicyAmount || 0),
+        cashPolicyAmount: Number(row.cashPolicyAmount || 0),
+        equipmentPolicyAmount: Number(row.equipmentPolicyAmount || 0),
+        paidCashAmount: Number(row.paidCashAmount || 0),
+        paidEquipmentAmount: Number(row.paidEquipmentAmount || 0),
+        calculatedPolicyAmount: Math.round(
+          calculated?.calculatedPolicyAmount || 0,
+        ),
+        policyAfterTaxAmount: Math.round(calculated?.policyAfterTaxAmount || 0),
+        note: row.note || "",
+      };
+    }),
+    summary: {
+      totalStudents: Number(summary.totalStudents || 0),
+      totalRevenue: Math.round(summary.totalRevenue || 0),
+      totalTkd: Math.round(summary.totalTkd || 0),
+      totalSchoolRetain: Math.round(summary.totalSchoolRetain || 0),
+      totalCompanyPayment: Math.round(summary.totalCompanyPayment || 0),
+      totalInitialPolicy: Math.round(summary.totalInitialPolicy || 0),
+      totalPolicyAfterTax: Math.round(summary.totalPolicyAfterTax || 0),
+      totalPaid: Math.round(summary.totalPaid || 0),
+      totalRemaining: Math.round(summary.totalRemaining || 0),
+    },
+  };
+};
+
 const escapeCsvCell = (value: string | number) =>
   `"${String(value).replace(/"/g, '""')}"`;
 

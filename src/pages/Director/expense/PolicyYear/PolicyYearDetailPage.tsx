@@ -4,7 +4,6 @@ import {
   Download,
   Filter,
   LockKeyhole,
-  Plus,
   Save,
   School,
   Settings2,
@@ -15,8 +14,8 @@ import {
   calculatePolicyRow,
   calculatePolicySummary,
   exportPolicyYearCsv,
+  buildPolicyYearSavePayload,
 } from "./utils";
-import PolicySummaryCards from "./components/PolicySummaryCards";
 import PolicySubjectTabs from "./components/PolicySubjectTabs";
 import PolicySubjectConfigCard from "./components/PolicySubjectConfigCard";
 import PolicyMonthlyTable from "./components/PolicyMonthlyTable";
@@ -30,7 +29,33 @@ type PolicyYearDetailPageProps = {
   schoolId?: number | null;
   databaseFieldsReadonly?: boolean;
   onBack: () => void;
-  onSave: (policy: PolicyYear) => void;
+  onSave: (policy: PolicyYear, payload: ReturnType<typeof buildPolicyYearSavePayload>) => void;
+};
+
+const getSubjectEquipmentPolicyAmount = (rows: PolicyMonthlyInput[]) => {
+  const amount = rows.find((row) => Number(row.equipmentPolicyAmount || 0) > 0)
+    ?.equipmentPolicyAmount;
+
+  return Number(amount || rows[0]?.equipmentPolicyAmount || 0);
+};
+
+const getEquipmentPolicyTotal = (rows: PolicyMonthlyInput[]) => {
+  const rowsBySubject = rows.reduce<Map<number, PolicyMonthlyInput[]>>(
+    (map, row) => {
+      const subjectRows = map.get(row.subjectId) || [];
+      subjectRows.push(row);
+      map.set(row.subjectId, subjectRows);
+
+      return map;
+    },
+    new Map(),
+  );
+
+  return [...rowsBySubject.values()].reduce(
+    (total, subjectRows) =>
+      total + getSubjectEquipmentPolicyAmount(subjectRows),
+    0,
+  );
 };
 
 export default function PolicyYearDetailPage({
@@ -60,16 +85,9 @@ export default function PolicyYearDetailPage({
     () => calculatePolicySummary(draft.monthlyRows, draft.subjects),
     [draft.monthlyRows, draft.subjects],
   );
-  const displayedSummary = useMemo(
-    () =>
-      schoolId
-        ? {
-            ...summary,
-            totalPaid: spentExpenseTotal,
-            totalRemaining: summary.totalPolicyAfterTax - spentExpenseTotal,
-          }
-        : summary,
-    [schoolId, spentExpenseTotal, summary],
+  const equipmentPolicyTotal = useMemo(
+    () => getEquipmentPolicyTotal(draft.monthlyRows),
+    [draft.monthlyRows],
   );
 
   const months = useMemo(
@@ -94,6 +112,16 @@ export default function PolicyYearDetailPage({
     () => calculatePolicySummary(filteredRows, draft.subjects),
     [filteredRows, draft.subjects],
   );
+  const tableSummary = useMemo(
+    () =>
+      schoolId
+        ? {
+            ...filteredSummary,
+            totalPaid: spentExpenseTotal,
+          }
+        : filteredSummary,
+    [filteredSummary, schoolId, spentExpenseTotal],
+  );
 
   const nextRowId = Math.max(0, ...draft.monthlyRows.map((row) => row.id)) + 1;
   const nextSubjectId =
@@ -105,7 +133,7 @@ export default function PolicyYearDetailPage({
       updatedAt: new Date().toISOString(),
     };
     setDraft(saved);
-    onSave(saved);
+    onSave(saved, buildPolicyYearSavePayload(saved));
     toast.success("Đã lưu chính sách năm");
   };
 
@@ -271,42 +299,27 @@ export default function PolicyYearDetailPage({
         </section>
       )}
 
-      <PolicySummaryCards summary={displayedSummary} />
-
       {schoolId && (
         <SpentExpenseRequestsSection
           schoolId={schoolId}
           schoolYear={draft.schoolYear}
           policyAfterTaxAmount={summary.totalPolicyAfterTax}
+          equipmentInputAmount={equipmentPolicyTotal}
           onTotalChange={setSpentExpenseTotal}
         />
       )}
 
       <section className="space-y-4">
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div>
             <div>
               <h3 className="text-lg font-black text-slate-900">
                 Chi tiết chính sách theo tháng
               </h3>
               <p className="mt-1 text-sm font-medium text-slate-400">
-                Nhập trực tiếp trên bảng hoặc dùng biểu mẫu thêm dòng.
+                Dữ liệu được đồng bộ từ thông tin thu chi và cấu hình chính sách năm.
               </p>
             </div>
-            <button
-              type="button"
-              disabled={
-                locked || databaseFieldsReadonly || draft.subjects.length === 0
-              }
-              onClick={() => {
-                setEditingRow(null);
-                setRowModalOpen(true);
-              }}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-black text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Plus size={16} />
-              Thêm dòng
-            </button>
           </div>
 
           <div className="mt-4 border-t border-slate-100 pt-4">
@@ -364,7 +377,7 @@ export default function PolicyYearDetailPage({
         <PolicyMonthlyTable
           rows={filteredRows}
           subjects={draft.subjects}
-          summary={filteredSummary}
+          summary={tableSummary}
           disabled={locked}
           databaseFieldsReadonly={databaseFieldsReadonly}
           onChange={(row) =>

@@ -1,10 +1,12 @@
 import api from "./api";
 import type {
+  ExpenseGroupedByEmployeeResponse,
   ExpenseListQuery,
   ExpenseListResponse,
   ExpenseRequest,
   PaymentMethod,
   PaymentOrder,
+  SaleAdminReviewStatus,
 } from "@/types/expenseRequest";
 
 const BASE = "/expense-requests";
@@ -75,6 +77,15 @@ export const expenseRequestApi = {
     return res.data;
   },
 
+  // ---- SALES ADMIN: kiểm duyệt song song (cố vấn, không chặn giám đốc) ----
+  saleAdminReview: async (
+    id: number,
+    data: { status: SaleAdminReviewStatus; note?: string },
+  ): Promise<ExpenseRequest> => {
+    const res = await api.post(`${BASE}/${id}/sale-admin-review`, data);
+    return res.data;
+  },
+
   // ---- KẾ TOÁN CÔNG NỢ: payment order (response bọc { suggest, paymentOrder }) ----
   createPaymentOrder: async (
     id: number,
@@ -128,6 +139,14 @@ export const expenseRequestApi = {
   // ---- QUERY ----
   list: async (query: ExpenseListQuery = {}): Promise<ExpenseListResponse> => {
     const res = await api.get(BASE, { params: query });
+    return res.data;
+  },
+
+  // Danh sách gom nhóm theo nhân viên (page/limit phân trang theo nhân viên).
+  groupedByEmployee: async (
+    query: ExpenseListQuery = {},
+  ): Promise<ExpenseGroupedByEmployeeResponse> => {
+    const res = await api.get(`${BASE}/grouped-by-employee`, { params: query });
     return res.data;
   },
 

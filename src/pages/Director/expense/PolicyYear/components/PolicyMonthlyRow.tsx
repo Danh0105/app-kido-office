@@ -6,7 +6,6 @@ import {
   formatMonth,
   getSchoolYearFromMonth,
 } from "../utils";
-import MoneyInput from "./MoneyInput";
 import NumberInput from "./NumberInput";
 
 type PolicyMonthlyRowProps = {
@@ -41,7 +40,7 @@ export default function PolicyMonthlyRow({
 
   return (
     <tr className="border-b border-slate-100 transition hover:bg-slate-50/80">
-      <td className="sticky left-0 z-10 min-w-[150px] bg-white px-3 py-2.5 text-sm font-black text-slate-800">
+      <td className="sticky left-0 z-10 bg-white px-3 py-2.5 text-sm font-black text-slate-800">
         {subject.name}
       </td>
       <td className="whitespace-nowrap px-3 py-2.5 text-sm font-bold text-slate-600">
@@ -69,23 +68,6 @@ export default function PolicyMonthlyRow({
           onChange={(value) => setField("monthsCount", value)}
         />
       </td>
-
-      <td className="bg-orange-50/50 px-2 py-2.5">
-        <MoneyInput
-          ariaLabel="Chi tiền mặt"
-          value={row.cashPolicyAmount}
-          disabled={disabled || databaseFieldsReadonly}
-          onChange={(value) => setField("cashPolicyAmount", value)}
-        />
-      </td>
-      <td className="bg-orange-50/50 px-2 py-2.5">
-        <MoneyInput
-          ariaLabel="Chi thiết bị"
-          value={row.equipmentPolicyAmount}
-          disabled={disabled || databaseFieldsReadonly}
-          onChange={(value) => setField("equipmentPolicyAmount", value)}
-        />
-      </td>
       <td
         className={`bg-amber-50/60 px-3 py-2.5 ${moneyClassName(
           calculated.calculatedPolicyAmount,
@@ -102,7 +84,7 @@ export default function PolicyMonthlyRow({
         {formatCurrency(Math.round(calculated.policyAfterTaxAmount))}
       </td>
 
-      <td className="min-w-[180px] px-2 py-2.5">
+      <td className="px-2 py-2.5">
         <input
           aria-label="Ghi chú"
           value={row.note}

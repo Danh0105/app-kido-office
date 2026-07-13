@@ -28,6 +28,7 @@ type PolicyYearDetailPageProps = {
   policy: PolicyYear;
   schoolId?: number | null;
   databaseFieldsReadonly?: boolean;
+  readOnly?: boolean;
   onBack: () => void;
   onSave: (policy: PolicyYear, payload: ReturnType<typeof buildPolicyYearSavePayload>) => void;
 };
@@ -62,6 +63,7 @@ export default function PolicyYearDetailPage({
   policy,
   schoolId,
   databaseFieldsReadonly = false,
+  readOnly = false,
   onBack,
   onSave,
 }: PolicyYearDetailPageProps) {
@@ -219,7 +221,7 @@ export default function PolicyYearDetailPage({
                 <Download size={16} />
                 Xuất Excel
               </button>
-              {!locked && (
+              {!locked && !readOnly && (
                 <>
                   <button
                     type="button"
@@ -257,7 +259,7 @@ export default function PolicyYearDetailPage({
         </div>
       </section>
 
-      {draft.status === "DRAFT" && (
+      {draft.status === "DRAFT" && !readOnly && (
         <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-center gap-2">
             <School size={19} className="text-blue-600" />
@@ -378,8 +380,8 @@ export default function PolicyYearDetailPage({
           rows={filteredRows}
           subjects={draft.subjects}
           summary={tableSummary}
-          disabled={locked}
-          databaseFieldsReadonly={databaseFieldsReadonly}
+          disabled={locked || readOnly}
+          databaseFieldsReadonly={databaseFieldsReadonly || readOnly}
           onChange={(row) =>
             setDraft((current) => ({
               ...current,
@@ -404,7 +406,7 @@ export default function PolicyYearDetailPage({
         />
       </section>
 
-      <PolicyMonthlyFormModal
+      {!readOnly && <PolicyMonthlyFormModal
         open={rowModalOpen}
         row={editingRow}
         subjects={draft.subjects}
@@ -415,8 +417,8 @@ export default function PolicyYearDetailPage({
           setEditingRow(null);
         }}
         onSubmit={handleRowSubmit}
-      />
-      <PolicySubjectFormModal
+      />}
+      {!readOnly && <PolicySubjectFormModal
         open={subjectModalOpen}
         subject={editingSubject}
         nextId={nextSubjectId}
@@ -426,7 +428,7 @@ export default function PolicyYearDetailPage({
           setEditingSubject(null);
         }}
         onSubmit={handleSubjectSubmit}
-      />
+      />}
     </div>
   );
 }

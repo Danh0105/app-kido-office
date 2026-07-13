@@ -32,7 +32,7 @@ export default function BottomNav() {
     ? "/employee/home"
     : "/";
 
-  const profilePath = "/employee/profile";
+  const profilePath = "/profile";
 
   const pathname = location.pathname;
   const homeActive =

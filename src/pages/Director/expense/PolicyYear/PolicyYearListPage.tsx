@@ -12,6 +12,7 @@ import {
   Search,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
+import { isChiefAccountant } from "@/utils/auth";
 import { MOCK_POLICY_SUBJECTS, MOCK_POLICY_YEARS } from "./mockData";
 import { PolicyYear, PolicyYearStatus } from "./types";
 import {
@@ -163,6 +164,7 @@ export default function PolicyYearListPage({
   schoolYear: scopedSchoolYear,
   databaseSubjects = [],
 }: PolicyYearListPageProps) {
+  const readOnly = isChiefAccountant();
   const [policies, setPolicies] = useState<PolicyYear[]>(() =>
     clonePolicies(schoolName, scopedSchoolYear, Boolean(schoolId)),
   );
@@ -372,7 +374,8 @@ export default function PolicyYearListPage({
       <PolicyYearDetailPage
         policy={activePolicy}
         schoolId={schoolId}
-        databaseFieldsReadonly={Boolean(schoolId)}
+        databaseFieldsReadonly={Boolean(schoolId) || readOnly}
+        readOnly={readOnly}
         onBack={() => setActivePolicyId(null)}
         onSave={(savedPolicy) =>
           setPolicies((current) =>
@@ -419,14 +422,14 @@ export default function PolicyYearListPage({
                   event.target.value = "";
                 }}
               />
-              <button
+              {!readOnly && <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 className="inline-flex h-10 items-center gap-2 rounded-xl bg-white/10 px-4 text-sm font-bold text-white hover:bg-white/20"
               >
                 <FileUp size={16} />
                 Import Excel
-              </button>
+              </button>}
               <button
                 type="button"
                 onClick={() => {
@@ -438,7 +441,7 @@ export default function PolicyYearListPage({
                 <FileDown size={16} />
                 Xuất báo cáo
               </button>
-              <button
+              {!readOnly && <button
                 type="button"
                 onClick={() => {
                   const nextId =
@@ -461,7 +464,7 @@ export default function PolicyYearListPage({
               >
                 <Plus size={16} />
                 Thêm chính sách năm
-              </button>
+              </button>}
             </div>
           </div>
         </div>
@@ -625,14 +628,14 @@ export default function PolicyYearListPage({
                         >
                           <Eye size={17} />
                         </button>
-                        <button
+                        {!readOnly && <button
                           type="button"
                           onClick={() => setActivePolicyId(policy.id)}
                           className="flex h-9 w-9 items-center justify-center rounded-lg text-blue-600 hover:bg-blue-50"
                           title="Sửa"
                         >
                           <Pencil size={17} />
-                        </button>
+                        </button>}
                         <button
                           type="button"
                           onClick={() => exportOne(policy)}

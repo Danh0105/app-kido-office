@@ -132,6 +132,75 @@ export type ExpenseGroupedByEmployeeResponse = {
   totalPages: number;
 };
 
+export type ExpenseNotificationScope = "general" | "overdue" | "all";
+
+export type ExpenseNotificationTab = "unread" | "read";
+
+export type ExpenseNotificationMeta = {
+  suggestType?: "EXPENSE_REQUEST" | string;
+  suggestId?: number;
+  suggestCode?: string;
+  employeeId?: number;
+  employeeName?: string;
+  employeePhone?: string;
+  kind?: string;
+  status?: ExpenseStatus | string;
+  daysLate?: number;
+};
+
+export type ExpenseNotification = {
+  id: number;
+  receiverId?: number;
+  senderId?: number;
+  type: "SUGGEST" | string;
+  entityId?: number;
+  title?: string;
+  message?: string;
+  isRead: boolean;
+  createdAt?: string;
+  meta?: ExpenseNotificationMeta;
+};
+
+export type ExpenseNotificationSummary = {
+  general: { total: number; unread: number };
+  overdue: { total: number; unread: number };
+};
+
+export type ExpenseNotificationEmployeeGroup = {
+  employeeId: number;
+  employeeName?: string;
+  phone?: string;
+  total: number;
+  unreadCount: number;
+  latestAt?: string;
+};
+
+export type ExpenseNotificationListResponse = {
+  scope: ExpenseNotificationScope;
+  data: ExpenseNotification[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+};
+
+export type ExpenseNotificationGroupedResponse = {
+  scope: ExpenseNotificationScope;
+  data: ExpenseNotificationEmployeeGroup[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+};
+
+export type ExpenseNotificationQuery = {
+  scope?: ExpenseNotificationScope;
+  tab?: ExpenseNotificationTab;
+  employeeId?: number;
+  page?: number;
+  limit?: number;
+};
+
 // Visual metadata for each status: Vietnamese label + Tailwind badge classes.
 export const STATUS_META: Record<
   ExpenseStatus,

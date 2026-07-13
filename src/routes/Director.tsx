@@ -20,7 +20,7 @@ import ExpenseRequestDetail from "@/pages/ExpenseRequest/ExpenseRequestDetail";
 import ExpenseTasks from "@/pages/ExpenseRequest/ExpenseTasks";
 import ExpenseNotifications from "@/pages/ExpenseRequest/ExpenseNotifications";
 import ReminderSettings from "@/pages/ExpenseRequest/ReminderSettings";
-import { hasRole } from "@/utils/auth";
+import { hasRole, isChiefAccountant } from "@/utils/auth";
 
 const EXPENSE_HOME = "/director/expense-management";
 const DIRECTOR_HOME = "/director";
@@ -45,7 +45,7 @@ function AccountantGuard({ children }: { children: React.ReactNode }) {
 
 // General director pages: block accountant only
 function DirectorOnlyGuard({ children }: { children: React.ReactNode }) {
-  if (hasRole("accountant")) {
+  if (hasRole("accountant") || isChiefAccountant()) {
     return <Navigate to={EXPENSE_HOME} replace />;
   }
   return <>{children}</>;
@@ -82,7 +82,7 @@ const directorOnly = (children: React.ReactNode) => (
 function DirectorFallback() {
   return (
     <Navigate
-      to={hasRole("accountant") ? EXPENSE_HOME : DIRECTOR_HOME}
+      to={hasRole("accountant") || isChiefAccountant() ? EXPENSE_HOME : DIRECTOR_HOME}
       replace
     />
   );
@@ -91,19 +91,19 @@ function DirectorFallback() {
 export default function DirectorRoutes() {
   return (
     <Routes>
-      <Route index element={directorOnly(<Home />)} />
-      <Route path="subject-list/:id" element={directorOnly(<SubjectList />)} />
+      <Route index element={isChiefAccountant() ? <Home /> : directorOnly(<Home />)} />
+      <Route path="subject-list/:id" element={isChiefAccountant() ? <SubjectList /> : directorOnly(<SubjectList />)} />
       <Route
         path="school-list/:employeeId"
-        element={directorOnly(<SchoolList />)}
+        element={isChiefAccountant() ? <SchoolList /> : directorOnly(<SchoolList />)}
       />
       <Route
         path="statistics/:employeeId"
-        element={directorOnly(<PolicyStatsPage />)}
+        element={isChiefAccountant() ? <PolicyStatsPage /> : directorOnly(<PolicyStatsPage />)}
       />
       <Route path="phong-ban" element={directorOnly(<Department />)} />
       <Route path="region/:employeeId" element={directorOnly(<Region />)} />
-      <Route path="nhan-vien" element={directorOnly(<EmployeeList />)} />
+      <Route path="nhan-vien" element={isChiefAccountant() ? <EmployeeList /> : directorOnly(<EmployeeList />)} />
       <Route
         path="employee-management"
         element={directorOnly(<EmployeeManagement />)}
@@ -126,13 +126,13 @@ export default function DirectorRoutes() {
       />
       <Route
         path="policy-list/:subject"
-        element={directorOnly(<PolicyList />)}
+        element={isChiefAccountant() ? <PolicyList /> : directorOnly(<PolicyList />)}
       />
       <Route
         path="policy-history-list/:policyId"
-        element={directorOnly(<PolicyHistoryPage audience="director" />)}
+        element={isChiefAccountant() ? <PolicyHistoryPage audience="director" /> : directorOnly(<PolicyHistoryPage audience="director" />)}
       />
-      <Route path="policy/:id" element={directorOnly(<PolicyGD />)} />
+      <Route path="policy/:id" element={isChiefAccountant() ? <PolicyGD /> : directorOnly(<PolicyGD />)} />
       <Route
         path="expense-management"
         element={
@@ -173,7 +173,7 @@ export default function DirectorRoutes() {
       />
       <Route
         path="expense-reminder-settings"
-        element={expenseAccess(<ReminderSettings />)}
+        element={isChiefAccountant() ? <Navigate to={EXPENSE_HOME} replace /> : expenseAccess(<ReminderSettings />)}
       />
 
       <Route path="*" element={<DirectorFallback />} />

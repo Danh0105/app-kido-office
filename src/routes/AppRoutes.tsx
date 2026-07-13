@@ -5,13 +5,14 @@ import Login from "../pages/Auth/Login";
 import UploadApk from "@/pages/UploadApk";
 import ProtectedRoute from "./ProtectedRoute";
 import RegisterFace from "@/pages/FaceId/RegisterFace";
-import { hasRole } from "@/utils/auth";
+import Profile from "@/pages/Employee/Profile";
+import { hasRole, isChiefAccountant } from "@/utils/auth";
 /* import TabletPage from "@/pages/Display/TabletPage";
  */ /* import Display from "@/pages/Display/Display";
  */ /* import INTRO from "@/pages/Display"; */
 
 function BlockAccountantOutsideExpense({ children }: any) {
-  if (hasRole("accountant")) {
+  if (hasRole("accountant") || isChiefAccountant()) {
     return <Navigate to="/director/expense-management" replace />;
   }
 
@@ -23,6 +24,14 @@ export default function AppRoutes() {
     <Routes>
       <Route path="/" element={<Login />} />
       <Route path="/upload-apk" element={<UploadApk />} />
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <Profile />
+          </ProtectedRoute>
+        }
+      />
       {/*    <Route path="/intro" element={<INTRO />} /> */}
       {/*       <Route path="/display" element={<Display />} />
        */}{" "}

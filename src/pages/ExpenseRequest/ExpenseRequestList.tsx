@@ -24,6 +24,51 @@ const PAGE_SIZE = 20;
 
 type ViewMode = "flat" | "grouped";
 
+const normalizeEmployeeName = (value?: string) =>
+  (value || "").trim().replace(/\s+/g, " ").toLocaleLowerCase("vi-VN");
+
+const groupExpenseRequestsByEmployeeName = (
+  groups: ExpenseEmployeeGroup[],
+): ExpenseEmployeeGroup[] => {
+  const merged = new Map<string, ExpenseEmployeeGroup>();
+
+  groups.forEach((group) => {
+    const displayName = group.employee?.name?.trim();
+    const key = displayName
+      ? normalizeEmployeeName(displayName)
+      : `#${group.employeeId}`;
+    const current = merged.get(key);
+
+    if (!current) {
+      merged.set(key, {
+        ...group,
+        employee: {
+          ...group.employee,
+          name: displayName || group.employee?.name,
+        },
+        requests: group.requests || [],
+      });
+      return;
+    }
+
+    const nextRequests = [...(current.requests || []), ...(group.requests || [])];
+    merged.set(key, {
+      ...current,
+      total: current.total + group.total,
+      totalAmount: current.totalAmount + group.totalAmount,
+      requests: nextRequests.sort(
+        (a, b) =>
+          new Date(b.createdAt || 0).getTime() -
+          new Date(a.createdAt || 0).getTime(),
+      ),
+    });
+  });
+
+  return Array.from(merged.values()).sort((a, b) =>
+    (a.employee?.name || "").localeCompare(b.employee?.name || "", "vi-VN"),
+  );
+};
+
 export default function ExpenseRequestList() {
   const navigate = useNavigate();
   const base = expenseBasePath();
@@ -38,7 +83,9 @@ export default function ExpenseRequestList() {
 
   const [items, setItems] = useState<ExpenseRequest[]>([]);
   const [groups, setGroups] = useState<ExpenseEmployeeGroup[]>([]);
-  const [viewMode, setViewMode] = useState<ViewMode>("flat");
+  const [viewMode, setViewMode] = useState<ViewMode>(
+    approverSide ? "grouped" : "flat",
+  );
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -73,7 +120,7 @@ export default function ExpenseRequestList() {
             requests: await enrichExpenseRequestsWithCreators(g.requests || []),
           })),
         );
-        setGroups(enrichedGroups);
+        setGroups(groupExpenseRequestsByEmployeeName(enrichedGroups));
         setTotalPages(res.totalPages || 1);
       } else {
         const res = await expenseRequestApi.list({

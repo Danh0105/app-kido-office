@@ -50,6 +50,7 @@ export type ActionKey =
 // Actions the current user may take on a request, derived from status + role + ownership.
 // Backend is the source of truth; this only decides which buttons to show.
 export const availableActions = (req: ExpenseRequest): ActionKey[] => {
+  if (hasRole("ketoan_truong")) return [];
   const owner = isOwner(req);
   const actions: ActionKey[] = [];
 

@@ -7,6 +7,7 @@ import { provinceApi } from "@/service/province";
 import { wardApi } from "@/service/ward";
 import AssignAreaModal from "./component/AssignAreaModal";
 import HandoverRegionModal from "./component/HandoverRegionModal";
+import { isChiefAccountant } from "@/utils/auth";
 
 type Employee = {
   id: number;
@@ -48,6 +49,7 @@ const roleLabel = (role: string) => {
 };
 
 export default function EmployeeList() {
+  const readOnly = isChiefAccountant();
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from;
@@ -159,7 +161,7 @@ export default function EmployeeList() {
             : "Danh sách nhân viên"
         }
       />
-      {from === "policy" ? (
+      {from === "policy" && !readOnly ? (
         <div className="p-4 mt-[60px] flex flex-col gap-3">
           <div className="flex gap-3">
             <button
@@ -545,41 +547,43 @@ export default function EmployeeList() {
                     <p className="font-medium">{item.name}</p>
                   </div>
 
-                  <button
-                    onClick={async (e) => {
-                      e.stopPropagation();
+                  {!readOnly && (
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
 
-                      if (!selectedEmployeeId) return;
+                        if (!selectedEmployeeId) return;
 
-                      const confirmDelete = window.confirm(
-                        `Thu hồi toàn bộ khu vực tỉnh ${item.name}?`,
-                      );
-
-                      if (!confirmDelete) return;
-
-                      try {
-                        await provinceApi.revokeProvince(
-                          selectedEmployeeId,
-                          item.id,
+                        const confirmDelete = window.confirm(
+                          `Thu hồi toàn bộ khu vực tỉnh ${item.name}?`,
                         );
 
-                        alert("Thu hồi tỉnh thành công");
+                        if (!confirmDelete) return;
 
-                        setProvinces((prev) =>
-                          prev.filter((p) => p.id !== item.id),
-                        );
-                      } catch (err: any) {
-                        console.error(err);
+                        try {
+                          await provinceApi.revokeProvince(
+                            selectedEmployeeId,
+                            item.id,
+                          );
 
-                        alert(
-                          err?.response?.data?.message || "Thu hồi thất bại",
-                        );
-                      }
-                    }}
-                    className="bg-red-500 text-white px-3 py-2 rounded-lg text-sm"
-                  >
-                    Thu hồi
-                  </button>
+                          alert("Thu hồi tỉnh thành công");
+
+                          setProvinces((prev) =>
+                            prev.filter((p) => p.id !== item.id),
+                          );
+                        } catch (err: any) {
+                          console.error(err);
+
+                          alert(
+                            err?.response?.data?.message || "Thu hồi thất bại",
+                          );
+                        }
+                      }}
+                      className="bg-red-500 text-white px-3 py-2 rounded-lg text-sm"
+                    >
+                      Thu hồi
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -625,36 +629,38 @@ export default function EmployeeList() {
                     </div>
                   </div>
 
-                  <button
-                    onClick={async (e) => {
-                      e.stopPropagation();
+                  {!readOnly && (
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
 
-                      if (!selectedEmployeeId) return;
+                        if (!selectedEmployeeId) return;
 
-                      const confirmDelete = window.confirm(
-                        `Thu hồi phường/xã ${w.name}?`,
-                      );
-
-                      if (!confirmDelete) return;
-
-                      try {
-                        await wardApi.revokeWard(selectedEmployeeId, w.id);
-
-                        alert("Thu hồi khu vực thành công");
-
-                        setWards((prev) => prev.filter((i) => i.id !== w.id));
-                      } catch (err: any) {
-                        console.error(err);
-
-                        alert(
-                          err?.response?.data?.message || "Thu hồi thất bại",
+                        const confirmDelete = window.confirm(
+                          `Thu hồi phường/xã ${w.name}?`,
                         );
-                      }
-                    }}
-                    className="bg-red-500 text-white px-3 py-2 rounded-lg text-sm"
-                  >
-                    Thu hồi
-                  </button>
+
+                        if (!confirmDelete) return;
+
+                        try {
+                          await wardApi.revokeWard(selectedEmployeeId, w.id);
+
+                          alert("Thu hồi khu vực thành công");
+
+                          setWards((prev) => prev.filter((i) => i.id !== w.id));
+                        } catch (err: any) {
+                          console.error(err);
+
+                          alert(
+                            err?.response?.data?.message || "Thu hồi thất bại",
+                          );
+                        }
+                      }}
+                      className="bg-red-500 text-white px-3 py-2 rounded-lg text-sm"
+                    >
+                      Thu hồi
+                    </button>
+                  )}
                 </div>
               ))}
             </div>

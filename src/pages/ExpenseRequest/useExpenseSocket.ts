@@ -1,20 +1,8 @@
 import { useEffect, useRef } from "react";
 import { getSocket } from "@/utils/socket";
+import type { ExpenseNotification as ExpenseRequestNotification } from "@/types/expenseRequest";
 
-export type ExpenseNotification = {
-  id: number;
-  type: string;
-  entityId?: number;
-  message?: string;
-  title?: string;
-  isRead?: boolean;
-  createdAt?: string;
-  meta?: {
-    suggestId?: number;
-    status?: string;
-    suggestType?: string;
-  };
-};
+export type ExpenseNotification = ExpenseRequestNotification;
 
 // Subscribe to real-time expense-request notifications.
 // `onNotify` fires for every incoming event so pages can refresh + toast.
@@ -41,7 +29,7 @@ export function useExpenseSocket(onNotify: (n: ExpenseNotification) => void) {
     sock.on("connect", register);
 
     const handleNew = (data: ExpenseNotification) => cb.current(data);
-    const handleGeneric = (data: ExpenseNotification) => {
+    const handleSuggest = (data: ExpenseNotification) => {
       if (
         data.type === "SUGGEST" &&
         data.meta?.suggestType === "EXPENSE_REQUEST"
@@ -51,12 +39,14 @@ export function useExpenseSocket(onNotify: (n: ExpenseNotification) => void) {
     };
 
     sock.on("expense-request-notification:new", handleNew);
-    sock.on("notification:new", handleGeneric);
+    sock.on("suggest-notification:new", handleSuggest);
+    sock.on("notification:new", handleSuggest);
 
     return () => {
       sock.off("connect", register);
       sock.off("expense-request-notification:new", handleNew);
-      sock.off("notification:new", handleGeneric);
+      sock.off("suggest-notification:new", handleSuggest);
+      sock.off("notification:new", handleSuggest);
     };
   }, []);
 }

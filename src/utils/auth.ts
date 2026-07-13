@@ -41,6 +41,8 @@ export const hasRole = (...roles: string[]): boolean => {
     return roles.some((r) => userRoles.includes(r));
 };
 
+export const isChiefAccountant = (): boolean => hasRole("ketoan_truong");
+
 export const getEmployeeName = () => {
 
     const user = getUserFromToken();

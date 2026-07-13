@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import BottomNav from "../../layout/BottomNav";
@@ -21,9 +21,9 @@ import {
   notificationApi,
   policyNotificationApi,
   reportNotificationApi,
-  suggestNotificationApi,
   weeklyPlanNotificationApi,
 } from "@/service/notification";
+import { expenseNotificationApi } from "@/service/expenseRequest";
 import { get } from "firebase/database";
 import { hasRole } from "@/utils/auth";
 
@@ -72,6 +72,13 @@ const LIMITED_MENUS = [
   },
 ];
 
+const CHIEF_ACCOUNTANT_MENUS = [
+  { title: "Quản lý thu chi", icon: expense, path: "expense-management", from: "expense" },
+  { title: "Thống kê", icon: statistics, path: "nhan-vien", from: "statistics" },
+  { title: "Đề xuất chi", icon: suggest, path: "expense-requests", from: "expense-request" },
+  { title: "Chính sách", icon: policy, path: "nhan-vien", from: "policy" },
+];
+
 // ================= TYPES =================
 type Notification = {
   id: number;
@@ -85,6 +92,7 @@ type Notification = {
   meta?: {
     subjectId?: number;
     suggestType?: string;
+    suggestId?: number;
   };
 };
 
@@ -172,11 +180,28 @@ export default function Home() {
   const [loadingMore, setLoadingMore] = useState(false);
 
   // ================= INIT =================
-  useEffect(() => {
-    notificationApi.getStats().then((res) => {
-      setNotificationStats(res.types || res);
-    });
+  const loadNotificationStats = useCallback(async () => {
+    const [statsRes, expenseSummary] = await Promise.all([
+      notificationApi.getStats(),
+      expenseNotificationApi.getSummary().catch(() => null),
+    ]);
+    const nextStats = statsRes.types || statsRes;
+    if (expenseSummary) {
+      const expenseTotal =
+        expenseSummary.general.total + expenseSummary.overdue.total;
+      const expenseUnread =
+        expenseSummary.general.unread + expenseSummary.overdue.unread;
+      nextStats.SUGGEST = {
+        unread: expenseUnread,
+        read: Math.max(0, expenseTotal - expenseUnread),
+      };
+    }
+    setNotificationStats(nextStats);
   }, []);
+
+  useEffect(() => {
+    loadNotificationStats();
+  }, [loadNotificationStats]);
 
   const isSuggestOnlyRole = hasRole(
     "ketoan_congno",
@@ -188,10 +213,10 @@ export default function Home() {
     const loadNotifications = async () => {
       setNotifications([]);
       const requests = isSuggestOnlyRole
-        ? [suggestNotificationApi.getAll(1, LIMIT, tab)]
+        ? [expenseNotificationApi.getAll(1, LIMIT, tab, { scope: "all" })]
         : [
             policyNotificationApi.getAll(1, LIMIT, tab),
-            suggestNotificationApi.getAll(1, LIMIT, tab),
+            expenseNotificationApi.getAll(1, LIMIT, tab, { scope: "all" }),
           ];
       if (!isSuggestOnlyRole && !hasRole("employee")) {
         requests.push(
@@ -210,7 +235,7 @@ export default function Home() {
       });
     };
     loadNotifications();
-  }, [tab]);
+  }, [isSuggestOnlyRole, tab]);
 
   // ================= SOCKET =================
   useEffect(() => {
@@ -246,13 +271,17 @@ export default function Home() {
 
         return [data, ...prev];
       });
-      setNotificationStats((prev) => ({
-        ...prev,
-        [data.type]: {
-          ...prev[data.type],
-          unread: prev[data.type].unread + 1,
-        },
-      }));
+      if (data.type === "SUGGEST" && data.meta?.suggestType === "EXPENSE_REQUEST") {
+        loadNotificationStats();
+      } else {
+        setNotificationStats((prev) => ({
+          ...prev,
+          [data.type]: {
+            ...prev[data.type],
+            unread: prev[data.type].unread + 1,
+          },
+        }));
+      }
     };
 
     socket.on("policy-notification:new", handleNew);
@@ -276,7 +305,7 @@ export default function Home() {
 
       socket.off("weekly-plan:new", handleNew);
     };
-  }, []);
+  }, [isSuggestOnlyRole, loadNotificationStats]);
 
   // ================= LOAD MORE =================
   const loadMore = async (
@@ -300,7 +329,9 @@ export default function Home() {
           break;
 
         case "SUGGEST":
-          res = await suggestNotificationApi.getAll(nextPage, LIMIT, tab);
+          res = await expenseNotificationApi.getAll(nextPage, LIMIT, tab, {
+            scope: "all",
+          });
           break;
 
         case "REPORT":
@@ -343,10 +374,15 @@ export default function Home() {
 
   // ================= CLICK =================
   const handleClickNotification = async (noti: Notification) => {
-    if (!noti.entityId) return;
+    const targetEntityId = noti.entityId || noti.meta?.suggestId;
+    if (!targetEntityId) return;
     if (!noti.isRead) {
       try {
-        await notificationApi.markAsRead(noti.id);
+        if (noti.type === "SUGGEST" && noti.meta?.suggestType === "EXPENSE_REQUEST") {
+          await expenseNotificationApi.markAsRead(noti.id);
+        } else {
+          await notificationApi.markAsRead(noti.id);
+        }
         setNotifications((prev) =>
           prev.map((n) =>
             n.id === noti.id
@@ -357,21 +393,25 @@ export default function Home() {
               : n,
           ),
         );
-        setNotificationStats((prev) => ({
-          ...prev,
-          [noti.type]: {
-            unread: Math.max(0, prev[noti.type].unread - 1),
-            read: prev[noti.type].read + 1,
-          },
-        }));
+        if (noti.type === "SUGGEST" && noti.meta?.suggestType === "EXPENSE_REQUEST") {
+          loadNotificationStats();
+        } else {
+          setNotificationStats((prev) => ({
+            ...prev,
+            [noti.type]: {
+              unread: Math.max(0, prev[noti.type].unread - 1),
+              read: prev[noti.type].read + 1,
+            },
+          }));
+        }
       } catch (error) {
         console.error("Failed to mark notification as read:", error);
       }
     }
     switch (noti.type) {
       case "POLICY": {
-        const res = await policiesApi.findOne(noti.entityId);
-        navigate(`/director/policy/${noti.entityId}`, {
+        const res = await policiesApi.findOne(targetEntityId);
+        navigate(`/director/policy/${targetEntityId}`, {
           state: {
             ...res,
             user: noti.senderId,
@@ -382,7 +422,7 @@ export default function Home() {
       case "SUGGEST":
         navigate(
           noti.meta?.suggestType === "EXPENSE_REQUEST"
-            ? `/director/expense-requests/${noti.entityId}`
+            ? `/director/expense-requests/${targetEntityId}`
             : "/director/expense-requests",
         );
         break;
@@ -398,9 +438,11 @@ export default function Home() {
     }
   };
 
-  const menus = hasRole("ketoan_congno", "ketoan_truong", "troly_gd", "thuquy")
-    ? LIMITED_MENUS
-    : ALL_MENUS;
+  const menus = hasRole("ketoan_truong")
+    ? CHIEF_ACCOUNTANT_MENUS
+    : hasRole("ketoan_congno", "troly_gd", "thuquy")
+      ? LIMITED_MENUS
+      : ALL_MENUS;
 
   const commonProps = {
     navigate,

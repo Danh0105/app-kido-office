@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import BottomNav from "../../layout/BottomNav";
 import { useNavigate } from "react-router-dom";
 
@@ -18,9 +18,9 @@ import {
   notificationApi,
   policyNotificationApi,
   reportNotificationApi,
-  suggestNotificationApi,
   weeklyPlanNotificationApi,
 } from "@/service/notification";
+import { expenseNotificationApi } from "@/service/expenseRequest";
 import ReportDetailPopup from "@/components/ReportDetailPopup";
 import { toast } from "react-hot-toast";
 
@@ -50,6 +50,7 @@ type Notification = {
     subjectName?: string;
     schoolYear?: string;
     suggestType?: string;
+    suggestId?: number;
   };
 };
 type NotificationCategory = "POLICY" | "SUGGEST" | "REPORT" | "WEEKLY_PLAN";
@@ -166,18 +167,35 @@ export default function Home() {
   const [loadingMore, setLoadingMore] = useState(false);
 
   // ================= INIT =================
-  useEffect(() => {
-    notificationApi.getStats().then((res) => {
-      setNotificationStats(res.types || res);
-    });
+  const loadNotificationStats = useCallback(async () => {
+    const [statsRes, expenseSummary] = await Promise.all([
+      notificationApi.getStats(),
+      expenseNotificationApi.getSummary().catch(() => null),
+    ]);
+    const nextStats = statsRes.types || statsRes;
+    if (expenseSummary) {
+      const expenseTotal =
+        expenseSummary.general.total + expenseSummary.overdue.total;
+      const expenseUnread =
+        expenseSummary.general.unread + expenseSummary.overdue.unread;
+      nextStats.SUGGEST = {
+        unread: expenseUnread,
+        read: Math.max(0, expenseTotal - expenseUnread),
+      };
+    }
+    setNotificationStats(nextStats);
   }, []);
+
+  useEffect(() => {
+    loadNotificationStats();
+  }, [loadNotificationStats]);
 
   useEffect(() => {
     const loadNotifications = async () => {
       setNotifications([]);
       const requests = [
         policyNotificationApi.getAll(1, LIMIT, tab),
-        suggestNotificationApi.getAll(1, LIMIT, tab),
+        expenseNotificationApi.getAll(1, LIMIT, tab, { scope: "all" }),
         reportNotificationApi.getAll(1, LIMIT, tab),
       ];
       if (!hasRole("employee")) {
@@ -227,13 +245,17 @@ export default function Home() {
           return prev;
         }
 
-        setNotificationStats((currentStats) => ({
-          ...currentStats,
-          [data.type]: {
-            ...currentStats[data.type],
-            unread: currentStats[data.type].unread + 1,
-          },
-        }));
+        if (data.type === "SUGGEST" && data.meta?.suggestType === "EXPENSE_REQUEST") {
+          loadNotificationStats();
+        } else {
+          setNotificationStats((currentStats) => ({
+            ...currentStats,
+            [data.type]: {
+              ...currentStats[data.type],
+              unread: currentStats[data.type].unread + 1,
+            },
+          }));
+        }
 
         return [data, ...prev];
       });
@@ -268,7 +290,7 @@ export default function Home() {
 
       socket.off("weekly-plan:new", handleNew);
     };
-  }, []);
+  }, [loadNotificationStats]);
 
   // ================= LOAD MORE =================
   const loadMore = async (
@@ -292,7 +314,9 @@ export default function Home() {
           break;
 
         case "SUGGEST":
-          res = await suggestNotificationApi.getAll(nextPage, LIMIT, tab);
+          res = await expenseNotificationApi.getAll(nextPage, LIMIT, tab, {
+            scope: "all",
+          });
           break;
 
         case "REPORT":
@@ -335,10 +359,15 @@ export default function Home() {
 
   // ================= CLICK =================
   const handleClickNotification = async (noti: Notification) => {
-    if (!noti.entityId) return;
+    const targetEntityId = noti.entityId || noti.meta?.suggestId;
+    if (!targetEntityId) return;
     if (!noti.isRead) {
       try {
-        await notificationApi.markAsRead(noti.id);
+        if (noti.type === "SUGGEST" && noti.meta?.suggestType === "EXPENSE_REQUEST") {
+          await expenseNotificationApi.markAsRead(noti.id);
+        } else {
+          await notificationApi.markAsRead(noti.id);
+        }
         setNotifications((prev) =>
           prev.map((n) =>
             n.id === noti.id
@@ -349,26 +378,30 @@ export default function Home() {
               : n,
           ),
         );
-        setNotificationStats((prev) => ({
-          ...prev,
-          [noti.type]: {
-            unread: Math.max(0, prev[noti.type].unread - 1),
-            read: prev[noti.type].read + 1,
-          },
-        }));
+        if (noti.type === "SUGGEST" && noti.meta?.suggestType === "EXPENSE_REQUEST") {
+          loadNotificationStats();
+        } else {
+          setNotificationStats((prev) => ({
+            ...prev,
+            [noti.type]: {
+              unread: Math.max(0, prev[noti.type].unread - 1),
+              read: prev[noti.type].read + 1,
+            },
+          }));
+        }
       } catch (error) {
         console.error("Failed to mark notification as read:", error);
       }
     }
     switch (noti.type) {
       case "POLICY": {
-        navigate(`/employee/policy/${noti.entityId}`);
+        navigate(`/employee/policy/${targetEntityId}`);
         break;
       }
       case "SUGGEST":
         navigate(
           noti.meta?.suggestType === "EXPENSE_REQUEST"
-            ? `/employee/expense-requests/${noti.entityId}`
+            ? `/employee/expense-requests/${targetEntityId}`
             : "/employee/expense-requests",
         );
         break;

@@ -25,6 +25,9 @@ import { InputExpenseRow } from "./type/InputExpenseRow";
 import { RevenueRow } from "./type/RevenueRow";
 import { ManagementRow } from "./type/ManagementRow";
 import { getApiErrorMessage } from "@/utils/apiError";
+import { isChiefAccountant } from "@/utils/auth";
+import ExpenseSummary from "./components/ExpenseSummary";
+import ExpenseSummaryTable from "./components/ExpenseSummaryTable";
 import {
   getOtherCostKey,
   getOtherCostUnitPrice,
@@ -107,10 +110,14 @@ export default function RealExpenseDetail({
   onSchoolYearChange,
   onSchoolYearsChange,
 }: RealExpenseDetailProps) {
+  const readOnly = isChiefAccountant();
   const { schoolId: schoolIdParam, schoolExpenseId: schoolExpenseIdParam } =
     useParams();
   const [tab, setTab] = useState<string>("expense");
   const [loading, setLoading] = useState(false);
+  const [summary, setSummary] = useState<any>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState("");
 
   const [keyword, setKeyword] = useState("");
 
@@ -279,6 +286,28 @@ export default function RealExpenseDetail({
   const money = (value: number) => {
     return Number(value || 0).toLocaleString("vi-VN");
   };
+
+  const loadSummary = async () => {
+    if (!resolvedSchoolExpenseId) {
+      setSummary(null);
+      setSummaryError("Chưa có phiếu thu chi cho kỳ đã chọn");
+      return;
+    }
+
+    setSummaryLoading(true);
+    setSummaryError("");
+    try {
+      setSummary(await schoolExpenseApi.getSummary(resolvedSchoolExpenseId));
+    } catch (error) {
+      setSummaryError(getApiErrorMessage(error, "Không thể tải tổng hợp thu chi"));
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tab === "summary") loadSummary();
+  }, [tab, resolvedSchoolExpenseId]);
 
   const normalizeHistory = (history: any) => {
     const list = Array.isArray(history)
@@ -1026,6 +1055,20 @@ export default function RealExpenseDetail({
           setSubjectId={setSubjectId}
         />
 
+        {tab === "summary" && (
+          <div className="space-y-5">
+            <ExpenseSummary
+              data={summary}
+              loading={summaryLoading}
+              error={summaryError}
+              onRetry={loadSummary}
+            />
+            {!summaryLoading && !summaryError && (
+              <ExpenseSummaryTable data={summary} subjects={subjects} school={school} />
+            )}
+          </div>
+        )}
+
         {tab === "policy-year" && (
           <PolicyYearListPage
             key={`${resolvedSchoolId || "school"}-${
@@ -1157,7 +1200,7 @@ export default function RealExpenseDetail({
             {/* SUB TABS */}
 
             <div className="space-y-5">
-              <InputExpenseTable
+              {!readOnly && <InputExpenseTable
                 rows={inputRows}
                 defaultFee={Number(
                   activeSubject?.policies?.[0]?.data?.fee || 0,
@@ -1166,8 +1209,8 @@ export default function RealExpenseDetail({
                 onAdd={addInputRow}
                 onRemove={removeInputRow}
                 classCount={activeSubject.classCount}
-              />
-              <ExpenseFormTable
+              />}
+              {!readOnly && <ExpenseFormTable
                 inputRows={inputRows}
                 revenueRows={revenueRows}
                 managementRows={managementRows}
@@ -1186,7 +1229,7 @@ export default function RealExpenseDetail({
                 handleViewHistory={handleViewHistory}
                 historyLoading={historyLoading}
                 historyCount={historyList.length}
-              />
+              />}
 
               {/* SAVED DATA */}
               {(savedRevenues.length > 0 ||

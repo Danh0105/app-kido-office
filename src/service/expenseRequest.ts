@@ -1,6 +1,10 @@
 import api from "./api";
 import type {
   ExpenseGroupedByEmployeeResponse,
+  ExpenseNotificationGroupedResponse,
+  ExpenseNotificationListResponse,
+  ExpenseNotificationQuery,
+  ExpenseNotificationSummary,
   ExpenseListQuery,
   ExpenseListResponse,
   ExpenseRequest,
@@ -174,11 +178,44 @@ export const expenseRequestApi = {
   },
 };
 
-// EXPENSE_REQUEST notifications (uses the shared /notifications endpoint).
+// EXPENSE_REQUEST notifications (dedicated bell/page endpoints).
 export const expenseNotificationApi = {
-  getAll: async (page = 1, limit = 20, tab?: "unread" | "read") => {
-    const res = await api.get(`/notifications`, {
-      params: { type: "EXPENSE_REQUEST", page, limit, tab },
+  getSummary: async (): Promise<ExpenseNotificationSummary> => {
+    const res = await api.get(`/notifications/expense/summary`);
+    return res.data;
+  },
+
+  getGroupedByEmployee: async (
+    query: ExpenseNotificationQuery = {},
+  ): Promise<ExpenseNotificationGroupedResponse> => {
+    const res = await api.get(`/notifications/expense/grouped-by-employee`, {
+      params: query,
+    });
+    return res.data;
+  },
+
+  getAll: async (
+    page = 1,
+    limit = 20,
+    tab?: "unread" | "read",
+    query: ExpenseNotificationQuery = {},
+  ): Promise<ExpenseNotificationListResponse> => {
+    const res = await api.get(`/notifications/expense`, {
+      params: { ...query, page, limit, tab },
+    });
+    return res.data;
+  },
+
+  markAsRead: async (id: number): Promise<{ success: boolean }> => {
+    const res = await api.patch(`/notifications/expense/${id}/read`);
+    return res.data;
+  },
+
+  markAllAsRead: async (
+    query: Pick<ExpenseNotificationQuery, "scope" | "employeeId"> = {},
+  ): Promise<{ success: boolean }> => {
+    const res = await api.patch(`/notifications/expense/read-all`, undefined, {
+      params: query,
     });
     return res.data;
   },

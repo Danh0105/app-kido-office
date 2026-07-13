@@ -6,7 +6,7 @@ import "./css/Sales.css";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { policiesApi } from "../../../../service/policy";
 import { PolicyStatus } from "../../enum/PolicyStatus";
-import { hasRole } from "../../../../utils/auth";
+import { hasRole, isChiefAccountant } from "../../../../utils/auth";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import HeaderWithBack from "@/components/HeaderWithBack";
 import { subjectApi } from "@/service/subject.api";
@@ -158,7 +158,8 @@ export default function Sales({ onLogout }: Props) {
     finalStatus === PolicyStatus.DIRECTOR_APPROVED ||
     finalStatus === PolicyStatus.SALE_ADMIN_APPROVED;
   const isRejected = finalStatus === PolicyStatus.REJECTED;
-  const showActions = !isApproved && !isRejected;
+  const readOnly = isChiefAccountant();
+  const showActions = !isApproved && !isRejected && !readOnly;
   useEffect(() => {
     const fetchData = async () => {
       if (!finalCurrentHistoryId) return;

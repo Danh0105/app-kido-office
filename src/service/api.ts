@@ -1,5 +1,6 @@
 // api.ts
 import axios from 'axios';
+import { toast } from 'react-hot-toast';
 
 const api = axios.create({
     baseURL:
@@ -27,7 +28,20 @@ api.interceptors.response.use(
         }
 
         if (status === 403) {
-            alert('Bạn không có quyền truy cập chức năng này');
+            const token = localStorage.getItem('access_token');
+            let isReadOnlyUser = false;
+            try {
+                const segment = token?.split('.')[1];
+                const payload = segment
+                    ? JSON.parse(atob(segment.replace(/-/g, '+').replace(/_/g, '/')))
+                    : null;
+                isReadOnlyUser = payload?.roles?.includes('ketoan_truong');
+            } catch {
+                // Invalid tokens are handled by the authentication flow.
+            }
+            toast.error(isReadOnlyUser
+                ? 'Bạn chỉ có quyền xem'
+                : 'Bạn không có quyền truy cập chức năng này');
         }
 
         return Promise.reject(error);

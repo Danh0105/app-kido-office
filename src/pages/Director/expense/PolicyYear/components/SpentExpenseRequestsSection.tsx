@@ -47,6 +47,14 @@ const isInSchoolYear = (value: string, schoolYear: string) => {
 
 const displayAmount = (value: number) => formatVnd(value) || "0";
 
+const getPaymentOrderAmount = (item: ExpenseRequest) => {
+  const amount = item.paymentOrder?.amount;
+  if (amount === undefined || amount === null) return null;
+
+  const normalizedAmount = Number(amount);
+  return Number.isFinite(normalizedAmount) ? normalizedAmount : null;
+};
+
 export default function SpentExpenseRequestsSection({
   schoolId,
   schoolYear,
@@ -254,20 +262,22 @@ export default function SpentExpenseRequestsSection({
               {items.length} đề xuất
             </p>
           </div>
-          <table className="min-w-[980px] w-full text-sm">
+          <table className="min-w-[1120px] w-full text-sm">
             <thead>
               <tr className="bg-slate-50 text-[11px] font-black uppercase tracking-wide text-slate-500">
                 <th className="px-4 py-3 text-left">Mã</th>
                 <th className="min-w-[280px] px-4 py-3 text-left">Nội dung</th>
                 <th className="px-4 py-3 text-left">Người đề xuất</th>
                 <th className="px-4 py-3 text-left">Ngày xác nhận chi</th>
-                <th className="px-4 py-3 text-right">Số tiền</th>
+                <th className="px-4 py-3 text-right">Số tiền đề xuất</th>
+                <th className="px-4 py-3 text-right">Số tiền thực chi</th>
                 <th className="px-4 py-3 text-center">Thao tác</th>
               </tr>
             </thead>
             <tbody>
               {items.map((item) => {
                 const requesterDetails = creatorInlineDetails(item);
+                const paymentOrderAmount = getPaymentOrderAmount(item);
 
                 return (
                   <tr
@@ -300,6 +310,11 @@ export default function SpentExpenseRequestsSection({
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-right font-black text-emerald-700">
                       {formatVnd(item.amount)} đ
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right font-black text-violet-700">
+                      {paymentOrderAmount === null
+                        ? "—"
+                        : `${formatVnd(paymentOrderAmount)} đ`}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <button

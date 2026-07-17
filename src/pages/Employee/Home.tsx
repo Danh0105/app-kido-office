@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import BottomNav from "../../layout/BottomNav";
 import { useNavigate } from "react-router-dom";
 
@@ -86,6 +86,8 @@ export default function Home() {
   const [selectedReportId, setSelectedReportId] = useState<number | null>(null);
   const [tab, setTab] = useState<"unread" | "read">("unread");
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [expenseRefreshVersion, setExpenseRefreshVersion] = useState(0);
+  const realtimeNotificationIdsRef = useRef(new Set<number>());
   const [unreadCount, setUnreadCount] = useState(0);
   const [notificationStats, setNotificationStats] = useState<NotificationStats>(
     {
@@ -186,9 +188,18 @@ export default function Home() {
     setNotificationStats(nextStats);
   }, []);
 
-  useEffect(() => {
-    loadNotificationStats();
+  const refreshExpenseNotifications = useCallback(async () => {
+    setExpenseRefreshVersion((version) => version + 1);
+    try {
+      await loadNotificationStats();
+    } catch (error) {
+      console.error("Failed to refresh expense notification stats:", error);
+    }
   }, [loadNotificationStats]);
+
+  useEffect(() => {
+    refreshExpenseNotifications();
+  }, [refreshExpenseNotifications]);
 
   useEffect(() => {
     const loadNotifications = async () => {
@@ -240,25 +251,32 @@ export default function Home() {
     const socket = getSocket();
 
     const handleNew = (data: Notification) => {
+      if (realtimeNotificationIdsRef.current.has(data.id)) return;
+      realtimeNotificationIdsRef.current.add(data.id);
+      if (realtimeNotificationIdsRef.current.size > 500) {
+        const oldestId = realtimeNotificationIdsRef.current.values().next().value;
+        if (oldestId !== undefined) {
+          realtimeNotificationIdsRef.current.delete(oldestId);
+        }
+      }
       setNotifications((prev) => {
         if (prev.find((n) => n.id === data.id)) {
           return prev;
         }
-
-        if (data.type === "SUGGEST" && data.meta?.suggestType === "EXPENSE_REQUEST") {
-          loadNotificationStats();
-        } else {
-          setNotificationStats((currentStats) => ({
-            ...currentStats,
-            [data.type]: {
-              ...currentStats[data.type],
-              unread: currentStats[data.type].unread + 1,
-            },
-          }));
-        }
-
         return [data, ...prev];
       });
+
+      if (data.type === "SUGGEST" && data.meta?.suggestType === "EXPENSE_REQUEST") {
+        refreshExpenseNotifications();
+      } else {
+        setNotificationStats((currentStats) => ({
+          ...currentStats,
+          [data.type]: {
+            ...currentStats[data.type],
+            unread: currentStats[data.type].unread + 1,
+          },
+        }));
+      }
     };
 
     const handleRealtimeNotification = (data: Notification) => {
@@ -290,7 +308,7 @@ export default function Home() {
 
       socket.off("weekly-plan:new", handleNew);
     };
-  }, [loadNotificationStats]);
+  }, [refreshExpenseNotifications]);
 
   // ================= LOAD MORE =================
   const loadMore = async (
@@ -379,7 +397,7 @@ export default function Home() {
           ),
         );
         if (noti.type === "SUGGEST" && noti.meta?.suggestType === "EXPENSE_REQUEST") {
-          loadNotificationStats();
+          refreshExpenseNotifications();
         } else {
           setNotificationStats((prev) => ({
             ...prev,
@@ -427,6 +445,8 @@ export default function Home() {
     hasMore,
     onClickNotification: handleClickNotification,
     notificationStats,
+    expenseRefreshVersion,
+    refreshExpenseNotifications,
   };
 
   return (

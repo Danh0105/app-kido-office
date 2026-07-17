@@ -14,13 +14,6 @@ const formatDate = (value?: string) => {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("vi-VN");
 };
 
-const findItem = (items: any[], subjectId: number, rowIndex: number) =>
-  items.find(
-    (item) =>
-      Number(item.subjectId) === Number(subjectId) &&
-      Number(item.rowIndex ?? 0) === Number(rowIndex),
-  );
-
 export default function ExpenseSummaryTable({ data, subjects, school }: Props) {
   const payload = unwrap(data);
   const sources = [payload?.summary, payload].filter(Boolean);
@@ -30,29 +23,50 @@ export default function ExpenseSummaryTable({ data, subjects, school }: Props) {
   const managementItems = arrayFrom(sources, ["managementExpenseItems", "managementItems"]);
 
   const subjectLabel = (subjectId: number) => {
-    const subject = subjects.find((s: any) => s.id === subjectId);
+    const subject = subjects.find((s: any) => Number(s.id) === subjectId);
     return subject ? subject.code || subject.name : "-";
   };
 
-  const rows = [...revenues]
-    .sort(
-      (a, b) =>
-        Number(a.subjectId) - Number(b.subjectId) ||
-        Number(a.rowIndex ?? 0) - Number(b.rowIndex ?? 0),
-    )
-    .map((revenue) => {
-      const schoolItem = findItem(schoolItems, revenue.subjectId, revenue.rowIndex ?? 0);
-      const managementItem = findItem(
-        managementItems,
-        revenue.subjectId,
-        revenue.rowIndex ?? 0,
-      );
+  const rowMap = new Map<
+    string,
+    {
+      subjectId: number;
+      rowIndex: number;
+      revenue?: any;
+      schoolItem?: any;
+      managementItem?: any;
+    }
+  >();
+
+  const addItems = (
+    items: any[],
+    field: "revenue" | "schoolItem" | "managementItem",
+  ) => {
+    items.forEach((item, index) => {
+      const subjectId = Number(item.subjectId || 0);
+      const rowIndex = Number(item.rowIndex ?? index);
+      const key = `${subjectId}:${rowIndex}`;
+      const row = rowMap.get(key) || { subjectId, rowIndex };
+
+      row[field] = item;
+      rowMap.set(key, row);
+    });
+  };
+
+  addItems(revenues, "revenue");
+  addItems(schoolItems, "schoolItem");
+  addItems(managementItems, "managementItem");
+
+  const rows = [...rowMap.values()]
+    .sort((a, b) => a.subjectId - b.subjectId || a.rowIndex - b.rowIndex)
+    .map(({ subjectId, revenue, schoolItem, managementItem }) => {
+      const sourceItem = revenue || schoolItem || managementItem || {};
 
       const invoiceAmount =
-        Number(revenue.invoiceAmount || 0) ||
-        Number(revenue.unitPrice || 0) *
-          Number(revenue.studentCount || 0) *
-          Number(revenue.monthsCount || 0);
+        Number(revenue?.invoiceAmount || 0) ||
+        Number(revenue?.unitPrice || 0) *
+          Number(revenue?.studentCount || 0) *
+          Number(revenue?.monthsCount || 0);
 
       const schoolExpenseAmount =
         Number(schoolItem?.schoolExpenseAmount || 0) ||
@@ -75,13 +89,14 @@ export default function ExpenseSummaryTable({ data, subjects, school }: Props) {
       const remainingOutsideExpense = totalOutsideExpense - paidOutsideExpense;
 
       return {
-        subjectLabel: subjectLabel(revenue.subjectId),
-        content: revenue.content || "-",
-        totalPeriods: revenue.totalPeriods,
-        studentCount: revenue.studentCount,
-        monthsCount: revenue.monthsCount,
+        subjectLabel: subjectLabel(subjectId),
+        content:
+          revenue?.content || schoolItem?.content || managementItem?.content || "-",
+        totalPeriods: sourceItem.totalPeriods,
+        studentCount: sourceItem.studentCount,
+        monthsCount: sourceItem.monthsCount,
         invoiceAmount,
-        paymentDate: revenue.paymentDate,
+        paymentDate: revenue?.paymentDate,
         totalOutsideExpense,
         paidOutsideExpense,
         remainingOutsideExpense,

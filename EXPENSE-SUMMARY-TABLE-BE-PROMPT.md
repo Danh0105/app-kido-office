@@ -12,7 +12,9 @@ GET /school-expenses/:id/summary
 
 Hiện tại FE chỉ dùng response này để tính vài con số tổng (tổng doanh thu, đã thu, tổng chi...) hiển thị dạng thẻ KPI. FE vừa thêm **bảng chi tiết theo từng dòng** (giống bảng Excel tổng hợp thu-chi theo trường/tháng), nên response `/summary` cần trả về **mảng chi tiết từng item**, không chỉ số tổng, để FE tự ráp từng dòng.
 
-Mỗi dòng trong bảng mới cần ghép 1 `revenueItem` với `schoolExpenseItem` + `managementExpenseItem` **cùng `subjectId` và cùng `rowIndex`** (đây là cách FE lưu khi gọi `POST /school-expenses/:id/save-all` — 3 mảng luôn được gửi kèm `rowIndex` để giữ đúng thứ tự dòng nhập liệu).
+Mỗi dòng trong bảng mới cần ghép `revenueItem`, `schoolExpenseItem` và `managementExpenseItem` **cùng `subjectId` và cùng `rowIndex`** (đây là cách FE lưu khi gọi `POST /school-expenses/:id/save-all` — 3 mảng luôn được gửi kèm `rowIndex` để giữ đúng thứ tự dòng nhập liệu).
+
+Bảng phải bao gồm **toàn bộ dữ liệu thu và chi của tất cả môn học**. FE tạo danh sách dòng từ hợp của khóa `(subjectId, rowIndex)` trong cả 3 mảng, nên một dòng chỉ có dữ liệu thu hoặc chỉ có dữ liệu chi vẫn được hiển thị; không được lấy riêng `revenueItems` làm danh sách dòng gốc.
 
 ## Yêu cầu sửa
 
@@ -89,6 +91,7 @@ Lưu ý bắt buộc:
 - **`subjectId` và `rowIndex` phải có trên cả 3 loại item** — đây là khoá để FE ghép 1 dòng doanh thu với 1 dòng chi ngoài HĐ tương ứng. Thiếu 1 trong 2 field này thì FE không ghép được dòng, bảng sẽ hiển thị sai/thiếu.
 - `schoolExpenseAmount` (của `schoolExpenseItems`) và `totalOutside` (của `managementExpenseItems`) nên trả sẵn giá trị đã tính (BE tính từ đơn giá × số học sinh × số tháng), không bắt FE tự suy ra từ đơn giá — tránh lệch số nếu công thức tính phía BE khác FE.
 - Nếu 1 `schoolExpense` có nhiều môn học (subject), `revenueItems`/`schoolExpenseItems`/`managementExpenseItems` phải gộp **tất cả subjectId**, không chỉ subject đang active — vì bảng tổng hợp hiển thị toàn bộ môn học của trường trong 1 bảng duy nhất.
+- Không được loại một item chỉ vì không tìm thấy item tương ứng trong 2 mảng còn lại. Ví dụ, một `(subjectId, rowIndex)` có chi nhưng chưa có thu vẫn phải được trả trong mảng chi tương ứng để FE hiển thị thành một dòng.
 
 ### 2. `GET /schools` (danh sách trường trong "Quản lý thu chi") cần trả kèm quan hệ `ward` và `employee`
 
@@ -113,6 +116,7 @@ FE **chưa** cần trường "Số hóa đơn" (mã hoá đơn) ở giai đoạn
 
 - [ ] `GET /school-expenses/:id/summary` (không truyền `subjectId`) trả về `revenueItems`, `schoolExpenseItems`, `managementExpenseItems` là **mảng chi tiết từng dòng** của **tất cả môn học**, mỗi item có `subjectId` và `rowIndex`.
 - [ ] Với 1 phiếu thu chi có N môn học, số dòng `revenueItems` = tổng số dòng doanh thu đã nhập của cả N môn (không chỉ môn đang xem).
+- [ ] Hợp các khóa `(subjectId, rowIndex)` của cả 3 mảng bao phủ toàn bộ dòng thu/chi của cả N môn; dòng chỉ có thu hoặc chỉ có chi không bị mất.
 - [ ] `schoolExpenseAmount` và `totalOutside` trả sẵn giá trị đã tính, khớp với số hiển thị ở tab chi tiết từng môn học (`ExpenseFormTable`).
 - [ ] `GET /schools?...` trả `ward.name` đúng với khu vực đã gán cho trường (kể cả khi filter theo `employeeName`/`hasRemainingExpense`/`keyword`), không trả `null` nếu trường đã có khu vực.
 - [ ] `GET /schools?...` vẫn giữ nguyên `employee.name`, `employee.phone` như hiện tại (không đổi hành vi cũ).

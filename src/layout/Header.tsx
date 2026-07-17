@@ -9,7 +9,9 @@ type Props = {
   loadMore: any;
   tab: "unread" | "read";
   setTab: (tab: "unread" | "read") => void;
-  onClickNotification: (notification: any) => void;
+  onClickNotification: (notification: any) => void | Promise<void>;
+  expenseRefreshVersion: number;
+  refreshExpenseNotifications: () => void | Promise<void>;
   hasMore: {
     POLICY: { unread: boolean; read: boolean };
     SUGGEST: { unread: boolean; read: boolean };
@@ -32,6 +34,8 @@ export default function AppHeader({
   tab,
   setTab,
   onClickNotification,
+  expenseRefreshVersion,
+  refreshExpenseNotifications,
   hasMore,
   notificationStats,
 }: Props) {
@@ -118,6 +122,8 @@ export default function AppHeader({
                 hasMore={hasMore}
                 notificationStats={notificationStats}
                 onClickNotification={onClickNotification}
+                expenseRefreshVersion={expenseRefreshVersion}
+                onRefreshExpenseNotifications={refreshExpenseNotifications}
               />
             </div>
           </div>

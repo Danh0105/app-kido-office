@@ -69,8 +69,6 @@ export default function Login({ onSuccess }: Props) {
       const EMPLOYEE_ROLES = ["employee", "probation", "employee_la", "sales"];
       if (EMPLOYEE_ROLES.some((r) => roles.includes(r))) {
         navigate("/employee/home");
-      } else if (roles.includes("accountant")) {
-        navigate("/director/expense-management");
       } else {
         navigate("/director");
       }
@@ -194,8 +192,6 @@ export default function Login({ onSuccess }: Props) {
                 const EMPLOYEE_ROLES = ["employee", "probation", "employee_la", "sales"];
                 if (EMPLOYEE_ROLES.some((r) => roles.includes(r))) {
                   navigate("/employee/home");
-                } else if (roles.includes("accountant")) {
-                  navigate("/director/expense-management");
                 } else {
                   navigate("/director");
                 }

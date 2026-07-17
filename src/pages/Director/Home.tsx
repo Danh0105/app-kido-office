@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import BottomNav from "../../layout/BottomNav";
@@ -141,6 +141,8 @@ export default function Home() {
     },
   );
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [expenseRefreshVersion, setExpenseRefreshVersion] = useState(0);
+  const realtimeNotificationIdsRef = useRef(new Set<number>());
   const unreadCount = useMemo(
     () => notifications.filter((n) => !n.isRead).length,
 
@@ -199,11 +201,21 @@ export default function Home() {
     setNotificationStats(nextStats);
   }, []);
 
-  useEffect(() => {
-    loadNotificationStats();
+  const refreshExpenseNotifications = useCallback(async () => {
+    setExpenseRefreshVersion((version) => version + 1);
+    try {
+      await loadNotificationStats();
+    } catch (error) {
+      console.error("Failed to refresh expense notification stats:", error);
+    }
   }, [loadNotificationStats]);
 
+  useEffect(() => {
+    refreshExpenseNotifications();
+  }, [refreshExpenseNotifications]);
+
   const isSuggestOnlyRole = hasRole(
+    "accountant",
     "ketoan_congno",
     "ketoan_truong",
     "troly_gd",
@@ -264,6 +276,14 @@ export default function Home() {
 
     const handleNew = (data: Notification) => {
       if (isSuggestOnlyRole && data.type !== "SUGGEST") return;
+      if (realtimeNotificationIdsRef.current.has(data.id)) return;
+      realtimeNotificationIdsRef.current.add(data.id);
+      if (realtimeNotificationIdsRef.current.size > 500) {
+        const oldestId = realtimeNotificationIdsRef.current.values().next().value;
+        if (oldestId !== undefined) {
+          realtimeNotificationIdsRef.current.delete(oldestId);
+        }
+      }
       setNotifications((prev) => {
         if (prev.find((n) => n.id === data.id)) {
           return prev;
@@ -272,7 +292,7 @@ export default function Home() {
         return [data, ...prev];
       });
       if (data.type === "SUGGEST" && data.meta?.suggestType === "EXPENSE_REQUEST") {
-        loadNotificationStats();
+        refreshExpenseNotifications();
       } else {
         setNotificationStats((prev) => ({
           ...prev,
@@ -305,7 +325,7 @@ export default function Home() {
 
       socket.off("weekly-plan:new", handleNew);
     };
-  }, [isSuggestOnlyRole, loadNotificationStats]);
+  }, [isSuggestOnlyRole, refreshExpenseNotifications]);
 
   // ================= LOAD MORE =================
   const loadMore = async (
@@ -394,7 +414,7 @@ export default function Home() {
           ),
         );
         if (noti.type === "SUGGEST" && noti.meta?.suggestType === "EXPENSE_REQUEST") {
-          loadNotificationStats();
+          refreshExpenseNotifications();
         } else {
           setNotificationStats((prev) => ({
             ...prev,
@@ -440,7 +460,7 @@ export default function Home() {
 
   const menus = hasRole("ketoan_truong")
     ? CHIEF_ACCOUNTANT_MENUS
-    : hasRole("ketoan_congno", "troly_gd", "thuquy")
+    : hasRole("accountant", "ketoan_congno", "troly_gd", "thuquy")
       ? LIMITED_MENUS
       : ALL_MENUS;
 
@@ -454,6 +474,8 @@ export default function Home() {
     hasMore,
     onClickNotification: handleClickNotification,
     notificationStats,
+    expenseRefreshVersion,
+    refreshExpenseNotifications,
     menus,
   };
 

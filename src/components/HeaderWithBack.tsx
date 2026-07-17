@@ -10,7 +10,6 @@ type Props = {
 export default function HeaderWithBack({ title = "Danh sách trường" }: Props) {
     const navigate = useNavigate();
 
-    const isAccountant = hasRole("accountant");
     const isEmployeeType = hasRole(
         "employee",
         "probation",
@@ -18,6 +17,7 @@ export default function HeaderWithBack({ title = "Danh sách trường" }: Props
         "sales",
     );
     const isDirectorType = hasRole(
+        "accountant",
         "director",
         "director_la",
         "saleadmin",
@@ -28,9 +28,7 @@ export default function HeaderWithBack({ title = "Danh sách trường" }: Props
         "troly_gd",
     );
 
-    const homePath = isAccountant
-        ? "/director/expense-management"
-        : isDirectorType
+    const homePath = isDirectorType
         ? "/director"
         : isEmployeeType
         ? "/employee/home"

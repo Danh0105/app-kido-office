@@ -1064,7 +1064,11 @@ export default function RealExpenseDetail({
               onRetry={loadSummary}
             />
             {!summaryLoading && !summaryError && (
-              <ExpenseSummaryTable data={summary} subjects={subjects} school={school} />
+              <ExpenseSummaryTable
+                data={summary}
+                subjects={allSubjects}
+                school={resolvedSchool}
+              />
             )}
           </div>
         )}

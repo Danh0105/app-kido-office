@@ -82,7 +82,7 @@ const directorOnly = (children: React.ReactNode) => (
 function DirectorFallback() {
   return (
     <Navigate
-      to={hasRole("accountant") || isChiefAccountant() ? EXPENSE_HOME : DIRECTOR_HOME}
+      to={isChiefAccountant() ? EXPENSE_HOME : DIRECTOR_HOME}
       replace
     />
   );
@@ -91,7 +91,14 @@ function DirectorFallback() {
 export default function DirectorRoutes() {
   return (
     <Routes>
-      <Route index element={isChiefAccountant() ? <Home /> : directorOnly(<Home />)} />
+      <Route
+        index
+        element={
+          hasRole("accountant") || isChiefAccountant()
+            ? <Home />
+            : directorOnly(<Home />)
+        }
+      />
       <Route path="subject-list/:id" element={isChiefAccountant() ? <SubjectList /> : directorOnly(<SubjectList />)} />
       <Route
         path="school-list/:employeeId"

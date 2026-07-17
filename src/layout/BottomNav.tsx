@@ -6,7 +6,6 @@ export default function BottomNav() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const isAccountant = hasRole("accountant");
   const isEmployeeType = hasRole(
     "employee",
     "probation",
@@ -14,6 +13,7 @@ export default function BottomNav() {
     "sales",
   );
   const isDirectorType = hasRole(
+    "accountant",
     "director",
     "director_la",
     "saleadmin",
@@ -24,9 +24,7 @@ export default function BottomNav() {
     "troly_gd",
   );
 
-  const homePath = isAccountant
-    ? "/director/expense-management"
-    : isDirectorType
+  const homePath = isDirectorType
     ? "/director"
     : isEmployeeType
     ? "/employee/home"
@@ -60,23 +58,19 @@ export default function BottomNav() {
           }`}
         >
           <Home size={20} />
-          <span className="text-xs">
-            {isAccountant ? "Thu chi" : "Trang chủ"}
-          </span>
+          <span className="text-xs">Trang chủ</span>
         </button>
 
         {/* PROFILE */}
-        {!isAccountant && (
-          <button
-            onClick={() => navigate(profilePath)}
-            className={`flex flex-col items-center ${
-              pathname === profilePath ? "text-orange-500" : "text-gray-400"
-            }`}
-          >
-            <User size={20} />
-            <span className="text-xs">Cá nhân</span>
-          </button>
-        )}
+        <button
+          onClick={() => navigate(profilePath)}
+          className={`flex flex-col items-center ${
+            pathname === profilePath ? "text-orange-500" : "text-gray-400"
+          }`}
+        >
+          <User size={20} />
+          <span className="text-xs">Cá nhân</span>
+        </button>
       </div>
     </div>
   );

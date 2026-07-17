@@ -11,9 +11,9 @@ import { hasRole, isChiefAccountant } from "@/utils/auth";
  */ /* import Display from "@/pages/Display/Display";
  */ /* import INTRO from "@/pages/Display"; */
 
-function BlockAccountantOutsideExpense({ children }: any) {
+function BlockAccountingRolesOutsideDirector({ children }: any) {
   if (hasRole("accountant") || isChiefAccountant()) {
-    return <Navigate to="/director/expense-management" replace />;
+    return <Navigate to="/director" replace />;
   }
 
   return children;
@@ -41,9 +41,9 @@ export default function AppRoutes() {
         path="/employee/*"
         element={
           <ProtectedRoute>
-            <BlockAccountantOutsideExpense>
+            <BlockAccountingRolesOutsideDirector>
               <EmployeeRoutes />
-            </BlockAccountantOutsideExpense>
+            </BlockAccountingRolesOutsideDirector>
           </ProtectedRoute>
         }
       />

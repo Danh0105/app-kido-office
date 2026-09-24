@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import React, { useEffect, useState } from "react";
+import { BookMarked } from "lucide-react";
 import HeaderWithBack from "../../../components/HeaderWithBack";
 import { employeeApi } from "../../../service/employee";
 import { dailyReportApi } from "@/service/report";
@@ -7,7 +8,11 @@ import { provinceApi } from "@/service/province";
 import { wardApi } from "@/service/ward";
 import AssignAreaModal from "./component/AssignAreaModal";
 import HandoverRegionModal from "./component/HandoverRegionModal";
-import { isChiefAccountant } from "@/utils/auth";
+import { hasRole, isChiefAccountant } from "@/utils/auth";
+import { CATALOG_ADMIN_ROLES } from "@/service/subjectCatalog.api";
+import AllPoliciesTab from "./component/AllPoliciesTab";
+import SubjectCatalogModal from "./component/SubjectCatalogModal";
+import { isDirectorBrandUiEnabled } from "@/utils/directorUi";
 
 type Employee = {
   id: number;
@@ -50,11 +55,16 @@ const roleLabel = (role: string) => {
 
 export default function EmployeeList() {
   const readOnly = isChiefAccountant();
+  const isBrand = isDirectorBrandUiEnabled();
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from;
   const [showHandover, setShowHandover] = useState(false);
+  const [showCatalog, setShowCatalog] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [activeTab, setActiveTab] = useState<"employees" | "policies">(
+    "policies",
+  );
 
   const [showRegionModal, setShowRegionModal] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(
@@ -81,7 +91,6 @@ export default function EmployeeList() {
 
   const fetchProvinces = async (employeeId: number) => {
     const data = await provinceApi.getProvincesByEmployee(employeeId);
-    console.log(data);
     setProvinces(data);
 
     return data;
@@ -153,16 +162,46 @@ export default function EmployeeList() {
   };
 
   return (
-    <div className="bg-gray-100 min-h-screen">
+    <>
+    <div className={isBrand ? "bg-[#FFF8E6] min-h-screen text-[#0047B8]" : "bg-gray-100 min-h-screen"}>
       <HeaderWithBack
+        brandSidebarInset={isBrand}
         title={
           SALES_EMPLOYEE_SCOPES.includes(from)
             ? "Danh sách nhân viên kinh doanh"
             : "Danh sách nhân viên"
         }
       />
-      {from === "policy" && !readOnly ? (
-        <div className="p-4 mt-[60px] flex flex-col gap-3">
+      {from === "policy" && (
+        <div className={`px-4 pt-4 mt-[60px] ${isBrand ? "lg:max-w-6xl lg:mx-auto" : ""}`}>
+          <div className={`bg-white p-1 rounded-xl shadow-sm grid grid-cols-2 gap-1 ${isBrand ? "border border-blue-900/10" : ""}`}>
+            <button
+              type="button"
+              onClick={() => setActiveTab("employees")}
+              className={`py-2.5 rounded-lg text-sm font-medium ${
+                activeTab === "employees"
+                  ? isBrand ? "bg-[#005BEA] text-white" : "bg-blue-500 text-white"
+                  : "text-gray-600"
+              }`}
+            >
+              Nhân viên
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("policies")}
+              className={`py-2.5 rounded-lg text-sm font-medium ${
+                activeTab === "policies"
+                  ? isBrand ? "bg-[#005BEA] text-white" : "bg-blue-500 text-white"
+                  : "text-gray-600"
+              }`}
+            >
+              Tất cả chính sách
+            </button>
+          </div>
+        </div>
+      )}
+      {from === "policy" && activeTab === "employees" && !readOnly ? (
+        <div className={`p-4 flex flex-col gap-3 ${isBrand ? "lg:max-w-6xl lg:mx-auto" : ""}`}>
           <div className="flex gap-3">
             <button
               onClick={() => setShowAssign(true)}
@@ -199,8 +238,22 @@ export default function EmployeeList() {
               + Tạo phường/xã
             </button>
           </div>
+
+          {/*
+            Danh mục môn học — nguồn của ô chọn môn khi tạo môn học cho trường.
+            Chỉ sales admin ghi được (backend chặn role khác bằng 403).
+          */}
+          {hasRole(...CATALOG_ADMIN_ROLES) && (
+            <button
+              onClick={() => setShowCatalog(true)}
+              className="w-full bg-indigo-500 text-white py-3 rounded-xl flex items-center justify-center gap-2"
+            >
+              <BookMarked size={18} />
+              Danh mục môn học
+            </button>
+          )}
         </div>
-      ) : (
+      ) : from === "policy" && activeTab === "policies" ? null : (
         <div className="p-4 mt-[60px] flex flex-col gap-3"></div>
       )}
 
@@ -407,104 +460,82 @@ export default function EmployeeList() {
       )}
 
       {/* LIST */}
-      <div
-        className={
-          from === "policy"
-            ? "px-3 pb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2"
-            : "p-4 space-y-3"
-        }
-      >
-        {employees.map((item) =>
-          from === "policy" ? (
-            <div
-              key={item.id}
-              className="bg-white rounded-2xl shadow-sm overflow-hidden flex flex-col"
+      {from === "policy" && activeTab === "policies" ? (
+        <div className={isBrand ? "lg:max-w-6xl lg:mx-auto" : ""}>
+          <AllPoliciesTab employees={employees} />
+        </div>
+      ) : (
+      <div className={`px-3 pb-6 grid grid-cols-3 gap-2 ${isBrand ? "lg:max-w-6xl lg:mx-auto lg:grid-cols-4 lg:gap-4" : ""}`}>
+        {employees.map((item) => (
+          <div
+            key={item.id}
+            className={`bg-white rounded-2xl shadow-sm overflow-hidden flex flex-col transition ${isBrand ? "border border-blue-900/10" : ""}`}
+          >
+            <button
+              type="button"
+              onClick={() => void handleEmployeeClick(item)}
+              className="relative flex flex-col items-center pt-3 pb-1 px-2 hover:bg-blue-50/40 transition"
             >
-              <button
-                type="button"
-                onClick={() => void handleEmployeeClick(item)}
-                className="flex flex-col items-center px-3 pt-4 pb-2 text-center hover:bg-blue-50/40 transition"
-              >
-                <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-2xl">
-                  👤
-                </div>
-                <p className="mt-1.5 w-full line-clamp-2 text-xs font-semibold leading-tight text-gray-800">
-                  {item.name}
-                </p>
-                <p className="mt-0.5 text-[11px] text-gray-400">
-                  {item.phone || "Chưa có số điện thoại"}
-                </p>
-              </button>
+              <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-2xl shrink-0">
+                👤
+              </div>
+              <p className="text-xs font-semibold text-gray-800 mt-1.5 text-center leading-tight line-clamp-2 w-full">
+                {item.name}
+              </p>
+              <p className="text-[11px] text-gray-400 mt-0.5">
+                {item.phone || "Chưa có SĐT"}
+              </p>
+            </button>
 
-              <div className="min-h-[28px] px-2 pb-2 flex flex-wrap justify-center gap-1">
-                {(item.roles ?? []).map((role) => (
+            <div className="px-2 pb-2 flex flex-wrap gap-0.5 justify-center min-h-[24px]">
+              {(item.roles ?? []).length ? (
+                (item.roles ?? []).map((role) => (
                   <span
                     key={role}
-                    className={`rounded-full px-1.5 py-[2px] text-[11px] font-medium leading-tight ${roleColor(
+                    className={`text-[11px] px-1.5 py-[2px] rounded-full font-medium leading-tight ${roleColor(
                       role,
                     )}`}
                   >
                     {roleLabel(role)}
                   </span>
-                ))}
-              </div>
-
-              <div className="mt-auto border-t border-gray-100 px-2 py-2">
-                <button
-                  type="button"
-                  onClick={() => void handleEmployeeClick(item)}
-                  className="w-full rounded-lg bg-blue-500 py-1.5 text-xs font-medium text-white hover:bg-blue-600"
-                >
-                  Xem khu vực và chính sách
-                </button>
-              </div>
+                ))
+              ) : (
+                <span className="text-[11px] text-gray-300 italic">
+                  Chưa có
+                </span>
+              )}
             </div>
-          ) : (
-            <div
-              key={item.id}
-              className="bg-white rounded-2xl p-4 flex items-center justify-between shadow-sm"
-            >
+
+            <div className="mt-auto border-t border-gray-100 px-2 py-2 flex flex-col gap-1.5">
+              {from === "report" && (
+                <span
+                  className={`w-full rounded-lg py-1.5 text-center text-[11px] font-medium ${
+                    reportedIds.includes(item.id)
+                      ? "bg-green-100 text-green-600"
+                      : "bg-red-100 text-red-600"
+                  }`}
+                >
+                  {reportedIds.includes(item.id)
+                    ? "✅ Đã báo cáo"
+                    : "❌ Chưa báo cáo"}
+                </span>
+              )}
               <button
                 type="button"
                 onClick={() => void handleEmployeeClick(item)}
-                className="flex items-center gap-3 flex-1 cursor-pointer text-left"
+                className="w-full py-1.5 bg-blue-500 text-white rounded-lg text-xs font-medium hover:bg-blue-600"
               >
-                <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-xl">
-                  👤
-                </div>
-
-                <div>
-                  <p className="font-semibold text-gray-800">{item.name}</p>
-                  <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    {(item.roles ?? []).map((role) => (
-                      <span
-                        key={role}
-                        className={`text-[11px] px-2 py-[2px] rounded-full font-medium ${roleColor(
-                          role,
-                        )}`}
-                      >
-                        {roleLabel(role)}
-                      </span>
-                    ))}
-                    <p className="text-sm text-gray-500">{item.phone}</p>
-                  </div>
-                </div>
+                {from === "policy"
+                  ? "Xem khu vực và chính sách"
+                  : from === "report"
+                    ? "Xem báo cáo"
+                    : "Xem chi tiết"}
               </button>
-
-              {from === "report" &&
-                (reportedIds.includes(item.id) ? (
-                  <span className="text-xs bg-green-100 text-green-600 px-3 py-1 rounded-full">
-                    ✅ Đã báo cáo
-                  </span>
-                ) : (
-                  <span className="text-xs bg-red-100 text-red-600 px-3 py-1 rounded-full">
-                    ❌ Chưa báo cáo
-                  </span>
-                ))}
             </div>
-          ),
-        )}
+          </div>
+        ))}
       </div>
+      )}
 
       {/* REGION MODAL */}
       {showRegionModal && (
@@ -535,12 +566,22 @@ export default function EmployeeList() {
                         Number(selectedEmployeeId),
                       );
 
+                      const provinceId = Number(
+                        item.provinceId ??
+                          item.province_id ??
+                          item.province?.id ??
+                          item.id,
+                      );
                       const filtered = data.filter(
-                        (w: any) => w.province_id === item.id,
+                        (w: any) =>
+                          Number(
+                            w.provinceId ??
+                              w.province_id ??
+                              w.province?.id,
+                          ) === provinceId,
                       );
 
                       setWards(filtered);
-                      console.log(filtered);
                       setShowWardModal(true);
                     }}
                   >
@@ -687,6 +728,10 @@ export default function EmployeeList() {
           employees={employees}
         />
       )}
+      {showCatalog && (
+        <SubjectCatalogModal onClose={() => setShowCatalog(false)} />
+      )}
     </div>
+    </>
   );
 }

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { employeeApi } from "@/service/employee";
 import { provinceApi } from "@/service/province";
 import { wardApi } from "@/service/ward";
+import SearchableSelect from "@/components/SearchableSelect";
 
 type Props = {
     onClose: () => void;
@@ -40,8 +41,13 @@ export default function HandoverRegionModal({
     // load province của nhân viên bàn giao
     useEffect(() => {
 
+        setProvinces([]);
+        setWardsByProvince({});
+        setExpandedProvinces([]);
+        setSelectedProvinceIds([]);
+        setSelectedWardIds([]);
+
         if (!fromEmployeeId) {
-            setProvinces([]);
             return;
         }
 
@@ -80,12 +86,10 @@ export default function HandoverRegionModal({
                     fromEmployeeId
                 );
 
-            const filtered =
-                data.filter(
-                    (w: any) =>
-                        w.province_id ===
-                        provinceId
-                );
+            const filtered = data.filter((w: any) =>
+                Number(w.provinceId ?? w.province_id ?? w.province?.id) ===
+                Number(provinceId)
+            );
 
             setWardsByProvince((prev) => ({
                 ...prev,
@@ -245,32 +249,13 @@ export default function HandoverRegionModal({
                         Nhân viên bàn giao
                     </p>
 
-                    <select
-                        value={
-                            fromEmployeeId || ""
-                        }
-                        onChange={(e) =>
-                            setFromEmployeeId(
-                                Number(
-                                    e.target.value
-                                )
-                            )
-                        }
-                        className="w-full border rounded-xl p-3"
-                    >
-                        <option value="">
-                            -- Chọn --
-                        </option>
-
-                        {employees.map((emp) => (
-                            <option
-                                key={emp.id}
-                                value={emp.id}
-                            >
-                                {emp.name}
-                            </option>
-                        ))}
-                    </select>
+                    <SearchableSelect
+                        value={String(fromEmployeeId || "")}
+                        onChange={(value) => setFromEmployeeId(value ? Number(value) : null)}
+                        options={employees}
+                        placeholder="-- Chọn --"
+                        searchPlaceholder="Tìm nhân viên bàn giao…"
+                    />
                 </div>
 
                 {/* TO */}
@@ -280,38 +265,13 @@ export default function HandoverRegionModal({
                         Nhân viên nhận
                     </p>
 
-                    <select
-                        value={
-                            toEmployeeId || ""
-                        }
-                        onChange={(e) =>
-                            setToEmployeeId(
-                                Number(
-                                    e.target.value
-                                )
-                            )
-                        }
-                        className="w-full border rounded-xl p-3"
-                    >
-                        <option value="">
-                            -- Chọn --
-                        </option>
-
-                        {employees
-                            .filter(
-                                (e) =>
-                                    e.id !==
-                                    fromEmployeeId
-                            )
-                            .map((emp) => (
-                                <option
-                                    key={emp.id}
-                                    value={emp.id}
-                                >
-                                    {emp.name}
-                                </option>
-                            ))}
-                    </select>
+                    <SearchableSelect
+                        value={String(toEmployeeId || "")}
+                        onChange={(value) => setToEmployeeId(value ? Number(value) : null)}
+                        options={employees.filter((employee) => employee.id !== fromEmployeeId)}
+                        placeholder="-- Chọn --"
+                        searchPlaceholder="Tìm nhân viên nhận…"
+                    />
                 </div>
 
                 {/* REGION */}

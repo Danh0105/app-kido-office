@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { dailyReportApi } from "@/service/report";
-import { weeklyPlanApi } from "@/service/plan";
 import { getEmployeeId } from "@/utils/auth";
 import HeaderWithBack from "@/components/HeaderWithBack";
 import ReportForm from "./ReportPage";
 import PlanForm from "./PlanPage";
+import ReportCalendar from "@/pages/Director/Sales/Report/DailyReportPage";
+import { ClipboardList, FileText, X } from "lucide-react";
 
 
 
@@ -32,7 +32,8 @@ const groupByDate = (reports: any[]) => {
 
 export default function DailyReportPage() {
 
-    const [mainTab, setMainTab] = useState<"plan" | "report">("report");
+    const [composer, setComposer] = useState<"plan" | "report" | null>(null);
+    const [calendarVersion, setCalendarVersion] = useState(0);
 
     const [report, setReport] = useState({
         date: new Date().toISOString().slice(0, 10),
@@ -61,7 +62,12 @@ export default function DailyReportPage() {
 
         setOpenDayKey(null);
         setOpenWeekIndex(0);
-    }, [mainTab]);
+    }, [composer]);
+
+    const handleSaved = () => {
+        setCalendarVersion((version) => version + 1);
+        setComposer(null);
+    };
 
     // ================= TASK =================
 
@@ -77,46 +83,67 @@ export default function DailyReportPage() {
 
 
 
-            <div className="px-4 pt-6 space-y-5 max-w-3xl mx-auto">
-                {/* TAB */}
-                <div className="bg-white rounded-xl p-1 shadow-sm mt-[60px] flex">
-                    <button
-                        onClick={() => setMainTab("plan")}
-                        className={`flex-1 py-2 rounded-lg ${mainTab === "plan"
-                            ? "bg-green-500 text-white"
-                            : "text-gray-500"}`}
-                    >
-                        Kế hoạch
-                    </button>
+            <div className="mx-auto max-w-[1500px] space-y-5 px-4 pt-6">
+                <div className="mt-[60px] rounded-xl bg-white p-2 shadow-sm">
+                    <div className="grid grid-cols-2 gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setComposer(composer === "plan" ? null : "plan")}
+                            className={`flex items-center justify-center gap-2 rounded-lg py-2.5 font-medium ${composer === "plan"
+                                ? "bg-green-500 text-white"
+                                : "bg-green-50 text-green-700"}`}
+                        >
+                            <ClipboardList className="h-4 w-4" />
+                            Tạo kế hoạch
+                        </button>
 
-                    <button
-                        onClick={() => setMainTab("report")}
-                        className={`flex-1 py-2 rounded-lg ${mainTab === "report"
-                            ? "bg-blue-500 text-white"
-                            : "text-gray-500"}`}
-                    >
-                        Báo cáo
-                    </button>
+                        <button
+                            type="button"
+                            onClick={() => setComposer(composer === "report" ? null : "report")}
+                            className={`flex items-center justify-center gap-2 rounded-lg py-2.5 font-medium ${composer === "report"
+                                ? "bg-blue-500 text-white"
+                                : "bg-blue-50 text-blue-700"}`}
+                        >
+                            <FileText className="h-4 w-4" />
+                            Tạo báo cáo
+                        </button>
+                    </div>
                 </div>
 
-                {mainTab === "report" && (
-                    <ReportForm
-                        report={report}
-                        setReport={setReport}
+                {composer && (
+                    <section className="relative rounded-2xl border border-slate-200 bg-slate-50 pt-2 shadow-sm">
+                        <button
+                            type="button"
+                            onClick={() => setComposer(null)}
+                            aria-label="Đóng biểu mẫu"
+                            className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-500 shadow transition hover:bg-slate-100"
+                        >
+                            <X className="h-5 w-5" />
+                        </button>
 
-                        openWeekIndex={openWeekIndex}
-                        setOpenWeekIndex={setOpenWeekIndex}
-                        groupByDate={groupByDate}
-                        getWeekday={getWeekday}
-                        formatDateTime={formatDateTime}
+                        {composer === "report" && (
+                            <ReportForm
+                                report={report}
+                                setReport={setReport}
+                                openWeekIndex={openWeekIndex}
+                                setOpenWeekIndex={setOpenWeekIndex}
+                                groupByDate={groupByDate}
+                                getWeekday={getWeekday}
+                                formatDateTime={formatDateTime}
+                                openDayKey={openDayKey}
+                                setOpenDayKey={setOpenDayKey}
+                                onSaved={handleSaved}
+                            />
+                        )}
+                        {composer === "plan" && <PlanForm onSaved={handleSaved} />}
+                    </section>
+                )}
 
-                        openDayKey={openDayKey}
-                        setOpenDayKey={setOpenDayKey}
-                    />
-                )}
-                {mainTab === "plan" && (
-                    <PlanForm />
-                )}
+                <ReportCalendar
+                    key={calendarVersion}
+                    employeeIdOverride={Number(getEmployeeId())}
+                    embedded
+                />
             </div>
         </div>
     );

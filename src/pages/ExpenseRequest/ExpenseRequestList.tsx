@@ -8,21 +8,51 @@ import BottomNav from "@/layout/BottomNav";
 import { getEmployeeId, hasRole } from "@/utils/auth";
 import { expenseRequestApi } from "@/service/expenseRequest";
 import {
-  STATUS_META,
+  KIND_META,
+  statusLabel,
   type ExpenseEmployeeGroup,
   type ExpenseRequest,
+  type ExpenseRequestKind,
   type ExpenseStatus,
 } from "@/types/expenseRequest";
 
 import ExpenseCard from "./components/ExpenseCard";
 import EmployeeGroupCard from "./components/EmployeeGroupCard";
+import ActionModal, { type ActionPayload } from "./components/ActionModal";
+import ExpenseRequestDetail from "./ExpenseRequestDetail";
 import { enrichExpenseRequestsWithCreators } from "./creatorProfiles";
 import { useExpenseSocket } from "./useExpenseSocket";
-import { expenseBasePath, expenseTasksPath, isApproverSide } from "./lib";
+import {
+  expenseBasePath,
+  expenseCreatePath,
+  expenseEditPath,
+  expenseTasksPath,
+  isApproverSide,
+  isEquipmentOnlyUser,
+  isTechnical,
+  KIND_STATUSES,
+  resolveExpenseRequestId,
+} from "./lib";
+
+/** Tab loại đề xuất; "" = tất cả. */
+type KindFilter = ExpenseRequestKind | "";
+
+const KIND_TABS: { value: KindFilter; label: string }[] = [
+  { value: "", label: "Tất cả" },
+  { value: "CASH", label: `${KIND_META.CASH.icon} ${KIND_META.CASH.label}` },
+  {
+    value: "EQUIPMENT",
+    label: `${KIND_META.EQUIPMENT.icon} ${KIND_META.EQUIPMENT.label}`,
+  },
+  {
+    value: "REPAIR",
+    label: `${KIND_META.REPAIR.icon} ${KIND_META.REPAIR.label}`,
+  },
+];
 
 const PAGE_SIZE = 20;
 
-type ViewMode = "flat" | "grouped";
+type ViewMode = "mine" | "flat" | "grouped";
 
 const normalizeEmployeeName = (value?: string) =>
   (value || "").trim().replace(/\s+/g, " ").toLocaleLowerCase("vi-VN");
@@ -74,36 +104,102 @@ export default function ExpenseRequestList() {
   const base = expenseBasePath();
   const approverSide = isApproverSide();
   const canCreate = hasRole("sales");
+  const isMultiRoleSales = canCreate && approverSide;
 
-  const title = approverSide
-    ? hasRole("saleadmin", "salesadmin_la")
-      ? "Tất cả đề xuất chi"
-      : "Đề xuất chi"
-    : "Đề xuất chi của tôi";
+  // Tài khoản chỉ thuộc phòng kỹ thuật: backend giới hạn về thiết bị/sửa chữa.
+  const equipmentOnly = isEquipmentOnlyUser();
+
+  const title = equipmentOnly
+    ? "Đề xuất kỹ thuật"
+    : approverSide
+      ? hasRole("saleadmin", "salesadmin_la")
+        ? "Tất cả đề xuất chi"
+        : "Đề xuất chi"
+      : "Đề xuất chi của tôi";
 
   const [items, setItems] = useState<ExpenseRequest[]>([]);
   const [groups, setGroups] = useState<ExpenseEmployeeGroup[]>([]);
+  const technical = isTechnical();
   const [viewMode, setViewMode] = useState<ViewMode>(
-    approverSide ? "grouped" : "flat",
+    isMultiRoleSales
+      ? "mine"
+      : // Phòng kỹ thuật làm việc theo từng đơn hàng cần xuất kho, gom theo
+        // nhân viên kinh doanh không giúp gì cho việc của họ.
+        technical
+        ? "flat"
+        : approverSide
+          ? "grouped"
+          : "mine",
   );
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
+  const [requestKind, setRequestKind] = useState<KindFilter>("");
+  const effectiveKind: KindFilter = requestKind;
   const [status, setStatus] = useState<ExpenseStatus | "">("");
   const [overdue, setOverdue] = useState(false);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+
+  const [withdrawTarget, setWithdrawTarget] = useState<ExpenseRequest | null>(null);
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ExpenseRequest | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [desktopDetailId, setDesktopDetailId] = useState<number | null>(null);
+
+  const submitWithdraw = async (payload: ActionPayload) => {
+    const requestId = withdrawTarget && resolveExpenseRequestId(withdrawTarget);
+    if (!requestId) return;
+
+    setWithdrawing(true);
+    try {
+      await expenseRequestApi.withdraw(requestId, payload.note);
+      toast.success("Đã rút đề xuất");
+      setWithdrawTarget(null);
+      await load();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Có lỗi xảy ra");
+    } finally {
+      setWithdrawing(false);
+    }
+  };
+
+  const submitDelete = async () => {
+    const requestId = deleteTarget && resolveExpenseRequestId(deleteTarget);
+    if (!requestId) return;
+
+    setDeleting(true);
+    try {
+      await expenseRequestApi.remove(requestId);
+      toast.success("Đã xoá đề xuất");
+      setDeleteTarget(null);
+      await load();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Có lỗi xảy ra");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const changeViewMode = (mode: ViewMode) => {
     setViewMode(mode);
     setPage(1);
   };
 
+  const openRequestDetail = (requestId: number) => {
+    if (window.matchMedia("(min-width: 1024px)").matches) {
+      setDesktopDetailId(requestId);
+      return;
+    }
+    navigate(`${base}/${requestId}`);
+  };
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const filters = {
+        requestKind: effectiveKind || undefined,
         status: status || undefined,
         overdue: overdue || undefined,
         fromDate: fromDate || undefined,
@@ -125,7 +221,10 @@ export default function ExpenseRequestList() {
       } else {
         const res = await expenseRequestApi.list({
           // Sales chỉ xem đề xuất của mình; các role duyệt xem theo scope backend.
-          createdBy: !approverSide ? Number(getEmployeeId()) || undefined : undefined,
+          createdBy:
+            viewMode === "mine" || !approverSide
+              ? Number(getEmployeeId()) || undefined
+              : undefined,
           ...filters,
         });
         const enrichedItems = await enrichExpenseRequestsWithCreators(res.data || []);
@@ -138,18 +237,50 @@ export default function ExpenseRequestList() {
     } finally {
       setLoading(false);
     }
-  }, [approverSide, status, overdue, fromDate, toDate, page, viewMode]);
+  }, [approverSide, effectiveKind, status, overdue, fromDate, toDate, page, viewMode]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!desktopDetailId) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setDesktopDetailId(null);
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [desktopDetailId]);
 
   // Auto-refresh when another role updates a request.
   useExpenseSocket(() => {
     load();
   });
 
-  const statusOptions = Object.keys(STATUS_META) as ExpenseStatus[];
+  // Lọc theo loại nào thì chỉ chào trạng thái có thật trong nhánh đó.
+  const statusOptions = effectiveKind
+    ? KIND_STATUSES[effectiveKind]
+    : [
+        ...new Set([
+          ...KIND_STATUSES.CASH,
+          ...KIND_STATUSES.EQUIPMENT,
+          ...KIND_STATUSES.REPAIR,
+        ]),
+      ];
+
+  const changeRequestKind = (value: KindFilter) => {
+    setPage(1);
+    setRequestKind(value);
+    // Trạng thái đang lọc có thể không tồn tại ở nhánh vừa chọn.
+    if (value && status && !KIND_STATUSES[value].includes(status)) setStatus("");
+  };
 
   return (
     <div className="bg-gray-100 min-h-screen flex flex-col">
@@ -160,7 +291,7 @@ export default function ExpenseRequestList() {
         <div className="flex gap-2 pt-2">
           {canCreate && (
             <button
-              onClick={() => navigate(`${base}/new`)}
+              onClick={() => navigate(expenseCreatePath())}
               className="flex-1 flex items-center justify-center gap-1 py-2 bg-blue-500 text-white rounded-xl text-sm font-medium active:scale-95"
             >
               <Plus size={16} /> Tạo đề xuất
@@ -185,7 +316,21 @@ export default function ExpenseRequestList() {
 
         {/* View mode toggle */}
         {approverSide && (
-          <div className="flex gap-1 bg-white rounded-xl p-1 border border-gray-100">
+          <div
+            className={`grid gap-1 bg-white rounded-xl p-1 border border-gray-100 ${
+              isMultiRoleSales ? "grid-cols-3" : "grid-cols-2"
+            }`}
+          >
+            {isMultiRoleSales && (
+              <button
+                onClick={() => changeViewMode("mine")}
+                className={`py-1.5 text-xs font-medium rounded-lg transition ${
+                  viewMode === "mine" ? "bg-blue-500 text-white" : "text-gray-500"
+                }`}
+              >
+                Đề xuất của tôi
+              </button>
+            )}
             <button
               onClick={() => changeViewMode("flat")}
               className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition ${
@@ -205,6 +350,27 @@ export default function ExpenseRequestList() {
           </div>
         )}
 
+        {/* Phòng kỹ thuật có tab Thiết bị/Sửa chữa; tab Tiền được ẩn. */}
+        <div className={`grid gap-1 bg-white rounded-xl p-1 border border-gray-100 ${
+          equipmentOnly ? "grid-cols-3" : "grid-cols-4"
+        }`}>
+          {KIND_TABS.filter(
+            (tab) => !equipmentOnly || tab.value !== "CASH",
+          ).map((tab) => (
+            <button
+              key={tab.value || "all"}
+              onClick={() => changeRequestKind(tab.value)}
+              className={`py-1.5 text-xs font-medium rounded-lg transition ${
+                requestKind === tab.value
+                  ? "bg-blue-500 text-white"
+                  : "text-gray-500"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
         {/* Filters */}
         <div className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100 space-y-2">
           <div className="flex gap-2">
@@ -219,7 +385,7 @@ export default function ExpenseRequestList() {
               <option value="">Tất cả trạng thái</option>
               {statusOptions.map((s) => (
                 <option key={s} value={s}>
-                  {STATUS_META[s].label}
+                  {statusLabel(s, effectiveKind || "CASH")}
                 </option>
               ))}
             </select>
@@ -263,33 +429,42 @@ export default function ExpenseRequestList() {
           <div className="text-center text-gray-400 text-sm py-10">Đang tải…</div>
         )}
 
-        {!loading && viewMode === "flat" && items.length === 0 && (
+        {!loading && viewMode !== "grouped" && items.length === 0 && (
           <div className="text-center text-gray-400 text-sm py-16">
             Không có đề xuất nào
           </div>
         )}
-        {viewMode === "flat" &&
-          items.map((item) => (
-            <ExpenseCard
-              key={item.id}
-              item={item}
-              onClick={() => navigate(`${base}/${item.id}`)}
-            />
-          ))}
+        {viewMode !== "grouped" &&
+          items.map((item, index) => {
+            const requestId = resolveExpenseRequestId(item);
+            return (
+              <ExpenseCard
+                key={requestId ?? `invalid-${index}`}
+                item={item}
+                onClick={() => requestId && openRequestDetail(requestId)}
+                onEdit={(request) => navigate(expenseEditPath(request.id))}
+                onWithdraw={setWithdrawTarget}
+                onDelete={setDeleteTarget}
+              />
+            );
+          })}
 
         {!loading && viewMode === "grouped" && groups.length === 0 && (
           <div className="text-center text-gray-400 text-sm py-16">
             Không có nhân viên kinh doanh nào
           </div>
         )}
-        {viewMode === "grouped" &&
-          groups.map((group) => (
-            <EmployeeGroupCard
-              key={group.employeeId}
-              group={group}
-              onItemClick={(reqId) => navigate(`${base}/${reqId}`)}
-            />
-          ))}
+        {viewMode === "grouped" && groups.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+            {groups.map((group) => (
+              <EmployeeGroupCard
+                key={group.employeeId}
+                group={group}
+                onItemClick={openRequestDetail}
+              />
+            ))}
+          </div>
+        )}
 
         {/* Pagination */}
         {totalPages > 1 && (
@@ -314,6 +489,68 @@ export default function ExpenseRequestList() {
           </div>
         )}
       </div>
+
+      {withdrawTarget && (
+        <ActionModal
+          title="Rút đề xuất"
+          submitLabel="Rút đề xuất"
+          submitColor="bg-gray-600"
+          showNote
+          noteLabel="Lý do rút (không bắt buộc)"
+          loading={withdrawing}
+          onClose={() => setWithdrawTarget(null)}
+          onSubmit={submitWithdraw}
+        />
+      )}
+
+      {deleteTarget && (
+        <ActionModal
+          title={`Xoá đề xuất ${deleteTarget.code || ""}`}
+          submitLabel="Xoá đề xuất"
+          submitColor="bg-red-600"
+          loading={deleting}
+          onClose={() => setDeleteTarget(null)}
+          onSubmit={submitDelete}
+        />
+      )}
+
+      {desktopDetailId && (
+        <div
+          className="fixed inset-0 z-[70] hidden items-center justify-center bg-black/55 p-6 lg:flex"
+          onMouseDown={() => setDesktopDetailId(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Chi tiết đề xuất"
+        >
+          <div
+            className="flex h-[calc(100vh-3rem)] w-full max-w-6xl flex-col overflow-hidden rounded-3xl bg-gray-100 shadow-2xl"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="flex shrink-0 items-center justify-between border-b border-gray-200 bg-white px-5 py-3">
+              <h2 className="text-lg font-bold text-gray-900">
+                Chi tiết đề xuất
+              </h2>
+              <button
+                type="button"
+                onClick={() => setDesktopDetailId(null)}
+                className="flex h-9 w-9 items-center justify-center rounded-xl bg-gray-100 text-lg text-gray-500 transition hover:bg-gray-200 hover:text-gray-800"
+                aria-label="Đóng chi tiết đề xuất"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="min-h-0 flex-1">
+              <ExpenseRequestDetail
+                key={desktopDetailId}
+                requestId={desktopDetailId}
+                embedded
+                onClose={() => setDesktopDetailId(null)}
+                onChanged={load}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       <BottomNav />
     </div>

@@ -3,7 +3,7 @@ import { CircleDollarSign, Loader2, ReceiptText } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { expenseRequestApi } from "@/service/expenseRequest";
-import type { ExpenseRequest } from "@/types/expenseRequest";
+import { KIND_META, type ExpenseRequest } from "@/types/expenseRequest";
 import { formatVnd } from "@/utils/decimal";
 import { enrichExpenseRequestsWithCreators } from "@/pages/ExpenseRequest/creatorProfiles";
 import { useExpenseSocket } from "@/pages/ExpenseRequest/useExpenseSocket";
@@ -23,10 +23,20 @@ type Props = {
 
 const getSpentDate = (item: ExpenseRequest) =>
   item.spentAt ||
+  // Đề xuất sửa chữa không đi qua CONFIRM_SPENT — kết thúc thẳng ở
+  // REPAIR_ACCEPTED, mốc thời gian là lúc phòng kỹ thuật nhận việc.
+  item.technicalRespondedAt ||
   item.updatedAt ||
   item.expectedPaymentDate ||
   item.createdAt ||
   "";
+
+/**
+ * Trạng thái được tính là "đã chi" cho từng loại đề xuất: tiền mặt/thiết bị
+ * kết thúc ở SPENT; sửa chữa không có bước CONFIRM_SPENT, kết thúc thẳng ở
+ * REPAIR_ACCEPTED (phòng kỹ thuật nhận việc coi như đã phát sinh chi phí).
+ */
+const SPENT_STATUSES = ["SPENT", "REPAIR_ACCEPTED"] as const;
 
 const isInSchoolYear = (value: string, schoolYear: string) => {
   if (!value || !schoolYear) return false;
@@ -47,8 +57,15 @@ const isInSchoolYear = (value: string, schoolYear: string) => {
 
 const displayAmount = (value: number) => formatVnd(value) || "0";
 
-const getPaymentOrderAmount = (item: ExpenseRequest) => {
-  const amount = item.paymentOrder?.amount;
+/**
+ * Số tiền thực chi: đề xuất tiền mặt lấy theo lệnh chi thực tế
+ * (`paymentOrder.amount`); đề xuất thiết bị/sửa chữa không có lệnh chi (chỉ
+ * có lệnh xuất kho, không mang số tiền) nên lấy số giám đốc đã duyệt
+ * (`amount`) khi phê duyệt làm số thực chi. Thiết bị mới: BE ghi `amount`
+ * theo tổng tiền phiếu nhập kho thật (nếu người xử lý nhập đơn giá).
+ */
+const getSpentAmount = (item: ExpenseRequest) => {
+  const amount = item.paymentOrder?.amount ?? item.amount;
   if (amount === undefined || amount === null) return null;
 
   const normalizedAmount = Number(amount);
@@ -80,21 +97,27 @@ export default function SpentExpenseRequestsSection({
 
     try {
       const allItems: ExpenseRequest[] = [];
-      let page = 1;
-      let totalPages = 1;
 
-      do {
-        const response = await expenseRequestApi.list({
-          status: "SPENT",
-          schoolId,
-          schoolYear,
-          page,
-          limit: 100,
-        });
-        allItems.push(...(response.data || []));
-        totalPages = Math.max(1, Number(response.totalPages || 1));
-        page += 1;
-      } while (page <= totalPages && page <= 50);
+      // Cộng cả tiền mặt, thiết bị lẫn sửa chữa — mỗi loại kết thúc ở trạng
+      // thái khác nhau (xem `SPENT_STATUSES`); số tiền mỗi loại lấy từ đâu
+      // xem `getSpentAmount`.
+      for (const status of SPENT_STATUSES) {
+        let page = 1;
+        let totalPages = 1;
+
+        do {
+          const response = await expenseRequestApi.list({
+            status,
+            schoolId,
+            schoolYear,
+            page,
+            limit: 100,
+          });
+          allItems.push(...(response.data || []));
+          totalPages = Math.max(1, Number(response.totalPages || 1));
+          page += 1;
+        } while (page <= totalPages && page <= 50);
+      }
 
       const filteredItems = allItems
         .filter(
@@ -130,7 +153,10 @@ export default function SpentExpenseRequestsSection({
   });
 
   const totalAmount = useMemo(
-    () => items.reduce((sum, item) => sum + Number(item.amount || 0), 0),
+    () => items.reduce((sum, item) => {
+      const spentAmount = getSpentAmount(item);
+      return sum + (spentAmount === null ? 0 : spentAmount);
+    }, 0),
     [items],
   );
   const equipmentTotalAmount = Number(equipmentInputAmount || 0);
@@ -266,10 +292,10 @@ export default function SpentExpenseRequestsSection({
             <thead>
               <tr className="bg-slate-50 text-[11px] font-black uppercase tracking-wide text-slate-500">
                 <th className="px-4 py-3 text-left">Mã</th>
+                <th className="px-4 py-3 text-left">Loại đề xuất</th>
                 <th className="min-w-[280px] px-4 py-3 text-left">Nội dung</th>
                 <th className="px-4 py-3 text-left">Người đề xuất</th>
                 <th className="px-4 py-3 text-left">Ngày xác nhận chi</th>
-                <th className="px-4 py-3 text-right">Số tiền đề xuất</th>
                 <th className="px-4 py-3 text-right">Số tiền thực chi</th>
                 <th className="px-4 py-3 text-center">Thao tác</th>
               </tr>
@@ -277,7 +303,10 @@ export default function SpentExpenseRequestsSection({
             <tbody>
               {items.map((item) => {
                 const requesterDetails = creatorInlineDetails(item);
-                const paymentOrderAmount = getPaymentOrderAmount(item);
+                const spentAmount = getSpentAmount(item);
+                const kindMeta = item.requestKind
+                  ? KIND_META[item.requestKind]
+                  : undefined;
 
                 return (
                   <tr
@@ -286,6 +315,17 @@ export default function SpentExpenseRequestsSection({
                   >
                     <td className="whitespace-nowrap px-4 py-3 font-bold text-slate-500">
                       {item.code || `#${item.id}`}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {kindMeta ? (
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${kindMeta.badge}`}
+                        >
+                          {kindMeta.icon} {kindMeta.short}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <p className="font-bold text-slate-800">{item.content}</p>
@@ -308,13 +348,10 @@ export default function SpentExpenseRequestsSection({
                     <td className="whitespace-nowrap px-4 py-3 font-semibold text-slate-600">
                       {formatDate(getSpentDate(item))}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right font-black text-emerald-700">
-                      {formatVnd(item.amount)} đ
-                    </td>
                     <td className="whitespace-nowrap px-4 py-3 text-right font-black text-violet-700">
-                      {paymentOrderAmount === null
+                      {spentAmount === null
                         ? "—"
-                        : `${formatVnd(paymentOrderAmount)} đ`}
+                        : `${formatVnd(spentAmount)} đ`}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <button

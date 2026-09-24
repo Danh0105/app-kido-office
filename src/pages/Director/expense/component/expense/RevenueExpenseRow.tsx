@@ -76,6 +76,7 @@ export default function RevenueExpenseRow({
   ]);
   const paidAmount = Number(row.paidAmount || 0);
   const remainingSchoolExpense = calculations.totalSchoolExpense - paidAmount;
+  const locked = !!inputData.invoiceLocked;
 
   const inputClass = `
     w-full
@@ -91,6 +92,8 @@ export default function RevenueExpenseRow({
     focus:border-blue-500
     focus:ring-2
     focus:ring-blue-100
+    disabled:bg-slate-100
+    disabled:text-slate-400
   `;
 
   const metricInputClass = `
@@ -108,13 +111,15 @@ export default function RevenueExpenseRow({
     focus:border-blue-500
     focus:ring-2
     focus:ring-blue-100
+    disabled:bg-slate-100
+    disabled:text-slate-400
   `;
 
   return (
     <div
       className={`
         grid
-        grid-cols-[200px_120px_90px_120px_140px_150px_160px_140px_120px_140px_150px_180px_150px_150px_160px_180px_70px]
+        grid-cols-[200px_120px_90px_120px_140px_150px_160px_140px_120px_140px_150px_160px_180px_150px_150px_160px_180px_70px]
         border-b
         hover:bg-blue-50/40
         transition-all
@@ -126,6 +131,7 @@ export default function RevenueExpenseRow({
         <input
           value={inputData.content || ""}
           maxLength={500}
+          disabled={locked}
           onChange={(e) =>
             updateInputRow(index, "content", e.target.value.slice(0, 500))
           }
@@ -140,7 +146,8 @@ export default function RevenueExpenseRow({
           type="number"
           min="0"
           step="0.01"
-          value={inputData.totalPeriods || ""}
+          value={Number(inputData.totalPeriods) || ""}
+          disabled={locked}
           onChange={(e) =>
             updateInputRow(index, "totalPeriods", Number(e.target.value || 0))
           }
@@ -154,7 +161,8 @@ export default function RevenueExpenseRow({
           type="number"
           min="0"
           step="0.01"
-          value={inputData.studentCount || ""}
+          value={Number(inputData.studentCount) || ""}
+          disabled={locked}
           onChange={(e) =>
             updateInputRow(index, "studentCount", Number(e.target.value || 0))
           }
@@ -168,7 +176,8 @@ export default function RevenueExpenseRow({
           type="number"
           min="0"
           step="0.01"
-          value={inputData.monthsCount || ""}
+          value={Number(inputData.monthsCount) || ""}
+          disabled={locked}
           onChange={(e) =>
             updateInputRow(index, "monthsCount", Number(e.target.value || 0))
           }
@@ -179,10 +188,12 @@ export default function RevenueExpenseRow({
       <div className="p-2 border-r border-slate-200">
         <DecimalInput
           value={csvcUnitPrice}
+          disabled={locked}
           onValueChange={(value) =>
             updateRow(index, "csvcUnitPrice", value)
           }
           placeholder="0"
+          allowDecimal={false}
           className={`${metricInputClass} text-emerald-700`}
         />
       </div>
@@ -205,9 +216,11 @@ export default function RevenueExpenseRow({
       <div className="p-2 border-r border-slate-200">
         <DecimalInput
           value={teacherUnitPrice}
+          disabled={locked}
           onValueChange={(value) =>
             updateRow(index, "teacherUnitPrice", value)
           }
+          allowDecimal={false}
           className={`${metricInputClass} text-amber-700`}
         />
       </div>
@@ -232,10 +245,12 @@ export default function RevenueExpenseRow({
       <div className="p-2 border-r border-slate-200">
         <DecimalInput
           value={taxUnitPrice}
+          disabled={locked}
           onValueChange={(value) =>
             updateRow(index, "taxUnitPrice", value)
           }
           placeholder="0"
+          allowDecimal={false}
           className={`${metricInputClass} text-rose-700`}
         />
       </div>
@@ -275,11 +290,26 @@ export default function RevenueExpenseRow({
         />
       </div>
 
+      {/* HÌNH THỨC CHI */}
+      <div className="p-2 border-r border-slate-200">
+        <select
+          value={row.paymentType || ""}
+          disabled={locked}
+          onChange={(e) => updateRow(index, "paymentType", e.target.value)}
+          className={inputClass}
+        >
+          <option value="">-- Chọn --</option>
+          <option value="in_contract">Có trong HĐ</option>
+          <option value="not_in_contract">Không có trong HĐ</option>
+        </select>
+      </div>
+
       {/* NGÀY CHI */}
       <div className="p-2 border-r border-slate-200">
         <input
           type="date"
           value={row.paymentDate || ""}
+          disabled={locked}
           onChange={(e) => updateRow(index, "paymentDate", e.target.value)}
           className={inputClass}
         />
@@ -293,6 +323,7 @@ export default function RevenueExpenseRow({
             updateRow(index, "paidAmount", value);
           }}
           placeholder="0"
+          allowDecimal={false}
           className="
             w-full h-10
             rounded-lg
@@ -326,6 +357,7 @@ export default function RevenueExpenseRow({
       <div className="p-2 border-r border-slate-200">
         <input
           value={row.payer || ""}
+          disabled={locked}
           onChange={(e) => updateRow(index, "payer", e.target.value)}
           placeholder="Người chi"
           className={inputClass}
@@ -336,6 +368,7 @@ export default function RevenueExpenseRow({
       <div className="p-2 border-r border-slate-200">
         <input
           value={row.note || ""}
+          disabled={locked}
           onChange={(e) => updateRow(index, "note", e.target.value)}
           placeholder="Ghi chú..."
           className={inputClass}

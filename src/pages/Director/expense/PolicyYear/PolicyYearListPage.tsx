@@ -3,8 +3,10 @@ import {
   AlertCircle,
   Download,
   Eye,
+  ExternalLink,
   FileDown,
   FileSpreadsheet,
+  FileText,
   FileUp,
   Loader2,
   Pencil,
@@ -27,6 +29,9 @@ import PolicyYearDetailPage from "./PolicyYearDetailPage";
 import { schoolExpenseApi } from "@/service/schoolExpense";
 import { revenueItemApi } from "@/service/revenueItem";
 import { getApiErrorMessage } from "@/utils/apiError";
+import { annualPolicyApi } from "@/service/annualPolicy";
+import { resolveApiFileUrl } from "@/utils/fileUrl";
+import { getCashSupportActualTotal } from "@/utils/cashSupport";
 
 type PolicyYearListPageProps = {
   schoolId?: number | null;
@@ -44,17 +49,9 @@ const listFromResponse = (response: any): any[] => {
   return [];
 };
 
-const getCashSupportAmount = (policyData: any) => {
-  const items = Array.isArray(policyData?.httienmat)
-    ? policyData.httienmat
-    : [];
-
-  return items.reduce(
-    (total: number, item: any) =>
-      total + Number(item?.money ?? item?.amount ?? 0),
-    0,
-  );
-};
+// Số chạy về QL thu chi = Thành tiền THỰC TẾ NHẬP, không phải Số tiền gốc.
+const getCashSupportAmount = (policyData: any) =>
+  getCashSupportActualTotal(policyData);
 
 const getEquipmentSupportAmount = (policyData: any) => {
   const items = Array.isArray(policyData?.htthietbi)
@@ -193,6 +190,11 @@ export default function PolicyYearListPage({
         const mappedSubjectMap = new Map(
           mappedSubjects.map((subject) => [subject.id, subject]),
         );
+        const annualPolicies = await annualPolicyApi.getAll({
+          schoolId,
+          schoolYear: scopedSchoolYear,
+        });
+        const annualPolicy = annualPolicies[0];
         const response = await schoolExpenseApi.getAll({
           page: 1,
           limit: 500,
@@ -275,6 +277,11 @@ export default function PolicyYearListPage({
                     schoolYear: scopedSchoolYear || policy.schoolYear,
                     subjects: mappedSubjects,
                     monthlyRows: rows,
+                    annualPolicyId: annualPolicy?.id,
+                    contractFileUrl: annualPolicy?.contractFileUrl,
+                    contractFileName: annualPolicy?.contractFileName,
+                    contractUploadedByName: annualPolicy?.contractUploadedByName,
+                    contractUploadedAt: annualPolicy?.contractUploadedAt,
                   }
                 : policy,
             ),
@@ -381,6 +388,13 @@ export default function PolicyYearListPage({
           setPolicies((current) =>
             current.map((policy) =>
               policy.id === savedPolicy.id ? savedPolicy : policy,
+            ),
+          )
+        }
+        onContractUpdated={(updatedPolicy) =>
+          setPolicies((current) =>
+            current.map((policy) =>
+              policy.id === updatedPolicy.id ? updatedPolicy : policy,
             ),
           )
         }
@@ -534,7 +548,7 @@ export default function PolicyYearListPage({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="min-w-[1680px] w-full text-sm">
+          <table className="min-w-[1780px] w-full text-sm">
             <thead>
               <tr className="bg-slate-900 text-xs font-black uppercase tracking-wide text-white">
                 <th className="px-4 py-3 text-center">STT</th>
@@ -547,6 +561,7 @@ export default function PolicyYearListPage({
                 <th className="px-4 py-3 text-right">Tổng chính sách</th>
                 <th className="px-4 py-3 text-right">Đã chi</th>
                 <th className="px-4 py-3 text-right">Còn lại chi</th>
+                <th className="px-4 py-3 text-center">Hợp đồng</th>
                 <th className="px-4 py-3 text-center">Trạng thái</th>
                 <th className="px-4 py-3 text-center">Thao tác</th>
               </tr>
@@ -614,6 +629,24 @@ export default function PolicyYearListPage({
                       }`}
                     >
                       {formatCurrency(Math.round(summary.totalRemaining))}
+                    </td>
+                    <td className="px-4 py-4 text-center">
+                      {policy.contractFileUrl ? (
+                        <a
+                          href={resolveApiFileUrl(policy.contractFileUrl)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex h-9 items-center gap-2 rounded-lg bg-blue-50 px-3 text-xs font-black text-blue-700 hover:bg-blue-100"
+                        >
+                          <ExternalLink size={15} />
+                          PDF
+                        </a>
+                      ) : (
+                        <span className="inline-flex h-9 items-center gap-2 rounded-lg bg-slate-100 px-3 text-xs font-bold text-slate-400">
+                          <FileText size={15} />
+                          Chưa có
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-4 text-center">
                       <StatusBadge status={policy.status} />

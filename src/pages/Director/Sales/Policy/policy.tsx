@@ -1,162 +1,45 @@
+import React from "react";
 import { formatVND } from "../../../../utils/formatVND";
-import React, { useEffect } from "react";
+import { POLICY_TAX_RATE, policyPercentBase } from "../../../../types/policy";
 
-export default function PolicyPage({
-  data,
-  diff,
-  renderRowValue,
-  studentPerClass,
-  periods,
-}: any) {
-  console.log("data2", data);
-
+export default function PolicyPage({ data = [], renderRowValue }: any) {
   const percent = (value: number, total: number) => {
     if (!total) return "0.00";
     return ((value / total) * 100).toFixed(2);
   };
+
   const otherCostKeys: string[] = Array.from(
     new Set(
       data.flatMap((row: any) =>
-        (row.otherCosts || []).map((item: any) => item.name),
-      ),
-    ),
+        (row.otherCosts || []).map((item: any) => item.name)
+      )
+    )
   );
   const policyKeys = ["QL1", "QL2", ...otherCostKeys];
+
   return (
-    <div className="p-4  text-sm text-gray-800">
-      <table className="border border-gray-300 border-collapse  w-full text-center">
-        <thead className="bg-yellow-200">
-          <tr>
-            <th rowSpan={3} className="border border-gray-300 p-2">
+    <div className="overflow-x-auto p-4 text-sm text-gray-800">
+      <table className="w-full min-w-max border-collapse border border-gray-300 text-center">
+        <thead>
+          <tr className="bg-yellow-200">
+            <th rowSpan={3} className="min-w-[72px] border border-gray-300 p-2">
               STT
             </th>
-            <th rowSpan={3} className="border border-gray-300 p-2">
+            <th
+              rowSpan={3}
+              className="min-w-[120px] border border-gray-300 p-2"
+            >
               Khoản
             </th>
-            <th rowSpan={3} className="border border-gray-300 p-2">
+            <th
+              rowSpan={3}
+              className="min-w-[120px] border border-gray-300 p-2"
+            >
               Mức thu
             </th>
             <th colSpan={5} className="border border-gray-300 p-2">
               PHẦN THU
             </th>
-          </tr>
-
-          <tr className="bg-yellow-100">
-            <th colSpan={4} className="border border-gray-300 p-2">
-              NHÀ TRƯỜNG
-            </th>
-            <th rowSpan={1} className="border border-gray-300 p-2">
-              Cty
-            </th>
-          </tr>
-
-          <tr className="bg-gray-100 text-[13px]">
-            <th className="border border-gray-200">CSVC</th>
-            <th className="border border-gray-200">Thuế</th>
-            <th className="border border-gray-200">GV</th>
-            <th className="border border-gray-200">Tổng %</th>
-            <th className="border border-gray-200">PT chương trình</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {data?.map((row, index) => {
-            const otherTotal = (row.otherCosts || []).reduce(
-              (s, i) => s + (Number(i.value) || 0),
-              0,
-            );
-
-            const total =
-              (row.ql1Percent || 0) -
-              (row.ql1Tax || 0) +
-              (row.ql2Percent || 0) -
-              (row.ql2Tax || 0) +
-              (row.tgPercent || 0) -
-              (row.tgTax || 0) +
-              otherTotal;
-            const totalPercent =
-              percent(Number(row.ql1Percent || 0), row.fee) +
-              percent(Number(row.ql2Percent || 0), row.fee);
-            const totalCsvc =
-              (Number(row.teacher || 0) / row.fee) * 100 +
-              (Number(row.tax || 0) / row.fee) * 100 +
-              (Number(row.qlCsvc || 0) / row.fee) * 100;
-            return (
-              <React.Fragment key={row.id}>
-                <tr className="hover:bg-blue-50 transition bg-gray-50">
-                  <td
-                    rowSpan={7}
-                    className="border border-gray-200 font-bold text-red-500"
-                  >
-                    {index + 1}
-                  </td>
-
-                  <td
-                    rowSpan={7}
-                    className="border border-gray-200 text-red-500"
-                  >
-                    {row.name}
-                  </td>
-                  <td rowSpan={7} className="border border-gray-200">
-                    {row.fee}
-                  </td>
-
-                  <td>{percent(Number(row.qlCsvc || 0), row.fee)} %</td>
-                  <td>{percent(Number(row.tax || 0), row.fee)} %</td>
-                  <td>{percent(Number(row.teacher || 0), row.fee)} %</td>
-
-                  <td>
-                    {(
-                      Number(percent(row.teacher || 0, row.fee)) +
-                      Number(percent(row.tax || 0, row.fee)) +
-                      Number(percent(row.qlCsvc || 0, row.fee))
-                    ).toFixed(2)}{" "}
-                    %
-                  </td>
-
-                  <td>{(100 - totalCsvc).toFixed(2)} %</td>
-
-                  {/*  <td className="border border-gray-200 font-bold text-blue-600">
-                                        {totalPercent} %
-                                    </td> */}
-                </tr>
-
-                <tr className="bg-gray-50">
-                  <td className="border border-gray-200">
-                    {renderRowValue(row.id, "qlCsvc", row.qlCsvc)}
-                  </td>
-
-                  <td className="border border-gray-200">
-                    {renderRowValue(row.id, "tax", row.tax)}
-                  </td>
-
-                  <td className="border border-gray-200">
-                    {renderRowValue(row.id, "teacher", row.teacher)}
-                  </td>
-
-                  <td className="border border-gray-200 font-semibold relative">
-                    {formatVND(row.qlCsvc + row.tax + row.teacher)}
-                  </td>
-
-                  <td className="border border-gray-200 text-red-500 font-semibold">
-                    {renderRowValue(
-                      row.id,
-                      "total",
-                      row.fee - row.qlCsvc - row.tax - row.teacher,
-                    )}
-                  </td>
-
-                  {/*   <td rowSpan={2} colSpan={2} className="border border-gray-200 font-bold text-blue-600">
-                                        <div>{formatVND(total)}</div>
-
-                                    </td> */}
-                </tr>
-              </React.Fragment>
-            );
-          })}
-        </tbody>
-        <thead className="bg-yellow-200">
-          <tr>
             <th
               colSpan={policyKeys.length * 2}
               className="border border-gray-300 p-2"
@@ -164,117 +47,187 @@ export default function PolicyPage({
               CHÍNH SÁCH
             </th>
           </tr>
-          <tr>
-            <th colSpan={2} className="border border-gray-300 p-2">
-              QL1
+
+          <tr className="bg-yellow-100">
+            <th colSpan={4} className="border border-gray-300 p-2">
+              NHÀ TRƯỜNG
             </th>
-            <th colSpan={2} className="border border-gray-300 p-2">
-              QL2
-            </th>
-            {otherCostKeys.map((name) => (
-              <th colSpan={2} className="border border-gray-300 p-2">
-                {" "}
+            <th className="border border-gray-300 p-2">Cty</th>
+            {policyKeys.map((name, keyIndex) => (
+              <th key={`policy-group-${keyIndex}-${name}`} colSpan={2} className="border border-gray-300 p-2">
                 {name}
               </th>
             ))}
           </tr>
-          <th className="border border-gray-200">%HP</th>
-          <th className="border border-gray-200">Thuế</th>
 
-          <th className="border border-gray-200">%HP</th>
-          <th className="border border-gray-200">Thuế</th>
-
-          {otherCostKeys.map((name) => (
-            <>
-              <th key={name} className="border border-gray-200">
-                %HP
-              </th>
-              <th key={name} className="border border-gray-200">
-                Thuế
-              </th>
-            </>
-          ))}
+          <tr className="bg-gray-100 text-[13px]">
+            <th className="min-w-[100px] border border-gray-200 p-2">CSVC</th>
+            <th className="min-w-[100px] border border-gray-200 p-2">Thuế</th>
+            <th className="min-w-[100px] border border-gray-200 p-2">GV</th>
+            <th className="min-w-[110px] border border-gray-200 p-2">Tổng %</th>
+            <th className="min-w-[130px] border border-gray-200 p-2">
+              PT chương trình
+            </th>
+            {policyKeys.map((name, keyIndex) => (
+              <React.Fragment key={`policy-heading-${keyIndex}-${name}`}>
+                <th className="min-w-[100px] border border-gray-200 p-2">
+                  %HP
+                </th>
+                <th className="min-w-[100px] border border-gray-200 p-2">
+                  Thuế
+                </th>
+              </React.Fragment>
+            ))}
+          </tr>
         </thead>
+
         <tbody>
-          {data?.map((row, index) => {
-            const otherTotal = (row.otherCosts || []).reduce(
-              (s, i) => s + (Number(i.value) || 0),
-              0,
-            );
+          {data.map((row: any, index: number) => {
+            const fee = Number(row.fee || 0);
+            const qlCsvc = Number(row.qlCsvc || 0);
+            const tax = Number(row.tax || 0);
+            const teacher = Number(row.teacher || 0);
+            // % chính sách: trên học phí, hoặc học phí sau thuế 2% nếu khoản này bật cờ.
+            const percentBase = policyPercentBase(row);
+            const schoolPercent =
+              Number(percent(qlCsvc, percentBase)) +
+              Number(percent(tax, percentBase)) +
+              Number(percent(teacher, percentBase));
 
-            const total =
-              (row.ql1Percent || 0) -
-              (row.ql1Tax || 0) +
-              (row.ql2Percent || 0) -
-              (row.ql2Tax || 0) +
-              (row.tgPercent || 0) -
-              (row.tgTax || 0) +
-              otherTotal;
-            const totalPercent =
-              percent(Number(row.ql1Percent || 0), row.fee) +
-              percent(Number(row.ql2Percent || 0), row.fee);
-            const totalCsvc =
-              (Number(row.teacher || 0) / row.fee) * 100 +
-              (Number(row.tax || 0) / row.fee) * 100 +
-              (Number(row.qlCsvc || 0) / row.fee) * 100;
             return (
-              <React.Fragment key={row.id}>
-                <tr className="hover:bg-blue-50 transition bg-gray-50">
-                  <td>{percent(Number(row.ql1Percent || 0), row.fee)} %</td>
-                  <td>{percent(Number(row.ql1Tax || 0), row.ql1Percent)} %</td>
+              <React.Fragment key={row.id ?? index}>
+                <tr className="bg-gray-50 transition hover:bg-blue-50">
+                  <td
+                    rowSpan={2}
+                    className="border border-gray-200 p-2 font-bold text-red-500"
+                  >
+                    {index + 1}
+                  </td>
+                  <td
+                    rowSpan={2}
+                    className="border border-gray-200 p-2 text-red-500"
+                  >
+                    {row.name}
+                    {row.percentAfterTax && (
+                      <div className="text-xs font-normal text-gray-500">
+                        % tính trên HP sau thuế {POLICY_TAX_RATE * 100}%
+                      </div>
+                    )}
+                  </td>
+                  <td
+                    rowSpan={2}
+                    className="border border-gray-200 p-2 font-medium"
+                  >
+                    {formatVND(fee)}
+                  </td>
 
-                  <td>{percent(Number(row.ql2Percent || 0), row.fee)} %</td>
-                  <td>{percent(Number(row.ql2Tax || 0), row.ql2Percent)} %</td>
+                  <td className="border border-gray-200 p-2">
+                    {percent(qlCsvc, percentBase)} %
+                  </td>
+                  <td className="border border-gray-200 p-2">
+                    {percent(tax, percentBase)} %
+                  </td>
+                  <td className="border border-gray-200 p-2">
+                    {percent(teacher, percentBase)} %
+                  </td>
+                  <td className="border border-gray-200 p-2 font-semibold">
+                    {schoolPercent.toFixed(2)} %
+                  </td>
+                  <td className="border border-gray-200 p-2">
+                    {(100 - schoolPercent).toFixed(2)} %
+                  </td>
 
-                  {otherCostKeys.map((name) => {
+                  <td className="border border-gray-200 p-2">
+                    {percent(Number(row.ql1Percent || 0), percentBase)} %
+                  </td>
+                  <td className="border border-gray-200 p-2">
+                    {percent(
+                      Number(row.ql1Tax || 0),
+                      Number(row.ql1Percent || 0)
+                    )}{" "}
+                    %
+                  </td>
+                  <td className="border border-gray-200 p-2">
+                    {percent(Number(row.ql2Percent || 0), percentBase)} %
+                  </td>
+                  <td className="border border-gray-200 p-2">
+                    {percent(
+                      Number(row.ql2Tax || 0),
+                      Number(row.ql2Percent || 0)
+                    )}{" "}
+                    %
+                  </td>
+                  {otherCostKeys.map((name, costIndex) => {
                     const item = (row.otherCosts || []).find(
-                      (i) => i.name === name,
+                      (cost: any) => cost.name === name
                     );
-
                     return (
-                      <>
-                        <td key={name} className="border border-gray-200">
-                          {percent(Number(item?.percent || 0), row.fee)} %
+                      <React.Fragment key={`policy-percent-${index}-${costIndex}-${name}`}>
+                        <td className="border border-gray-200 p-2">
+                          {percent(Number(item?.percent || 0), percentBase)} %
                         </td>
-                        <td key={name} className="border border-gray-200">
-                          {percent(Number(item?.tax || 0), row.fee)} %
+                        <td className="border border-gray-200 p-2">
+                          {percent(Number(item?.tax || 0), percentBase)} %
                         </td>
-                      </>
+                      </React.Fragment>
                     );
                   })}
                 </tr>
 
-                <tr className="bg-gray-50">
-                  <td className="border border-gray-200">
-                    {renderRowValue(row.id, "ql1Percent", row.ql1Percent)}
+                <tr className="bg-white transition hover:bg-blue-50">
+                  <td className="border border-gray-200 p-2">
+                    {renderRowValue(row.id, "qlCsvc", qlCsvc)}
+                  </td>
+                  <td className="border border-gray-200 p-2">
+                    {renderRowValue(row.id, "tax", tax)}
+                  </td>
+                  <td className="border border-gray-200 p-2">
+                    {renderRowValue(row.id, "teacher", teacher)}
+                  </td>
+                  <td className="border border-gray-200 p-2 font-semibold">
+                    {formatVND(qlCsvc + tax + teacher)}
+                  </td>
+                  <td className="border border-gray-200 p-2 font-semibold text-red-500">
+                    {renderRowValue(
+                      row.id,
+                      "total",
+                      fee - qlCsvc - tax - teacher
+                    )}
                   </td>
 
-                  <td className="border border-gray-200">
-                    {renderRowValue(row.id, "ql1Tax", row.ql1Tax)}
+                  <td className="border border-gray-200 p-2">
+                    {renderRowValue(
+                      row.id,
+                      "ql1Percent",
+                      Number(row.ql1Percent || 0)
+                    )}
                   </td>
-
-                  <td className="border border-gray-200">
-                    {renderRowValue(row.id, "ql2Percent", row.ql2Percent)}
+                  <td className="border border-gray-200 p-2">
+                    {renderRowValue(row.id, "ql1Tax", Number(row.ql1Tax || 0))}
                   </td>
-
-                  <td className="border border-gray-200">
-                    {renderRowValue(row.id, "ql2Tax", row.ql2Tax)}
+                  <td className="border border-gray-200 p-2">
+                    {renderRowValue(
+                      row.id,
+                      "ql2Percent",
+                      Number(row.ql2Percent || 0)
+                    )}
                   </td>
-
-                  {otherCostKeys.map((name) => {
+                  <td className="border border-gray-200 p-2">
+                    {renderRowValue(row.id, "ql2Tax", Number(row.ql2Tax || 0))}
+                  </td>
+                  {otherCostKeys.map((name, costIndex) => {
                     const item = (row.otherCosts || []).find(
-                      (i) => i.name === name,
+                      (cost: any) => cost.name === name
                     );
-
                     return (
-                      <>
-                        <td key={name} className="border border-gray-200">
+                      <React.Fragment key={`policy-value-${index}-${costIndex}-${name}`}>
+                        <td className="border border-gray-200 p-2">
                           {formatVND(item?.percent || 0)}
                         </td>
-                        <td key={name} className="border border-gray-200">
+                        <td className="border border-gray-200 p-2">
                           {formatVND(item?.tax || 0)}
                         </td>
-                      </>
+                      </React.Fragment>
                     );
                   })}
                 </tr>

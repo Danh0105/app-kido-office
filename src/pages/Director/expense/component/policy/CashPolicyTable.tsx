@@ -8,6 +8,7 @@ import {
   TableHead,
   Td,
 } from "./TableUI";
+import { getCashSupportActualAmount } from "@/utils/cashSupport";
 
 type Props = {
   policy: any;
@@ -40,7 +41,9 @@ export default function CashPolicyTable({ policy }: Props) {
 
               <TableHead align="center">Nhóm</TableHead>
 
-              <TableHead align="center">Số tiền</TableHead>
+              <TableHead align="center">Số tiền CS</TableHead>
+
+              <TableHead align="center">Thành tiền thực tế</TableHead>
 
               <TableHead align="center">Tháng</TableHead>
 
@@ -79,6 +82,11 @@ export default function CashPolicyTable({ policy }: Props) {
                 </Td>
 
                 <MoneyTd align="center">{item.money}</MoneyTd>
+
+                {/* Số chạy về QL thu chi — công thức ô "Thực tế nhập" của MoneyForm */}
+                <MoneyTd align="center">
+                  {getCashSupportActualAmount(item, policy?.data?.mode)}
+                </MoneyTd>
 
                 <CenterTd>{item.months}</CenterTd>
 

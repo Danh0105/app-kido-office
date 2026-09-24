@@ -258,9 +258,15 @@ const getMonthGroups = (daysByDate: Record<string, DayData>) => {
         .sort((a, b) => b.key.localeCompare(a.key));
 };
 
-export default function DailyReportPage() {
+export default function DailyReportPage({
+    employeeIdOverride,
+    embedded = false,
+}: {
+    employeeIdOverride?: number;
+    embedded?: boolean;
+} = {}) {
     const { employeeId } = useParams();
-    const id = Number(employeeId);
+    const id = Number(employeeIdOverride ?? employeeId);
     const [selectedTask, setSelectedTask] = useState<Task | null>(null);
     const [selectedReportId, setSelectedReportId] = useState<number | null>(null);
     const [loading, setLoading] = useState(false);
@@ -334,9 +340,9 @@ export default function DailyReportPage() {
 
     return (
         <div className="min-h-screen bg-slate-100 pb-20 text-slate-900">
-            <HeaderWithBack title="Báo cáo | Kế hoạch" />
+            {!embedded && <HeaderWithBack title="Báo cáo | Kế hoạch" />}
 
-            <main className="mx-auto mt-14 w-full max-w-[1500px] px-3 py-4 sm:px-5 lg:px-7">
+            <main className={`mx-auto w-full max-w-[1500px] px-3 py-4 sm:px-5 lg:px-7 ${embedded ? "" : "mt-14"}`}>
                 <section className="mb-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div>

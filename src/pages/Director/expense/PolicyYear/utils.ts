@@ -147,23 +147,21 @@ export const buildPolicyYearSavePayload = (policy: PolicyYear) => {
         equipmentPolicyAmount: Number(row.equipmentPolicyAmount || 0),
         paidCashAmount: Number(row.paidCashAmount || 0),
         paidEquipmentAmount: Number(row.paidEquipmentAmount || 0),
-        calculatedPolicyAmount: Math.round(
-          calculated?.calculatedPolicyAmount || 0,
-        ),
-        policyAfterTaxAmount: Math.round(calculated?.policyAfterTaxAmount || 0),
+        calculatedPolicyAmount: calculated?.calculatedPolicyAmount || 0,
+        policyAfterTaxAmount: calculated?.policyAfterTaxAmount || 0,
         note: row.note || "",
       };
     }),
     summary: {
       totalStudents: Number(summary.totalStudents || 0),
-      totalRevenue: Math.round(summary.totalRevenue || 0),
-      totalTkd: Math.round(summary.totalTkd || 0),
-      totalSchoolRetain: Math.round(summary.totalSchoolRetain || 0),
-      totalCompanyPayment: Math.round(summary.totalCompanyPayment || 0),
-      totalInitialPolicy: Math.round(summary.totalInitialPolicy || 0),
-      totalPolicyAfterTax: Math.round(summary.totalPolicyAfterTax || 0),
-      totalPaid: Math.round(summary.totalPaid || 0),
-      totalRemaining: Math.round(summary.totalRemaining || 0),
+      totalRevenue: Number(summary.totalRevenue || 0),
+      totalTkd: Number(summary.totalTkd || 0),
+      totalSchoolRetain: Number(summary.totalSchoolRetain || 0),
+      totalCompanyPayment: Number(summary.totalCompanyPayment || 0),
+      totalInitialPolicy: Number(summary.totalInitialPolicy || 0),
+      totalPolicyAfterTax: Number(summary.totalPolicyAfterTax || 0),
+      totalPaid: Number(summary.totalPaid || 0),
+      totalRemaining: Number(summary.totalRemaining || 0),
     },
   };
 };

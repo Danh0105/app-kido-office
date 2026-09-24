@@ -73,24 +73,42 @@ export default function Support({ cdhd, data, studentPerClass, periods }: any) {
 
     const totalPerStudentMoney = data.reduce((sum, row) => {
         const money = toNumber(row.money);
+        const depreciationYears = toNumber(row.depreciationYearsM);
+        const depreciatedMoney = depreciationYears > 0 ? money / depreciationYears : 0;
         const students = toNumber(row.studentsM);
         const months = toNumber(row.monthsM);
 
         if (students > 0 && months > 0) {
-            return sum + money / students / months;
+            return sum + depreciatedMoney / students / months;
         }
         return sum;
     }, 0);
-    const totalPerStudentDevice = data.reduce((sum, row) => {
-        const money = toNumber(row.price);
+    const getPerStudentDevice = (row: any) => {
+        const total = toNumber(row.qty) * toNumber(row.price);
+        const depreciationYears = toNumber(row.depreciationYearsD);
+        const depreciatedTotal = depreciationYears > 0 ? total / depreciationYears : 0;
         const students = toNumber(row.studentsD);
-        const months = toNumber(row.monthsD);
 
-        if (students > 0 && months > 0) {
-            return sum + money / students / months;
+        if (depreciatedTotal <= 0 || students <= 0) return 0;
+
+        if (periods > 0) {
+            if (studentPerClass <= 0) return 0;
+
+            let amount = (depreciatedTotal / periods / students) * studentPerClass;
+            if (toNumber(row.realPeriodsD) > 0) {
+                amount = (amount * toNumber(row.realPeriodsD)) / periods;
+            }
+            return amount;
         }
-        return sum;
-    }, 0);
+
+        const months = toNumber(row.monthsD);
+        return months > 0 ? depreciatedTotal / students / months : 0;
+    };
+
+    const totalPerStudentDevice = data.reduce(
+        (sum, row) => sum + getPerStudentDevice(row),
+        0
+    );
     return (
         <div className="p-4  text-sm text-gray-800">
             <table className="border border-gray-300 border-collapse w-full text-center">
@@ -124,7 +142,7 @@ export default function Support({ cdhd, data, studentPerClass, periods }: any) {
 
                         <th className="border border-gray-200 p-2">Số tháng</th>
                         <th className="border border-gray-200 p-2">Số học sinh</th>
-                        <th className="border border-gray-200 p-2">Tiền / HS</th>
+                        <th className="border border-gray-200 p-2">Tiền / HS / TIẾT</th>
 
                         <th className="border border-gray-200 p-2">Danh mục</th>
                         <th className="border border-gray-200 p-2">Số lượng</th>
@@ -144,28 +162,24 @@ export default function Support({ cdhd, data, studentPerClass, periods }: any) {
                 <tbody>
                     {data.map((row, index) => {
                         let perStudentMoney = 0;
+                        const depreciationYearsM = toNumber(row.depreciationYearsM);
+                        const depreciatedMoney = depreciationYearsM > 0
+                            ? toNumber(row.money) / depreciationYearsM
+                            : 0;
 
                         if (row.studentsM > 0) {
                             if (studentPerClass > 0) {
-                                perStudentMoney =
-                                    (row.money / row.studentsM / periods) * studentPerClass;
-
-                                // scale theo tiết thực
-                                if (row.realPeriods > 0) {
+                                if (periods > 0) {
                                     perStudentMoney =
-                                        (perStudentMoney * row.realPeriods) / periods;
+                                        depreciatedMoney / row.studentsM / periods * studentPerClass;
                                 }
 
                             } else if (row.monthsM > 0) {
                                 perStudentMoney =
-                                    row.money / row.studentsM / row.monthsM;
+                                    depreciatedMoney / row.studentsM / row.monthsM;
                             }
                         }
-                        console.log(studentPerClass)
-                        const perStudentDevice =
-                            toNumber(row.qty) * toNumber(row.price) > 0 && row.monthsD > 0
-                                ? toNumber(row.qty) * toNumber(row.price) / row.studentsD / row.monthsD
-                                : 0;
+                        const perStudentDevice = getPerStudentDevice(row);
                         return (
                             <tr key={index} className="hover:bg-blue-50 transition bg-gray-50">
                                 <td className="border border-gray-200 font-bold text-red-500">

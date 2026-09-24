@@ -1,0 +1,32 @@
+# Vhost môi trường dev của kido-app (FE) cho giám đốc test trước khi lên
+# production — ĐÃ TRIỂN KHAI TRÊN SERVER tại https://dev.kidoedu.edu.vn
+# (cấu hình thật nằm ở /etc/nginx/sites-available/dev.kidoedu.edu.vn, do
+# certbot --nginx tự chèn thêm phần SSL/redirect). File này giữ lại để tham
+# khảo/tái tạo nếu cần dựng lại từ đầu hoặc dựng thêm subdomain dev khác.
+#
+# Quy trình đã dùng:
+#   1. Build bản dev: npm run build:dev   (ra thư mục dist-dev/, không đụng dist/ production)
+#   2. DNS bản ghi A của dev.kidoedu.edu.vn đã trỏ sẵn về IP server này.
+#   3. Xin chứng chỉ SSL + tự cấu hình nginx:
+#        sudo certbot --nginx -d dev.kidoedu.edu.vn --redirect
+#   4. Mỗi lần có bản mới muốn đưa lên cho giám đốc test:
+#        npm run build:dev
+
+server {
+    listen 80;
+    server_name dev.kidoedu.edu.vn;
+
+    # Build dev nằm ở đây, tách biệt hoàn toàn với dist/ (production).
+    root /var/www/kido-app/dist-dev;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # API dev: đã cấu hình sẵn trong .env.development (VITE_API_URL=http://160.250.132.143:3011),
+    # nên FE gọi thẳng, không cần proxy /api/ ở đây.
+}
+
+# Sau bước certbot --nginx --redirect, block trên sẽ được thêm listen 443 ssl
+# + ssl_certificate, và certbot tự tạo thêm 1 block port 80 redirect sang https.

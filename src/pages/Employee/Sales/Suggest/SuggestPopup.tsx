@@ -32,6 +32,8 @@ export default function SuggestPopup({
     initialData,
 }: any) {
     const [loading, setLoading] = useState(false);
+    const [wardError, setWardError] = useState("");
+    const [policyError, setPolicyError] = useState("");
 
     const [form, setForm] = useState<Suggest>({
         content: "",
@@ -65,6 +67,7 @@ export default function SuggestPopup({
             }));
 
             setpPovinces(mapped);
+            if (mapped.length === 1) setSelectedRegion(Number(mapped[0].id));
         });
     }, []);
 
@@ -82,6 +85,7 @@ export default function SuggestPopup({
             }));
 
             setWards(mapped);
+            if (mapped.length === 1) setSelectedWard(Number(mapped[0].id));
         } catch (err) {
             console.error(err);
         }
@@ -173,7 +177,7 @@ export default function SuggestPopup({
                 }));
 
                 setPolicies(mapped);
-                setSelectedPolicy(mapped[0]?.id ?? null);
+                setSelectedPolicy(null);
 
             } catch (err) {
                 console.error("Load policy failed", err);
@@ -218,6 +222,9 @@ export default function SuggestPopup({
             if (initialData.policyId) {
                 setSelectedPolicy(initialData.policyId);
             }
+            if (initialData.ward?.id || initialData.wardId) {
+                setSelectedWard(Number(initialData.ward?.id || initialData.wardId));
+            }
         } else {
             setForm({
                 content: "",
@@ -234,6 +241,12 @@ export default function SuggestPopup({
 
     // ===== validate =====
     const validateForm = () => {
+        setWardError("");
+        setPolicyError("");
+        if (!initialData?.id && !selectedWard) {
+            setWardError("Vui lòng chọn xã/phường");
+            return false;
+        }
         if (!form.content?.trim()) {
             alert("Vui lòng nhập nội dung");
             return false;
@@ -264,17 +277,39 @@ export default function SuggestPopup({
         try {
             setLoading(true);
 
-            await suggestApi.create({
-                ...form,
-                policyId: selectedPolicy || undefined,
-                file: form.file || undefined,
-            });
+            if (initialData?.id) {
+                await suggestApi.update(initialData.id, {
+                    ...form,
+                    policyId: selectedPolicy || undefined,
+                    file: form.file || undefined,
+                });
+            } else {
+                await suggestApi.createByWard(selectedWard!, {
+                    content: form.content.trim(),
+                    component: form.component?.trim() || undefined,
+                    description: form.description?.trim() || undefined,
+                    issueDate: form.issueDate || undefined,
+                    policyId: selectedPolicy || undefined,
+                    file: form.file || undefined,
+                });
+            }
 
             onSuccess();
             onClose();
 
-        } catch (e) {
-            alert("Lỗi");
+        } catch (e: any) {
+            const status = e?.response?.status;
+            const raw = e?.response?.data?.message;
+            const message = Array.isArray(raw) ? raw.join(", ") : raw || "Không thể gửi đề xuất";
+            if (message.includes("Chính sách")) {
+                setPolicyError(message);
+                if (message.includes("không tồn tại")) setSelectedPolicy(null);
+            } else if (status === 403 || message.includes("xã/phường")) {
+                setWardError(message);
+                if (selectedRegion) fetchWards(selectedRegion);
+            } else {
+                alert(message);
+            }
         } finally {
             setLoading(false);
         }
@@ -316,6 +351,29 @@ export default function SuggestPopup({
                 </h2>
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-4">
+
+                    <MobileSelect
+                        label="Tỉnh/Thành phố"
+                        placeholder="Chọn tỉnh/thành phố"
+                        value={selectedRegion}
+                        options={provinces}
+                        onChange={setSelectedRegion}
+                    />
+
+                    <MobileSelect
+                        label="Xã/Phường *"
+                        placeholder="Chọn xã/phường"
+                        value={selectedWard}
+                        options={wards}
+                        onChange={(value) => {
+                            setSelectedWard(value);
+                            setSelectedPolicy(null);
+                            setWardError("");
+                            setPolicyError("");
+                        }}
+                        disabled={!selectedRegion}
+                    />
+                    {wardError && <p className="-mt-3 text-xs text-red-600">{wardError}</p>}
 
                     {/* content */}
                     <textarea
@@ -431,26 +489,6 @@ export default function SuggestPopup({
                         )}
                     </div>
 
-                    {/* region */}
-                    <MobileSelect
-                        label="Khu vực"
-                        placeholder="Chọn khu vực"
-                        value={selectedRegion}
-                        options={provinces}
-                        onChange={setSelectedRegion}
-                    />
-
-                    {/* ward */}
-                    {wards.length > 0 && (
-                        <MobileSelect
-                            label="Phường/Xã"
-                            placeholder="Chọn phường/xã"
-                            value={selectedWard}
-                            options={wards}
-                            onChange={setSelectedWard}
-                        />
-                    )}
-
                     {/* school */}
                     {selectedRegion && (
                         <MobileSelect
@@ -486,13 +524,19 @@ export default function SuggestPopup({
 
                     {/* policy */}
                     {selectedSubject && (
-                        <MobileSelect
-                            label="Chính sách"
-                            placeholder="Chọn chính sách"
-                            value={selectedPolicy}
-                            options={policies}
-                            onChange={setSelectedPolicy}
-                        />
+                        <>
+                            <MobileSelect
+                                label="Chính sách liên quan (không bắt buộc)"
+                                placeholder="Không gắn chính sách"
+                                value={selectedPolicy}
+                                options={policies}
+                                onChange={(value) => {
+                                    setSelectedPolicy(value || null);
+                                    setPolicyError("");
+                                }}
+                            />
+                            {policyError && <p className="-mt-3 text-xs text-red-600">{policyError}</p>}
+                        </>
                     )}
 
                     {/* buttons */}
@@ -521,9 +565,8 @@ export default function SuggestPopup({
 }
 
 const formatPolicyName = (item: any) => {
-    const date = new Date(item.createdAt);
-
-    return `Chính sách #${item.id} - ${date.toLocaleDateString(
-        "vi-VN",
-    )}`;
+    const subject = item.subject?.name || item.subjectName || "Chưa rõ môn";
+    const school = item.subject?.school?.name || item.schoolName || "Chưa rõ trường";
+    const year = item.subject?.schoolYear || item.schoolYear || "Chưa rõ năm học";
+    return `${subject} · ${school} · ${year} · ${item.status || "—"}`;
 };

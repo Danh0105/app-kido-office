@@ -1,5 +1,6 @@
 import { formatVND } from "../../../../utils/formatVND";
 import React, { useEffect } from "react";
+import { POLICY_TAX_RATE, policyPercentBase } from "../../../../types/policy";
 
 
 export default function PolicyPage({ data, diff, renderRowValue, studentPerClass, periods }: any) {
@@ -59,8 +60,9 @@ export default function PolicyPage({ data, diff, renderRowValue, studentPerClass
                             (row.ql2Percent || 0) - (row.ql2Tax || 0) +
                             (row.tgPercent || 0) - (row.tgTax || 0) +
                             otherTotal;
-                        const totalPercent = percent(Number(row.ql1Percent || 0), row.fee) + percent(Number(row.ql2Percent || 0), row.fee)
-                        const totalCsvc = (Number(row.teacher || 0) / row.fee * 100) + (Number(row.tax || 0) / row.fee * 100) + (Number(row.qlCsvc || 0) / row.fee * 100);
+                        const percentBase = policyPercentBase(row);
+                        const totalPercent = percent(Number(row.ql1Percent || 0), percentBase) + percent(Number(row.ql2Percent || 0), percentBase)
+                        const totalCsvc = (Number(row.teacher || 0) / percentBase * 100) + (Number(row.tax || 0) / percentBase * 100) + (Number(row.qlCsvc || 0) / percentBase * 100);
                         return (
                             <React.Fragment key={row.id}>
 
@@ -73,20 +75,25 @@ export default function PolicyPage({ data, diff, renderRowValue, studentPerClass
 
                                     <td rowSpan={7} className="border border-gray-200 text-red-500">
                                         {row.name}
+                                        {row.percentAfterTax && (
+                                            <div className="text-xs text-gray-500">
+                                                % tính trên HP sau thuế {POLICY_TAX_RATE * 100}%
+                                            </div>
+                                        )}
                                     </td>
                                     <td rowSpan={7} className="border border-gray-200">
                                         {row.fee}
                                     </td>
 
-                                    <td>{percent(Number(row.qlCsvc || 0), row.fee)} %</td>
-                                    <td>{percent(Number(row.tax || 0), row.fee)} %</td>
-                                    <td>{percent(Number(row.teacher || 0), row.fee)} %</td>
+                                    <td>{percent(Number(row.qlCsvc || 0), percentBase)} %</td>
+                                    <td>{percent(Number(row.tax || 0), percentBase)} %</td>
+                                    <td>{percent(Number(row.teacher || 0), percentBase)} %</td>
 
                                     <td>
                                         {(
-                                            Number(percent(row.teacher || 0, row.fee)) +
-                                            Number(percent(row.tax || 0, row.fee)) +
-                                            Number(percent(row.qlCsvc || 0, row.fee))
+                                            Number(percent(row.teacher || 0, percentBase)) +
+                                            Number(percent(row.tax || 0, percentBase)) +
+                                            Number(percent(row.qlCsvc || 0, percentBase))
                                         ).toFixed(2)} %
                                     </td>
 
@@ -142,9 +149,9 @@ export default function PolicyPage({ data, diff, renderRowValue, studentPerClass
                     <tr>
                         <th colSpan={2} className="border border-gray-300 p-2">QL1</th>
                         <th colSpan={2} className="border border-gray-300 p-2">QL2</th>
-                        {otherCostKeys.map((name) => (
+                        {otherCostKeys.map((name, costIndex) => (
 
-                            <th colSpan={2} className="border border-gray-300 p-2"> {name}</th>
+                            <th key={`policy-group-${costIndex}-${name}`} colSpan={2} className="border border-gray-300 p-2"> {name}</th>
                         ))}
                     </tr>
                     <th className="border border-gray-200">%HP</th>
@@ -154,15 +161,15 @@ export default function PolicyPage({ data, diff, renderRowValue, studentPerClass
                     <th className="border border-gray-200">Thuế</th>
 
 
-                    {otherCostKeys.map((name) => (
-                        <>
-                            <th key={name} className="border border-gray-200">
+                    {otherCostKeys.map((name, costIndex) => (
+                        <React.Fragment key={`policy-heading-${costIndex}-${name}`}>
+                            <th className="border border-gray-200">
                                 %HP
                             </th>
-                            <th key={name} className="border border-gray-200">
+                            <th className="border border-gray-200">
                                 Thuế
                             </th>
-                        </>
+                        </React.Fragment>
                     ))}
                 </thead>
                 <tbody>
@@ -177,32 +184,34 @@ export default function PolicyPage({ data, diff, renderRowValue, studentPerClass
                             (row.ql2Percent || 0) - (row.ql2Tax || 0) +
                             (row.tgPercent || 0) - (row.tgTax || 0) +
                             otherTotal;
-                        const totalPercent = percent(Number(row.ql1Percent || 0), row.fee) + percent(Number(row.ql2Percent || 0), row.fee)
-                        const totalCsvc = (Number(row.teacher || 0) / row.fee * 100) + (Number(row.tax || 0) / row.fee * 100) + (Number(row.qlCsvc || 0) / row.fee * 100);
+                        // % chính sách: trên học phí, hoặc học phí sau thuế 2% nếu khoản này bật cờ.
+                        const percentBase = policyPercentBase(row);
+                        const totalPercent = percent(Number(row.ql1Percent || 0), percentBase) + percent(Number(row.ql2Percent || 0), percentBase)
+                        const totalCsvc = (Number(row.teacher || 0) / percentBase * 100) + (Number(row.tax || 0) / percentBase * 100) + (Number(row.qlCsvc || 0) / percentBase * 100);
                         return (
-                            <React.Fragment key={row.id}>
+                            <React.Fragment key={row.id ?? `policy-row-${index}`}>
 
                                 <tr className="hover:bg-blue-50 transition bg-gray-50">
-                                    <td>{percent(Number(row.ql1Percent || 0), row.fee)} %</td>
+                                    <td>{percent(Number(row.ql1Percent || 0), percentBase)} %</td>
                                     <td>{percent(Number(row.ql1Tax || 0), row.ql1Percent)} %</td>
 
-                                    <td>{percent(Number(row.ql2Percent || 0), row.fee)} %</td>
+                                    <td>{percent(Number(row.ql2Percent || 0), percentBase)} %</td>
                                     <td>{percent(Number(row.ql2Tax || 0), row.ql2Percent)} %</td>
 
-                                    {otherCostKeys.map((name) => {
+                                    {otherCostKeys.map((name, costIndex) => {
                                         const item = (row.otherCosts || []).find(i => i.name === name);
 
                                         return (
-                                            <>
-                                                <td key={name} className="border border-gray-200">
+                                            <React.Fragment key={`policy-percent-${index}-${costIndex}-${name}`}>
+                                                <td className="border border-gray-200">
 
-                                                    {percent(Number(item?.percent || 0), row.fee)} %
+                                                    {percent(Number(item?.percent || 0), percentBase)} %
                                                 </td>
-                                                <td key={name} className="border border-gray-200">
+                                                <td className="border border-gray-200">
 
-                                                    {percent(Number(item?.tax || 0), row.fee)} %
+                                                    {percent(Number(item?.tax || 0), percentBase)} %
                                                 </td>
-                                            </>
+                                            </React.Fragment>
                                         );
                                     })}
 
@@ -226,18 +235,18 @@ export default function PolicyPage({ data, diff, renderRowValue, studentPerClass
                                         {renderRowValue(row.id, "ql2Tax", row.ql2Tax)}
                                     </td>
 
-                                    {otherCostKeys.map((name) => {
+                                    {otherCostKeys.map((name, costIndex) => {
                                         const item = (row.otherCosts || []).find(i => i.name === name);
 
                                         return (
-                                            <>
-                                                <td key={name} className="border border-gray-200">
+                                            <React.Fragment key={`policy-value-${index}-${costIndex}-${name}`}>
+                                                <td className="border border-gray-200">
                                                     {formatVND(item?.percent || 0)}
                                                 </td>
-                                                <td key={name} className="border border-gray-200">
+                                                <td className="border border-gray-200">
                                                     {formatVND(item?.tax || 0)}
                                                 </td>
-                                            </>
+                                            </React.Fragment>
                                         );
                                     })}
 

@@ -1,7 +1,10 @@
 import "./css/tailwind.scss";
+import "./css/directorBrand.css";
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import Index from "./routes";
+import DevRoleSwitcher from "./components/DevRoleSwitcher";
+import { initWebPush } from "./utils/webPush";
 
 import { registerSW } from "virtual:pwa-register";
 
@@ -44,6 +47,17 @@ function App() {
         };
     }, []);
 
+    // Cập nhật cả registration Firebase cũ của người vẫn còn phiên đăng nhập.
+    // Nếu chỉ gọi sau submit Login, các máy đã lưu token sẽ không bao giờ thay
+    // worker URL trần bằng worker có query config cho tới khi đăng nhập lại.
+    useEffect(() => {
+        if (!localStorage.getItem("access_token")) return;
+
+        void initWebPush().catch((error) => {
+            console.warn("Web push initialization failed on app startup:", error);
+        });
+    }, []);
+
     const handleInstall = async () => {
         if (!deferredPrompt) return;
 
@@ -60,6 +74,7 @@ function App() {
     return (
         <>
             <Index />
+            <DevRoleSwitcher />
 
             {
                 deferredPrompt && (

@@ -1,51 +1,70 @@
 // api.ts
-import axios from 'axios';
-import { toast } from 'react-hot-toast';
+import axios from "axios";
+import { toast } from "react-hot-toast";
 
 const api = axios.create({
-    baseURL:
-        import.meta.env.VITE_API_URL,
+  baseURL: import.meta.env.VITE_API_URL,
 });
 
 api.interceptors.request.use((config) => {
-    const token = localStorage.getItem('access_token');
+  const token = localStorage.getItem("access_token");
 
-    if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-    }
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
 
-    return config;
+  return config;
 });
 
 api.interceptors.response.use(
-    (response) => response,
-    (error) => {
-        const status = error?.response?.status;
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status;
 
-        if (status === 401) {
-            localStorage.removeItem('access_token');
-            window.location.href = '/login';
-        }
+    if (status === 401) {
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("user");
 
-        if (status === 403) {
-            const token = localStorage.getItem('access_token');
-            let isReadOnlyUser = false;
-            try {
-                const segment = token?.split('.')[1];
-                const payload = segment
-                    ? JSON.parse(atob(segment.replace(/-/g, '+').replace(/_/g, '/')))
-                    : null;
-                isReadOnlyUser = payload?.roles?.includes('ketoan_truong');
-            } catch {
-                // Invalid tokens are handled by the authentication flow.
-            }
-            toast.error(isReadOnlyUser
-                ? 'Bạn chỉ có quyền xem'
-                : 'Bạn không có quyền truy cập chức năng này');
-        }
+      // App dùng HashRouter và màn đăng nhập nằm ở route `/`. Chuyển
+      // pathname sang `/login` vừa không khớp route, vừa buộc tải lại
+      // toàn bộ app; một API khởi tạo trả 401 ngay sau login vì thế có
+      // thể khiến người dùng tưởng màn đăng nhập bị treo.
+      if (window.location.hash !== "#/") {
+        window.location.hash = "#/";
+      }
+    }
 
-        return Promise.reject(error);
-    },
+    // Nest trả "Cannot GET /duong-dan" khi **route không tồn tại**, khác hẳn
+    // 404 nghiệp vụ ("không tìm thấy bản ghi") mà nhiều màn đang bắt để xử lý
+    // riêng. Chỉ kêu ở trường hợp đầu — sai đường dẫn API mà im lặng thì người
+    // dùng bấm Lưu, không thấy gì, tưởng đã lưu xong.
+    if (status === 404) {
+      const raw = error?.response?.data?.message;
+      const text = Array.isArray(raw) ? raw.join(", ") : raw;
+
+      if (
+        typeof text === "string" &&
+        /^Cannot (GET|POST|PUT|PATCH|DELETE) /i.test(text)
+      ) {
+        console.error("API route không tồn tại:", text);
+        toast.error(
+          "Chức năng này đang lỗi kết nối máy chủ. Báo bộ phận kỹ thuật giúp mình."
+        );
+      }
+    }
+
+    if (status === 403) {
+      const backendMessage = error?.response?.data?.message;
+      const message = Array.isArray(backendMessage)
+        ? backendMessage.join(", ")
+        : backendMessage;
+      toast.error(
+        message || "Bạn không có quyền truy cập chức năng này"
+      );
+    }
+
+    return Promise.reject(error);
+  }
 );
 
 export default api;

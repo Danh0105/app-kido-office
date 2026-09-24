@@ -61,6 +61,7 @@ export const weeklyPlanApi = {
     },
 
     // 🔥 Lấy kế hoạch tuần hiện tại
+    // ⚠️ Backend chưa có route này — gọi vào sẽ 404 (xem scripts/check-api-routes.mjs).
     getCurrentWeek: async (employeeId: number) => {
         const res = await api.get(
             `/weekly-plans/employee/${employeeId}/current-week`
@@ -83,12 +84,14 @@ export const weeklyPlanApi = {
     },
 
     // 🔥 Lấy chi tiết 1 version
+    // ⚠️ Backend chưa có route này — gọi vào sẽ 404 (xem scripts/check-api-routes.mjs).
     getHistoryDetail: async (historyId: number) => {
         const res = await api.get(`/weekly-plans/history/${historyId}`);
         return res.data;
     },
 
     // 🔥 So sánh 2 version (nếu bạn làm API này)
+    // ⚠️ Backend chưa có route này — gọi vào sẽ 404 (xem scripts/check-api-routes.mjs).
     compareVersion: async (planId: number, v1: number, v2: number) => {
         const res = await api.get(
             `/weekly-plans/${planId}/compare?v1=${v1}&v2=${v2}`

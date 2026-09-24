@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 
 import Home from "../pages/Director/Home";
 import Department from "../pages/Director/Department";
@@ -20,12 +20,17 @@ import ExpenseRequestDetail from "@/pages/ExpenseRequest/ExpenseRequestDetail";
 import ExpenseTasks from "@/pages/ExpenseRequest/ExpenseTasks";
 import ExpenseNotifications from "@/pages/ExpenseRequest/ExpenseNotifications";
 import ReminderSettings from "@/pages/ExpenseRequest/ReminderSettings";
-import { hasRole, isChiefAccountant } from "@/utils/auth";
+import WarehousePage from "@/pages/Warehouse/WarehousePage";
+import { hasRole, isChiefAccountant, isAccountantOnly } from "@/utils/auth";
+import { isDirectorBrandUiEnabled } from "@/utils/directorUi";
+import DirectorBrandShell from "@/pages/Director/components/DirectorBrandShell";
+import PayrollPage from "@/pages/Payroll/PayrollPage";
 
 const EXPENSE_HOME = "/director/expense-management";
 const DIRECTOR_HOME = "/director";
 
-// Expense routes: accountant, director, ketoan_congno, ketoan_truong, troly_gd, thuquy
+// Expense routes: accountant, director, ketoan_congno, ketoan_truong, troly_gd,
+// thuquy, saleadmin (saleadmin chỉ sửa được bảng "Chi Ngoài" — xem ManagementExpenseTable).
 function AccountantGuard({ children }: { children: React.ReactNode }) {
   if (
     !hasRole(
@@ -36,6 +41,9 @@ function AccountantGuard({ children }: { children: React.ReactNode }) {
       "ketoan_truong",
       "troly_gd",
       "thuquy",
+      "saleadmin",
+      "salesadmin",
+      "salesadmin_la",
     )
   ) {
     return <Navigate to={DIRECTOR_HOME} replace />;
@@ -45,13 +53,13 @@ function AccountantGuard({ children }: { children: React.ReactNode }) {
 
 // General director pages: block accountant only
 function DirectorOnlyGuard({ children }: { children: React.ReactNode }) {
-  if (hasRole("accountant") || isChiefAccountant()) {
+  if (isAccountantOnly() || isChiefAccountant()) {
     return <Navigate to={EXPENSE_HOME} replace />;
   }
   return <>{children}</>;
 }
 
-// Expense-request module: director, saleadmin, ketoan_congno, thuquy (+ variants)
+// Expense-request module: director, saleadmin, ketoan_congno, thuquy, ky_thuat (+ variants)
 function ExpenseRequestGuard({ children }: { children: React.ReactNode }) {
   if (
     !hasRole(
@@ -64,6 +72,8 @@ function ExpenseRequestGuard({ children }: { children: React.ReactNode }) {
       "ketoan_truong",
       "troly_gd",
       "thuquy",
+      // Phòng kỹ thuật xử lý nhánh đề xuất thiết bị.
+      "ky_thuat",
     )
   ) {
     return <Navigate to={DIRECTOR_HOME} replace />;
@@ -89,12 +99,18 @@ function DirectorFallback() {
 }
 
 export default function DirectorRoutes() {
+  const { pathname } = useLocation();
+  // Home tự dựng sidebar brand riêng (HomeDesktopBrand); mọi trang con còn lại
+  // khoác chung một shell ở đây để giao diện đồng bộ mà không phải bọc từng trang.
+  const isHome = pathname.replace(/\/+$/, "") === DIRECTOR_HOME;
+
   return (
+    <DirectorBrandShell enabled={!isHome && isDirectorBrandUiEnabled()}>
     <Routes>
       <Route
         index
         element={
-          hasRole("accountant") || isChiefAccountant()
+          isAccountantOnly() || isChiefAccountant()
             ? <Home />
             : directorOnly(<Home />)
         }
@@ -174,6 +190,10 @@ export default function DirectorRoutes() {
         element={expenseAccess(<ExpenseRequestDetail />)}
       />
       <Route path="expense-tasks" element={expenseAccess(<ExpenseTasks />)} />
+      {/* Quản lý kho thiết bị: kỹ thuật quản nhập/xuất/tồn; giám đốc + sales admin xem/duyệt được cùng module. */}
+      <Route path="warehouse" element={expenseAccess(<WarehousePage />)} />
+      {/* Backend tự giới hạn phạm vi: BGĐ/Nhân sự/KTT xem tất cả, role khác chỉ xem chính mình. */}
+      <Route path="payrolls" element={<PayrollPage />} />
       <Route
         path="expense-notifications"
         element={expenseAccess(<ExpenseNotifications />)}
@@ -185,5 +205,6 @@ export default function DirectorRoutes() {
 
       <Route path="*" element={<DirectorFallback />} />
     </Routes>
+    </DirectorBrandShell>
   );
 }

@@ -21,7 +21,9 @@ export default function RealExpensePeriods() {
     try {
       setLoading(true);
 
-      const res = await expensePeriodApi.getAll();
+      const res = await expensePeriodApi.getAll(
+        schoolId ? { schoolId } : undefined,
+      );
 
       setPeriods(res || []);
     } catch (error) {

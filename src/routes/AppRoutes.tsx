@@ -6,13 +6,15 @@ import UploadApk from "@/pages/UploadApk";
 import ProtectedRoute from "./ProtectedRoute";
 import RegisterFace from "@/pages/FaceId/RegisterFace";
 import Profile from "@/pages/Employee/Profile";
-import { hasRole, isChiefAccountant } from "@/utils/auth";
+import { GiaoVienRoutes, NhanSuRoutes } from "./Teaching";
+import VirtualTryOnPage from "@/pages/VirtualTryOn/VirtualTryOnPage";
+import { isAccountantOnly, isChiefAccountant } from "@/utils/auth";
 /* import TabletPage from "@/pages/Display/TabletPage";
  */ /* import Display from "@/pages/Display/Display";
  */ /* import INTRO from "@/pages/Display"; */
 
 function BlockAccountingRolesOutsideDirector({ children }: any) {
-  if (hasRole("accountant") || isChiefAccountant()) {
+  if (isAccountantOnly() || isChiefAccountant()) {
     return <Navigate to="/director" replace />;
   }
 
@@ -32,6 +34,11 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      {/*
+        Thử đồ ảo — mở công khai, KHÔNG bọc ProtectedRoute: khách chưa đăng
+        nhập vẫn dùng được. Backend chặn lạm dụng bằng giới hạn theo IP.
+      */}
+      <Route path="/virtual-tryon" element={<VirtualTryOnPage />} />
       {/*    <Route path="/intro" element={<INTRO />} /> */}
       {/*       <Route path="/display" element={<Display />} />
        */}{" "}
@@ -52,6 +59,24 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute>
             <DirectorRoutes />
+          </ProtectedRoute>
+        }
+      />
+      {/* Giảng dạy — phòng Nhân sự quản lý lịch dạy & chấm công */}
+      <Route
+        path="/nhan-su/*"
+        element={
+          <ProtectedRoute>
+            <NhanSuRoutes />
+          </ProtectedRoute>
+        }
+      />
+      {/* Giảng dạy — lịch dạy của chính giáo viên */}
+      <Route
+        path="/giao-vien/*"
+        element={
+          <ProtectedRoute>
+            <GiaoVienRoutes />
           </ProtectedRoute>
         }
       />

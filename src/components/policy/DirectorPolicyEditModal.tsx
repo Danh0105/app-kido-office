@@ -19,9 +19,12 @@ const fieldLabels: Record<string, string> = {
   thuetndn: "Thuế TNDN",
   companyProfit: "Lợi nhuận công ty",
   companyProfitPerHS: "Lợi nhuận / học sinh",
+  remainingCashDepreciationAmount: "Tổng tiền còn khấu hao",
+  remainingDeviceDepreciationAmount: "Tổng tiền thiết bị còn khấu hao",
   ttcs: "Chính sách vận hành",
   httienmat: "Hỗ trợ tiền mặt",
   htthietbi: "Hỗ trợ thiết bị",
+  depreciationYears: "Số năm khấu hao",
   notes: "Ghi chú",
   giaTriHopDong: "Giá trị hợp đồng",
   soTietThucDay: "Số tiết thực dạy",
@@ -142,7 +145,10 @@ function EditorNode({
     );
   }
 
-  const readOnlyField = fieldName === "id";
+  const readOnlyField =
+    fieldName === "id" ||
+    fieldName === "remainingCashDepreciationAmount" ||
+    fieldName === "remainingDeviceDepreciationAmount";
   const inputClass =
     "mt-1 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-500";
 
@@ -273,7 +279,7 @@ export default function DirectorPolicyEditModal({
               <input
                 type="number"
                 min="1"
-                step="1"
+                step="0.1"
                 value={months ?? ""}
                 onChange={(event) =>
                   setMonths(

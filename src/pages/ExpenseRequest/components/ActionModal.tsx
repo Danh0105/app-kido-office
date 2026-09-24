@@ -1,6 +1,17 @@
 import { useState } from "react";
+import {
+  FUND_SOURCE_LABEL,
+  type ExpenseAttachment,
+  type FundSource,
+} from "@/types/expenseRequest";
+import { resolveFileUrl } from "@/service/expenseRequest";
 
-export type ActionPayload = { note?: string; reason?: string; files?: File[] };
+export type ActionPayload = {
+  note?: string;
+  reason?: string;
+  files?: File[];
+  fundSource?: FundSource;
+};
 
 type Props = {
   title: string;
@@ -9,12 +20,20 @@ type Props = {
   showNote?: boolean;
   noteLabel?: string;
   showFiles?: boolean;
+  /** Tệp đã up từ trước (VD lần xuất tiền trước) — hiện kèm nút xoá riêng, không phải file mới chọn. */
+  existingAttachments?: ExpenseAttachment[];
+  /** Xoá 1 tệp đã up trong `existingAttachments`. Bỏ trống = không cho xoá. */
+  onDeleteAttachment?: (attachmentId: number) => void | Promise<void>;
   requireReason?: boolean;
   reasonLabel?: string;
+  /** Thủ quỹ chọn nguồn tiền đã dùng để chi khi xác nhận xuất tiền */
+  showFundSource?: boolean;
   loading?: boolean;
   onClose: () => void;
   onSubmit: (payload: ActionPayload) => void;
 };
+
+const FUND_SOURCES: FundSource[] = ["COMPANY_CASH", "BANK_ACCOUNT"];
 
 const MAX_FILES = 5;
 const MAX_SIZE = 50 * 1024 * 1024; // 50MB
@@ -26,8 +45,11 @@ export default function ActionModal({
   showNote,
   noteLabel = "Ghi chú",
   showFiles,
+  existingAttachments,
+  onDeleteAttachment,
   requireReason,
   reasonLabel = "Lý do",
+  showFundSource,
   loading,
   onClose,
   onSubmit,
@@ -35,7 +57,19 @@ export default function ActionModal({
   const [note, setNote] = useState("");
   const [reason, setReason] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  const [fundSource, setFundSource] = useState<FundSource | null>(null);
   const [error, setError] = useState("");
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  const handleDeleteExisting = async (attachmentId: number) => {
+    if (!onDeleteAttachment) return;
+    setDeletingId(attachmentId);
+    try {
+      await onDeleteAttachment(attachmentId);
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const pickFiles = (list: FileList | null) => {
     if (!list) return;
@@ -57,10 +91,15 @@ export default function ActionModal({
       setError("Vui lòng nhập lý do");
       return;
     }
+    if (showFundSource && !fundSource) {
+      setError("Vui lòng chọn nguồn tiền");
+      return;
+    }
     onSubmit({
       note: showNote ? note.trim() || undefined : undefined,
       reason: requireReason ? reason.trim() : undefined,
       files: showFiles ? files : undefined,
+      fundSource: showFundSource ? fundSource! : undefined,
     });
   };
 
@@ -100,6 +139,29 @@ export default function ActionModal({
             </div>
           )}
 
+          {showFundSource && (
+            <div>
+              <label className="text-sm text-gray-600">
+                Nguồn tiền <span className="text-red-500">*</span>
+              </label>
+              <div className="flex gap-2 mt-1">
+                {FUND_SOURCES.map((src) => (
+                  <button
+                    key={src}
+                    onClick={() => setFundSource(src)}
+                    className={`flex-1 py-2 text-sm rounded-lg border font-medium ${
+                      fundSource === src
+                        ? "bg-blue-500 text-white border-blue-500"
+                        : "bg-white text-gray-600 border-gray-300"
+                    }`}
+                  >
+                    {FUND_SOURCE_LABEL[src]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {showNote && (
             <div>
               <label className="text-sm text-gray-600">{noteLabel}</label>
@@ -114,10 +176,42 @@ export default function ActionModal({
             </div>
           )}
 
+          {showFiles && !!existingAttachments?.length && (
+            <div>
+              <label className="text-sm text-gray-600">Tệp đã tải lên</label>
+              <ul className="mt-1 space-y-1">
+                {existingAttachments.map((a) => (
+                  <li
+                    key={a.id}
+                    className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-2 py-1"
+                  >
+                    <a
+                      href={resolveFileUrl(a.fileUrl)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="truncate text-blue-500"
+                    >
+                      📎 {a.fileName || a.fileUrl}
+                    </a>
+                    {onDeleteAttachment && (
+                      <button
+                        onClick={() => handleDeleteExisting(a.id)}
+                        disabled={deletingId === a.id}
+                        className="text-red-500 ml-2 disabled:opacity-50"
+                      >
+                        {deletingId === a.id ? "…" : "✕"}
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {showFiles && (
             <div>
               <label className="text-sm text-gray-600">
-                Tệp đính kèm (tối đa {MAX_FILES})
+                Tệp đính kèm mới (tối đa {MAX_FILES})
               </label>
               <input
                 type="file"

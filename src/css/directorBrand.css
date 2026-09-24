@@ -1,0 +1,13 @@
+/* ===== Giao diện brand Giám đốc: đồng bộ tông màu cho các trang con cũ ===== */
+.director-brand-main > .bg-gray-100,
+.director-brand-main > .bg-slate-100,
+.director-brand-main > .bg-gray-50 {
+  background-color: #fff8e6;
+}
+.director-brand-main .bg-blue-500 { background-color: #005bea; }
+.director-brand-main .bg-blue-600 { background-color: #0047b8; }
+.director-brand-main .hover\:bg-blue-600:hover { background-color: #0047b8; }
+.director-brand-main .text-blue-500,
+.director-brand-main .text-blue-600 { color: #0047b8; }
+.director-brand-main .border-blue-500 { border-color: #005bea; }
+

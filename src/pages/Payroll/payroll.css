@@ -1,0 +1,36 @@
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .payroll-print-shell,
+  .payroll-print-shell * {
+    visibility: visible !important;
+  }
+
+  .payroll-print-shell {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    box-shadow: none !important;
+  }
+
+  .payroll-print-root {
+    padding: 0 !important;
+  }
+
+  .payroll-no-print {
+    display: none !important;
+  }
+
+  .payroll-slip-table tr,
+  .payroll-print-root section {
+    break-inside: avoid;
+  }
+}

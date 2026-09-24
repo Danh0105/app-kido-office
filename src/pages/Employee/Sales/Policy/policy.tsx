@@ -1,52 +1,65 @@
 import { formatNumber, parseNumber } from "../../../../utils/formatNumber";
 import { formatVND } from "../../../../utils/formatVND";
-import { RowType } from '../../../../types/policy';
+import { RowType, policyPercentBase } from '../../../../types/policy';
 import React, { useEffect, useState } from "react";
 const MoneyDisplay = ({ value }: { value: number }) => (
     <div className="text-xs text-green-600 mt-1">
-        ≈ {value} %
+        ≈ {value.toLocaleString("vi-VN", { maximumFractionDigits: 1 })} %
     </div>
 );
 
 
+const otherCostFieldClass =
+    "w-full rounded-xl border border-gray-200 bg-gray-50/60 px-3.5 py-2.5 text-[15px] text-gray-800 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100";
+
 const OtherCostItem = ({ item, onChange, onRemove }: any) => {
     return (
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-3.5 space-y-3">
+            <div className="flex items-center gap-2">
+                <input
+                    value={item.name}
+                    onChange={(e) => onChange({ ...item, name: e.target.value })}
+                    placeholder="Tên chi phí"
+                    className={`${otherCostFieldClass} bg-white`}
+                />
+                <button
+                    onClick={onRemove}
+                    className="shrink-0 rounded-lg bg-red-500 px-3 py-2 text-xs font-medium text-white transition hover:bg-red-600"
+                >
+                    Xoá
+                </button>
+            </div>
 
-            {/* tên */}
-            <input
-                value={item.name}
-                onChange={(e) => onChange({ ...item, name: e.target.value })}
-                placeholder="Tên chi phí"
-                className="w-full px-3 py-2 border rounded-lg text-sm"
-            />
-
-            {/* %HP */}
-            <input
-                value={formatNumber(item.percent)}
-                onChange={(e) =>
-                    onChange({ ...item, percent: parseNumber(e.target.value) })
-                }
-                placeholder="%HP"
-                className="w-full sm:w-32 px-3 py-2 border rounded-lg text-sm"
-            />
-
-            {/* Thuế */}
-            <input
-                value={formatNumber(item.tax)}
-                onChange={(e) =>
-                    onChange({ ...item, tax: parseNumber(e.target.value) })
-                }
-                placeholder="Thuế"
-                className="w-full sm:w-32 px-3 py-2 border rounded-lg text-sm"
-            />
-
-            <button
-                onClick={onRemove}
-                className="bg-red-500 text-white px-3 py-2 rounded-lg text-sm"
-            >
-                Xóa
-            </button>
+            <div className="grid grid-cols-2 gap-3">
+                <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                        Số tiền (VNĐ)
+                    </label>
+                    <input
+                        value={item.percent ? formatNumber(item.percent) : ""}
+                        onChange={(e) =>
+                            onChange({ ...item, percent: parseNumber(e.target.value) })
+                        }
+                        placeholder="0"
+                        inputMode="numeric"
+                        className={`${otherCostFieldClass} bg-white`}
+                    />
+                </div>
+                <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                        Thuế (VNĐ)
+                    </label>
+                    <input
+                        value={item.tax ? formatNumber(item.tax) : ""}
+                        onChange={(e) =>
+                            onChange({ ...item, tax: parseNumber(e.target.value) })
+                        }
+                        placeholder="0"
+                        inputMode="numeric"
+                        className={`${otherCostFieldClass} bg-white`}
+                    />
+                </div>
+            </div>
         </div>
     );
 };
@@ -59,27 +72,49 @@ type Props = {
     setGrandTotal: (value: number) => void;
     setfee: (value: number) => void;
     setTotalTax: (value: number) => void;
+    activeTab?: "TIET" | "HS";
+    studentPerClass?: number;
+    periods?: number;
+    students?: number;
+    months?: number;
 };
 
-const PolicyFormItem = ({ row, updateRow, removeRow }: any) => {
+/**
+ * Chi phí khác tính theo đầu HS giống Tiền mặt/Thiết bị, thay vì cộng thẳng:
+ * - Tab HP/TIẾT: Số tiền / số học sinh / số tiết × sĩ số lớp.
+ * - Tab HP/HS: Số tiền / số tháng / số học sinh.
+ */
+const otherCostAmount = (
+    item: { percent?: number; tax?: number },
+    ctx: { activeTab?: string; students?: number; periods?: number; studentPerClass?: number; months?: number },
+) => {
+    const raw = (Number(item.percent) || 0) - (Number(item.tax) || 0);
+    const { activeTab, students = 0, periods = 0, studentPerClass = 0, months = 0 } = ctx;
+    if (activeTab === "TIET" && students > 0 && periods > 0 && studentPerClass > 0) {
+        return Math.round((raw / students / periods) * studentPerClass);
+    }
+    if (activeTab === "HS" && months > 0 && students > 0) {
+        return Math.round(raw / months / students);
+    }
+    return raw;
+};
+
+const PolicyFormItem = ({ row, updateRow, removeRow, activeTab, studentPerClass, periods, students, months }: any) => {
     const calcPercent = (fee: number, money: number) => {
         if (!fee) return 0;
-        return Math.round((money / fee) * 100);
+        return Number(((money / fee) * 100).toFixed(1));
     };
 
-    const cscv = calcPercent(row.fee, row.qlCsvc);
-    const tax = calcPercent(row.fee, row.tax);
-    const gv = calcPercent(row.fee, row.teacher);
-
-    const ql1Money = calcPercent(row.fee, row.ql1Percent);
-    const ql1TaxMoney = calcPercent(row.ql1Percent, row.ql1Tax);
-
-    const ql2Money = calcPercent(row.fee, row.ql2Percent);
-    const ql2TaxMoney = calcPercent(row.ql2Percent, row.ql2Tax);
+    // % chính sách quy trên học phí, hoặc học phí sau thuế 2% nếu khoản này bật cờ.
+    const percentBase = policyPercentBase(row);
+    const cscv = calcPercent(percentBase, row.qlCsvc);
+    const gv = calcPercent(percentBase, row.teacher);
+    const ql1Money = calcPercent(percentBase, row.ql1Percent);
+    const ql2Money = calcPercent(percentBase, row.ql2Percent);
 
     const otherTotal = (row.otherCosts || []).reduce(
         (sum: number, item) =>
-            sum + (Number(item.percent) || 0) - (Number(item.tax) || 0),
+            sum + otherCostAmount(item, { activeTab, students, periods, studentPerClass, months }),
         0
     );
     const total =
@@ -87,8 +122,7 @@ const PolicyFormItem = ({ row, updateRow, removeRow }: any) => {
         (row.ql2Percent || 0) - (row.ql2Tax || 0) +
         (row.tgPercent || 0) - (row.tgTax || 0) +
         otherTotal;
-
-    const totalPercent = ql1TaxMoney + ql2TaxMoney;
+    const totalAsPercent = calcPercent(percentBase, total);
 
     // ✅ input style dùng chung
     const inputClass = `
@@ -192,7 +226,7 @@ const PolicyFormItem = ({ row, updateRow, removeRow }: any) => {
 
             {/* Thuế */}
             <div>
-                <label className={labelClass}>Thuế (%)</label>
+                <label className={labelClass}>Thuế (VNĐ)</label>
                 <input
                     value={formatNumber(row.tax)}
                     onChange={(e) => {
@@ -201,7 +235,6 @@ const PolicyFormItem = ({ row, updateRow, removeRow }: any) => {
                     }}
                     className={inputClass}
                 />
-                <MoneyDisplay value={tax} />
             </div>
 
             {/* Giáo viên */}
@@ -233,7 +266,7 @@ const PolicyFormItem = ({ row, updateRow, removeRow }: any) => {
             </div>
 
             <div>
-                <label className={labelClass}>QL1 Thuế</label>
+                <label className={labelClass}>QL1 Thuế (VNĐ)</label>
                 <input
                     value={formatNumber(row.ql1Tax)}
                     onChange={(e) => {
@@ -242,7 +275,6 @@ const PolicyFormItem = ({ row, updateRow, removeRow }: any) => {
                     }}
                     className={inputClass}
                 />
-                <MoneyDisplay value={ql1TaxMoney} />
             </div>
 
             {/* QL2 */}
@@ -260,7 +292,7 @@ const PolicyFormItem = ({ row, updateRow, removeRow }: any) => {
             </div>
 
             <div>
-                <label className={labelClass}>QL2 Thuế</label>
+                <label className={labelClass}>QL2 Thuế (VNĐ)</label>
                 <input
                     value={formatNumber(row.ql2Tax)}
                     onChange={(e) => {
@@ -269,31 +301,27 @@ const PolicyFormItem = ({ row, updateRow, removeRow }: any) => {
                     }}
                     className={inputClass}
                 />
-                <MoneyDisplay value={ql2TaxMoney} />
             </div>
             {/* Chi phí khác */}
             <div>
                 <label className={labelClass}>Chi phí khác</label>
 
-                <div className="space-y-2 mt-2">
+                <div className="space-y-2.5 mt-2">
                     {(row.otherCosts || []).map((item) => (
-                        <>
-                            <OtherCostItem
-                                key={item.id}
-                                item={item}
-                                onChange={(newItem) => {
-                                    const newArr = row.otherCosts.map((i) =>
-                                        i.id === item.id ? newItem : i
-                                    );
-                                    updateRow(row.id, "otherCosts", newArr);
-                                }}
-                                onRemove={() => {
-                                    const newArr = row.otherCosts.filter((i) => i.id !== item.id);
-                                    updateRow(row.id, "otherCosts", newArr);
-                                }}
-                            />
-                            <MoneyDisplay value={calcPercent(row.fee, item.percent)} />
-                        </>
+                        <OtherCostItem
+                            key={item.id}
+                            item={item}
+                            onChange={(newItem) => {
+                                const newArr = row.otherCosts.map((i) =>
+                                    i.id === item.id ? newItem : i
+                                );
+                                updateRow(row.id, "otherCosts", newArr);
+                            }}
+                            onRemove={() => {
+                                const newArr = row.otherCosts.filter((i) => i.id !== item.id);
+                                updateRow(row.id, "otherCosts", newArr);
+                            }}
+                        />
                     ))}
 
                 </div>
@@ -312,7 +340,7 @@ const PolicyFormItem = ({ row, updateRow, removeRow }: any) => {
                         ];
                         updateRow(row.id, "otherCosts", newArr);
                     }}
-                    className="mt-2 text-blue-500 text-sm"
+                    className="mt-2.5 text-blue-500 text-sm"
                 >
                     + Thêm chi phí khác
                 </button>
@@ -321,8 +349,16 @@ const PolicyFormItem = ({ row, updateRow, removeRow }: any) => {
             <div>
                 <label className={labelClass}>Tổng chi ngoài</label>
                 <div className="font-semibold text-blue-600 dark:text-blue-400">
-                    {formatVND(total)} ≈ {totalPercent}%
+                    {formatVND(total)} ≈ {totalAsPercent}%
                 </div>
+                {(row.otherCosts || []).length > 0 && (
+                    <div className="text-[11px] text-red-700 font-semibold mt-1">
+                        Chi phí khác — Công thức tính:{" "}
+                        {activeTab === "TIET"
+                            ? "Số tiền / số học sinh / số tiết × sĩ số lớp"
+                            : "Số tiền / số tháng / số học sinh"}
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -337,6 +373,11 @@ export default function PolicyPage({
     addRow,
     setfee,
     setTotalTax,
+    activeTab,
+    studentPerClass,
+    periods,
+    students,
+    months,
 }: Props) {
     useEffect(() => {
         const totalFee = rows.reduce((sum, row) => {
@@ -362,7 +403,7 @@ export default function PolicyPage({
 
             const otherTotal = (row.otherCosts || []).reduce(
                 (sum: number, item) =>
-                    sum + (Number(item.percent) || 0) - (Number(item.tax) || 0),
+                    sum + otherCostAmount(item, { activeTab, students, periods, studentPerClass, months }),
                 0
             );
             return sum + ql1 + ql2 + tg + otherTotal;
@@ -370,7 +411,7 @@ export default function PolicyPage({
 
         setGrandTotal(totalAll);
 
-    }, [rows]);
+    }, [rows, activeTab, studentPerClass, periods, students, months]);
 
 
     return (
@@ -382,6 +423,11 @@ export default function PolicyPage({
                     row={row}
                     updateRow={updateRow}
                     removeRow={removeRow}
+                    activeTab={activeTab}
+                    studentPerClass={studentPerClass}
+                    periods={periods}
+                    students={students}
+                    months={months}
                 />
             ))}
             <button

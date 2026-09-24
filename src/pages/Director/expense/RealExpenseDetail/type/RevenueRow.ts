@@ -7,6 +7,7 @@ export type RevenueRow = {
     collectedDate: string;
     paidAmount: number;
     paymentDate: string;
+    paymentType?: 'in_contract' | 'not_in_contract' | '';
     remainingOutsideExpense: number;
     payer: string;
     note: string;

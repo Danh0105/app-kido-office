@@ -4,18 +4,21 @@ import { formatDate } from "../../../../utils/formatDate";
 import { PolicyStatus } from "../../../../pages/Director/enum/PolicyStatus";
 import { useNavigate, useParams } from "react-router-dom";
 import HeaderWithBack from "@/components/HeaderWithBack";
+import { isDirectorBrandUiEnabled } from "@/utils/directorUi";
 type Subject = {
     id: number;
     createdAt: string;
     status: number;
     note: string;
     action: string;
+    updatedBy?: string;
     diff: any;
     newData: any;
     oldData: any;
 };
 export default function PolicyList() {
     const navigate = useNavigate();
+    const isBrand = isDirectorBrandUiEnabled();
     const { policyId } = useParams();
     const [policy, setPolicy] = useState<Subject[]>([]);
     const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -68,11 +71,12 @@ export default function PolicyList() {
         setNote(note);
     }
     return (
-        <div className="bg-gray-100 min-h-screen">
-            <HeaderWithBack title="Lịch sử chỉnh sửa" />
+        <>
+        <div className={isBrand ? "bg-[#FFF8E6] min-h-screen text-[#0047B8]" : "bg-gray-100 min-h-screen"}>
+            <HeaderWithBack title="Lịch sử chỉnh sửa" brandSidebarInset={isBrand} />
 
             {/* LIST */}
-            <div className="p-4 mt-[60px] space-y-3">
+            <div className={`p-4 mt-[60px] space-y-3 ${isBrand ? "lg:max-w-5xl lg:mx-auto" : ""}`}>
                 <div className="p-4 space-y-3">
                     {policy.map((item) => {
                         const statusConfig = {
@@ -113,7 +117,7 @@ export default function PolicyList() {
                                 key={item.id}
                                 className={`bg-white dark:bg-gray-900
                                     rounded-2xl
-                                    border border-gray-200 dark:border-gray-700
+                                    border ${isBrand ? "border-blue-900/10" : "border-gray-200 dark:border-gray-700"}
                                     p-4
                                     shadow-sm
                                     transition
@@ -160,6 +164,7 @@ export default function PolicyList() {
                                                             : "text-gray-400"
                                                     }`}>
                                                         {actionLabel}
+                                                        {item.updatedBy ? ` • ${item.updatedBy}` : ""}
                                                     </p>
                                                 </div>
                                             </div>
@@ -263,5 +268,6 @@ export default function PolicyList() {
                 </div>
             )}
         </div>
+        </>
     );
 }

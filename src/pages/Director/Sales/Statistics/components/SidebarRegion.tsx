@@ -1,25 +1,39 @@
-import HeaderWithBack from "@/components/HeaderWithBack";
 import { schoolApi } from "@/service/school.api";
 import { wardApi } from "@/service/ward";
-import { getEmployeeId } from "@/utils/auth";
+import { provinceApi } from "@/service/province";
 import { useEffect, useMemo, useState } from "react";
 
 export default function SidebarRegion({ employeeId, data, selected, onSelect, onSelectSchool }: any) {
     const [selectedSchool, setSelectedSchool] = useState<number | null>(null);
     const [wards, setWards] = useState<any[]>([]);
+    const [provinces, setProvinces] = useState<any[]>([]);
     const [openProvince, setOpenProvince] = useState<number | null>(null);
     const [schools, setSchools] = useState<any[]>([]);
     const [selectedWard, setSelectedWard] = useState<number | null>(null);
 
     // ===== LOAD WARDS =====
     useEffect(() => {
-        const fetchWards = async () => {
-            const res = await wardApi.getByEmployee(Number(employeeId));
-            console.log("res ward ", res)
-            setWards(res || []);
-        };
-        fetchWards();
-    }, []);
+        if (!employeeId) return;
+
+        wardApi
+            .getByEmployee(Number(employeeId))
+            .then((res: any) => setWards(res || []))
+            .catch(() => setWards([]));
+    }, [employeeId]);
+
+    /**
+     * Khu vực đã giao cho nhân viên. Phải lấy riêng: danh sách tỉnh của sidebar
+     * trước đây suy từ chính sách, nên nhân viên chưa có chính sách nào thì
+     * không có tỉnh/khu vực nào để chọn.
+     */
+    useEffect(() => {
+        if (!employeeId) return;
+
+        provinceApi
+            .getProvincesByEmployee(Number(employeeId))
+            .then((res: any) => setProvinces(Array.isArray(res) ? res : []))
+            .catch(() => setProvinces([]));
+    }, [employeeId]);
     const handleResetFilter = () => {
         setOpenProvince(null);
         setSelectedWard(null);
@@ -68,6 +82,40 @@ export default function SidebarRegion({ employeeId, data, selected, onSelect, on
         return map;
     }, [wards]);
 
+    /**
+     * Tỉnh hiển thị = tỉnh có chính sách (kèm số trường / số hợp đồng thống kê
+     * được) **hợp** với tỉnh được giao nhưng chưa có chính sách nào — tỉnh mới
+     * nhận vẫn phải chọn được để xem phường/xã và trường.
+     */
+    const provinceRows = useMemo(() => {
+        const rows = new Map<number, any>();
+
+        (data || []).forEach((item: any) => {
+            rows.set(Number(item.provinceId), { ...item });
+        });
+
+        provinces.forEach((province: any) => {
+            const id = Number(province.id);
+            if (rows.has(id)) return;
+
+            const wardList = wardMap[id] || [];
+            rows.set(id, {
+                provinceId: id,
+                provinceName: province.name,
+                // Chưa có chính sách nào: số trường lấy từ phường/xã được giao.
+                schoolCount: wardList.reduce(
+                    (sum: number, ward: any) => sum + Number(ward.schoolCount || 0),
+                    0,
+                ),
+                total: 0,
+            });
+        });
+
+        return Array.from(rows.values()).sort((a: any, b: any) =>
+            String(a.provinceName || "").localeCompare(String(b.provinceName || ""), "vi"),
+        );
+    }, [data, provinces, wardMap]);
+
     return (
         <div className="h-full overflow-y-auto bg-white border-r p-4">
             <div className="flex items-center justify-between mb-4">
@@ -87,7 +135,13 @@ export default function SidebarRegion({ employeeId, data, selected, onSelect, on
                 </button>
             </div>
 
-            {data.map((p: any) => {
+            {provinceRows.length === 0 && (
+                <p className="text-xs text-gray-400">
+                    Nhân viên chưa được giao khu vực nào.
+                </p>
+            )}
+
+            {provinceRows.map((p: any) => {
                 const wardList = wardMap[p.provinceId] || [];
 
                 return (
@@ -139,7 +193,7 @@ export default function SidebarRegion({ employeeId, data, selected, onSelect, on
                                         >
                                             <span>{w.name}</span>
                                             <span className="text-gray-500">
-                                                {w.schoolcount}
+                                                {w.schoolCount ?? w.schoolcount}
                                             </span>
                                         </div>
 

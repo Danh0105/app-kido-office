@@ -12,7 +12,7 @@ const days = [
     { label: "Thứ 7", value: 6 },
     { label: "Chủ nhật", value: 0 },
 ];
-export default function PlanForm() {
+export default function PlanForm({ onSaved }: { onSaved?: () => void } = {}) {
     const [plan, setPlan] = useState({
         startDate: "",
         endDate: "",
@@ -218,6 +218,7 @@ export default function PlanForm() {
             setTasks([{ title: "", content: "", location: "", dayOfWeek: 1 }]);
 
             fetchPlans(); // 🔥 rất quan trọng
+            onSaved?.();
         } catch (err) {
             console.error(err);
             alert("Lỗi");

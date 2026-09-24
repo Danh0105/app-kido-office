@@ -2,16 +2,28 @@ import api from "./api";
 
 const BASE_URL = "https://sales.kidoedu.vn";
 
+export interface Employee {
+    id: number;
+    name?: string;
+    email?: string;
+    phone?: string;
+    roles: string[];
+    avatar?: string | null;
+    avatarUrl?: string | null;
+}
+
+export async function getSalesEmployees(): Promise<Employee[]> {
+    const response = await api.get<Employee[]>("/employees/sales");
+    return response.data;
+}
+
 export const employeeApi = {
     getAll: async () => {
         const res = await api.get(`/employees`);
         return res.data;
     },
 
-    getSales: async () => {
-        const res = await api.get(`/employees/sales`);
-        return res.data;
-    },
+    getSales: getSalesEmployees,
 
     create: async (data: {
         name: string;
@@ -25,6 +37,12 @@ export const employeeApi = {
         return res.data;
     },
 
+    /** Chỉ tài khoản có role `dev` mới gọi được — tự đổi role cho chính mình. */
+    setDevRoles: async (roles: string[]) => {
+        const res = await api.patch<Employee>(`/employees/me/dev-roles`, { roles });
+        return res.data;
+    },
+
     getByDepartment: async (departmentId: number) => {
         const res = await api.get(`/employees`, {
             params: { departmentId },
@@ -32,9 +50,10 @@ export const employeeApi = {
         return res.data;
     },
 
+    // Route do RegionController phục vụ (/regions/...), không phải /employees/...
     getRegionsByDepartment: async (departmentId: number) => {
         const res = await api.get(
-            `/employees/regions-by-department/${departmentId}`
+            `/regions/regions-by-department/${departmentId}`
         );
         return res.data;
     },
@@ -48,6 +67,7 @@ export const employeeApi = {
         });
         return res.data;
     },
+    // ⚠️ Backend chưa có route này — gọi vào sẽ 404 (xem scripts/check-api-routes.mjs).
     getAvailable: async (regionId: number) => {
         const res = await api.get(
             `/employees/${regionId}/available-employees`
@@ -58,16 +78,6 @@ export const employeeApi = {
         const res = await api.get(
             `/employees/getbyid/${userId}`,
         );
-        return res.data;
-    },
-    addManyToRegion: async (employeeId: number, regionIds: number[]) => {
-        const res = await api.post(`/employees/${employeeId}/regions`, {
-            regionIds,
-        });
-        return res.data;
-    },
-    removeRegion: async (employeeId: number, regionId: number) => {
-        const res = await api.delete(`/employees/${employeeId}/regions/${regionId}`);
         return res.data;
     },
     delete: async (id: number) => {
@@ -88,19 +98,22 @@ export const employeeApi = {
         return res.data;
     },
 
+    // ⚠️ Backend chưa có route này — gọi vào sẽ 404 (xem scripts/check-api-routes.mjs).
     clearFace: async (employeeId: number) => {
         const res = await api.delete(`/employees/${employeeId}/faces`);
         return res.data;
     },
+    // Hai endpoint dưới do ProvinceController phục vụ (@Controller('provinces')),
+    // không phải EmployeeController — gọi sang /employee/... là 404 và mất dữ liệu.
     addManyToProvince: async (employeeId: number, provinceIds: number[]) => {
-        const res = await api.post(`/employee/add-many-to-province`, {
+        const res = await api.post(`/provinces/add-many-to-province`, {
             employeeId,
             provinceIds,
         });
         return res.data;
     },
     removeProvince: async (employeeId: number, provinceId: number) => {
-        const res = await api.delete(`/employee/remove-province`, {
+        const res = await api.delete(`/provinces/remove-province`, {
             data: { employeeId, provinceId },
         });
         return res.data;

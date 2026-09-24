@@ -45,12 +45,17 @@ export type CalculatedPolicyRow = PolicyMonthlyInput & {
 
 export type PolicyYear = {
   id: number;
+  annualPolicyId?: number | null;
   schoolName: string;
   schoolYear: string;
   status: PolicyYearStatus;
   subjects: PolicySubject[];
   monthlyRows: PolicyMonthlyInput[];
   updatedAt: string;
+  contractFileUrl?: string | null;
+  contractFileName?: string | null;
+  contractUploadedByName?: string | null;
+  contractUploadedAt?: string | null;
 };
 
 export type PolicySummary = {

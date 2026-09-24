@@ -14,6 +14,8 @@ type Suggest = {
   issueDate?: string;
   amount?: number | null;
   fileUrl?: string;
+  wardId?: number | null;
+  ward?: { id: number; name: string } | null;
   status: "DRAFT" | "PENDING" | "REVIEWED" | "APPROVED" | "REJECTED";
   policyId?: number;
   policy?: {
@@ -211,6 +213,7 @@ function SuggestCard({
       )}
 
       <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-gray-400">
+        <span>📍 {item.ward?.name || (item.wardId ? `Xã/phường #${item.wardId}` : "Chưa xác định")}</span>
         {item.component && <span>🧩 {item.component}</span>}
         {!!item.amount && <span>💰 {formatVnd(item.amount)} đ</span>}
         {item.issueDate && <span>📅 {item.issueDate}</span>}

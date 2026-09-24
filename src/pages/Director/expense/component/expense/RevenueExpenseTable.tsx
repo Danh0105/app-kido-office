@@ -113,12 +113,12 @@ export default function RevenueExpenseTable({
 
       {/* TABLE */}
       <div className="overflow-x-auto">
-        <div className="min-w-[2430px]">
+        <div className="min-w-[2590px]">
           {/* HEADER ROW */}
           <div
             className="
               grid
-              grid-cols-[200px_120px_90px_120px_140px_150px_160px_140px_120px_140px_150px_180px_150px_150px_160px_180px_70px]
+              grid-cols-[200px_120px_90px_120px_140px_150px_160px_140px_120px_140px_150px_160px_180px_150px_150px_160px_180px_70px]
               bg-slate-900
               text-white
               font-semibold
@@ -171,6 +171,10 @@ export default function RevenueExpenseTable({
             </div>
 
             <div className="p-3 text-center border-r border-slate-700">
+              📑 Hình thức chi
+            </div>
+
+            <div className="p-3 text-center border-r border-slate-700">
               <div className="flex items-center justify-center gap-2">
                 <CalendarDays size={14} />
                 Ngày chi
@@ -219,7 +223,7 @@ export default function RevenueExpenseTable({
           <div
             className="
               grid
-              grid-cols-[200px_120px_90px_120px_140px_150px_160px_140px_120px_140px_150px_180px_150px_150px_160px_180px_70px]
+              grid-cols-[200px_120px_90px_120px_140px_150px_160px_140px_120px_140px_150px_160px_180px_150px_150px_160px_180px_70px]
               bg-slate-100
               border-t-2
               border-slate-300
@@ -250,6 +254,8 @@ export default function RevenueExpenseTable({
                 {formatVND(totals.totalSchoolExpense)}
               </span>
             </div>
+
+            <div className={footerCellClass} />
 
             <div className={footerCellClass} />
 

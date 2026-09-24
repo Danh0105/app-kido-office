@@ -36,6 +36,7 @@ export const regionApi = {
         return res.data;
     },
 
+    // ⚠️ Backend chưa có route này — gọi vào sẽ 404 (xem scripts/check-api-routes.mjs).
     getEmployeesByRegion: async (regionId: number) => {
         const res = await api.get(`/regions/${regionId}/employees`);
         return res.data;
@@ -44,6 +45,7 @@ export const regionApi = {
         const res = await api.get(`/regions/regions-by-employee/${employeeId}`);
         return res.data;
     },
+    // ⚠️ Backend chưa có route này — gọi vào sẽ 404 (xem scripts/check-api-routes.mjs).
     getAvailableRegions: async (employeeId: number) => {
         const res = await api.get(`/regions/available-regions/${employeeId}`);
         return res.data;

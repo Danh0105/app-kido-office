@@ -5,7 +5,7 @@ import { AlertTriangle, ChevronDown, Clock, Phone, User } from "lucide-react";
 
 import HeaderWithBack from "@/components/HeaderWithBack";
 import BottomNav from "@/layout/BottomNav";
-import { expenseNotificationApi } from "@/service/expenseRequest";
+import { expenseNotificationApi, expenseRequestApi } from "@/service/expenseRequest";
 import type {
   ExpenseNotification,
   ExpenseNotificationEmployeeGroup,
@@ -14,7 +14,11 @@ import type {
 import { STATUS_LABEL } from "@/types/expenseRequest";
 
 import { useExpenseSocket } from "./useExpenseSocket";
-import { expenseBasePath, formatDateTime } from "./lib";
+import {
+  expenseBasePath,
+  formatDateTime,
+  resolveExpenseRequestId,
+} from "./lib";
 
 type MainTab = "employee" | "overdue";
 
@@ -166,7 +170,7 @@ export default function ExpenseNotifications() {
       }
     }
 
-    const entityId = n.meta?.suggestId ?? n.entityId;
+    const entityId = resolveExpenseRequestId(n);
     if (entityId) navigate(`${base}/${entityId}`);
   };
 
@@ -200,6 +204,20 @@ export default function ExpenseNotifications() {
       await expenseNotificationApi.markAllAsRead({ scope: "overdue" });
       await Promise.all([loadSummary(), loadOverdue(overduePage)]);
       toast.success("Đã đọc hết thông báo quá hạn");
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Có lỗi xảy ra");
+    }
+  };
+
+  /** Tắt nhắc quá hạn cho riêng đề xuất này — không ảnh hưởng đề xuất khác. */
+  const muteOverdueAlert = async (item: ExpenseNotification) => {
+    const suggestId = item.meta?.suggestId;
+    if (!suggestId) return;
+
+    try {
+      await expenseRequestApi.muteOverdueAlert(suggestId);
+      await Promise.all([loadSummary(), loadOverdue(overduePage)]);
+      toast.success("Đã tắt nhắc quá hạn cho đề xuất này");
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Có lỗi xảy ra");
     }
@@ -277,6 +295,7 @@ export default function ExpenseNotifications() {
             totalPages={overdueTotalPages}
             onOpen={openNotification}
             onMarkRead={markOverdueRead}
+            onMute={muteOverdueAlert}
             onPageChange={loadOverdue}
           />
         )}
@@ -411,6 +430,7 @@ function OverdueList({
   totalPages,
   onOpen,
   onMarkRead,
+  onMute,
   onPageChange,
 }: {
   items: ExpenseNotification[];
@@ -419,6 +439,7 @@ function OverdueList({
   totalPages: number;
   onOpen: (n: ExpenseNotification) => void;
   onMarkRead: () => void;
+  onMute?: (n: ExpenseNotification) => void;
   onPageChange: (page: number) => void;
 }) {
   return (
@@ -439,7 +460,13 @@ function OverdueList({
 
       <div className="space-y-2">
         {items.map((item) => (
-          <NotificationItem key={item.id} item={item} onOpen={onOpen} overdue />
+          <NotificationItem
+            key={item.id}
+            item={item}
+            onOpen={onOpen}
+            onMute={onMute}
+            overdue
+          />
         ))}
       </div>
 
@@ -451,20 +478,27 @@ function OverdueList({
 function NotificationItem({
   item,
   onOpen,
+  onMute,
   overdue,
 }: {
   item: ExpenseNotification;
   onOpen: (n: ExpenseNotification) => void;
+  onMute?: (n: ExpenseNotification) => void;
   overdue?: boolean;
 }) {
   const daysLate = item.meta?.daysLate;
   const status = item.meta?.status;
 
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onOpen(item)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") onOpen(item);
+      }}
       className={cx(
-        "w-full rounded-xl p-3 shadow-sm border text-left active:scale-[0.99] transition",
+        "w-full rounded-xl p-3 shadow-sm border text-left active:scale-[0.99] transition cursor-pointer",
         overdue
           ? item.isRead
             ? "bg-white border-red-100"
@@ -486,6 +520,13 @@ function NotificationItem({
         {overdue && <AlertTriangle size={16} className="text-red-500 mt-0.5" />}
 
         <div className="min-w-0 flex-1">
+          {overdue && item.meta?.employeeName && (
+            <p className="flex items-center gap-1 text-xs font-medium text-gray-600">
+              <User size={12} className="text-gray-400" />
+              {item.meta.employeeName}
+              {item.meta.employeePhone && ` · ${item.meta.employeePhone}`}
+            </p>
+          )}
           {item.title && (
             <p className="text-sm font-semibold text-gray-900">{item.title}</p>
           )}
@@ -499,6 +540,19 @@ function NotificationItem({
             {item.meta?.suggestCode && (
               <Badge tone="gray">{item.meta.suggestCode}</Badge>
             )}
+            {overdue && onMute && item.meta?.suggestId && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMute(item);
+                }}
+                title="Đề xuất này sẽ không bị nhắc quá hạn nữa"
+                className="rounded-full border border-gray-200 px-2 py-0.5 text-[11px] text-gray-500 hover:bg-gray-100 hover:text-red-600"
+              >
+                Tắt nhắc
+              </button>
+            )}
           </div>
 
           {item.createdAt && (
@@ -508,7 +562,7 @@ function NotificationItem({
           )}
         </div>
       </div>
-    </button>
+    </div>
   );
 }
 

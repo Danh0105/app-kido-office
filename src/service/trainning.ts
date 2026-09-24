@@ -18,6 +18,7 @@ export const trainingApi = {
         return res.data;
     },
 
+    // ⚠️ Backend chưa có route này — gọi vào sẽ 404 (xem scripts/check-api-routes.mjs).
     create: async (data: {
         title: string;
         youtubeId: string;
@@ -32,6 +33,7 @@ export const trainingApi = {
         return res.data;
     },
 
+    // ⚠️ Backend chưa có route này — gọi vào sẽ 404 (xem scripts/check-api-routes.mjs).
     update: async (
         id: number,
         data: {
@@ -49,6 +51,7 @@ export const trainingApi = {
         return res.data;
     },
 
+    // ⚠️ Backend chưa có route này — gọi vào sẽ 404 (xem scripts/check-api-routes.mjs).
     remove: async (id: number) => {
         const res = await api.delete(
             `/training/${id}`,

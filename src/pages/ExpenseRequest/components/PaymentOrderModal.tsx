@@ -1,24 +1,35 @@
 import { useState } from "react";
 import DecimalInput from "@/components/DecimalInput";
-import { PAYMENT_METHOD_LABEL, type PaymentMethod } from "@/types/expenseRequest";
+import {
+  PAYMENT_METHOD_LABEL,
+  type PaymentMethod,
+} from "@/types/expenseRequest";
 import type { PaymentOrderPayload } from "@/service/expenseRequest";
 
 export default function PaymentOrderModal({
   defaultAmount,
+  defaultPaymentMethod = "CASH",
+  defaultNote = "",
   retry = false,
+  edit = false,
   loading,
   onClose,
   onSubmit,
 }: {
   defaultAmount: number;
+  defaultPaymentMethod?: PaymentMethod;
+  defaultNote?: string;
   retry?: boolean;
+  /** Kế toán công nợ sửa lệnh chi đã lập — các bước sau phải làm lại. */
+  edit?: boolean;
   loading?: boolean;
   onClose: () => void;
   onSubmit: (payload: PaymentOrderPayload) => void;
 }) {
   const [amount, setAmount] = useState<number>(defaultAmount);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
-  const [note, setNote] = useState("");
+  const [paymentMethod, setPaymentMethod] =
+    useState<PaymentMethod>(defaultPaymentMethod);
+  const [note, setNote] = useState(defaultNote);
   const [error, setError] = useState("");
 
   const handleSubmit = () => {
@@ -26,7 +37,11 @@ export default function PaymentOrderModal({
       setError("Số tiền phải lớn hơn 0");
       return;
     }
-    onSubmit({ amount, paymentMethod, note: note.trim() || undefined });
+    onSubmit({
+      amount,
+      paymentMethod,
+      note: note.trim() || undefined,
+    });
   };
 
   const methods: PaymentMethod[] = ["CASH", "BANK_TRANSFER"];
@@ -42,7 +57,7 @@ export default function PaymentOrderModal({
       >
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <h2 className="font-semibold">
-            {retry ? "Lên lại lệnh chi" : "Lên lệnh chi"}
+            {edit ? "Sửa lệnh chi" : retry ? "Lên lại lệnh chi" : "Lên lệnh chi"}
           </h2>
           <button
             onClick={onClose}
@@ -62,6 +77,7 @@ export default function PaymentOrderModal({
               onValueChange={setAmount}
               className="w-full mt-1 px-3 py-2 border rounded-lg text-sm"
               placeholder="0"
+              allowDecimal={false}
             />
           </div>
 
@@ -96,6 +112,13 @@ export default function PaymentOrderModal({
             />
           </div>
 
+          {edit && (
+            <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
+              Sửa lệnh chi sẽ xoá xác nhận xuất tiền / nhận tiền đã làm — thủ
+              quỹ và kinh doanh phải xác nhận lại theo số liệu mới.
+            </p>
+          )}
+
           {error && <p className="text-xs text-red-500">{error}</p>}
         </div>
 
@@ -114,9 +137,11 @@ export default function PaymentOrderModal({
           >
             {loading
               ? "Đang xử lý…"
-              : retry
-                ? "Lên lại lệnh chi"
-                : "Lên lệnh chi"}
+              : edit
+                ? "Lưu thay đổi"
+                : retry
+                  ? "Lên lại lệnh chi"
+                  : "Lên lệnh chi"}
           </button>
         </div>
       </div>

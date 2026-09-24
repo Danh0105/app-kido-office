@@ -13,8 +13,9 @@ import { subjectApi } from "@/service/subject.api";
 import { employeeApi } from "@/service/employee";
 import { policiesApi } from "@/service/policy";
 import PolicyHistoryTimeline from "@/components/policy/PolicyHistoryTimeline";
-import { PolicyHistoryEntry } from "@/types/policy";
+import { PolicyHistoryEntry, policyPercentBase } from "@/types/policy";
 import { getApiErrorMessage } from "@/utils/apiError";
+import { getEmployeeId } from "@/utils/auth";
 
 const renderLabel = (props: any) => {
     const { name, percent, x, y } = props;
@@ -55,11 +56,10 @@ export default function Sales() {
         (typeof policy?.createdBy === "object"
             ? policy?.createdBy?.id
             : policy?.createdBy);
-    const user = routeState.user || policyOwner;
+    const user = routeState.user || policyOwner || getEmployeeId();
     const subjectId = routeState.subjectId || policy?.subjectId;
     const currentHistoryId =
         routeState.currentHistoryId || policy?.currentHistoryId;
-    console.log("Location state:", location.state);
     const state = routeState as any;
     const subjectName = state?.subjectName;
     const diff = routeState.diff || histories[0]?.diff;
@@ -78,12 +78,30 @@ export default function Sales() {
                 setLoadingPolicy(true);
                 setPolicyError("");
 
-                const policyResponse = await policiesApi.findOne(Number(policyId));
-                setPolicy(policyResponse?.policy || policyResponse);
+                const requestedId = Number(policyId);
+                let policyResponse: any;
+
+                try {
+                    policyResponse = await policiesApi.findOne(requestedId);
+                } catch (error: any) {
+                    if (error?.response?.status !== 404) throw error;
+
+                    // Một số thông báo cũ lưu currentHistoryId ở entityId. Khi
+                    // mở trực tiếp hoặc refresh, location.state không còn nên
+                    // cần tra ngược history để lấy chính sách hiện tại.
+                    policyResponse = await policiesApi.getByCurrentHistoryId(requestedId);
+                }
+
+                const policyDetail = policyResponse?.policy || policyResponse;
+                const actualPolicyId = Number(
+                    policyDetail?.policyId ?? policyDetail?.id ?? requestedId,
+                );
+
+                setPolicy(policyDetail);
 
                 try {
                     const historyResponse =
-                        await policiesApi.getHistoryByPolicy(Number(policyId));
+                        await policiesApi.getHistoryByPolicy(actualPolicyId);
                     setHistories(
                         Array.isArray(historyResponse)
                             ? historyResponse
@@ -110,11 +128,19 @@ export default function Sales() {
 
         const fetchProposal = async () => {
             try {
-                const resSubject = await subjectApi.findOne(subjectId);
-                const resEmployee = await employeeApi.getById(Number(user));
+                const validSubjectId = Number(subjectId);
+                const validEmployeeId = Number(user);
+                const [resSubject, resEmployee] = await Promise.all([
+                    Number.isInteger(validSubjectId) && validSubjectId > 0
+                        ? subjectApi.findOne(validSubjectId)
+                        : Promise.resolve(null),
+                    Number.isInteger(validEmployeeId) && validEmployeeId > 0
+                        ? employeeApi.getById(validEmployeeId)
+                        : Promise.resolve(null),
+                ]);
 
-                setSubject(resSubject);
-                setEmployee(resEmployee);
+                if (resSubject) setSubject(resSubject);
+                if (resEmployee) setEmployee(resEmployee);
 
             } catch (err) {
                 console.error("Load policy failed", err);
@@ -122,7 +148,7 @@ export default function Sales() {
         };
 
         fetchProposal();
-    }, [data]);
+    }, [data, subjectId, user]);
     const merged = Array.from({ length: maxLength }).map((_, i) => {
         const tm = data?.httienmat?.[i];
         const tb = data?.htthietbi?.[i];
@@ -130,6 +156,7 @@ export default function Sales() {
         return {
             type: tm?.type || "",
             money: tm?.money || 0,
+            depreciationYearsM: tm?.depreciationYears || 1,
             monthsM: tm?.months || 0,
             studentsM: tm?.students || 0,
             realStudents: tm?.realStudents || 0,
@@ -137,8 +164,11 @@ export default function Sales() {
             device: tb?.category || "",
             qty: tb?.qty || 0,
             price: tb?.price || 0,
+            depreciationYearsD: tb?.depreciationYears || 1,
             studentsD: tb?.students || 0,
             monthsD: tb?.months || 0,
+            realStudentsD: tb?.realStudents || 0,
+            realPeriodsD: tb?.realPeriods || 0,
 
             condMonths: tb?.months || tm?.months || 0,
             condStudents: tb?.students || tm?.students || 0,
@@ -226,9 +256,26 @@ export default function Sales() {
         - (data?.vanHanh || 0)
         - (data?.thuetndn || 0);
     const companyProfit = data?.companyProfit || companyProfit1;
+    const percentAfterTax =
+        Boolean(data?.percentAfterTax) ||
+        Boolean(data?.ttcs?.some((row: any) => row.percentAfterTax));
+    const percentFeeBase = policyPercentBase({
+        fee: data?.fee,
+        percentAfterTax,
+    });
+    const formatPercentOfFee = (value: number, isText?: boolean, key?: string) => {
+        if (key === "fee" || key === "feeAfterTax") return "100%";
+        if (isText || percentFeeBase <= 0) return "—";
+        return `${(((Number(value) || 0) / percentFeeBase) * 100).toLocaleString("vi-VN", {
+            maximumFractionDigits: 1,
+        })}%`;
+    };
 
     const costItems = [
         { label: "Học phí", key: "fee", note: data?.notes?.fee },
+        ...(percentAfterTax
+            ? [{ label: "Học phí sau thuế", key: "feeAfterTax" }]
+            : []),
         { label: "Số tháng", key: "durationMonths", isText: true, note: data?.notes?.durationMonths },
         { label: "Sĩ số lớp", key: "studentPerClass", isText: true, note: data?.notes?.studentPerClass },
         { label: "CSVC", key: "csvc", note: data?.notes?.totalQlCsvc },
@@ -247,30 +294,53 @@ export default function Sales() {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-2 lg:mt-0">
             <div className="bg-gradient-to-r from-green-100 to-green-50 p-4">
                 <h2 className="text-lg font-semibold text-gray-700">Bảng tính chi phí</h2>
+                <div className="mt-2 grid grid-cols-[1fr_64px_104px] items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                    <span>Khoản mục</span>
+                    <span className="text-right">% HP</span>
+                    <span className="text-right">Số tiền</span>
+                </div>
+                {percentAfterTax && (
+                    <div className="mt-2 rounded-lg bg-white/70 px-2 py-1 text-[11px] font-medium text-gray-600">
+                        Chính sách trừ 2% thuế trước; các % bên dưới tính trên học phí sau thuế:{" "}
+                        <b className="text-gray-800">{formatVND(percentFeeBase)}</b>
+                    </div>
+                )}
             </div>
             <div className="divide-y divide-gray-100">
-                {costItems.map((item, i) => (
+                {costItems.map((item, i) => {
+                    const value =
+                        item.key === "feeAfterTax"
+                            ? percentFeeBase
+                            : data?.[item.key] || 0;
+                    return (
                     <div key={i} className="px-4 py-3 flex flex-col gap-1 hover:bg-gray-50 transition">
-                        <div className="flex justify-between items-center">
+                        <div className="grid grid-cols-[1fr_64px_104px] items-center gap-2">
                             <span className={`text-sm font-medium ${item.danger ? "text-red-500" : "text-gray-600"}`}>
                                 {item.label}
                             </span>
-                            <span className="font-semibold text-gray-900">
+                            <span className="text-right text-xs font-semibold text-gray-500">
+                                {formatPercentOfFee(value, item.isText, item.key)}
+                            </span>
+                            <span className="text-right font-semibold text-gray-900">
                                 {item.isText
-                                    ? data?.[item.key] || 0
-                                    : renderValue(item.key, data?.[item.key] || 0)}
+                                    ? value
+                                    : renderValue(item.key, value)}
                             </span>
                         </div>
                         {item.note && (
                             <div className="text-xs text-gray-400 italic">{item.note}</div>
                         )}
                     </div>
-                ))}
+                    );
+                })}
 
                 {data?.companyProfitPerHS !== 0 ? (
                     <div className="px-4 py-3 bg-red-50">
-                        <div className="flex justify-between">
+                        <div className="grid grid-cols-[1fr_64px_104px] items-center gap-2">
                             <span className="font-semibold text-red-600">HP / Tiết</span>
+                            <span className="text-right text-xs font-semibold text-red-500">
+                                {formatPercentOfFee(data?.companyProfit || companyProfit)}
+                            </span>
                             <span className="font-bold text-red-600">
                                 {formatVND(data?.companyProfit || companyProfit)}
                             </span>
@@ -278,8 +348,11 @@ export default function Sales() {
                     </div>
                 ) : (
                     <div className="px-4 py-3 bg-red-50">
-                        <div className="flex justify-between">
+                        <div className="grid grid-cols-[1fr_64px_104px] items-center gap-2">
                             <span className="font-semibold text-red-600">HP / HS</span>
+                            <span className="text-right text-xs font-semibold text-red-500">
+                                {formatPercentOfFee(data?.companyProfit || companyProfit)}
+                            </span>
                             <span className="font-bold text-red-600">
                                 {formatVND(data?.companyProfit || companyProfit)}
                             </span>
@@ -289,8 +362,11 @@ export default function Sales() {
 
                 {data?.companyProfitPerHS !== 0 && (
                     <div className="px-4 py-3 bg-blue-50">
-                        <div className="flex justify-between">
+                        <div className="grid grid-cols-[1fr_64px_104px] items-center gap-2">
                             <span className="font-semibold text-blue-600">HP / HS</span>
+                            <span className="text-right text-xs font-semibold text-blue-500">
+                                {formatPercentOfFee(data?.companyProfitPerHS || companyProfit1)}
+                            </span>
                             <span className="font-bold text-blue-600">
                                 {formatVND(data?.companyProfitPerHS || companyProfit1)}
                             </span>
@@ -333,7 +409,10 @@ export default function Sales() {
 
                 <div className="lg:mt-6">
                     <PolicyPage
-                        data={data?.ttcs}
+                        data={(data?.ttcs || []).map((row: any) => ({
+                            ...row,
+                            percentAfterTax: Boolean(row.percentAfterTax ?? percentAfterTax),
+                        }))}
                         diff={diff}
                         renderRowValue={renderRowValue}
                         studentPerClass={data?.studentPerClass}
@@ -344,6 +423,7 @@ export default function Sales() {
                         data={merged}
                         studentPerClass={data?.studentPerClass}
                         periods={data?.periods}
+                        mode={data?.mode}
                     />
                     {renderLogNote()}
                     {histories.length > 0 && (

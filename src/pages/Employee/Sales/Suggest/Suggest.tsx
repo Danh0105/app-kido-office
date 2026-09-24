@@ -12,6 +12,8 @@ type Suggest = {
   issueDate?: string;
   amount?: number | null;
   fileUrl?: string;
+  wardId?: number | null;
+  ward?: { id: number; name: string } | null;
   status: "PENDING" | "REVIEWED" | "APPROVED" | "REJECTED";
   rejectReason?: string;
   policy?: {
@@ -164,6 +166,9 @@ export default function SuggestPage() {
 
               {/* META */}
               <div className="mt-2 space-y-1">
+                <p className="text-xs text-gray-500">
+                  📍 {item.ward?.name || (item.wardId ? `Xã/phường #${item.wardId}` : "Chưa xác định")}
+                </p>
                 {item.component && (
                   <p className="text-xs text-gray-500">🧩 {item.component}</p>
                 )}

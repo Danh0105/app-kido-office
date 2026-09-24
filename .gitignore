@@ -37,7 +37,11 @@ Thumbs.db
 # Production build
 www/
 dist/
+dist-dev/
 public/
+!public/
+public/*
+!public/firebase-messaging-sw.js
 src/pages/Display/
 android/
 ios/

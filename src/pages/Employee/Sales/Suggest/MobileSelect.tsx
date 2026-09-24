@@ -25,7 +25,9 @@ export default function MobileSelect({
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState("");
 
-    const selected = options.find((o) => o.id === value);
+    // API có nơi trả id dạng number, có nơi trả chuỗi từ raw query. So sánh
+    // theo chuỗi để giá trị đã chọn vẫn hiện đúng dù kiểu dữ liệu khác nhau.
+    const selected = options.find((o) => String(o.id) === String(value));
 
     const filteredOptions = useMemo(() => {
         if (!search) return options;
@@ -88,7 +90,7 @@ export default function MobileSelect({
                             )}
 
                             {filteredOptions.map((o) => {
-                                const isActive = value === o.id;
+                                const isActive = String(value) === String(o.id);
 
                                 return (
                                     <div

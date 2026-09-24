@@ -24,9 +24,124 @@ export type RowType = {
     fee: number;
     otherCosts?: OtherCost[];
     durationMonths?: number;
+    /**
+     * Mặc định mọi % chính sách (QL1/QL2/TG/chi phí khác) tính trên học phí.
+     * Một số chính sách phải trừ 2% thuế trước rồi mới tính % trên học phí
+     * sau thuế → bật cờ này. Xem `policyPercentBase`.
+     */
+    percentAfterTax?: boolean;
 };
 
-export type PolicyData = Record<string, any>;
+/** Thuế trừ trước khi tính % chính sách (2%). */
+export const POLICY_TAX_RATE = 0.02;
+
+/** Mẫu số để quy tiền → % chính sách: học phí, hoặc học phí sau thuế 2% nếu bật cờ. */
+export const policyPercentBase = (row: { fee?: number | string; percentAfterTax?: boolean } | null | undefined): number => {
+    const fee = Number(row?.fee || 0);
+    return row?.percentAfterTax ? fee * (1 - POLICY_TAX_RATE) : fee;
+};
+
+export type PolicyStatusValue =
+    | "DRAFT"
+    | "PENDING"
+    | "SALE_ADMIN_APPROVED"
+    | "DIRECTOR_APPROVED"
+    | "REJECTED";
+
+export type PolicyData = Record<string, unknown>;
+
+/** 3 nhóm file đính kèm của một Policy. File cũ không có `category` -> coi như "CONTRACT". */
+export type PolicyContractCategory = "CONTRACT" | "BBCS" | "HANDOVER_IMAGE";
+
+export const POLICY_CONTRACT_CATEGORIES: PolicyContractCategory[] = [
+    "CONTRACT",
+    "BBCS",
+    "HANDOVER_IMAGE",
+];
+
+export const POLICY_CONTRACT_CATEGORY_LABELS: Record<PolicyContractCategory, string> = {
+    CONTRACT: "Hợp đồng đính kèm",
+    BBCS: "BBCS đính kèm (cũ)",
+    HANDOVER_IMAGE: "Hình ảnh bàn giao",
+};
+
+/** Một file hợp đồng PDF trong `contractFiles` — một chính sách có thể kèm nhiều file. */
+export type PolicyContractFile = {
+    id: string;
+    url: string;
+    originalName: string;
+    size: number;
+    uploadedById: number;
+    uploadedByName?: string | null;
+    uploadedAt: string;
+    category?: PolicyContractCategory;
+};
+
+export type PolicyPageItem = {
+    policyId: number;
+    policyStatus: PolicyStatusValue;
+    policyCreatedAt: string;
+    schoolId: number;
+    schoolName: string;
+    subjectId: number;
+    subjectName: string;
+    schoolYear: string | null;
+    employeeId: number | null;
+    employeeName: string | null;
+};
+
+export type PolicyPageResponse = {
+    data: PolicyPageItem[];
+    pagination: { page: number; limit: number; total: number; totalPages: number };
+};
+
+export type PolicyListItem = {
+    policyId: number;
+    status: PolicyStatusValue;
+    createdAt: string;
+    updatedAt: string;
+    employeeId: number | null;
+    employeeName: string | null;
+    schoolId: number;
+    schoolName: string;
+    subjectId: number;
+    subjectName: string;
+    schoolYear: string | null;
+    contractNumber: string | null;
+    studentCount: number | null;
+    totalLessons: number | null;
+    policyData: PolicyData | null;
+    currentHistoryId: number | null;
+};
+
+export type PolicyListResponse = {
+    data: PolicyListItem[];
+    meta: {
+        page: number; limit: number; total: number; totalPages: number;
+        hasNextPage: boolean; hasPreviousPage: boolean;
+    };
+};
+
+export type PolicyFilterOptions = {
+    statuses: Array<{ value: PolicyStatusValue; label: string }>;
+    schools: Array<{ id: number; name: string }>;
+    subjects: Array<{ id: number; name: string }>;
+    schoolYears: string[];
+    employees: Array<{ id: number; name: string | null }>;
+};
+
+export type PolicyDetail = {
+    id: number;
+    subjectId: number;
+    subject: Record<string, unknown>;
+    data: PolicyData;
+    createdAt: string;
+    updatedAt: string;
+    status: PolicyStatusValue;
+    note: string | null;
+    currentHistoryId: number | null;
+    durationMonths: number | null;
+};
 
 export type PolicyDiffValue = {
     old: any;
@@ -54,6 +169,7 @@ export type PolicyHistoryEntry = {
 export type DirectorPolicyUpdatePayload = {
     employeeId: number;
     data: PolicyData;
+    status: "DIRECTOR_APPROVED";
     note?: string;
     durationMonths?: number;
 };

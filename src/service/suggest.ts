@@ -37,6 +37,24 @@ export const suggestApi = {
         return res.data;
     },
 
+    /** Tạo đề xuất thường gắn trực tiếp với xã/phường phụ trách. */
+    createByWard: async (
+        wardId: number,
+        data: {
+            content: string;
+            component?: string;
+            description?: string;
+            issueDate?: string;
+            policyId?: number;
+            status?: string;
+            file?: File;
+        },
+    ) => {
+        // Không tự đặt Content-Type: axios/browser phải sinh multipart boundary.
+        const res = await api.post(`/suggest/wards/${wardId}`, buildFormData(data));
+        return res.data;
+    },
+
     // 📌 update
     update: async (
         id: number,
@@ -61,6 +79,7 @@ export const suggestApi = {
     },
 
     // 📌 get all
+    // ⚠️ Backend chưa có route này — gọi vào sẽ 404 (xem scripts/check-api-routes.mjs).
     getAll: async () => {
         const res = await api.get(`/suggest`);
         return res.data;
@@ -73,6 +92,7 @@ export const suggestApi = {
     },
 
     // 📌 history
+    // ⚠️ Backend chưa có route này — gọi vào sẽ 404 (xem scripts/check-api-routes.mjs).
     getHistory: async (id: number) => {
         const res = await api.get(`/suggest/${id}/history`);
         return res.data;

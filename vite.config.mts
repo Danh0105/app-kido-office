@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import { VitePWA } from 'vite-plugin-pwa'
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   // ❌ bỏ root
   // root: "./src",
 
@@ -64,10 +64,13 @@ export default defineConfig({
   },
 
   build: {
-    outDir: "dist",
+    // `--mode development` (build:dev) build ra thư mục riêng "dist-dev" —
+    // không ghi đè "dist" của bản production, để giám đốc test bản dev song
+    // song mà không ảnh hưởng bản đang chạy thật.
+    outDir: mode === "production" ? "dist" : "dist-dev",
     emptyOutDir: true,
     rollupOptions: {
       input: "index.html",
     },
   },
-});
+}));

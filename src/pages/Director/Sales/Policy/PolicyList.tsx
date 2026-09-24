@@ -4,6 +4,10 @@ import { formatDate } from "../../../../utils/formatDate";
 import { PolicyStatus } from "../../enum/PolicyStatus";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import HeaderWithBack from "@/components/HeaderWithBack";
+import { isDirectorBrandUiEnabled } from "@/utils/directorUi";
+import { resolveApiFileUrl } from "@/utils/fileUrl";
+import { FileText, ExternalLink, X } from "lucide-react";
+import type { PolicyContractFile } from "@/types/policy";
 type Subject = {
     id: number;
     createdAt: string;
@@ -12,15 +16,36 @@ type Subject = {
     note: string;
     subjectId: number;
     currentHistoryId: number;
+    contractFiles?: PolicyContractFile[];
+    contractFileUrl?: string | null;
+    contractFileName?: string | null;
+};
+
+/** Gom `contractFiles` (nhiều file) và `contractFileUrl` cũ (1 file) về cùng một danh sách để hiển thị. */
+const getContractFiles = (item: Subject): PolicyContractFile[] => {
+    if (item.contractFiles?.length) return item.contractFiles;
+    if (item.contractFileUrl) {
+        return [{
+            id: "legacy",
+            url: item.contractFileUrl,
+            originalName: item.contractFileName || "Hợp đồng PDF",
+            size: 0,
+            uploadedById: 0,
+            uploadedAt: "",
+        }];
+    }
+    return [];
 };
 
 export default function PolicyList() {
     const navigate = useNavigate();
+    const isBrand = isDirectorBrandUiEnabled();
     const { subject } = useParams();
     const location = useLocation();
     const data = location.state;
     const subjectID = Number(subject);
     const [policy, setPolicy] = useState<Subject[]>([]);
+    const [filesModal, setFilesModal] = useState<Subject | null>(null);
     // ================== HANDLE ==================
     useEffect(() => {
         const fetchData = async () => {
@@ -36,10 +61,11 @@ export default function PolicyList() {
     }, [subjectID]);
 
     return (
-        <div className="bg-gray-100 min-h-screen">
-            <HeaderWithBack title="Danh sách chính sách" />
+        <>
+        <div className={isBrand ? "bg-[#FFF8E6] min-h-screen text-[#0047B8]" : "bg-gray-100 min-h-screen"}>
+            <HeaderWithBack title="Danh sách chính sách" brandSidebarInset={isBrand} />
             {/* LIST */}
-            <div className="p-4 mt-[60px] space-y-3">
+            <div className={`p-4 mt-[60px] space-y-3 ${isBrand ? "lg:max-w-5xl lg:mx-auto" : ""}`}>
                 <div className="p-4 space-y-3">
                     {policy.map((item, index) => {
                         const statusConfig = {
@@ -65,6 +91,7 @@ export default function PolicyList() {
                             className: "bg-gray-100 text-gray-500",
                         };
                         const isLatest = index === 0;
+                        const contractFiles = getContractFiles(item);
                         return (
                             <div
                                 key={item.id}
@@ -81,8 +108,8 @@ export default function PolicyList() {
                 rounded-2xl p-4 shadow-sm transition space-y-3
 
                 ${isLatest
-                                        ? "bg-blue-50 border-2 border-blue-400 shadow-md"
-                                        : "bg-white dark:bg-gray-900"
+                                        ? isBrand ? "bg-white border-2 border-[#005BEA] shadow-md" : "bg-blue-50 border-2 border-blue-400 shadow-md"
+                                        : isBrand ? "bg-white border border-blue-900/10" : "bg-white dark:bg-gray-900"
                                     }
 
                 active:scale-95
@@ -172,6 +199,15 @@ export default function PolicyList() {
                                     >
                                         🕘 Lịch sử
                                     </button>
+
+                                    {contractFiles.length > 0 && (
+                                        <button
+                                            onClick={() => setFilesModal(item)}
+                                            className="flex-1 py-2 rounded-xl bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 text-sm font-medium"
+                                        >
+                                            📎 File ({contractFiles.length})
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         );
@@ -182,5 +218,47 @@ export default function PolicyList() {
 
 
         </div>
+
+        {filesModal && (
+            <div
+                className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+                onClick={() => setFilesModal(null)}
+            >
+                <div
+                    className="w-full max-w-md rounded-2xl bg-white p-4 shadow-2xl"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                        <h2 className="text-base font-bold text-gray-900">File Sale Admin đã up</h2>
+                        <button
+                            type="button"
+                            onClick={() => setFilesModal(null)}
+                            className="rounded-full p-1.5 text-gray-500 hover:bg-gray-100"
+                            aria-label="Đóng"
+                        >
+                            <X size={18} />
+                        </button>
+                    </div>
+                    <ul className="mt-3 flex flex-col gap-2">
+                        {getContractFiles(filesModal).map((file) => (
+                            <li key={file.id}>
+                                <a
+                                    href={resolveApiFileUrl(file.url)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title={file.originalName}
+                                    className="flex min-w-0 items-center gap-2 rounded-xl border border-gray-100 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
+                                >
+                                    <FileText size={16} className="shrink-0" />
+                                    <span className="truncate">{file.originalName}</span>
+                                    <ExternalLink size={14} className="ml-auto shrink-0" />
+                                </a>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            </div>
+        )}
+        </>
     );
 }

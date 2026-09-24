@@ -4,29 +4,23 @@ import HeaderWithBack from "@/components/HeaderWithBack";
 import { provinceApi } from "@/service/province";
 import { employeeApi } from "@/service/employee";
 import { wardApi } from "@/service/ward";
+import { toast } from "react-hot-toast";
 
+/**
+ * GET /provinces/provinces-by-employee/:id trả về **danh sách tỉnh phẳng**
+ * (backend đã bóc `row.province` ra), không phải bản ghi employee_region.
+ */
 type ProvinceType = {
     id: number;
-    employeeId: number;
-    provinceId: number;
-    province: {
-        id: number;
-        name: string;
-    };
-};
-
-type Employee = {
-    id: number;
     name: string;
-    email: string;
-    phone: string;
 };
 
 export default function Province() {
     const { employeeId } = useParams();
     const navigate = useNavigate();
 
-    const [availableEmployees, setAvailableEmployees] = useState<Employee[]>([]);
+    // Tên biến cũ là "employees" nhưng nội dung là danh sách tỉnh chưa giao.
+    const [availableProvinces, setAvailableProvinces] = useState<ProvinceType[]>([]);
     const [showSelectForm, setShowSelectForm] = useState(false);
 
     const [provinces, setProvinces] = useState<ProvinceType[]>([]);
@@ -71,19 +65,31 @@ export default function Province() {
     const handleOpenAdd = async () => {
         try {
             const data = await provinceApi.getAvailableProvinces(Number(employeeId));
-            setAvailableEmployees(data);
+            setAvailableProvinces(Array.isArray(data) ? data : []);
             setShowSelectForm(true);
         } catch (err) {
-            console.error(err);
+            // Trước đây chỉ log: API hỏng là bấm "+" không ra gì, không ai biết vì sao.
+            console.error("Load available provinces failed", err);
+            toast.error("Không tải được danh sách tỉnh còn trống.");
         }
     };
 
     const handleAddMany = async () => {
-        await employeeApi.addManyToProvince(Number(employeeId), selectedIds);
+        if (!selectedIds.length) return;
 
-        setSelectedIds([]);
-        setShowSelectForm(false);
-        fetchData();
+        // Trước đây không bắt lỗi: gọi hỏng thì modal đứng im, người dùng tưởng
+        // đã lưu xong. Giờ hỏng là báo thẳng ra màn hình.
+        try {
+            await employeeApi.addManyToProvince(Number(employeeId), selectedIds);
+
+            setSelectedIds([]);
+            setShowSelectForm(false);
+            await fetchData();
+            toast.success("Đã phân khu vực");
+        } catch (err) {
+            console.error("Add provinces failed", err);
+            toast.error("Không phân được khu vực. Thử lại giúp mình.");
+        }
     };
 
     return (
@@ -109,12 +115,12 @@ export default function Province() {
                     >
                         <div
                             onClick={async () => {
-                                setSelectedProvinceId(item.province.id);
+                                setSelectedProvinceId(item.id);
 
                                 const data = await wardApi.getByEmployee(Number(employeeId));
                                 /*     console.log("All wards:", data);
                                     const filtered = data.filter(
-                                        (w: any) => w.province_id === item.province.id
+                                        (w: any) => w.province_id === item.id
                                     ); */
 
                                 setWards(data);
@@ -128,7 +134,7 @@ export default function Province() {
                             </div>
 
                             <p className="font-semibold text-gray-800">
-                                {item.province.name}
+                                {item.name}
                             </p>
                         </div>
 
@@ -137,11 +143,17 @@ export default function Province() {
                             onClick={async (e) => {
                                 e.stopPropagation();
 
-                                await employeeApi.removeProvince(
-                                    Number(employeeId),
-                                    item.province.id
-                                );
-                                fetchData();
+                                try {
+                                    await employeeApi.removeProvince(
+                                        Number(employeeId),
+                                        item.id
+                                    );
+                                    await fetchData();
+                                    toast.success("Đã thu hồi khu vực");
+                                } catch (err) {
+                                    console.error("Remove province failed", err);
+                                    toast.error("Không thu hồi được khu vực.");
+                                }
                             }}
                             className="text-red-500 px-3 py-1 rounded-lg hover:bg-red-50"
                         >
@@ -196,13 +208,13 @@ export default function Province() {
                         </h2>
 
                         <div className="max-h-[300px] overflow-auto space-y-2">
-                            {availableEmployees.length === 0 && (
+                            {availableProvinces.length === 0 && (
                                 <p className="text-center text-gray-500">
                                     Không còn dữ liệu
                                 </p>
                             )}
 
-                            {availableEmployees.map(emp => (
+                            {availableProvinces.map(emp => (
                                 <div
                                     key={emp.id}
                                     onClick={() => toggleSelect(emp.id)}

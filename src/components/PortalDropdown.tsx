@@ -7,31 +7,59 @@ import {
   Lightbulb,
   ClipboardList,
   CalendarDays,
+  GraduationCap,
   ChevronDown,
   User,
   Calendar,
   AlertTriangle,
   Phone,
   Clock,
+  CalendarCheck,
+  BellRing,
+  BookOpenCheck,
+  MapPin,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 
 import { hasRole } from "@/utils/auth";
-import { reportNotificationApi } from "@/service/notification";
+import { canViewTeaching } from "@/pages/Teaching/lib";
+import {
+  isTeachingAlertType,
+  isTeachingCancellationNotification,
+  isTeachingScheduleNotification,
+} from "@/utils/teachingNotification";
+import {
+  reportNotificationApi,
+  type TeachingAlertType,
+} from "@/service/notification";
 import { employeeApi } from "@/service/employee";
-import { expenseNotificationApi } from "@/service/expenseRequest";
+import {
+  expenseNotificationApi,
+  expenseRequestApi,
+} from "@/service/expenseRequest";
 import type {
   ExpenseNotification,
   ExpenseNotificationEmployeeGroup,
   ExpenseNotificationSummary,
 } from "@/types/expenseRequest";
 import { STATUS_LABEL } from "@/types/expenseRequest";
+import TeacherLocationChangeModal from "@/components/TeacherLocationChangeModal";
 
-type NotificationType = "POLICY" | "SUGGEST" | "REPORT" | "WEEKLY_PLAN";
+type NotificationType =
+  | "POLICY"
+  | "SUGGEST"
+  | "REPORT"
+  | "WEEKLY_PLAN"
+  | "TEACHING";
 type TabType = "unread" | "read";
+type TeachingTypeTab = "ALL" | TeachingAlertType;
 
 type Notification = {
   id: number;
-  type: NotificationType;
+  // Type thô từ BE — 4 loại đầu trùng khoá tab, riêng "Giảng dạy" gộp 3 type
+  // con (TEACHING_SCHEDULE_CONFIRM_RESULT…) vào một khoá tab "TEACHING".
+  type: NotificationType | TeachingAlertType;
   entityId?: number;
   message: string;
   isRead: boolean;
@@ -41,6 +69,7 @@ type Notification = {
   meta?: {
     regionName?: string;
     schoolName?: string;
+    className?: string;
     schoolYear?: string;
     subjectName?: string;
     suggestType?: string;
@@ -52,6 +81,9 @@ type Notification = {
     kind?: string;
     status?: string;
     daysLate?: number;
+    requestId?: number;
+    teacherId?: number;
+    route?: string;
   };
 };
 
@@ -64,6 +96,9 @@ type SenderGroup = {
 };
 
 type Props = {
+  teachingNotificationsOnly?: boolean;
+  /** Mở từ trong module Giảng dạy — chỉ giữ tab "Giảng dạy", ẩn 4 tab còn lại vốn không liên quan. */
+  onlyTeachingTab?: boolean;
   open: boolean;
   dropdownRef: React.RefObject<HTMLDivElement | null>;
   notifications: Notification[];
@@ -78,7 +113,9 @@ type Props = {
 };
 
 const toDateString = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
 
 type ExpenseDropdownTab = "general" | "overdue";
 
@@ -90,6 +127,8 @@ const emptyExpenseSummary: ExpenseNotificationSummary = {
 };
 
 export default function NotificationDropdown({
+  teachingNotificationsOnly = false,
+  onlyTeachingTab = false,
   open,
   dropdownRef,
   notifications,
@@ -102,30 +141,141 @@ export default function NotificationDropdown({
   expenseRefreshVersion,
   onRefreshExpenseNotifications,
 }: Props) {
-  const isEmployee = hasRole("employee");
+  // `sales` đi theo workspace Nhân viên dù token không nhất thiết có thêm
+  // role `employee`. Tài khoản sales + giaovu phải giữ cả hai nhóm tab.
+  const isEmployee = hasRole("employee", "sales");
+  const isTeachingManager = hasRole("nhansu", "giaovu");
+  const isTeachingSales = hasRole("giaovu") && isEmployee;
+  const hideBusinessNotificationTabs =
+    hasRole("nhansu") || (hasRole("giaovu") && !isTeachingSales);
   const isSuggestOnlyRole = hasRole(
     "accountant",
     "ketoan_congno",
     "ketoan_truong",
     "troly_gd",
+    // Phòng kỹ thuật chỉ nhận thông báo đề xuất chi (nhánh thiết bị).
+    "ky_thuat"
   );
 
+  // Panel hẹp 380px đủ cho thông báo ngắn, nhưng tiêu đề chính sách kèm
+  // trường/năm học thì xuống 4–5 dòng. Cho phép bung rộng để đọc một lượt.
+  const [expanded, setExpanded] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [typeTab, setTypeTab] = useState<NotificationType>(
-    isSuggestOnlyRole ? "SUGGEST" : "POLICY",
+    teachingNotificationsOnly
+      ? "POLICY"
+      : onlyTeachingTab
+      ? "TEACHING"
+      : hideBusinessNotificationTabs
+      ? "TEACHING"
+      : !isSuggestOnlyRole
+      ? "POLICY"
+      : "SUGGEST"
+  );
+  const [teachingTypeTab, setTeachingTypeTab] =
+    useState<TeachingTypeTab>("ALL");
+  const [locationRequestId, setLocationRequestId] = useState<number | null>(
+    null
   );
 
-  const unreadPolicyCount = notificationStats?.POLICY.unread;
-  const unreadSuggestCount = notificationStats?.SUGGEST.unread;
-  const unreadReportCount = notificationStats?.REPORT.unread;
-  const unreadPlanCount = notificationStats?.WEEKLY_PLAN.unread;
+  const unreadPolicyCount = notificationStats?.POLICY?.unread ?? 0;
+  const unreadSuggestCount = notificationStats?.SUGGEST?.unread ?? 0;
+  const unreadReportCount = notificationStats?.REPORT?.unread ?? 0;
+  const unreadPlanCount = notificationStats?.WEEKLY_PLAN?.unread ?? 0;
+  const unreadTeachingCount = notificationStats?.TEACHING?.unread ?? 0;
+
+  const teachingIconMenus: {
+    key: NotificationType;
+    teachingType: TeachingTypeTab;
+    icon: any;
+    count: number;
+    activeClass: string;
+    label: string;
+  }[] = [
+    {
+      key: "TEACHING",
+      teachingType: "ALL",
+      icon: GraduationCap,
+      count: unreadTeachingCount,
+      activeClass: "bg-teal-100 text-teal-600",
+      label: "Tất cả thông báo giảng dạy",
+    },
+    {
+      key: "TEACHING",
+      teachingType: "TEACHING_SCHEDULE_CONFIRM_RESULT",
+      icon: CalendarCheck,
+      count: notifications.filter(
+        (item) =>
+          !item.isRead && item.type === "TEACHING_SCHEDULE_CONFIRM_RESULT"
+      ).length,
+      activeClass: "bg-teal-100 text-teal-600",
+      label: "Xác nhận lịch",
+    },
+    {
+      key: "TEACHING",
+      teachingType: "TEACHING_SCHEDULE_CONFIRM_ALERT",
+      icon: BellRing,
+      count: notifications.filter(
+        (item) =>
+          !item.isRead && item.type === "TEACHING_SCHEDULE_CONFIRM_ALERT"
+      ).length,
+      activeClass: "bg-teal-100 text-teal-600",
+      label: "Nhắc xác nhận",
+    },
+    {
+      key: "TEACHING",
+      teachingType: "TEACHING_LESSON_REPORT_ALERT",
+      icon: BookOpenCheck,
+      count: notifications.filter(
+        (item) =>
+          !item.isRead &&
+          (item.type === "TEACHING_LESSON_REPORT_ALERT" ||
+            isTeachingCancellationNotification(item))
+      ).length,
+      activeClass: "bg-teal-100 text-teal-600",
+      label: "Báo giảng và hủy tiết",
+    },
+    {
+      key: "TEACHING",
+      teachingType: "TEACHER_LOCATION_CHANGE_REQUEST",
+      icon: MapPin,
+      count: notifications.filter(
+        (item) =>
+          !item.isRead && item.type === "TEACHER_LOCATION_CHANGE_REQUEST"
+      ).length,
+      activeClass: "bg-teal-100 text-teal-600",
+      label: "Đổi vị trí",
+    },
+  ];
 
   const notificationMenus: {
     key: NotificationType;
     icon: any;
     count: number;
     activeClass: string;
-  }[] = isSuggestOnlyRole
+    teachingType?: TeachingTypeTab;
+    label?: string;
+  }[] = teachingNotificationsOnly
+    ? [
+        {
+          key: "POLICY",
+          icon: CalendarDays,
+          count: unreadPolicyCount,
+          activeClass: "bg-blue-100 text-blue-600",
+        },
+      ]
+    : onlyTeachingTab
+    ? isTeachingManager
+      ? teachingIconMenus
+      : [
+          {
+            key: "TEACHING",
+            icon: GraduationCap,
+            count: unreadTeachingCount,
+            activeClass: "bg-teal-100 text-teal-600",
+          },
+        ]
+    : isSuggestOnlyRole
     ? [
         {
           key: "SUGGEST",
@@ -134,6 +284,8 @@ export default function NotificationDropdown({
           activeClass: "bg-green-100 text-green-600",
         },
       ]
+    : hideBusinessNotificationTabs
+    ? teachingIconMenus
     : [
         {
           key: "POLICY",
@@ -153,7 +305,7 @@ export default function NotificationDropdown({
           count: unreadReportCount,
           activeClass: "bg-orange-100 text-orange-600",
         },
-        ...(isEmployee
+        ...(isEmployee && !isTeachingSales
           ? []
           : [
               {
@@ -163,6 +315,20 @@ export default function NotificationDropdown({
                 activeClass: "bg-purple-100 text-purple-600",
               },
             ]),
+        // Xác nhận lịch dạy + báo giảng — chỉ Nhân sự/Giáo vụ (và các role
+        // chỉ-xem module Giảng dạy) mới có gì để xem ở đây.
+        ...(canViewTeaching()
+          ? isTeachingManager
+            ? teachingIconMenus
+            : [
+                {
+                  key: "TEACHING" as NotificationType,
+                  icon: GraduationCap,
+                  count: unreadTeachingCount,
+                  activeClass: "bg-teal-100 text-teal-600",
+                },
+              ]
+          : []),
       ];
 
   // =================== REPORT GROUPED (director) ===================
@@ -191,8 +357,9 @@ export default function NotificationDropdown({
   const [expenseGroupPage, setExpenseGroupPage] = useState(1);
   const [expenseGroupTotalPages, setExpenseGroupTotalPages] = useState(1);
   const [expenseGroupsLoading, setExpenseGroupsLoading] = useState(false);
-  const [expandedExpenseEmployee, setExpandedExpenseEmployee] =
-    useState<number | null>(null);
+  const [expandedExpenseEmployee, setExpandedExpenseEmployee] = useState<
+    number | null
+  >(null);
   const [expenseEmployeeItems, setExpenseEmployeeItems] = useState<
     Record<number, ExpenseNotification[]>
   >({});
@@ -202,8 +369,9 @@ export default function NotificationDropdown({
   const [expenseEmployeeTotalPages, setExpenseEmployeeTotalPages] = useState<
     Record<number, number>
   >({});
-  const [expenseEmployeeLoading, setExpenseEmployeeLoading] =
-    useState<number | null>(null);
+  const [expenseEmployeeLoading, setExpenseEmployeeLoading] = useState<
+    number | null
+  >(null);
   const [overdueItems, setOverdueItems] = useState<ExpenseNotification[]>([]);
   const [overduePage, setOverduePage] = useState(1);
   const [overdueTotalPages, setOverdueTotalPages] = useState(1);
@@ -223,11 +391,7 @@ export default function NotificationDropdown({
     if (salesEmployeeIdsRef.current) return salesEmployeeIdsRef.current;
     try {
       const response = await employeeApi.getSales();
-      const data: Array<{ id: number }> = Array.isArray(response)
-        ? response
-        : Array.isArray(response?.data)
-        ? response.data
-        : [];
+      const data: Array<{ id: number }> = response;
       salesEmployeeIdsRef.current = new Set(data.map((e) => e.id));
     } catch (err) {
       console.error("Failed to fetch sales employees:", err);
@@ -243,11 +407,11 @@ export default function NotificationDropdown({
         getSalesEmployeeIds(),
       ]);
       const groups = (res.data || []).filter((g: SenderGroup) =>
-        salesEmployeeIds.has(g.senderId),
+        salesEmployeeIds.has(g.senderId)
       );
       return { date: res.date || date, groups } as DaySection;
     },
-    [tab, getSalesEmployeeIds],
+    [tab, getSalesEmployeeIds]
   );
 
   // Reset về hôm nay mỗi lần mở lại chuông thông báo.
@@ -273,7 +437,11 @@ export default function NotificationDropdown({
             setSenderLoading(key);
             try {
               const res = await reportNotificationApi.getBySender(
-                first.senderId, 1, 50, tab, section.date,
+                first.senderId,
+                1,
+                50,
+                tab,
+                section.date
               );
               setSenderNotifications({ [key]: res.data || [] });
             } finally {
@@ -321,7 +489,9 @@ export default function NotificationDropdown({
           const employeeIds = new Set(prev.map((group) => group.employeeId));
           return [
             ...prev,
-            ...groupedData.filter((group) => !employeeIds.has(group.employeeId)),
+            ...groupedData.filter(
+              (group) => !employeeIds.has(group.employeeId)
+            ),
           ];
         });
         setExpenseGroupPage(res.page || page);
@@ -334,7 +504,7 @@ export default function NotificationDropdown({
         }
       }
     },
-    [tab],
+    [tab]
   );
 
   const loadExpenseEmployeeItems = useCallback(
@@ -342,10 +512,15 @@ export default function NotificationDropdown({
       const requestId = ++expenseEmployeeRequestRef.current;
       setExpenseEmployeeLoading(employeeId);
       try {
-        const res = await expenseNotificationApi.getAll(page, EXPENSE_LIMIT, tab, {
-          scope: "general",
-          employeeId,
-        });
+        const res = await expenseNotificationApi.getAll(
+          page,
+          EXPENSE_LIMIT,
+          tab,
+          {
+            scope: "general",
+            employeeId,
+          }
+        );
         if (requestId !== expenseEmployeeRequestRef.current) return;
 
         const nextItems = Array.isArray(res.data) ? res.data : [];
@@ -380,7 +555,7 @@ export default function NotificationDropdown({
         }
       }
     },
-    [tab],
+    [tab]
   );
 
   const loadOverdueItems = useCallback(
@@ -388,16 +563,24 @@ export default function NotificationDropdown({
       const requestId = ++overdueRequestRef.current;
       setOverdueLoading(true);
       try {
-        const res = await expenseNotificationApi.getAll(page, EXPENSE_LIMIT, tab, {
-          scope: "overdue",
-        });
+        const res = await expenseNotificationApi.getAll(
+          page,
+          EXPENSE_LIMIT,
+          tab,
+          {
+            scope: "overdue",
+          }
+        );
         if (requestId !== overdueRequestRef.current) return;
 
         const nextItems = Array.isArray(res.data) ? res.data : [];
         setOverdueItems((prev) => {
           if (page === 1) return nextItems;
           const itemIds = new Set(prev.map((item) => item.id));
-          return [...prev, ...nextItems.filter((item) => !itemIds.has(item.id))];
+          return [
+            ...prev,
+            ...nextItems.filter((item) => !itemIds.has(item.id)),
+          ];
         });
         setOverduePage(res.page || page);
         setOverdueTotalPages(res.totalPages || 1);
@@ -409,7 +592,7 @@ export default function NotificationDropdown({
         }
       }
     },
-    [tab],
+    [tab]
   );
 
   useEffect(() => {
@@ -503,7 +686,7 @@ export default function NotificationDropdown({
     if (expandedExpenseEmployee === null || expenseGroupsLoading) return;
     if (
       expenseGroups.some(
-        (group) => group.employeeId === expandedExpenseEmployee,
+        (group) => group.employeeId === expandedExpenseEmployee
       )
     ) {
       return;
@@ -538,7 +721,7 @@ export default function NotificationDropdown({
   const handleToggleSender = async (
     senderId: number,
     date: string,
-    count: number,
+    count: number
   ) => {
     const key = senderKey(senderId, date);
     if (expandedSender === key) {
@@ -558,7 +741,7 @@ export default function NotificationDropdown({
         1,
         50,
         tab,
-        date,
+        date
       );
       setSenderNotifications((prev) => ({
         ...prev,
@@ -574,19 +757,59 @@ export default function NotificationDropdown({
   // =================== HOOKS GUARD ===================
 
   useEffect(() => {
-    if (isSuggestOnlyRole && typeTab !== "SUGGEST") {
-      setTypeTab("SUGGEST");
-    } else if (isEmployee && typeTab === "WEEKLY_PLAN") {
-      setTypeTab("POLICY");
+    // Ưu tiên cố định để tránh 2 điều kiện cùng đúng làm effect nhảy qua lại
+    // vô hạn giữa 2 tab (vd hideBusinessNotificationTabs và isSuggestOnlyRole
+    // cùng true cho một role).
+    let target: NotificationType | null = null;
+    if (teachingNotificationsOnly) {
+      target = "POLICY";
+    } else if (hideBusinessNotificationTabs) {
+      target = "TEACHING";
+    } else if (isSuggestOnlyRole) {
+      target = "SUGGEST";
+    } else if (isEmployee && !isTeachingSales && typeTab === "WEEKLY_PLAN") {
+      target = "POLICY";
     }
-  }, [isEmployee, isSuggestOnlyRole, typeTab]);
+
+    if (target !== null && target !== typeTab) {
+      setTypeTab(target);
+    }
+  }, [
+    hideBusinessNotificationTabs,
+    isEmployee,
+    isSuggestOnlyRole,
+    isTeachingSales,
+    teachingNotificationsOnly,
+    typeTab,
+  ]);
 
   const filtered =
     tab === "unread"
       ? notifications.filter((n) => !n.isRead)
       : notifications.filter((n) => n.isRead);
 
-  const typeFiltered = filtered.filter((n) => n.type === typeTab);
+  // Giáo viên chỉ có một tab "lịch dạy": thông báo loại này ở BE mang type riêng
+  // TEACHING_SCHEDULE (bản cũ là SYSTEM) nên không so thẳng với typeTab được.
+  // Tab "TEACHING" của Giáo vụ/Nhân sự cũng vậy — gộp 3 type con lại.
+  const categoryFiltered = teachingNotificationsOnly
+    ? filtered.filter(isTeachingScheduleNotification)
+    : typeTab === "TEACHING"
+    ? filtered.filter(
+        (n) =>
+          isTeachingAlertType(n.type) ||
+          isTeachingCancellationNotification(n),
+      )
+    : filtered.filter((n) => n.type === typeTab);
+
+  const typeFiltered =
+    typeTab === "TEACHING" && teachingTypeTab !== "ALL"
+      ? categoryFiltered.filter(
+          (n) =>
+            n.type === teachingTypeTab ||
+            (teachingTypeTab === "TEACHING_LESSON_REPORT_ALERT" &&
+              isTeachingCancellationNotification(n)),
+        )
+      : categoryFiltered;
 
   if (!open) return null;
 
@@ -603,7 +826,18 @@ export default function NotificationDropdown({
   const renderNotificationItem = (n: Notification) => (
     <div
       key={n.id}
-      onClick={() => onClickNotification(n)}
+      onClick={() => {
+        if (
+          n.type === "TEACHER_LOCATION_CHANGE_REQUEST" ||
+          n.meta?.kind === "teacher_location_change_request"
+        ) {
+          const requestId = Number(n.meta?.requestId || n.entityId);
+          if (Number.isInteger(requestId) && requestId > 0) {
+            setLocationRequestId(requestId);
+          }
+        }
+        onClickNotification(n);
+      }}
       className={`p-1 rounded-lg transition cursor-pointer ${
         n.isRead
           ? "bg-white border"
@@ -617,11 +851,9 @@ export default function NotificationDropdown({
       } hover:shadow-md`}
     >
       <div className="flex justify-between gap-2">
-        <p className="text-[13px] leading-tight line-clamp-3">{n.message}</p>
+        <p className="text-[13px] leading-normal line-clamp-3">{n.message}</p>
 
-        {!n.isRead && (
-          <span className="w-2 h-2 bg-red-500 rounded-full mt-1" />
-        )}
+        {!n.isRead && <span className="w-2 h-2 bg-red-500 rounded-full mt-1" />}
       </div>
 
       <div className="text-xs text-gray-400 mt-1">
@@ -638,6 +870,12 @@ export default function NotificationDropdown({
         {n.meta?.schoolName && (
           <span className="px-2 py-[2px] text-[10px] bg-blue-100 text-blue-600 rounded-full">
             {n.meta.schoolName}
+          </span>
+        )}
+
+        {n.meta?.className && (
+          <span className="px-2 py-[2px] text-[10px] bg-teal-100 text-teal-600 rounded-full">
+            {n.meta.className}
           </span>
         )}
 
@@ -687,9 +925,7 @@ export default function NotificationDropdown({
         }`}
       >
         <button
-          onClick={() =>
-            handleToggleSender(group.senderId, date, group.count)
-          }
+          onClick={() => handleToggleSender(group.senderId, date, group.count)}
           className={`w-full flex items-center gap-2 px-3 py-2 transition ${
             group.count > 0
               ? "bg-orange-50 hover:bg-orange-100"
@@ -753,7 +989,7 @@ export default function NotificationDropdown({
                 }`}
               >
                 <div className="flex justify-between gap-2">
-                  <p className="text-[13px] leading-tight line-clamp-2">
+                  <p className="text-[13px] leading-normal line-clamp-2">
                     {n.message}
                   </p>
                   {!n.isRead && (
@@ -815,9 +1051,26 @@ export default function NotificationDropdown({
     }
   };
 
+  /** Tắt nhắc quá hạn cho riêng đề xuất này — không ảnh hưởng đề xuất khác. */
+  const muteOverdueAlert = async (
+    e: React.MouseEvent,
+    n: ExpenseNotification
+  ) => {
+    e.stopPropagation(); // tránh trigger onClick điều hướng của cả dòng
+    const suggestId = n.meta?.suggestId;
+    if (!suggestId) return;
+
+    try {
+      await expenseRequestApi.muteOverdueAlert(suggestId);
+      await onRefreshExpenseNotifications();
+    } catch (err) {
+      console.error("Failed to mute overdue alert:", err);
+    }
+  };
+
   const renderExpenseNotificationItem = (
     n: ExpenseNotification,
-    overdue = false,
+    overdue = false
   ) => (
     <div
       key={n.id}
@@ -834,11 +1087,18 @@ export default function NotificationDropdown({
     >
       <div className="flex justify-between gap-2">
         <div className="min-w-0">
+          {n.meta?.employeeName && (
+            <p className="flex items-center gap-1 text-[11px] font-medium text-gray-600">
+              <User className="w-3 h-3 text-gray-400" />
+              {n.meta.employeeName}
+              {n.meta.employeePhone && ` · ${n.meta.employeePhone}`}
+            </p>
+          )}
           <div className="flex items-start gap-1.5">
             {overdue && (
               <AlertTriangle className="w-3.5 h-3.5 text-red-500 mt-0.5 flex-shrink-0" />
             )}
-            <p className="text-[13px] leading-tight line-clamp-3">
+            <p className="text-[13px] leading-normal line-clamp-3">
               {n.message}
             </p>
           </div>
@@ -858,6 +1118,16 @@ export default function NotificationDropdown({
               <span className="px-2 py-[2px] text-[10px] bg-gray-100 text-gray-600 rounded-full">
                 {n.meta.suggestCode}
               </span>
+            )}
+            {overdue && n.meta?.suggestId && (
+              <button
+                type="button"
+                onClick={(e) => muteOverdueAlert(e, n)}
+                title="Đề xuất này sẽ không bị nhắc quá hạn nữa"
+                className="px-2 py-[2px] text-[10px] text-gray-500 border border-gray-200 rounded-full hover:bg-gray-100 hover:text-red-600"
+              >
+                Tắt nhắc
+              </button>
             )}
           </div>
 
@@ -956,7 +1226,9 @@ export default function NotificationDropdown({
               </p>
             )}
 
-            <div className="space-y-1 p-1">{items.map((n) => renderExpenseNotificationItem(n))}</div>
+            <div className="space-y-1 p-1">
+              {items.map((n) => renderExpenseNotificationItem(n))}
+            </div>
 
             {itemPage < itemTotalPages && (
               <button
@@ -1034,7 +1306,9 @@ export default function NotificationDropdown({
               </p>
             )}
 
-            <div className="space-y-1">{expenseGroups.map(renderExpenseGroupCard)}</div>
+            <div className="space-y-1">
+              {expenseGroups.map(renderExpenseGroupCard)}
+            </div>
 
             {expenseGroupPage < expenseGroupTotalPages && (
               <button
@@ -1136,7 +1410,7 @@ export default function NotificationDropdown({
 
                 <div className="space-y-1">
                   {section.groups.map((group) =>
-                    renderSenderCard(group, section.date),
+                    renderSenderCard(group, section.date)
                   )}
                 </div>
               </div>
@@ -1173,13 +1447,31 @@ export default function NotificationDropdown({
 
       <div
         ref={dropdownRef}
-        className="fixed top-0 right-0 w-[95%] max-w-[380px] h-[75dvh] bg-white z-[9999]
-        rounded-l-2xl shadow-2xl flex flex-col overflow-hidden"
+        className={`fixed top-0 right-0 bg-white z-[9999] rounded-l-2xl shadow-2xl flex flex-col overflow-hidden transition-[max-width,height] duration-200 ${
+          expanded
+            ? "w-full max-w-[900px] h-[100dvh]"
+            : "w-[95%] max-w-[380px] h-[75dvh]"
+        }`}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 px-4 py-3 border-b bg-white shadow-sm sticky top-0 z-10">
           <Bell className="w-5 h-5 text-blue-500" />
           <span className="font-semibold">Thông báo</span>
+
+          <button
+            type="button"
+            onClick={() => setExpanded((value) => !value)}
+            title={expanded ? "Thu gọn" : "Mở rộng"}
+            aria-label={expanded ? "Thu gọn thông báo" : "Mở rộng thông báo"}
+            aria-pressed={expanded}
+            className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 active:scale-95"
+          >
+            {expanded ? (
+              <Minimize2 className="w-4 h-4" />
+            ) : (
+              <Maximize2 className="w-4 h-4" />
+            )}
+          </button>
         </div>
 
         <div className="flex text-sm border-b">
@@ -1205,10 +1497,20 @@ export default function NotificationDropdown({
 
               return (
                 <button
-                  key={item.key}
-                  onClick={() => setTypeTab(item.key)}
+                  key={`${item.key}-${item.teachingType || "category"}`}
+                  title={item.label}
+                  aria-label={item.label}
+                  onClick={() => {
+                    setTypeTab(item.key);
+                    if (item.teachingType)
+                      setTeachingTypeTab(item.teachingType);
+                  }}
                   className={`relative flex flex-col items-center justify-center w-12 h-12 rounded-xl transition ${
-                    typeTab === item.key ? item.activeClass : "text-gray-400"
+                    typeTab === item.key &&
+                    (!item.teachingType ||
+                      teachingTypeTab === item.teachingType)
+                      ? item.activeClass
+                      : "text-gray-400"
                   }`}
                 >
                   <Icon size={18} />
@@ -1223,43 +1525,51 @@ export default function NotificationDropdown({
             })}
           </div>
 
-          <div className="flex-1 overflow-y-auto p-1 space-y-1">
-            {isDirectorReport ? (
-              renderDirectorReportGroups()
-            ) : isExpenseSuggest ? (
-              renderExpenseSuggest()
-            ) : (
-              <>
-                {typeFiltered.length === 0 && (
-                  <p className="text-center text-sm text-gray-400 py-6">
-                    Không có thông báo
-                  </p>
-                )}
+          <div className="flex-1 min-w-0 flex overflow-hidden">
+            <div className="flex-1 min-w-0 overflow-y-auto p-1 space-y-1">
+              {isDirectorReport ? (
+                renderDirectorReportGroups()
+              ) : isExpenseSuggest ? (
+                renderExpenseSuggest()
+              ) : (
+                <>
+                  {typeFiltered.length === 0 && (
+                    <p className="text-center text-sm text-gray-400 py-6">
+                      Không có thông báo
+                    </p>
+                  )}
 
-                {typeFiltered.map(renderNotificationItem)}
+                  {typeFiltered.map(renderNotificationItem)}
 
-                {hasMore[typeTab][tab] && (
-                  <button
-                    onClick={handleLoadMore}
-                    disabled={loadingMore}
-                    className="w-full py-3 text-blue-500 text-sm font-medium flex items-center justify-center gap-2"
-                  >
-                    {loadingMore ? (
-                      <>
-                        <span className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                        Đang tải...
-                      </>
-                    ) : (
-                      "Xem thêm"
-                    )}
-                  </button>
-                )}
-              </>
-            )}
+                  {(hasMore?.[typeTab]?.[tab] ?? false) && (
+                    <button
+                      onClick={handleLoadMore}
+                      disabled={loadingMore}
+                      className="w-full py-3 text-blue-500 text-sm font-medium flex items-center justify-center gap-2"
+                    >
+                      {loadingMore ? (
+                        <>
+                          <span className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                          Đang tải...
+                        </>
+                      ) : (
+                        "Xem thêm"
+                      )}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
+      {locationRequestId && (
+        <TeacherLocationChangeModal
+          requestId={locationRequestId}
+          onClose={() => setLocationRequestId(null)}
+        />
+      )}
     </>,
-    document.body,
+    document.body
   );
 }

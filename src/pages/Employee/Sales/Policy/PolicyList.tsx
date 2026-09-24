@@ -198,6 +198,12 @@ export default function PolicyList() {
             {/* BUTTON ADD */}
             <button
                 onClick={() => {
+                    if (policy.length > 0) {
+                        alert("Môn học này đã có chính sách. Hệ thống sẽ mở chính sách hiện có để chỉnh sửa.");
+                        setEditingItem(policy[0]);
+                    } else {
+                        setEditingItem(null);
+                    }
                     setShowModal(true);
                 }}
                 className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-blue-500 text-white text-2xl shadow-lg active:scale-90"
@@ -228,7 +234,16 @@ export default function PolicyList() {
             {showModal && (
                 <div className="fixed inset-0 bg-black/40 flex items-end z-50">
                     <div className="bg-white dark:bg-gray-900 w-full p-4 rounded-t-2xl max-h-[90vh] overflow-y-auto">
-                        <FormCreate setShowModal={setShowModal} subjectId={subjectID} setPolicy={setPolicy} defaultData={editingItem?.data} id={editingItem?.id} />
+                        <FormCreate
+                            setShowModal={setShowModal}
+                            subjectId={subjectID}
+                            setPolicy={setPolicy}
+                            defaultData={editingItem?.data}
+                            id={editingItem?.id}
+                            onExistingPolicy={(existingPolicy) => {
+                                setEditingItem(existingPolicy);
+                            }}
+                        />
                     </div>
                 </div>
             )}

@@ -2,6 +2,7 @@ import PolicyPage from "./policy";
 import React, { useEffect, useState } from "react";
 import { formatVND } from "../../../../utils/formatVND";
 import Support from "./support";
+import SupportCards from "@/pages/Employee/Sales/PolicyView/support";
 import "./css/Sales.css";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { policiesApi } from "../../../../service/policy";
@@ -14,9 +15,22 @@ import ProposalForm from "./ProposalForm";
 import { mapToProposalForm } from "../../../../utils/mapToProposalForm";
 import { employeeApi } from "@/service/employee";
 import PolicyPie from "@/components/PolicyPie";
+import DepreciationRemainingSummary from "@/pages/Employee/Sales/Policy/components/DepreciationRemainingSummary";
 import DirectorEditPolicy from "@/components/policy/DirectorEditPolicy";
 import PolicyHistoryTimeline from "@/components/policy/PolicyHistoryTimeline";
-import { PolicyHistoryEntry } from "@/types/policy";
+import {
+  PolicyHistoryEntry,
+  PolicyContractFile,
+  PolicyContractCategory,
+  POLICY_CONTRACT_CATEGORIES,
+  POLICY_CONTRACT_CATEGORY_LABELS,
+  policyPercentBase,
+} from "@/types/policy";
+import { isDirectorBrandUiEnabled } from "@/utils/directorUi";
+import { resolveApiFileUrl } from "@/utils/fileUrl";
+import { Paperclip, ExternalLink, X, Upload, Loader2 } from "lucide-react";
+import { toast } from "react-hot-toast";
+import { getApiErrorMessage } from "@/utils/apiError";
 type OtherCost = {
   id: string;
   name: string;
@@ -40,17 +54,33 @@ type RowType = {
   total: number;
   fee: number;
   otherCosts?: OtherCost[];
+  percentAfterTax?: boolean;
 };
 type Props = {
   onLogout?: () => void;
+  /**
+   * Nhúng trong popup (danh sách chính sách): lấy id + state từ props thay
+   * vì URL, bỏ header trang, và "quay lại" = đóng popup.
+   */
+  embedded?: boolean;
+  policyId?: number;
+  initialState?: any;
+  onClose?: () => void;
 };
 
-export default function Sales({ onLogout }: Props) {
-  const { id } = useParams();
+export default function Sales({
+  onLogout,
+  embedded = false,
+  policyId,
+  initialState,
+  onClose,
+}: Props) {
+  const params = useParams();
+  const id = embedded ? String(policyId ?? "") : params.id;
+  const isBrand = isDirectorBrandUiEnabled();
   const location = useLocation();
   const { data, user, subjectId, currentHistoryId, status } =
-    location.state || {};
-  console.log("data", location.state);
+    (embedded ? initialState : location.state) || {};
   const [subject, setSubject] = useState([]);
   const [employee, setEmployee] = useState<any>(null);
   const [formProposal, setFormProposal] = useState<any>(null);
@@ -58,7 +88,8 @@ export default function Sales({ onLogout }: Props) {
   const [diff, setDiff] = React.useState<any>(null);
   const [policy, setPolicy] = useState<any>(null);
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(Boolean(id && !data));
+  const [loadError, setLoadError] = useState("");
   const [showEditModal, setShowEditModal] = useState(false);
   const [editHistories, setEditHistories] = useState<PolicyHistoryEntry[]>([]);
 
@@ -71,14 +102,16 @@ export default function Sales({ onLogout }: Props) {
   const fetchPolicy = async () => {
     try {
       setLoading(true);
+      setLoadError("");
 
       const res = await policiesApi.findOne(Number(id));
 
       console.log("FETCH POLICY:", res);
 
-      setPolicy(res);
+      setPolicy((res as any)?.policy || res);
     } catch (err) {
       console.error("Load policy failed", err);
+      setLoadError("Không thể tải chi tiết chính sách.");
     } finally {
       setLoading(false);
     }
@@ -101,6 +134,179 @@ export default function Sales({ onLogout }: Props) {
   }, [id]);
 
   const finalData = policy?.data || data;
+
+  const isImageFile = (file: PolicyContractFile) =>
+    /\.(jpe?g|png)$/i.test(file.originalName || file.url || "");
+
+  const contractFiles: PolicyContractFile[] = policy?.contractFiles?.length
+    ? policy.contractFiles
+    : policy?.contractFileUrl
+      ? [
+          {
+            id: "legacy",
+            url: policy.contractFileUrl,
+            originalName: policy.contractFileName || "Hợp đồng PDF",
+            size: 0,
+            uploadedById: 0,
+            uploadedAt: "",
+          },
+        ]
+      : [];
+  const [showFilesModal, setShowFilesModal] = useState(false);
+  const [uploadingContract, setUploadingContract] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const uploadCategoryRef = React.useRef<PolicyContractCategory>("CONTRACT");
+
+  const canEditPolicyFiles = hasRole(
+    "director",
+    "director_la",
+    "saleadmin",
+    "salesadmin",
+    "salesadmin_la",
+  );
+
+  const uploadContract = async (fileList?: FileList | null) => {
+    const files = Array.from(fileList ?? []);
+    if (files.length === 0 || !id) return;
+
+    for (const file of files) {
+      if (file.size > 20 * 1024 * 1024) {
+        toast.error(`"${file.name}" vượt quá 20 MB`);
+        return;
+      }
+    }
+
+    setUploadingContract(true);
+    try {
+      await policiesApi.uploadContract(
+        Number(id),
+        files,
+        uploadCategoryRef.current,
+      );
+      await fetchPolicy();
+      toast.success(
+        files.length > 1
+          ? `Đã upload ${files.length} file`
+          : "Đã upload file",
+      );
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Không thể upload file"));
+    } finally {
+      setUploadingContract(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const removeContract = async (file: PolicyContractFile) => {
+    if (!id) return;
+    if (!window.confirm(`Xoá file "${file.originalName}"?`)) return;
+    setUploadingContract(true);
+    try {
+      await policiesApi.removeContract(Number(id), file.id);
+      await fetchPolicy();
+      toast.success("Đã xoá file");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Không thể xoá file"));
+    } finally {
+      setUploadingContract(false);
+    }
+  };
+
+  const renderCategorySection = (category: PolicyContractCategory) => {
+    const categoryFiles = contractFiles.filter(
+      (file) => (file.category ?? "CONTRACT") === category,
+    );
+    return (
+      <div
+        key={category}
+        className="rounded-xl border border-gray-100 overflow-hidden"
+      >
+        <div className="flex items-center justify-between gap-2 bg-gradient-to-r from-blue-50 to-white px-3 py-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="truncate text-sm font-semibold text-gray-800">
+              {POLICY_CONTRACT_CATEGORY_LABELS[category]}
+            </span>
+            <span className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+              {categoryFiles.length}
+            </span>
+          </div>
+          {canEditPolicyFiles && (
+            <button
+              type="button"
+              disabled={uploadingContract}
+              onClick={() => {
+                uploadCategoryRef.current = category;
+                fileInputRef.current?.click();
+              }}
+              className="shrink-0 inline-flex items-center gap-1 rounded-md border border-blue-200 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {uploadingContract ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <Upload size={13} />
+              )}
+              Thêm file
+            </button>
+          )}
+        </div>
+        {categoryFiles.length === 0 ? (
+          <p className="px-3 py-3 text-xs text-gray-400">Chưa có file</p>
+        ) : (
+          <ul className="max-h-72 space-y-2 overflow-y-auto p-3">
+            {categoryFiles.map((file) => (
+              <li
+                key={file.id}
+                className="rounded-xl border border-gray-100 p-2"
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  {isImageFile(file) && (
+                    <a
+                      href={resolveApiFileUrl(file.url)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0"
+                    >
+                      <img
+                        src={resolveApiFileUrl(file.url)}
+                        alt={file.originalName}
+                        className="h-12 w-12 rounded-md border border-gray-100 object-cover"
+                      />
+                    </a>
+                  )}
+                  <a
+                    href={resolveApiFileUrl(file.url)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={file.originalName}
+                    className="inline-flex min-w-0 items-center gap-1.5 text-sm font-medium text-blue-700 hover:underline"
+                  >
+                    {!isImageFile(file) && (
+                      <span className="shrink-0" aria-hidden>
+                        📎
+                      </span>
+                    )}
+                    <span className="truncate">{file.originalName}</span>
+                    <ExternalLink size={14} className="shrink-0" />
+                  </a>
+                  {canEditPolicyFiles && file.id !== "legacy" && (
+                    <button
+                      type="button"
+                      disabled={uploadingContract}
+                      onClick={() => void removeContract(file)}
+                      title="Xoá file này"
+                      className="ml-auto shrink-0 rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
+  };
 
   const policyOwner =
     policy?.employeeId ??
@@ -154,12 +360,19 @@ export default function Sales({ onLogout }: Props) {
       dotClassName: "bg-red-500",
     },
   };
-  const isApproved =
-    finalStatus === PolicyStatus.DIRECTOR_APPROVED ||
-    finalStatus === PolicyStatus.SALE_ADMIN_APPROVED;
+  // DIRECTOR_APPROVED là chốt cuối — không ai còn duyệt được nữa.
+  // SALE_ADMIN_APPROVED chỉ xong lượt của Sale Admin, giám đốc vẫn phải tự
+  // duyệt tiếp — không được coi là "đã xong" chung cho mọi người xem, nếu
+  // không giám đốc sẽ mất luôn nút Duyệt/Từ chối ở đúng bước cần họ nhất.
+  const isFinalApproved = finalStatus === PolicyStatus.DIRECTOR_APPROVED;
+  const isWaitingOnDirector =
+    finalStatus === PolicyStatus.SALE_ADMIN_APPROVED &&
+    hasRole("saleadmin", "salesadmin_la") &&
+    !hasRole("director", "director_la");
   const isRejected = finalStatus === PolicyStatus.REJECTED;
   const readOnly = isChiefAccountant();
-  const showActions = !isApproved && !isRejected && !readOnly;
+  const showActions =
+    !isFinalApproved && !isRejected && !readOnly && !isWaitingOnDirector;
   useEffect(() => {
     const fetchData = async () => {
       if (!finalCurrentHistoryId) return;
@@ -182,6 +395,7 @@ export default function Sales({ onLogout }: Props) {
     finalData?.htthietbi?.length || 0,
   );
   const navigate = useNavigate();
+  const goBack = () => (embedded ? onClose?.() : navigate(-1));
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [note, setNote] = useState("");
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -193,14 +407,20 @@ export default function Sales({ onLogout }: Props) {
     return {
       type: tm?.type || "",
       money: tm?.money || 0,
+      depreciationYearsM: tm?.depreciationYears || 1,
       monthsM: tm?.months || 0,
       studentsM: tm?.students || 0,
+      realStudents: tm?.realStudents || 0,
+      realPeriods: tm?.realPeriods || 0,
 
       device: tb?.category || "",
       qty: tb?.qty || 0,
       price: tb?.price || 0,
+      depreciationYearsD: tb?.depreciationYears || 1,
       studentsD: tb?.students || 0,
       monthsD: tb?.months || 0,
+      realStudentsD: tb?.realStudents || 0,
+      realPeriodsD: tb?.realPeriods || 0,
 
       condMonths: tb?.months || tm?.months || 0,
       condStudents: tb?.students || tm?.students || 0,
@@ -320,14 +540,32 @@ export default function Sales({ onLogout }: Props) {
     (finalData?.vanHanh || 0) -
     (finalData?.thuetndn || 0);
   const companyProfit = finalData?.companyProfit || companyProfit1;
+  const percentAfterTax =
+    Boolean(finalData?.percentAfterTax) ||
+    Boolean(finalData?.ttcs?.some((row: RowType) => row.percentAfterTax));
+  const percentFeeBase = policyPercentBase({
+    fee: finalData?.fee,
+    percentAfterTax,
+  });
+  const formatPercentOfFee = (value: number, isText?: boolean, key?: string) => {
+    if (key === "fee" || key === "feeAfterTax") return "100%";
+    if (isText || percentFeeBase <= 0) return "—";
+    return `${((Number(value) || 0) / percentFeeBase * 100).toLocaleString("vi-VN", {
+      maximumFractionDigits: 1,
+    })}%`;
+  };
   const costItems: {
     label: string;
     key: string;
     note?: string;
     isText?: boolean;
     danger?: boolean;
+    formula?: string;
   }[] = [
     { label: "Học phí", key: "fee", note: finalData?.notes?.fee },
+    ...(percentAfterTax
+      ? [{ label: "Học phí sau thuế", key: "feeAfterTax" }]
+      : []),
     {
       label: "Số tháng",
       key: "durationMonths",
@@ -358,24 +596,45 @@ export default function Sales({ onLogout }: Props) {
     { label: "CS ký HĐ", key: "cdhd", note: finalData?.notes?.totalM },
     { label: "Thiết bị", key: "thietbi", note: finalData?.notes?.totalD },
     { label: "Giáo cụ", key: "giaoCu", note: finalData?.notes?.giaoCu },
-    { label: "Thuế TNDN", key: "thuetndn", note: finalData?.notes?.thuetndn },
+    {
+      label: "Thuế TNDN",
+      key: "thuetndn",
+      note: finalData?.notes?.thuetndn,
+      formula: "(CS tháng + CS ký HĐ) × 22%",
+    },
     { label: "Vận hành", key: "vanHanh", note: finalData?.notes?.vanHanh },
   ];
 
   const renderCostCard = () => (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-2 lg:mt-0">
-      <div className="bg-gradient-to-r from-green-100 to-green-50 p-4">
-        <h2 className="text-lg font-semibold text-gray-700">
+    <div className="mx-auto mt-2 w-[calc(100%-1.5rem)] max-w-[360px] overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm lg:mt-0 lg:w-full lg:max-w-none">
+      <div className="bg-gradient-to-r from-green-100 to-green-50 px-3 py-3 lg:p-4">
+        <h2 className="text-base font-semibold text-gray-700 lg:text-lg">
           Bảng tính chi phí
         </h2>
+        <div className="mt-2 grid grid-cols-[1fr_64px_104px] items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+          <span>Khoản mục</span>
+          <span className="text-right">% HP</span>
+          <span className="text-right">Số tiền</span>
+        </div>
+        {percentAfterTax && (
+          <div className="mt-2 rounded-lg bg-white/70 px-2 py-1 text-[11px] font-medium text-gray-600">
+            Chính sách trừ 2% thuế trước; các % bên dưới tính trên học phí sau thuế:{" "}
+            <b className="text-gray-800">{formatVND(percentFeeBase)}</b>
+          </div>
+        )}
       </div>
       <div className="divide-y divide-gray-100">
-        {costItems.map((item, i) => (
+        {costItems.map((item, i) => {
+          const value =
+            item.key === "feeAfterTax"
+              ? percentFeeBase
+              : finalData?.[item.key] || 0;
+          return (
           <div
             key={i}
-            className="px-4 py-3 flex flex-col gap-1 hover:bg-gray-50 transition"
+            className="flex flex-col gap-1 px-3 py-2 hover:bg-gray-50 transition lg:px-4 lg:py-3"
           >
-            <div className="flex justify-between items-center">
+            <div className="grid grid-cols-[1fr_64px_104px] items-center gap-2">
               <span
                 className={`text-sm font-medium ${
                   item.danger ? "text-red-500" : "text-gray-600"
@@ -383,31 +642,44 @@ export default function Sales({ onLogout }: Props) {
               >
                 {item.label}
               </span>
-              <span className="font-semibold text-gray-900">
+              <span className="text-right text-xs font-semibold text-gray-500">
+                {formatPercentOfFee(value, item.isText, item.key)}
+              </span>
+              <span className="break-words text-right text-sm font-semibold text-gray-900">
                 {item.isText
-                  ? finalData?.[item.key] || 0
-                  : renderValue(item.key, finalData?.[item.key] || 0)}
+                  ? value
+                  : renderValue(item.key, value)}
               </span>
             </div>
+            {item.formula && (
+              <div className="text-xs text-red-500 italic">{item.formula}</div>
+            )}
             {item.note && (
               <div className="text-xs text-gray-400 italic">{item.note}</div>
             )}
           </div>
-        ))}
+          );
+        })}
 
         {finalData?.companyProfitPerHS !== 0 ? (
-          <div className="px-4 py-3 bg-red-50">
-            <div className="flex justify-between">
+          <div className="bg-red-50 px-3 py-2.5 lg:px-4 lg:py-3">
+            <div className="grid grid-cols-[1fr_64px_104px] items-center gap-2">
               <span className="font-semibold text-red-600">HP / Tiết</span>
+              <span className="text-right text-xs font-semibold text-red-500">
+                {formatPercentOfFee(finalData.companyProfit || companyProfit)}
+              </span>
               <span className="font-bold text-red-600">
                 {formatVND(finalData.companyProfit || companyProfit)}
               </span>
             </div>
           </div>
         ) : (
-          <div className="px-4 py-3 bg-red-50">
-            <div className="flex justify-between">
+          <div className="bg-red-50 px-3 py-2.5 lg:px-4 lg:py-3">
+            <div className="grid grid-cols-[1fr_64px_104px] items-center gap-2">
               <span className="font-semibold text-red-600">HP / HS</span>
+              <span className="text-right text-xs font-semibold text-red-500">
+                {formatPercentOfFee(finalData?.companyProfit || companyProfit)}
+              </span>
               <span className="font-bold text-red-600">
                 {formatVND(finalData?.companyProfit || companyProfit)}
               </span>
@@ -416,9 +688,12 @@ export default function Sales({ onLogout }: Props) {
         )}
 
         {finalData?.companyProfitPerHS !== 0 && (
-          <div className="px-4 py-3 bg-blue-50">
-            <div className="flex justify-between">
+          <div className="bg-blue-50 px-3 py-2.5 lg:px-4 lg:py-3">
+            <div className="grid grid-cols-[1fr_64px_104px] items-center gap-2">
               <span className="font-semibold text-blue-600">HP / HS</span>
+              <span className="text-right text-xs font-semibold text-blue-500">
+                {formatPercentOfFee(finalData?.companyProfitPerHS || companyProfit1)}
+              </span>
               <span className="font-bold text-blue-600">
                 {formatVND(finalData?.companyProfitPerHS || companyProfit1)}
               </span>
@@ -448,7 +723,7 @@ export default function Sales({ onLogout }: Props) {
   );
 
   const renderContent = () => (
-    <div className="bg-gray-100 min-h-screen">
+    <div className={`${embedded ? "" : "min-h-screen"} pb-24 lg:pb-0 ${isBrand ? "bg-[#FFF8E6] text-[#0047B8]" : "bg-gray-100"}`}>
       <div className="lg:max-w-[1400px] lg:mx-auto lg:px-6 lg:pt-4">
         {finalStatus && statusConfig[finalStatus] && (
           <div
@@ -490,12 +765,58 @@ export default function Sales({ onLogout }: Props) {
             </span>
           </div>
         )}
+
         <div className="lg:grid lg:grid-cols-5 lg:gap-6 mt-2">
           <div className="lg:col-span-3">
             {formProposal && (
               <ProposalForm form={formProposal} setForm={setFormProposal} />
             )}
-            <PolicyPie data={finalData} companyProfit={companyProfit} />
+            <div className="relative">
+              {contractFiles.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowFilesModal(true)}
+                  className={`
+                    absolute top-1/2 left-3 -translate-y-1/2 z-10
+                    inline-flex items-center gap-1.5
+                    px-3 py-2 rounded-full border font-semibold text-xs
+                    shadow-lg backdrop-blur
+                    ${
+                      isBrand
+                        ? "border-[#0047B8]/20 bg-white/95 text-[#0047B8]"
+                        : "border-gray-200 bg-white/95 text-gray-700"
+                    }
+                  `}
+                >
+                  <Paperclip size={14} />
+                  <span>Xem tất cả file</span>
+                  <span
+                    className={`
+                      inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1
+                      rounded-full text-[11px] font-bold
+                      ${isBrand ? "bg-[#0047B8] text-white" : "bg-indigo-600 text-white"}
+                    `}
+                  >
+                    {contractFiles.length}
+                  </span>
+                </button>
+              )}
+              <PolicyPie
+                data={finalData}
+                subjectName={(subject as any)?.name}
+                companyProfit={companyProfit}
+              />
+              <DepreciationRemainingSummary
+                moneyRows={finalData?.httienmat || []}
+                deviceRows={finalData?.htthietbi || []}
+                savedRemainingMoney={
+                  finalData?.remainingCashDepreciationAmount
+                }
+                savedRemainingDevice={
+                  finalData?.remainingDeviceDepreciationAmount
+                }
+              />
+            </div>
           </div>
 
           <div className="lg:col-span-2 lg:sticky lg:top-20 lg:self-start">
@@ -505,7 +826,10 @@ export default function Sales({ onLogout }: Props) {
 
         <div className="lg:mt-6">
           <PolicyPage
-            data={finalData?.ttcs}
+            data={(finalData?.ttcs || []).map((row: RowType) => ({
+              ...row,
+              percentAfterTax: Boolean(row.percentAfterTax ?? percentAfterTax),
+            }))}
             diff={diff}
             renderRowValue={renderRowValue}
             studentPerClass={finalData?.studentPerClass}
@@ -516,7 +840,19 @@ export default function Sales({ onLogout }: Props) {
             data={merged}
             studentPerClass={finalData?.studentPerClass}
             periods={finalData?.periods}
+            mode={finalData?.mode}
           />
+          {/* Từng khoản Tiền mặt #n / Thiết bị #n dạng thẻ (cùng UI với màn
+              xem chính sách của Kinh doanh) — bảng tổng ở trên chỉ gom số. */}
+          {merged.length > 0 && (
+            <SupportCards
+              cdhd={finalData?.cdhd}
+              data={merged}
+              studentPerClass={finalData?.studentPerClass}
+              periods={finalData?.periods}
+              mode={finalData?.mode}
+            />
+          )}
           {renderLogNote()}
           {editHistories.length > 0 && (
             <div className="mx-4 mb-24 mt-4 lg:mx-0">
@@ -527,7 +863,13 @@ export default function Sales({ onLogout }: Props) {
       </div>
     </div>
   );
-  const isDirectorRole = hasRole("director", "director_la");
+  const canEditPolicy = hasRole(
+    "director",
+    "director_la",
+    "saleadmin",
+    "salesadmin",
+    "salesadmin_la",
+  );
 
   const handleOpenEdit = () => {
     if (!finalData) return;
@@ -549,7 +891,7 @@ export default function Sales({ onLogout }: Props) {
       });
 
       alert("Đã duyệt");
-      navigate(-1);
+      goBack();
       setShowApproveModal(false);
       setNote("");
     } catch (err: any) {
@@ -571,30 +913,62 @@ export default function Sales({ onLogout }: Props) {
       });
 
       alert("Đã từ chối");
-      navigate(-1);
+      goBack();
       setShowRejectModal(false);
       setNote("");
     } catch (err: any) {
       alert(err.message);
     }
   };
-  if (loading && !finalData) {
-    return <div className="p-6">Loading...</div>;
+  const statusText =
+    loadError || (loading ? "Đang tải chính sách..." : "Không tìm thấy chính sách.");
+
+  if (!finalData) {
+    if (embedded) {
+      return (
+        <div className="px-6 py-16 text-center text-gray-500">{statusText}</div>
+      );
+    }
+    return (
+      <>
+      <div className={isBrand ? "bg-[#FFF8E6] min-h-screen text-[#0047B8]" : "bg-gray-100 min-h-screen"}>
+        <HeaderWithBack title={decodeURIComponent("Chính sách")} brandSidebarInset={isBrand} />
+        <div className="pt-24 px-6 text-center text-gray-500">
+          {statusText}
+        </div>
+      </div>
+      </>
+    );
   }
   return (
-    <div>
-      <HeaderWithBack title={decodeURIComponent("Chính sách")} />
+    <>
+    <div className={embedded ? "" : isBrand ? "bg-[#FFF8E6] min-h-screen" : ""}>
+      {!embedded && (
+        <HeaderWithBack title={decodeURIComponent("Chính sách")} brandSidebarInset={isBrand} />
+      )}
 
-      {/* DESKTOP */}
-      <div className="hidden lg:block pt-16 pb-24 overflow-auto min-h-screen">
+      {/* DESKTOP — popup nhúng thì hiện ở mọi cỡ màn hình, thanh nút bám đáy popup */}
+      <div
+        className={
+          embedded
+            ? "block"
+            : `hidden lg:block pt-16 pb-24 overflow-auto min-h-screen ${isBrand ? "bg-[#FFF8E6]" : ""}`
+        }
+      >
         {renderContent()}
 
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur border-t border-gray-200 shadow-lg">
+        <div
+          className={
+            embedded
+              ? "sticky bottom-0 z-10 bg-white/95 backdrop-blur border-t border-blue-900/10 shadow-lg"
+              : `fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur border-t shadow-lg ${isBrand ? "border-blue-900/10 lg:left-[286px]" : "border-gray-200"}`
+          }
+        >
           <div className="max-w-[1400px] mx-auto px-6 py-3 flex justify-end gap-4">
-            {isDirectorRole && (
+            {canEditPolicy && (
               <button
                 onClick={handleOpenEdit}
-                className="px-8 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-semibold transition"
+                className="px-8 py-2.5 bg-[#FFC928] hover:bg-amber-400 text-[#3f2d05] rounded-xl font-semibold transition"
               >
                 Chỉnh sửa chính sách
               </button>
@@ -609,7 +983,7 @@ export default function Sales({ onLogout }: Props) {
                 </button>
                 <button
                   onClick={() => setShowApproveModal(true)}
-                  className="px-8 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-semibold transition"
+                  className={`px-8 py-2.5 text-white rounded-xl font-semibold transition ${isBrand ? "bg-[#005BEA] hover:bg-[#0047B8]" : "bg-blue-500 hover:bg-blue-600"}`}
                 >
                   Duyệt
                 </button>
@@ -620,6 +994,7 @@ export default function Sales({ onLogout }: Props) {
       </div>
 
       {/* MOBILE */}
+      {!embedded && (
       <div className="lg:hidden">
         <TransformWrapper
           minScale={0.3}
@@ -645,42 +1020,46 @@ export default function Sales({ onLogout }: Props) {
                 {renderContent()}
               </TransformComponent>
 
-              <div className="fixed bottom-6 left-0 right-0 z-50 flex justify-center gap-4 px-4">
-                {showActions && (
-                  <button
-                    onClick={() => setShowRejectModal(true)}
-                    className="flex-1 max-w-[160px] py-3 bg-red-500 text-white rounded-xl shadow font-semibold"
-                  >
-                    Từ chối
-                  </button>
-                )}
-                {isDirectorRole && (
-                  <button
-                    onClick={handleOpenEdit}
-                    className="px-4 py-3 bg-amber-500 text-white rounded-full shadow font-semibold"
-                  >
-                    Sửa chính sách
-                  </button>
-                )}
+              <div
+                className="fixed bottom-0 left-0 right-0 z-50 grid grid-cols-4 gap-2 border-t border-gray-200 bg-white/95 px-3 pt-2 shadow-[0_-4px_16px_rgba(0,0,0,0.12)] backdrop-blur"
+                style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+              >
                 <button
                   onClick={() => resetTransform()}
-                  className="px-4 py-3 bg-gray-500 text-white rounded-full shadow"
+                  className="min-h-11 rounded-xl bg-gray-600 px-1.5 py-2 text-xs font-semibold text-white shadow active:scale-95"
                 >
-                  🏠
+                  Về giữa
                 </button>
-                {showActions && (
+                {canEditPolicy && (
                   <button
-                    onClick={() => setShowApproveModal(true)}
-                    className="flex-1 max-w-[160px] py-3 bg-blue-500 text-white rounded-xl shadow font-semibold"
+                    onClick={handleOpenEdit}
+                    className="min-h-11 rounded-xl bg-amber-500 px-1.5 py-2 text-xs font-semibold text-white shadow active:scale-95"
                   >
-                    Duyệt
+                    Chỉnh sửa
                   </button>
+                )}
+                {showActions && (
+                  <>
+                    <button
+                      onClick={() => setShowRejectModal(true)}
+                      className="min-h-11 rounded-xl bg-red-500 px-1.5 py-2 text-xs font-semibold text-white shadow active:scale-95"
+                    >
+                      Từ chối
+                    </button>
+                    <button
+                      onClick={() => setShowApproveModal(true)}
+                      className="min-h-11 rounded-xl bg-blue-500 px-1.5 py-2 text-xs font-semibold text-white shadow active:scale-95"
+                    >
+                      Duyệt
+                    </button>
+                  </>
                 )}
               </div>
             </>
           )}
         </TransformWrapper>
       </div>
+      )}
       {showRejectModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-5 w-[90%] max-w-md shadow-lg">
@@ -709,6 +1088,43 @@ export default function Sales({ onLogout }: Props) {
               >
                 Xác nhận
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(event) => void uploadContract(event.target.files)}
+      />
+      {showFilesModal && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setShowFilesModal(false)}
+        >
+          <div
+            className="flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4 py-3">
+              <h2 className="text-base font-bold text-gray-900">
+                Tổng hợp file ({contractFiles.length})
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowFilesModal(false)}
+                className="rounded-full p-1.5 text-gray-500 hover:bg-gray-100"
+                aria-label="Đóng"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 sm:grid sm:grid-cols-1 lg:grid-cols-3 sm:gap-3 sm:space-y-0">
+              {POLICY_CONTRACT_CATEGORIES.map((category) =>
+                renderCategorySection(category),
+              )}
             </div>
           </div>
         </div>
@@ -802,5 +1218,6 @@ export default function Sales({ onLogout }: Props) {
         </div>
       )}
     </div>
+    </>
   );
 }

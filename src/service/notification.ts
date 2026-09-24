@@ -79,6 +79,47 @@ export const policyNotificationApi = {
 };
 
 // ==========================================================
+// LỊCH DẠY (Nhân sự gửi cho giáo viên)
+// ==========================================================
+
+export const teachingScheduleNotificationApi = {
+    getAll: async (
+        page = 1,
+        limit = 10,
+        tab?: 'unread' | 'read',
+    ) => {
+        const res = await api.get(
+            '/notifications/teaching-schedule',
+            {
+                params: {
+                    page,
+                    limit,
+                    tab,
+                },
+            },
+        );
+
+        return res.data;
+    },
+
+    getUnreadCount: async () => {
+        const res = await api.get(
+            '/notifications/teaching-schedule/unread-count',
+        );
+
+        return res.data;
+    },
+
+    markAllAsRead: async () => {
+        const res = await api.patch(
+            '/notifications/teaching-schedule/read-all',
+        );
+
+        return res.data;
+    },
+};
+
+// ==========================================================
 // SUGGEST
 // ==========================================================
 
@@ -233,4 +274,39 @@ export const weeklyPlanNotificationApi = {
         return res.data;
     },
 
+};
+
+// ==========================================================
+// GIẢNG DẠY — xác nhận lịch & báo giảng (gửi cho Giáo vụ/Nhân sự)
+// ==========================================================
+// Chưa có endpoint riêng như POLICY/REPORT — 3 type này dùng thẳng
+// GET /notifications?type=... (endpoint chung, đã lọc theo receiverId).
+export type TeachingAlertType =
+    | 'TEACHING_SCHEDULE_CONFIRM_RESULT'
+    | 'TEACHING_SCHEDULE_CONFIRM_ALERT'
+    | 'TEACHING_LESSON_REPORT_ALERT'
+    | 'TEACHER_LOCATION_CHANGE_REQUEST'
+    | 'TEACHING_REPLACEMENT_REQUEST';
+
+export const teachingAlertNotificationApi = {
+    getAll: async (
+        type: TeachingAlertType,
+        page = 1,
+        limit = 10,
+        tab?: 'unread' | 'read',
+    ) => {
+        const res = await api.get(
+            '/notifications',
+            {
+                params: {
+                    type,
+                    page,
+                    limit,
+                    tab,
+                },
+            },
+        );
+
+        return res.data;
+    },
 };

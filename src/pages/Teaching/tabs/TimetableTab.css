@@ -1,0 +1,138 @@
+/* Cột và hàng dùng chung kích thước cho tiêu đề, lịch đã xếp và ô nhập. */
+.timetable-grid {
+  --class-width: 128px;
+  --subject-width: 150px;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: #44403c;
+  font-size: 13px;
+}
+/* Một số màn xuất chính sách có CSS th/td toàn cục với padding !important. */
+.timetable-grid th, .timetable-grid td { box-sizing: border-box; font-size: 13px; }
+/* Sticky đặt trên từng ô thead (không đặt trên <thead>) để Safari/iOS cũng
+   giữ được hàng "Thứ ..." khi cuộn dọc. */
+.timetable-grid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  padding: 0 !important;
+  height: 38px;
+  background: #fdf6ee;
+  border-bottom: 1px solid #f0e4d4;
+  color: #57534e;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-align: center;
+}
+.timetable-grid thead .timetable-day {
+  background: #ffedd5;
+  border-right: 1px solid #f0e4d4;
+  color: #9a3412;
+  font-size: 13px;
+  letter-spacing: 0;
+}
+.timetable-grid thead .timetable-weekend { background: #fdf6ee; color: #a8a29e; }
+/* Hàng 2 (Lớp học / Giáo viên) dính ngay dưới hàng "Thứ ..." cao 38px. */
+.timetable-grid thead .timetable-subhead { top: 38px; height: 30px; padding: 0 12px !important; background: #fdfaf6; text-align: left; }
+.timetable-grid .timetable-day-end { border-right: 1px solid #f0e4d4; }
+.timetable-grid .timetable-fixed { position: sticky; z-index: 20; }
+.timetable-grid thead .timetable-fixed { z-index: 40; }
+.timetable-grid .timetable-session { left: 0; border-right: 1px solid #ece2d5; }
+.timetable-grid .timetable-period { left: var(--session-width, 56px); border-right: 1px solid #ece2d5; }
+.timetable-grid .timetable-time { left: calc(var(--session-width, 56px) + var(--period-width, 92px)); border-right: 1px solid #ddd0bd; }
+.timetable-grid tbody tr { --row-surface: #fff; }
+.timetable-grid tbody tr:nth-child(even) { --row-surface: #fffdfa; }
+.timetable-grid tbody td, .timetable-grid tbody th {
+  padding: 8px 0 !important;
+  border-bottom: 1px solid #ece2d5;
+  background: var(--row-surface);
+  vertical-align: top;
+}
+.timetable-grid tbody .timetable-session { background: #fdfaf6; vertical-align: middle; text-align: center; }
+.timetable-grid .timetable-session-label { color: #a8a29e; font-size: 10px; font-weight: 700; letter-spacing: .08em; }
+.timetable-grid .timetable-session-start:not(:first-child) > td,
+.timetable-grid .timetable-session-start:not(:first-child) > th { border-top: 2px solid #ddd0bd; }
+.timetable-period-content { display: flex; flex-direction: column; align-items: center; }
+.timetable-period-number { display: grid; place-items: center; width: 32px; height: 40px; color: #44403c; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.timetable-period-actions { display: flex; align-items: center; justify-content: center; gap: 2px; height: 26px; }
+.timetable-period-actions button { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 5px; color: #a8a29e; }
+.timetable-period-actions button:hover:not(:disabled) { background: #ffedd5; color: #ea580c; }
+.timetable-period-actions button:disabled { opacity: .25; cursor: not-allowed; }
+.timetable-period-actions .timetable-delete:hover { background: #fff1f2; color: #e11d48; }
+.timetable-time-range { display: grid; grid-template-columns: minmax(0, 1fr) 10px minmax(0, 1fr); align-items: center; gap: 4px; min-height: 40px; padding: 0 10px; font-variant-numeric: tabular-nums; }
+.timetable-time-range > span { text-align: center; color: #a8a29e; }
+.timetable-time-range input { width: 100%; min-width: 0; height: 34px; padding: 0 5px; border: 1px solid #ece2d5; border-radius: 6px; background: #fff; color: #57534e; font-size: 12px; font-weight: 500; }
+.timetable-time-range input::-webkit-calendar-picker-indicator { margin: 0; padding: 0; opacity: .45; cursor: pointer; }
+.timetable-time-range time { text-align: center; font-size: 13px; font-weight: 500; }
+.timetable-grid .timetable-cell { padding: 8px 0 !important; border-right: 1px solid #f0e4d4; }
+.timetable-cell-content { min-height: 40px; }
+.timetable-entry { display: grid; grid-template-columns: var(--class-width) var(--subject-width) minmax(0, 1fr); min-height: 40px; align-items: stretch; }
+.timetable-entry + .timetable-entry { margin-top: 4px; }
+.timetable-class-slot, .timetable-subject-slot, .timetable-teacher-slot { display: flex; align-items: center; min-width: 0; padding: 2px 8px; }
+.timetable-class-slot, .timetable-subject-slot { border-right: 1px solid #f3ece3; }
+.timetable-teacher-slot { gap: 4px; }
+.timetable-saved-class, .timetable-saved-subject, .timetable-saved-teacher { width: 100%; min-width: 0; min-height: 36px; padding: 4px; border-radius: 6px; text-align: left; white-space: normal; overflow-wrap: anywhere; line-height: 1.5; }
+.timetable-saved-class { color: #44403c; font-weight: 600; }
+.timetable-saved-subject { color: #57534e; font-size: 12px; }
+.timetable-saved-teacher { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+.timetable-saved-class:hover:not(:disabled), .timetable-saved-subject:hover:not(:disabled), .timetable-saved-teacher:hover:not(:disabled) { background: #fff7ed; }
+.timetable-saved-class:disabled, .timetable-saved-subject:disabled, .timetable-saved-teacher:disabled { cursor: default; }
+.timetable-teacher-dot { width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: currentColor; opacity: .75; }
+.timetable-remove-schedule { display: grid; place-items: center; flex-shrink: 0; width: 24px; height: 28px; border-radius: 5px; color: #a8a29e; }
+.timetable-remove-schedule:hover { background: #fff1f2; color: #e11d48; }
+.timetable-draft select { height: 36px; width: 100%; min-width: 0; border: 1px solid #ece2d5; border-radius: 6px; padding: 0 6px; background: #fff; color: #57534e; font-size: 12px; text-overflow: ellipsis; }
+.timetable-draft select:disabled { background: #fdfaf6; color: #a8a29e; }
+.timetable-select { width: 100%; min-width: 0; }
+.timetable-select > button { height: 36px; padding: 0 8px; border-color: #ece2d5; border-radius: 6px; font-size: 12px; }
+.timetable-cell-footer { display: flex; align-items: center; min-height: 26px; padding: 0 8px; }
+.timetable-cell-footer button { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 4px; border-radius: 5px; color: #a8a29e; font-size: 11px; font-weight: 500; }
+.timetable-cell-footer button:hover { background: #ffedd5; color: #ea580c; }
+.timetable-cell-footer button:disabled { opacity: .4; }
+.timetable-empty { display: grid; place-items: center; height: 40px; color: #ddd0bd; }
+.timetable-grid tbody .timetable-break > td, .timetable-grid tbody .timetable-break > th { background: #fffbeb; }
+.timetable-break-label { display: grid; place-items: center; min-height: 40px; color: #b45309; font-size: 11px; font-weight: 500; }
+.timetable-grid .timetable-break-cell { border-right: 1px solid #f0e4d4; text-align: center; vertical-align: middle; color: #a8a29e; font-size: 11px; }
+.timetable-entry-rejected { background: #fff1f2; }
+.timetable-rejected-label { display: flex; align-items: center; gap: 3px; color: #e11d48; font-size: 10px; font-weight: 600; text-decoration: none; }
+.timetable-grid .timetable-cell-error { background: #fff7f7; }
+.timetable-cell-message { margin: 4px 12px 0; color: #be123c; font-size: 11px; line-height: 1.5; white-space: normal; }
+.timetable-grid button:focus-visible, .timetable-grid select:focus-visible, .timetable-grid input:focus-visible { outline: 2px solid #fb923c; outline-offset: 2px; }
+@media (max-width: 767px) {
+  /* Điện thoại: giữ Buổi + Tiết + Khung giờ dính nhưng thu gọn để còn chỗ cho các thứ. */
+  .timetable-grid th, .timetable-grid td { font-size: 12px; }
+  .timetable-grid thead th { padding: 0 4px !important; }
+  .timetable-grid thead .timetable-subhead { padding: 0 6px !important; }
+  .timetable-grid .timetable-session { padding: 0 !important; }
+  .timetable-grid .timetable-session-label { display: block; writing-mode: vertical-rl; transform: rotate(180deg); font-size: 9px; letter-spacing: .12em; }
+  .timetable-grid thead .timetable-session { font-size: 0; }
+  .timetable-period-number { width: 100%; font-size: 14px; }
+  .timetable-break-label { font-size: 10px; }
+  .timetable-period-actions { height: 30px; }
+  .timetable-period-actions button { width: 22px; height: 28px; }
+  /* Khung giờ xếp dọc: 07:30 trên, 08:05 dưới. */
+  .timetable-time-range { grid-template-columns: 1fr; gap: 0; padding: 0 4px; }
+  .timetable-time-range > span { display: none; }
+  .timetable-time-range time { font-size: 12px; line-height: 1.4; }
+  .timetable-time-range input { height: 28px; padding: 0 2px; font-size: 11px; }
+  .timetable-class-slot, .timetable-subject-slot, .timetable-teacher-slot { padding: 2px 4px; }
+  .timetable-saved-class, .timetable-saved-subject, .timetable-saved-teacher { padding: 2px; font-size: 12px; line-height: 1.35; }
+  .timetable-saved-subject { font-size: 11px; }
+  .timetable-cell-message { margin: 4px 6px 0; }
+
+  /* Ô ngày: Lớp / Môn / GV xếp dọc thành một thẻ để thấy đủ trong một khung hình. */
+  .timetable-grid-stacked .timetable-entry { grid-template-columns: minmax(0, 1fr); grid-auto-rows: auto; min-height: 0; margin: 0 4px; padding: 4px 0; border: 1px solid #f0e4d4; border-radius: 8px; background: var(--row-surface, #fff); }
+  .timetable-grid-stacked .timetable-entry + .timetable-entry { margin-top: 6px; }
+  .timetable-grid-stacked .timetable-class-slot, .timetable-grid-stacked .timetable-subject-slot { border-right: 0; }
+  .timetable-grid-stacked .timetable-class-slot, .timetable-grid-stacked .timetable-subject-slot, .timetable-grid-stacked .timetable-teacher-slot { padding: 0 6px; }
+  .timetable-grid-stacked .timetable-saved-class, .timetable-grid-stacked .timetable-saved-subject, .timetable-grid-stacked .timetable-saved-teacher { min-height: 0; padding: 1px 2px; }
+  .timetable-grid-stacked .timetable-saved-class { font-size: 13px; }
+  .timetable-grid-stacked .timetable-saved-subject { color: #78716c; }
+  .timetable-grid-stacked .timetable-saved-teacher { font-size: 12px; }
+  .timetable-grid-stacked .timetable-draft { gap: 4px; padding: 4px 6px; }
+  .timetable-grid-stacked .timetable-draft select { height: 32px; }
+  .timetable-grid-stacked .timetable-cell-content { min-height: 0; }
+  .timetable-grid-stacked .timetable-empty { height: 32px; }
+  .timetable-grid-stacked thead th { height: 36px; }
+}

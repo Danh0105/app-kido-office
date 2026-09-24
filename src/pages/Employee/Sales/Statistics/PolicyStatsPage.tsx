@@ -9,6 +9,7 @@ import HeaderWithBack from "@/components/HeaderWithBack";
 import { policiesApi } from "@/service/policy";
 import PolicyPopup from "./components/PolicyPopup";
 import SchoolInfoCard from "./components/SchoolInfoCard";
+import SearchableSelect from "@/components/SearchableSelect";
 
 const groupByProvince = (rows: any[]) => {
     const map = new Map();
@@ -290,22 +291,14 @@ export default function PolicyStatsPage() {
                         </select>
 
                         {/* MÔN HỌC */}
-                        <select
-                            className="border rounded px-2 py-2 text-sm w-1/2"
-                            value={selectedSubject || ""}
-                            onChange={(e) =>
-                                setSelectedSubject(
-                                    e.target.value ? Number(e.target.value) : null
-                                )
-                            }
-                        >
-                            <option value="">Môn học</option>
-                            {subjectsFilter.map((s: any) => (
-                                <option key={s.id} value={s.id}>
-                                    {s.name}
-                                </option>
-                            ))}
-                        </select>
+                        <SearchableSelect
+                            className="w-1/2"
+                            value={String(selectedSubject || "")}
+                            onChange={(value) => setSelectedSubject(value ? Number(value) : null)}
+                            options={subjectsFilter}
+                            placeholder="Môn học"
+                            searchPlaceholder="Tìm môn học…"
+                        />
                     </div>
 
                 </div>

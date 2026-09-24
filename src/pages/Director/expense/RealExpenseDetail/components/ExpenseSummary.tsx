@@ -1,14 +1,29 @@
-import { AlertCircle, ArrowDownRight, ArrowUpRight, Loader2, WalletCards } from "lucide-react";
+import {
+  AlertCircle,
+  Banknote,
+  Building2,
+  CircleDollarSign,
+  Clock3,
+  Loader2,
+  ReceiptText,
+  WalletCards,
+} from "lucide-react";
 
 type Props = {
   data: any;
   loading: boolean;
   error: string;
   onRetry: () => void;
+  school?: any;
 };
 
 export const unwrap = (value: any) =>
   value?.data && !Array.isArray(value.data) ? value.data : value || {};
+
+export const toNumber = (value: unknown, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
 
 const numberFrom = (sources: any[], keys: string[]) => {
   for (const source of sources) {
@@ -31,17 +46,28 @@ export const arrayFrom = (sources: any[], keys: string[]) => {
   return [];
 };
 
+export const formatCurrency = (value: unknown) => {
+  if (value === null || value === undefined || value === "") return "--";
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return String(value);
+  return `${new Intl.NumberFormat("vi-VN").format(parsed)} đ`;
+};
+
 const sum = (items: any[], getValue: (item: any) => number) =>
   items.reduce((total, item) => total + getValue(item), 0);
 
-const amount = (value: number) =>
-  `${Number(value || 0).toLocaleString("vi-VN")} đ`;
-
-export default function ExpenseSummary({ data, loading, error, onRetry }: Props) {
+export default function ExpenseSummary({
+  data,
+  loading,
+  error,
+  onRetry,
+  school,
+}: Props) {
   if (loading) {
     return (
       <div className="flex min-h-[300px] items-center justify-center rounded-3xl bg-white text-slate-500 shadow-sm">
-        <Loader2 className="mr-2 animate-spin" size={22} /> Đang tải tổng hợp...
+        <Loader2 className="mr-2 animate-spin" size={22} />
+        Đang tải tổng hợp...
       </div>
     );
   }
@@ -50,9 +76,14 @@ export default function ExpenseSummary({ data, loading, error, onRetry }: Props)
     return (
       <div className="rounded-3xl border border-rose-200 bg-rose-50 p-8 text-center">
         <AlertCircle className="mx-auto text-rose-500" size={34} />
-        <p className="mt-3 font-bold text-rose-700">Không thể tải dữ liệu tổng hợp</p>
+        <p className="mt-3 font-bold text-rose-700">
+          Không thể tải dữ liệu tổng hợp
+        </p>
         <p className="mt-1 text-sm text-rose-600">{error}</p>
-        <button onClick={onRetry} className="mt-4 rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white">
+        <button
+          onClick={onRetry}
+          className="mt-4 rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white"
+        >
           Thử lại
         </button>
       </div>
@@ -63,103 +94,241 @@ export default function ExpenseSummary({ data, loading, error, onRetry }: Props)
   const sources = [payload?.summary, payload].filter(Boolean);
   const revenues = arrayFrom(sources, ["revenueItems", "revenues"]);
   const schoolItems = arrayFrom(sources, ["schoolExpenseItems", "schoolItems"]);
-  const managementItems = arrayFrom(sources, ["managementExpenseItems", "managementItems"]);
+  const managementItems = arrayFrom(sources, [
+    "managementExpenseItems",
+    "managementItems",
+  ]);
+  const cashPolicyItems = arrayFrom(sources, [
+    "cashPolicyItems",
+    "cashPolicies",
+  ]);
 
   const calculatedRevenue = sum(revenues, (item) =>
-    Number(item.invoiceAmount ?? item.totalAmount ??
-      Number(item.unitPrice || 0) * Number(item.studentCount || 0) * Number(item.monthsCount || 0)),
+    toNumber(
+      item.invoiceAmount ??
+        item.totalAmount ??
+        toNumber(item.unitPrice) *
+          toNumber(item.studentCount) *
+          toNumber(item.monthsCount)
+    )
   );
-  const calculatedRevenuePaid = sum(revenues, (item) => Number(item.paidAmount || 0));
+  const calculatedRevenuePaid = sum(revenues, (item) =>
+    toNumber(item.paidAmount)
+  );
   const calculatedSchool = sum(schoolItems, (item) =>
-    Number(item.schoolExpenseAmount ?? item.totalAmount ??
-      (Number(item.teacherUnitPrice ?? item.giaovien ?? 0) +
-        Number(item.taxUnitPrice ?? item.thue ?? item.tax ?? 0) +
-        Number(item.csvcUnitPrice ?? item.csvc ?? 0)) *
-        Number(item.studentCount || 0) * Number(item.monthsCount || 0)),
+    toNumber(
+      item.schoolExpenseAmount ??
+        item.totalAmount ??
+        (toNumber(item.teacherUnitPrice ?? item.giaovien) +
+          toNumber(item.taxUnitPrice ?? item.thue ?? item.tax) +
+          toNumber(item.csvcUnitPrice ?? item.csvc)) *
+          toNumber(item.studentCount) *
+          toNumber(item.monthsCount)
+    )
   );
   const calculatedManagement = sum(managementItems, (item) =>
-    Number(item.totalOutside ?? item.totalOutsideExpense ?? item.totalAmount ??
-      (Number(item.ql1UnitPrice || 0) + Number(item.ql2UnitPrice || 0)) *
-        Number(item.studentCount || 0) * Number(item.monthsCount || 0)),
+    toNumber(
+      item.totalOutside ??
+        item.totalOutsideExpense ??
+        item.totalAmount ??
+        (Math.max(0, toNumber(item.ql1UnitPrice) - toNumber(item.ql1Tax)) +
+          Math.max(0, toNumber(item.ql2UnitPrice) - toNumber(item.ql2Tax))) *
+          toNumber(item.studentCount) *
+          toNumber(item.monthsCount) +
+          (Array.isArray(item.otherCosts) ? item.otherCosts : []).reduce(
+            (total: number, cost: any) =>
+              total +
+              Math.max(
+                0,
+                toNumber(cost.unitPrice ?? cost.percent ?? cost.value) -
+                  toNumber(cost.tax),
+              ),
+            0,
+          )
+    )
   );
   const calculatedExpensePaid =
-    sum(schoolItems, (item) => Number(item.paidAmount || 0)) +
-    sum(managementItems, (item) => Number(item.paidAmount || 0));
+    sum(schoolItems, (item) => toNumber(item.paidAmount)) +
+    sum(managementItems, (item) => toNumber(item.paidAmount));
+  const calculatedCashPolicy = sum(
+    cashPolicyItems,
+    (item) => toNumber(item.cashPolicyAmount) + toNumber(item.otherAmount)
+  );
 
-  const totalRevenue = numberFrom(sources, ["totalRevenue", "revenueTotal", "totalInvoice"]) ?? calculatedRevenue;
-  const revenueRemaining = numberFrom(sources, ["remainingRevenue", "revenueRemaining", "totalReceivable"]);
-  const revenuePaid = numberFrom(sources, ["totalRevenuePaid", "revenuePaid", "totalCollected", "collectedAmount"])
-    ?? (revenueRemaining === undefined ? calculatedRevenuePaid : totalRevenue - revenueRemaining);
-  const totalSchool = numberFrom(sources, ["totalSchoolExpense", "totalSchool", "schoolExpenseTotal"]) ?? calculatedSchool;
-  const totalManagement = numberFrom(sources, ["totalManagementExpense", "totalManagement", "totalOutsideExpense", "totalOutside"]) ?? calculatedManagement;
-  const totalExpense = numberFrom(sources, ["totalExpense", "expenseTotal"]) ?? totalSchool + totalManagement;
-  const expenseRemaining = numberFrom(sources, ["remainingExpense", "expenseRemaining", "totalPayable"]);
-  const expensePaid = numberFrom(sources, ["totalExpensePaid", "expensePaid", "totalPaidExpense"])
-    ?? (expenseRemaining === undefined ? calculatedExpensePaid : totalExpense - expenseRemaining);
-  const netCashFlow = revenuePaid - expensePaid;
+  const totalRevenue =
+    numberFrom(sources, ["totalRevenue", "revenueTotal", "totalInvoice"]) ??
+    calculatedRevenue;
+  const totalExpense =
+    numberFrom(sources, ["totalExpense", "expenseTotal"]) ??
+    calculatedSchool + calculatedManagement;
+  const totalCashPolicy =
+    numberFrom(sources, ["totalCashPolicy", "cashPolicyTotal"]) ??
+    calculatedCashPolicy;
+  const explicitRevenueRemaining = numberFrom(sources, [
+    "remainingRevenue",
+    "revenueRemaining",
+    "totalReceivable",
+  ]);
+  const revenuePaid =
+    numberFrom(sources, [
+      "totalRevenuePaid",
+      "revenuePaid",
+      "totalCollected",
+      "collectedAmount",
+    ]) ??
+    (explicitRevenueRemaining === undefined
+      ? calculatedRevenuePaid
+      : totalRevenue - explicitRevenueRemaining);
+  const remainingRevenue =
+    explicitRevenueRemaining ?? totalRevenue - revenuePaid;
+  const explicitExpenseRemaining = numberFrom(sources, [
+    "remainingExpense",
+    "expenseRemaining",
+    "totalPayable",
+  ]);
+  const expensePaid =
+    numberFrom(sources, [
+      "totalExpensePaid",
+      "expensePaid",
+      "totalPaidExpense",
+    ]) ??
+    (explicitExpenseRemaining === undefined
+      ? calculatedExpensePaid
+      : totalExpense - explicitExpenseRemaining);
+  const remainingExpense =
+    explicitExpenseRemaining ?? totalExpense - expensePaid;
+  const expenseItems = arrayFrom(sources, ["expenseItems", "items"]);
+  const incompleteCount =
+    numberFrom(sources, ["incompleteCount", "pendingItemsCount"]) ??
+    (expenseItems.length
+      ? expenseItems.filter(
+          (item) => toNumber(item.remainingOutsideExpense ?? item.remaining) > 0
+        ).length
+      : revenues.filter(
+          (item) =>
+            toNumber(
+              item.remainingAmount ??
+                toNumber(item.invoiceAmount) - toNumber(item.paidAmount)
+            ) > 0
+        ).length +
+        schoolItems.filter(
+          (item) =>
+            toNumber(
+              item.remaining ??
+                toNumber(item.schoolExpenseAmount) - toNumber(item.paidAmount)
+            ) > 0
+        ).length +
+        managementItems.filter(
+          (item) =>
+            toNumber(
+              item.remaining ??
+                toNumber(item.totalOutside ?? item.totalOutsideExpense) -
+                  toNumber(item.paidAmount)
+            ) > 0
+        ).length);
+
+  const summarySource = sources[0] || {};
+  const period = summarySource.period || summarySource.expensePeriod || {};
+  const schoolName =
+    school?.name || summarySource.school?.name || summarySource.schoolName;
+  const periodName =
+    period.name ||
+    summarySource.periodName ||
+    (period.month && period.year
+      ? `Tháng ${period.month}/${period.year}`
+      : "Kỳ thu chi hiện tại");
 
   const cards = [
-    ["Tổng doanh thu", totalRevenue, "text-emerald-700", "bg-emerald-50"],
-    ["Đã thu", revenuePaid, "text-blue-700", "bg-blue-50"],
-    ["Còn phải thu", totalRevenue - revenuePaid, "text-amber-700", "bg-amber-50"],
-    ["Tổng chi dự kiến", totalExpense, "text-rose-700", "bg-rose-50"],
-    ["Đã chi", expensePaid, "text-violet-700", "bg-violet-50"],
-    ["Còn phải chi", totalExpense - expensePaid, "text-orange-700", "bg-orange-50"],
-  ] as const;
+    {
+      label: "Tổng doanh thu",
+      value: totalRevenue,
+      icon: CircleDollarSign,
+      tone: "bg-emerald-50 text-emerald-700",
+    },
+    {
+      label: "Tổng chi",
+      value: totalExpense,
+      icon: ReceiptText,
+      tone: "bg-rose-50 text-rose-700",
+    },
+    {
+      label: "Chính sách tiền mặt",
+      value: totalCashPolicy,
+      icon: Banknote,
+      tone: "bg-violet-50 text-violet-700",
+    },
+    {
+      label: "Còn phải thu",
+      value: remainingRevenue,
+      icon: WalletCards,
+      tone: "bg-amber-50 text-amber-700",
+    },
+    {
+      label: "Còn phải chi",
+      value: remainingExpense,
+      icon: WalletCards,
+      tone: "bg-orange-50 text-orange-700",
+    },
+  ];
 
   return (
     <div className="space-y-5">
-      <section className="rounded-3xl bg-gradient-to-r from-slate-900 to-emerald-900 p-6 text-white shadow-sm">
+      <section className="rounded-3xl bg-gradient-to-r from-slate-900 to-blue-900 p-6 text-white shadow-sm">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-200">Tổng hợp thu chi</p>
-            <h2 className="mt-2 text-2xl font-black">Tình hình tài chính hiện tại</h2>
+            <div className="flex items-center gap-2 text-sm font-bold text-blue-200">
+              <Building2 size={18} />
+              {schoolName || "Chi tiết thu chi trường học"}
+            </div>
+            <h2 className="mt-2 text-2xl font-black">{periodName}</h2>
           </div>
           <div className="rounded-2xl bg-white/10 px-5 py-3">
-            <p className="text-xs font-bold text-emerald-100">Dòng tiền ròng</p>
-            <p className={`mt-1 text-2xl font-black ${netCashFlow < 0 ? "text-rose-300" : "text-white"}`}>
-              {amount(netCashFlow)}
+            <p className="text-sm font-bold text-blue-100">Còn lại dự kiến</p>
+            <p className="mt-1 text-2xl font-black">
+              {formatCurrency(totalRevenue - totalExpense - totalCashPolicy)}
             </p>
           </div>
         </div>
       </section>
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {cards.map(([label, value, color, background]) => (
-          <div key={label} className={`rounded-3xl border border-slate-100 p-5 shadow-sm ${background}`}>
-            <p className="text-sm font-bold text-slate-500">{label}</p>
-            <p className={`mt-2 text-2xl font-black ${color}`}>{amount(value)}</p>
+        {cards.map(({ label, value, icon: Icon, tone }) => (
+          <div
+            key={label}
+            className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-bold text-slate-500">{label}</p>
+                <p className="mt-2 text-2xl font-black text-slate-900">
+                  {formatCurrency(value)}
+                </p>
+              </div>
+              <span
+                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${tone}`}
+              >
+                <Icon size={23} />
+              </span>
+            </div>
           </div>
         ))}
-      </section>
 
-      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 px-5 py-4">
-          <h3 className="font-black text-slate-900">Cơ cấu thu chi</h3>
-        </div>
-        <div className="divide-y divide-slate-100">
-          <SummaryRow icon={<ArrowUpRight size={18} />} label="Doanh thu" value={totalRevenue} tone="emerald" />
-          <SummaryRow icon={<ArrowDownRight size={18} />} label="Chi trường" value={totalSchool} tone="rose" />
-          <SummaryRow icon={<ArrowDownRight size={18} />} label="Chi quản lý / chi ngoài" value={totalManagement} tone="orange" />
-          <SummaryRow icon={<WalletCards size={18} />} label="Chênh lệch dự kiến" value={totalRevenue - totalExpense} tone="blue" strong />
+        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-bold text-slate-500">
+                Dòng chưa hoàn thành
+              </p>
+              <p className="mt-2 text-2xl font-black text-slate-900">
+                {incompleteCount}
+              </p>
+            </div>
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-red-700">
+              <Clock3 size={23} />
+            </span>
+          </div>
         </div>
       </section>
-    </div>
-  );
-}
-
-function SummaryRow({ icon, label, value, tone, strong = false }: any) {
-  const colors: Record<string, string> = {
-    emerald: "bg-emerald-100 text-emerald-700",
-    rose: "bg-rose-100 text-rose-700",
-    orange: "bg-orange-100 text-orange-700",
-    blue: "bg-blue-100 text-blue-700",
-  };
-  return (
-    <div className={`flex items-center gap-3 px-5 py-4 ${strong ? "bg-blue-50/50" : ""}`}>
-      <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${colors[tone]}`}>{icon}</span>
-      <span className="flex-1 font-bold text-slate-600">{label}</span>
-      <span className={`text-right font-black ${strong ? "text-blue-700" : "text-slate-900"}`}>{amount(value)}</span>
     </div>
   );
 }

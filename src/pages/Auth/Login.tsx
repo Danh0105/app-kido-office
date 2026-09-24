@@ -4,6 +4,8 @@ import { useNavigate } from "react-router-dom";
 import FaceVerify from "../FaceId/FaceVerify";
 import { initWebPush } from "@/utils/webPush";
 import { Capacitor } from "@capacitor/core";
+import { loginErrorMessage, loginWithRetry, networkMessage } from "./lib";
+
 type Props = {
   onSuccess?: () => void;
 };
@@ -22,32 +24,50 @@ export default function Login({ onSuccess }: Props) {
   });
 
   const [loading, setLoading] = useState(false);
+  /** Lần gọi thứ 2 trở đi → nói cho người dùng biết đang thử lại, không phải treo. */
+  const [retrying, setRetrying] = useState(false);
+  const [error, setError] = useState("");
   const navigate = useNavigate();
   const [tab, setTab] = useState<"password" | "face">("password");
   const isValid = form.phone && form.password;
 
+  /** Vào màn chính theo role — dùng chung cho đăng nhập mật khẩu và FaceID. */
+  const goHome = (user: any) => {
+    const roles: string[] = user?.roles ?? [];
+    const EMPLOYEE_ROLES = ["employee", "probation", "employee_la", "sales"];
+    navigate(
+      EMPLOYEE_ROLES.some((r) => roles.includes(r))
+        ? "/employee/home"
+        : "/director"
+    );
+  };
+
   const handleSubmit = async () => {
-    if (!isValid) return;
+    if (!isValid || loading) return;
+
+    setError("");
+
+    // navigator.onLine chỉ đáng tin khi nó báo `false` — đủ để khỏi bắt chờ 20 giây.
+    if (!navigator.onLine) {
+      setError("Máy đang không có mạng. Bật lại Wi-Fi hoặc 4G rồi thử lại.");
+      return;
+    }
+
+    setLoading(true);
 
     try {
-      setLoading(true);
+      const result = await loginWithRetry(
+        { phone: form.phone, password: form.password },
+        () => setRetrying(true)
+      );
 
-      const res = await fetch("https://sales.kidoedu.vn/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          phone: form.phone,
-          password: form.password,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.message || "Login failed");
+      const message = loginErrorMessage(result);
+      if (message) {
+        setError(message);
+        return;
       }
+
+      const { data } = result;
 
       localStorage.setItem("access_token", data.access_token);
       localStorage.setItem("user", JSON.stringify(data.user));
@@ -57,28 +77,28 @@ export default function Login({ onSuccess }: Props) {
           JSON.stringify({
             phone: form.phone,
             password: form.password,
-          }),
+          })
         );
       } else {
         localStorage.removeItem("remember_login");
       }
 
-      await initWebPush();
+      // Đăng ký nhận thông báo chạy nền: nó gọi Firebase rồi gọi tiếp API lưu
+      // token, cả hai đều không có hạn chờ. Trước đây `await` ở đây nên mạng yếu
+      // là kẹt luôn ở màn đăng nhập dù token đã lưu xong — đăng nhập được rồi
+      // mà người dùng tưởng hỏng.
+      void initWebPush().catch((pushError) => {
+        console.warn("Web push initialization failed after login:", pushError);
+      });
 
-      const roles: string[] = data.user.roles ?? [];
-      const EMPLOYEE_ROLES = ["employee", "probation", "employee_la", "sales"];
-      if (EMPLOYEE_ROLES.some((r) => roles.includes(r))) {
-        navigate("/employee/home");
-      } else {
-        navigate("/director");
-      }
-
+      goHome(data.user);
       onSuccess?.();
     } catch (err: any) {
-      console.error(err.message);
-      alert(err.message);
+      console.error("Login error:", err);
+      setError(networkMessage(err));
     } finally {
       setLoading(false);
+      setRetrying(false);
     }
   };
   useEffect(() => {
@@ -170,6 +190,12 @@ export default function Login({ onSuccess }: Props) {
                 </label>
               </div>
 
+              {error && (
+                <p className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm leading-relaxed text-red-600">
+                  {error}
+                </p>
+              )}
+
               <button
                 disabled={!isValid || loading}
                 onClick={handleSubmit}
@@ -177,7 +203,11 @@ export default function Login({ onSuccess }: Props) {
                   !isValid || loading ? "bg-gray-400" : "bg-blue-500"
                 }`}
               >
-                {loading ? "Đang đăng nhập..." : "Đăng nhập"}
+                {loading
+                  ? retrying
+                    ? "Mạng chậm, đang thử lại…"
+                    : "Đang đăng nhập..."
+                  : "Đăng nhập"}
               </button>
             </>
           )}
@@ -185,16 +215,15 @@ export default function Login({ onSuccess }: Props) {
           {/* ================= FACE ================= */}
           {tab === "face" && (
             <FaceVerify
-              onSuccess={async (user: any) => {
-                await initWebPush();
-
-                const roles: string[] = user.roles ?? [];
-                const EMPLOYEE_ROLES = ["employee", "probation", "employee_la", "sales"];
-                if (EMPLOYEE_ROLES.some((r) => roles.includes(r))) {
-                  navigate("/employee/home");
-                } else {
-                  navigate("/director");
-                }
+              onSuccess={(user: any) => {
+                // Cùng lý do với đăng nhập mật khẩu: không chờ đăng ký thông báo.
+                void initWebPush().catch((pushError) => {
+                  console.warn(
+                    "Web push initialization failed after face login:",
+                    pushError
+                  );
+                });
+                goHome(user);
               }}
             />
           )}

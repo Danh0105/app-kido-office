@@ -1,36 +1,13 @@
 import { Home, User } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { hasRole } from "@/utils/auth";
+import { getHomePath, PROFILE_PATH } from "@/utils/nav";
 
 export default function BottomNav() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const isEmployeeType = hasRole(
-    "employee",
-    "probation",
-    "employee_la",
-    "sales",
-  );
-  const isDirectorType = hasRole(
-    "accountant",
-    "director",
-    "director_la",
-    "saleadmin",
-    "salesadmin_la",
-    "ketoan_congno",
-    "thuquy",
-    "ketoan_truong",
-    "troly_gd",
-  );
-
-  const homePath = isDirectorType
-    ? "/director"
-    : isEmployeeType
-    ? "/employee/home"
-    : "/";
-
-  const profilePath = "/profile";
+  const homePath = getHomePath();
+  const profilePath = PROFILE_PATH;
 
   const pathname = location.pathname;
   const homeActive =
@@ -40,7 +17,7 @@ export default function BottomNav() {
     pathname === "/director/expense-management";
 
   return (
-    <div className="fixed bottom-0 left-0 w-full z-50 bg-transparent">
+    <div className="fixed bottom-0 left-0 w-full z-50 bg-transparent lg:hidden">
       <div
         className="
           w-full

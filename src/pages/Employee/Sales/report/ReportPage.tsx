@@ -17,6 +17,7 @@ export default function ReportForm({
     formatDateTime,
     openDayKey,
     setOpenDayKey,
+    onSaved,
 }: any) {
     const [tab, setTab] = useState<"day" | "week">("week");
     const [loadingList, setLoadingList] = useState(false);
@@ -94,6 +95,7 @@ export default function ReportForm({
             setEditingReport(null);
             setTasks([{ title: "", content: "", location: "" }]);
             fetchReports();
+            onSaved?.();
 
         } catch (err) {
             console.error(err);

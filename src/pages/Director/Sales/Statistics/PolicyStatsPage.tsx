@@ -86,8 +86,27 @@ const getDeviceQuantity = (device: any) => {
   return Number.isFinite(quantity) ? quantity : 0;
 };
 
-export default function PolicyStatsPage() {
-  const { employeeId } = useParams();
+type Props = {
+  /**
+   * Bỏ trống = lấy từ URL (`/director/statistics/:employeeId`, giám đốc chọn
+   * nhân viên). Truyền vào = khoá cứng theo nhân viên đó — dùng cho màn "thống
+   * kê của tôi" của kinh doanh, không có cách nào đổi sang người khác.
+   */
+  employeeId?: number;
+  /**
+   * Phần thu chi thực tế. `/school-expenses` chỉ mở cho kế toán / trợ lý GĐ /
+   * giám đốc, nên màn của kinh doanh phải tắt hẳn — để bật thì mọi request chỉ
+   * nhận 403 và các khối liên quan hiện rỗng vô nghĩa.
+   */
+  showExpenses?: boolean;
+};
+
+export default function PolicyStatsPage({
+  employeeId: employeeIdProp,
+  showExpenses = true,
+}: Props = {}) {
+  const { employeeId: employeeIdParam } = useParams();
+  const employeeId = employeeIdProp ?? employeeIdParam;
   const [filters, setFilters] = useState<{
     employeeId: number;
     fromDate?: string;
@@ -164,13 +183,20 @@ export default function PolicyStatsPage() {
   }, []);
 
   useEffect(() => {
+    if (!showExpenses) return;
     expensePeriodApi.getAll().then((res) => {
       const list = Array.isArray(res) ? res : res?.data || [];
       setExpensePeriods(list);
     }).catch(() => {});
-  }, []);
+  }, [showExpenses]);
 
   useEffect(() => {
+    if (!showExpenses) {
+      setSchoolExpenses(new Map());
+      setExpenseLoading(false);
+      return;
+    }
+
     let active = true;
 
     const fetchExpenses = async () => {
@@ -229,7 +255,7 @@ export default function PolicyStatsPage() {
 
     fetchExpenses();
     return () => { active = false; };
-  }, [selectedPeriodId, selectedSubject]);
+  }, [selectedPeriodId, selectedSubject, showExpenses]);
 
   const resetFilters = () => {
     setSelectedProvince(null);
@@ -552,18 +578,20 @@ export default function PolicyStatsPage() {
             </button>
           </div>
           {/* KỲ THU CHI MOBILE */}
-          <select
-            className="h-11 w-full rounded-xl border bg-white px-2 text-sm shadow-sm outline-none focus:ring-2 focus:ring-blue-200 mt-2"
-            value={selectedPeriodId || ""}
-            onChange={(e) => setSelectedPeriodId(e.target.value ? Number(e.target.value) : null)}
-          >
-            <option value="">📅 Kỳ thu chi</option>
-            {expensePeriods.map((p: any) => (
-              <option key={p.id} value={p.id}>
-                {p.name || `${String(p.month).padStart(2, "0")}/${p.year}`}
-              </option>
-            ))}
-          </select>
+          {showExpenses && (
+            <select
+              className="h-11 w-full rounded-xl border bg-white px-2 text-sm shadow-sm outline-none focus:ring-2 focus:ring-blue-200 mt-2"
+              value={selectedPeriodId || ""}
+              onChange={(e) => setSelectedPeriodId(e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">📅 Kỳ thu chi</option>
+              {expensePeriods.map((p: any) => (
+                <option key={p.id} value={p.id}>
+                  {p.name || `${String(p.month).padStart(2, "0")}/${p.year}`}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
         {/* ===== DESKTOP FILTER ===== */}
         <div className="hidden md:flex items-center gap-3 mb-4 bg-white p-4 rounded-2xl shadow-sm border">
@@ -596,18 +624,20 @@ export default function PolicyStatsPage() {
           </select>
 
           {/* KỲ THU CHI */}
-          <select
-            className="border rounded-xl px-3 py-2 text-sm min-w-[200px]"
-            value={selectedPeriodId || ""}
-            onChange={(e) => setSelectedPeriodId(e.target.value ? Number(e.target.value) : null)}
-          >
-            <option value="">📅 Kỳ thu chi</option>
-            {expensePeriods.map((p: any) => (
-              <option key={p.id} value={p.id}>
-                {p.name || `${String(p.month).padStart(2, "0")}/${p.year}`}
-              </option>
-            ))}
-          </select>
+          {showExpenses && (
+            <select
+              className="border rounded-xl px-3 py-2 text-sm min-w-[200px]"
+              value={selectedPeriodId || ""}
+              onChange={(e) => setSelectedPeriodId(e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">📅 Kỳ thu chi</option>
+              {expensePeriods.map((p: any) => (
+                <option key={p.id} value={p.id}>
+                  {p.name || `${String(p.month).padStart(2, "0")}/${p.year}`}
+                </option>
+              ))}
+            </select>
+          )}
 
           {/* MÔN HỌC */}
           <select
@@ -748,12 +778,14 @@ export default function PolicyStatsPage() {
             )}
           </section>
         )}
-        <ExpenseStatsSection
-          policies={expenseScopedPolicies}
-          restrictToPolicySchools
-          subjectId={selectedSubject}
-          employeeId={Number(employeeId) || undefined}
-        />
+        {showExpenses && (
+          <ExpenseStatsSection
+            policies={expenseScopedPolicies}
+            restrictToPolicySchools
+            subjectId={selectedSubject}
+            employeeId={Number(employeeId) || undefined}
+          />
+        )}
         {/* ===== LOADING ===== */}
         {(isLoading || isFetching) && <LoadingOverlay />}
 
@@ -1146,13 +1178,13 @@ export default function PolicyStatsPage() {
                   );
                 })()}
 
-                {expenseLoading && (
+                {showExpenses && expenseLoading && (
                   <div className="border-t-2 border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500 italic flex items-center gap-2">
                     <div className="w-3 h-3 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
                     Đang tải thu chi...
                   </div>
                 )}
-                {!schoolExpenses.has(school.schoolId) && !expenseLoading && (
+                {showExpenses && !schoolExpenses.has(school.schoolId) && !expenseLoading && (
                   <div className="border-t-2 border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500 italic">
                     Chưa có dữ liệu thu chi
                   </div>

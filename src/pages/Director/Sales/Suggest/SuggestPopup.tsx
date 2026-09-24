@@ -25,6 +25,7 @@ type Option = {
 
 export default function SuggestPopup({ open, onClose, onSuccess, initialData }: any) {
     const [loading, setLoading] = useState(false);
+    const [wardError, setWardError] = useState("");
 
     const [form, setForm] = useState<Suggest>({
         content: "",
@@ -80,6 +81,7 @@ export default function SuggestPopup({ open, onClose, onSuccess, initialData }: 
                 name: item.name,
             }));
             setWards(mapped);
+            if (mapped.length === 1) setSelectedWard(Number(mapped[0].id));
         }).catch(() => setWards([]));
 
         schoolApi.getByEmployeeRegion(Number(selectedRegion)).then((res) => {
@@ -149,7 +151,7 @@ export default function SuggestPopup({ open, onClose, onSuccess, initialData }: 
                 }));
 
                 setPolicies(mapped);
-                setSelectedPolicy(mapped[0]?.id ?? null);
+                setSelectedPolicy(null);
 
             } catch (err) {
                 console.error("Load policy failed", err);
@@ -173,19 +175,36 @@ export default function SuggestPopup({ open, onClose, onSuccess, initialData }: 
 
     // ===== submit =====
     const handleSubmit = async () => {
+        if (!selectedWard) {
+            setWardError("Vui lòng chọn xã/phường");
+            return;
+        }
+        if (!form.content.trim()) {
+            alert("Vui lòng nhập nội dung");
+            return;
+        }
         try {
             setLoading(true);
 
-            await suggestApi.create({
-                ...form,
+            await suggestApi.createByWard(selectedWard, {
+                content: form.content.trim(),
+                component: form.component?.trim() || undefined,
+                description: form.description?.trim() || undefined,
+                issueDate: form.issueDate || undefined,
                 policyId: selectedPolicy || undefined,
                 file: form.file || undefined,
             });
 
             onSuccess();
             onClose();
-        } catch (e) {
-            alert("Lỗi");
+        } catch (e: any) {
+            const raw = e?.response?.data?.message;
+            const message = Array.isArray(raw) ? raw.join(", ") : raw || "Không thể gửi đề xuất";
+            if (e?.response?.status === 403 || message.includes("xã/phường")) {
+                setWardError(message);
+            } else {
+                alert(message);
+            }
         } finally {
             setLoading(false);
         }
@@ -255,14 +274,21 @@ export default function SuggestPopup({ open, onClose, onSuccess, initialData }: 
                     />
 
                     {wards.length > 0 && (
-                        <MobileSelect
-                            label="Xã/Phường"
-                            placeholder="Chọn xã/phường"
-                            value={selectedWard}
-                            options={wards}
-                            onChange={setSelectedWard}
-                            disabled={!selectedRegion}
-                        />
+                        <>
+                            <MobileSelect
+                                label="Xã/Phường *"
+                                placeholder="Chọn xã/phường"
+                                value={selectedWard}
+                                options={wards}
+                                onChange={(value) => {
+                                    setSelectedWard(value);
+                                    setSelectedPolicy(null);
+                                    setWardError("");
+                                }}
+                                disabled={!selectedRegion}
+                            />
+                            {wardError && <p className="-mt-3 text-xs text-red-600">{wardError}</p>}
+                        </>
                     )}
 
                     <MobileSelect
@@ -324,7 +350,8 @@ export default function SuggestPopup({ open, onClose, onSuccess, initialData }: 
     );
 }
 const formatPolicyName = (item: any) => {
-    const date = new Date(item.createdAt);
-
-    return `Chính sách #${item.id} - ${date.toLocaleDateString("vi-VN")}`;
+    const subject = item.subject?.name || item.subjectName || "Chưa rõ môn";
+    const school = item.subject?.school?.name || item.schoolName || "Chưa rõ trường";
+    const year = item.subject?.schoolYear || item.schoolYear || "Chưa rõ năm học";
+    return `${subject} · ${school} · ${year} · ${item.status || "—"}`;
 };

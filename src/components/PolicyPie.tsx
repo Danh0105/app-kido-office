@@ -7,24 +7,37 @@ import {
     Legend,
     ResponsiveContainer,
 } from "recharts";
+/**
+ * Bảng màu phân loại, thứ tự cố định — **không** xoay vòng.
+ *
+ * Bộ cũ bị hai lỗi: cặp cam↔xanh lá không phân biệt được với người mù màu
+ * (ΔE 5.7 protan) và slot xám gần như mất màu, nên nhiều lát bánh nhìn giống
+ * nhau. Bộ này giữ đúng 9 hue, chạy qua trình kiểm tra palette và đạt cả 5 mục:
+ * dải sáng, chroma, tách CVD (10.3), tách mắt thường (22.6), tương phản ≥ 3:1.
+ */
 const COLORS = [
-    "#6366f1", // indigo
-    "#22c55e", // green
-    "#f59e0b", // amber
-    "#ef4444", // red
-    "#0ea5e9", // sky
-    "#8b5cf6", // violet
-    "#14b8a6", // teal
-    "#f97316", // orange
-    "#64748b", // gray
+    "#4f46e5", // indigo
+    "#d97706", // amber
+    "#0891b2", // cyan
+    "#db2777", // pink
+    "#65a30d", // lime
+    "#7c3aed", // violet
+    "#ea580c", // orange
+    "#0d9488", // teal
+    "#2563eb", // blue
 ];
+
+/** Quá số hue có sẵn thì gộp phần nhỏ nhất vào "Khác", không dùng lại màu. */
+const MAX_SLICES = COLORS.length;
 const buildChartData = (data: any, companyProfit: number) => {
     const fee = data?.fee || 0;
-    console.log(companyProfit)
     const raw = [
         { key: "csvc", name: "CSVC" },
         { key: "thue", name: "Thuế" },
         { key: "giaovien", name: "Giáo viên" },
+        // Khoản này cũng trừ vào "Công ty thu về" nhưng trước đây thiếu trong
+        // biểu đồ, làm các lát cộng lại không bằng học phí.
+        { key: "teacherCompany", name: "GV công ty" },
         { key: "csthang", name: "CS tháng" },
         { key: "cdhd", name: "CĐ HĐ" },
         { key: "thietbi", name: "Thiết bị" },
@@ -50,9 +63,34 @@ const buildChartData = (data: any, companyProfit: number) => {
         });
     }
 
-    return items.filter(i => i.value > 0);
+    const visible = items.filter(i => i.value > 0);
+    if (visible.length <= MAX_SLICES) return visible;
+
+    // Giữ các khoản lớn, dồn phần còn lại vào một lát "Khác".
+    const sorted = [...visible].sort((a, b) => b.value - a.value);
+    const kept = sorted.slice(0, MAX_SLICES - 1);
+    const rest = sorted.slice(MAX_SLICES - 1);
+
+    return [
+        ...kept,
+        {
+            name: "Khác",
+            value: rest.reduce((sum, item) => sum + item.value, 0),
+        },
+    ];
 };
-export default function PolicyPie({ data, subjectName, companyProfit }: { data: any; subjectName?: string, companyProfit: number }) {
+export default function PolicyPie({
+    data,
+    subjectName,
+    companyProfit,
+    className,
+}: {
+    data: any;
+    subjectName?: string;
+    companyProfit: number;
+    /** Mặc định chừa chỗ cho header cố định của màn xem chính sách. */
+    className?: string;
+}) {
     const chartData = buildChartData(data, companyProfit);
     const total = chartData.reduce((s, i) => s + i.value, 0);
 
@@ -69,16 +107,20 @@ export default function PolicyPie({ data, subjectName, companyProfit }: { data: 
     };
 
     return (
-        <div className="bg-white rounded-2xl shadow-md p-3 border border-gray-100 mt-[50px]">
+        <div className={`bg-white rounded-2xl shadow-md p-3 border border-gray-100 ${className ?? "mt-[50px]"}`}>
 
             <h3 className="text-sm font-semibold mb-2 text-gray-700 text-center">
                 📊 Phân bổ chi phí
             </h3>
             {/* SUBJECT + FEE */}
             <div className="text-center mb-3">
-                <div className="text-sm font-medium text-gray-800 truncate">
-                    {`Môn học: ${subjectName || "Tên môn"}`}
-                </div>
+                {/* Không biết tên môn thì bỏ hẳn dòng — chữ "Tên môn" giữ chỗ
+                    trông như dữ liệu bị lỗi. */}
+                {subjectName && (
+                    <div className="text-sm font-medium text-gray-800 truncate">
+                        {`Môn học: ${subjectName}`}
+                    </div>
+                )}
 
                 <div className="text-xs text-gray-500">
                     Học phí:{" "}

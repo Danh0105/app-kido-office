@@ -1,6 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Search } from "lucide-react";
 import HeaderWithBack from "@/components/HeaderWithBack";
 import { employeeApi } from "@/service/employee";
+import { teacherApi } from "@/service/teaching";
+import type { Teacher } from "@/types/teaching";
+import { getApiErrorMessage } from "@/utils/apiError";
+import { resolveApiFileUrl } from "@/utils/fileUrl";
+import TeacherDetailModal from "./components/TeacherDetailModal";
 
 const ROLE_OPTIONS = [
   { value: "sales", label: "Nhân viên KD" },
@@ -13,9 +19,23 @@ const ROLE_OPTIONS = [
   { value: "ketoan_truong", label: "Kế toán trưởng" },
   { value: "troly_gd", label: "Trợ lý GĐ" },
   { value: "thuquy", label: "Thủ quỹ" },
+  { value: "ky_thuat", label: "Phòng kỹ thuật" },
+  { value: "nhansu", label: "Nhân sự" },
+  { value: "giaovu", label: "Giáo vụ" },
+  { value: "giaovien_congty", label: "Giáo viên công ty" },
+  { value: "giaovien_ctv", label: "Giáo viên CTV" },
   { value: "employee", label: "Nhân viên" },
   { value: "probation", label: "Thử việc" },
   { value: "employee_la", label: "Long An" },
+];
+
+const CTV_ROLE = "giaovien_ctv";
+
+type TabKey = "staff" | "ctv";
+
+const TABS: { key: TabKey; label: string }[] = [
+  { key: "staff", label: "Nhân viên" },
+  { key: "ctv", label: "Giáo viên CTV" },
 ];
 
 const roleColor = (r: string) => {
@@ -28,6 +48,9 @@ const roleColor = (r: string) => {
   if (r === "accountant") return "bg-orange-100 text-orange-700";
   if (r === "ketoan_congno" || r === "thuquy" || r === "ketoan_truong" || r === "troly_gd")
     return "bg-teal-100 text-teal-700";
+  if (r === "ky_thuat") return "bg-violet-100 text-violet-700";
+  if (r === "nhansu" || r === "giaovu") return "bg-pink-100 text-pink-700";
+  if (r === "giaovien_congty" || r === "giaovien_ctv") return "bg-cyan-100 text-cyan-700";
   return "bg-gray-100 text-gray-600";
 };
 
@@ -39,14 +62,29 @@ type Employee = {
   phone: string;
   email: string;
   roles: string[];
+  avatar?: string | null;
+  avatarUrl?: string | null;
 };
 
 const EMPTY_FORM = { name: "", phone: "", email: "", password: "", roles: [] as string[] };
+
+const employeeAvatarUrl = (employee: Employee) => {
+  const raw = employee.avatarUrl || employee.avatar;
+  return raw ? resolveApiFileUrl(raw) : null;
+};
+
+const employeeInitial = (employee: Employee) =>
+  (employee.name || employee.email || "U").trim().charAt(0).toUpperCase() || "U";
 
 export default function EmployeeManagement() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+
+  // tab + search + filter
+  const [tab, setTab] = useState<TabKey>("staff");
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
 
   // single role assignment
   const [roleTarget, setRoleTarget] = useState<Employee | null>(null);
@@ -58,6 +96,15 @@ export default function EmployeeManagement() {
   const [bulkRoles, setBulkRoles] = useState<string[]>([]);
   const [bulkLoading, setBulkLoading] = useState(false);
 
+  // chi tiết giáo viên CTV
+  const [detailTarget, setDetailTarget] = useState<Employee | null>(null);
+  const [teacherByEmployee, setTeacherByEmployee] = useState<Map<number, Teacher>>(
+    new Map(),
+  );
+  const [teacherLoading, setTeacherLoading] = useState(false);
+  const [teacherError, setTeacherError] = useState("");
+  const teacherLoadedRef = useRef(false);
+
   const fetchData = async () => {
     try {
       const data = await employeeApi.getAll();
@@ -68,6 +115,42 @@ export default function EmployeeManagement() {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  /**
+   * Hồ sơ giảng dạy nằm ở bảng `teachers`, khác bảng tài khoản — nạp một lần khi
+   * mở tab CTV rồi tra theo `employeeId` để bật popup không phải chờ mạng.
+   * Role không xem được module Giảng dạy sẽ nhận 403; giữ lỗi để popup báo rõ
+   * thay vì hiện hồ sơ trống như thể giáo viên chưa khai gì.
+   */
+  const loadTeachers = async () => {
+    if (teacherLoadedRef.current) return;
+    teacherLoadedRef.current = true;
+    setTeacherLoading(true);
+    setTeacherError("");
+    try {
+      const map = new Map<number, Teacher>();
+      let page = 1;
+      let totalPages = 1;
+      do {
+        const res = await teacherApi.list({ teacherRole: CTV_ROLE, page, limit: 100 });
+        (res?.data ?? []).forEach((t) => {
+          if (t.employeeId) map.set(t.employeeId, t);
+        });
+        totalPages = res?.pagination?.totalPages ?? 1;
+        page += 1;
+      } while (page <= totalPages && page <= 20);
+      setTeacherByEmployee(map);
+    } catch (err) {
+      teacherLoadedRef.current = false; // cho phép thử lại lần mở tab sau
+      setTeacherError(getApiErrorMessage(err, "Không tải được hồ sơ giáo viên"));
+    } finally {
+      setTeacherLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tab === "ctv") loadTeachers();
+  }, [tab]);
 
   const toggleSelect = (id: number) =>
     setSelectedIds((prev) => {
@@ -168,17 +251,93 @@ export default function EmployeeManagement() {
 
   const hasSelected = selectedIds.size > 0;
 
+  // Giáo viên CTV đứng riêng một tab, tab nhân viên không hiển thị họ nữa.
+  const tabEmployees = useMemo(() => {
+    const isCtv = (e: Employee) => (e.roles ?? []).includes(CTV_ROLE);
+    return employees.filter((e) => (tab === "ctv" ? isCtv(e) : !isCtv(e)));
+  }, [employees, tab]);
+
+  const tabCounts = useMemo(() => {
+    const ctv = employees.filter((e) => (e.roles ?? []).includes(CTV_ROLE)).length;
+    return { ctv, staff: employees.length - ctv };
+  }, [employees]);
+
+  // Chỉ liệt kê những chức vụ thực sự có trong tab đang xem.
+  const roleFilterOptions = useMemo(() => {
+    const present = new Set<string>();
+    tabEmployees.forEach((e) => (e.roles ?? []).forEach((r) => present.add(r)));
+    const known = ROLE_OPTIONS.filter(
+      (o) => present.has(o.value) && !(tab === "ctv" && o.value === CTV_ROLE),
+    );
+    const unknown = [...present]
+      .filter((r) => !ROLE_OPTIONS.some((o) => o.value === r) && r !== CTV_ROLE)
+      .map((r) => ({ value: r, label: r }));
+    return [...known, ...unknown];
+  }, [tabEmployees, tab]);
+
+  const filteredEmployees = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+    return tabEmployees.filter((item) => {
+      if (keyword) {
+        const haystack = `${item.name ?? ""} ${item.phone ?? ""} ${item.email ?? ""}`.toLowerCase();
+        if (!haystack.includes(keyword)) return false;
+      }
+      if (roleFilter === "__none__" && (item.roles ?? []).length > 0) return false;
+      if (roleFilter && roleFilter !== "__none__" && !(item.roles ?? []).includes(roleFilter)) {
+        return false;
+      }
+      return true;
+    });
+  }, [tabEmployees, search, roleFilter]);
+
+  const hasFilter = !!search.trim() || !!roleFilter;
+  const clearFilters = () => {
+    setSearch("");
+    setRoleFilter("");
+  };
+
+  const changeTab = (key: TabKey) => {
+    if (key === tab) return;
+    setTab(key);
+    setRoleFilter("");
+    clearSelection();
+  };
+
   return (
     <div className="bg-gray-100 min-h-screen pb-32">
       <HeaderWithBack title="Quản lý nhân viên" />
 
+      {/* ── Tabs ── */}
+      <div className="px-3 pt-[68px] pb-2 flex gap-2">
+        {TABS.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => changeTab(key)}
+            className={`flex-1 py-2 rounded-xl text-sm font-medium transition ${
+              tab === key
+                ? "bg-white text-blue-600 shadow-sm ring-1 ring-blue-200"
+                : "bg-white/60 text-gray-500"
+            }`}
+          >
+            {label}
+            <span className="ml-1 text-[11px] font-normal text-gray-400">
+              ({key === "ctv" ? tabCounts.ctv : tabCounts.staff})
+            </span>
+          </button>
+        ))}
+      </div>
+
       {/* ── Toolbar ── */}
-      <div className="px-3 pt-[68px] pb-2 flex items-center gap-2">
+      <div className="px-3 pb-2 flex items-center gap-2">
         <button
-          onClick={() => setShowCreateModal(true)}
+          onClick={() => {
+            // Tạo từ tab CTV thì tick sẵn chức vụ Giáo viên CTV.
+            setForm({ ...EMPTY_FORM, roles: tab === "ctv" ? [CTV_ROLE] : [] });
+            setShowCreateModal(true);
+          }}
           className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-xl text-sm font-medium transition"
         >
-          + Thêm nhân viên
+          + Thêm {tab === "ctv" ? "giáo viên CTV" : "nhân viên"}
         </button>
 
         {hasSelected && (
@@ -200,11 +359,63 @@ export default function EmployeeManagement() {
         )}
       </div>
 
+      {/* ── Search + filter ── */}
+      <div className="px-3 pb-2 flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Tìm tên, SĐT, email…"
+            className="w-full pl-8 pr-3 py-2 rounded-xl border text-sm bg-white"
+          />
+        </div>
+
+        <select
+          value={roleFilter}
+          onChange={(e) => setRoleFilter(e.target.value)}
+          className="flex-shrink-0 py-2 px-2 rounded-xl border text-sm bg-white max-w-[140px]"
+        >
+          <option value="">Tất cả chức vụ</option>
+          <option value="__none__">Chưa có chức vụ</option>
+          {roleFilterOptions.map(({ value, label }) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
+        </select>
+
+        {hasFilter && (
+          <button
+            onClick={clearFilters}
+            className="flex-shrink-0 text-gray-500 px-2 py-2 text-sm"
+          >
+            Xoá lọc
+          </button>
+        )}
+      </div>
+
+      {hasFilter && (
+        <p className="px-3 pb-2 text-xs text-gray-500">
+          {filteredEmployees.length}/{tabEmployees.length}{" "}
+          {tab === "ctv" ? "giáo viên CTV" : "nhân viên"}
+        </p>
+      )}
+
+      {!filteredEmployees.length && (
+        <p className="px-3 py-8 text-center text-sm text-gray-400">
+          {tabEmployees.length
+            ? "Không tìm thấy kết quả phù hợp"
+            : tab === "ctv"
+              ? "Chưa có giáo viên CTV nào"
+              : "Chưa có nhân viên nào"}
+        </p>
+      )}
+
       {/* ── 3-column grid ── */}
       <div className="px-3 grid grid-cols-3 gap-2">
-        {employees.map((item) => {
+        {filteredEmployees.map((item) => {
           const isSelected = selectedIds.has(item.id);
           const isProbation = item.roles?.includes("probation");
+          const avatarUrl = employeeAvatarUrl(item);
 
           return (
             <div
@@ -216,14 +427,50 @@ export default function EmployeeManagement() {
               {/* ── Card header: avatar + checkbox ── */}
               <div
                 className="relative flex flex-col items-center pt-3 pb-1 px-2 cursor-pointer"
-                onClick={() => toggleSelect(item.id)}
+                onClick={() =>
+                  tab === "ctv" ? setDetailTarget(item) : toggleSelect(item.id)
+                }
               >
-                <div
-                  className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl shrink-0 ${
-                    isSelected ? "bg-indigo-100" : "bg-blue-50"
-                  }`}
-                >
-                  {isSelected ? "✓" : "👤"}
+                {/* Tab CTV dùng cú chạm để mở hồ sơ, nên chọn hàng loạt tách ra ô tick riêng. */}
+                {tab === "ctv" && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleSelect(item.id);
+                    }}
+                    aria-label={isSelected ? "Bỏ chọn" : "Chọn"}
+                    className={`absolute left-1.5 top-1.5 w-5 h-5 rounded-md border flex items-center justify-center text-[11px] leading-none ${
+                      isSelected
+                        ? "bg-indigo-500 border-indigo-500 text-white"
+                        : "bg-white border-gray-300 text-transparent"
+                    }`}
+                  >
+                    ✓
+                  </button>
+                )}
+
+                <div className="relative w-12 h-12 shrink-0">
+                  <div
+                    className={`w-12 h-12 rounded-full overflow-hidden flex items-center justify-center text-lg font-bold ${
+                      isSelected ? "bg-indigo-100 text-indigo-700" : "bg-blue-50 text-blue-600"
+                    }`}
+                  >
+                    {avatarUrl ? (
+                      <img
+                        src={avatarUrl}
+                        alt={item.name ? `Avatar ${item.name}` : "Avatar nhân viên"}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <span>{employeeInitial(item)}</span>
+                    )}
+                  </div>
+                  {isSelected && (
+                    <span className="absolute -right-1 -bottom-1 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-500 text-[11px] font-bold text-white ring-2 ring-white">
+                      ✓
+                    </span>
+                  )}
                 </div>
 
                 <p className="text-xs font-semibold text-gray-800 mt-1.5 text-center leading-tight line-clamp-2 w-full">
@@ -281,6 +528,24 @@ export default function EmployeeManagement() {
           );
         })}
       </div>
+
+      {/* ── CTV DETAIL MODAL ── */}
+      {detailTarget && (
+        <TeacherDetailModal
+          account={detailTarget}
+          teacher={teacherByEmployee.get(detailTarget.id) ?? null}
+          loading={teacherLoading}
+          error={teacherError}
+          roleLabel={roleLabel}
+          roleColor={roleColor}
+          onClose={() => setDetailTarget(null)}
+          onAssignRoles={() => {
+            setRoleTarget(detailTarget);
+            setPendingRoles(detailTarget.roles ?? []);
+            setDetailTarget(null);
+          }}
+        />
+      )}
 
       {/* ── CREATE MODAL ── */}
       {showCreateModal && (

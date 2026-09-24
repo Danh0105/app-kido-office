@@ -9,7 +9,10 @@ export const getApiErrorMessage = (
   }
 
   if (status === 403) {
-    return "Bạn không có quyền thực hiện thao tác này.";
+    const message = error?.response?.data?.message;
+    return Array.isArray(message)
+      ? message.join(", ")
+      : message || "Bạn không có quyền thực hiện thao tác này.";
   }
 
   if (status === 404) {

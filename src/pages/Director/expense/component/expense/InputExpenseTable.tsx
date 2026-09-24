@@ -13,19 +13,6 @@ type Props = {
   classCount: number;
 };
 
-const invoiceOptions: {
-  label: string;
-  value: InputExpenseRow["invoiceType"];
-}[] = [
-  { label: "Chọn", value: "" },
-  { label: "Xuất HĐ Cty", value: "company" },
-  { label: "Xuất HĐ HS", value: "student" },
-  { label: "Không xuất HĐ", value: "none" },
-  { label: "Khác", value: "other" },
-];
-
-const isInvoiceIssued = (value: InputExpenseRow["invoiceType"]) =>
-  value === "company" || value === "student" || value === "other";
 export default function InputExpenseTable({
   rows,
   onUpdate,
@@ -67,7 +54,7 @@ export default function InputExpenseTable({
       </div>
 
       <div className="overflow-auto">
-        <table className="w-full min-w-[1900px] border-collapse font-semibold text-xl">
+        <table className="w-full min-w-[1500px] border-collapse font-semibold text-xl">
           <thead className="text-xl">
             <tr className="bg-slate-900 text-white">
               <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
@@ -87,12 +74,6 @@ export default function InputExpenseTable({
               </th>
               <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
                 🧾 Thành tiền
-              </th>
-              <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
-                📄 HĐ
-              </th>
-              <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
-                📆 Ngày xuất
               </th>
               <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
                 💰 Đã thu
@@ -117,21 +98,21 @@ export default function InputExpenseTable({
               const price = Number(row.unitPrice || 0);
               const invoiceAmount = students * months * price;
               const remaining = invoiceAmount - Number(row.paidAmount || 0);
-              const invoiceType =
-                row.invoiceType || (row.invoiced ? "company" : "");
+              const locked = !!row.invoiceLocked;
 
               return (
                 <tr key={idx} className="hover:bg-slate-50 transition">
-                  <td className="border p-3">
-                    <input
-                      type="text"
+                  <td className="border p-3 min-w-[220px]">
+                    <textarea
                       value={row.content || ""}
                       maxLength={500}
+                      disabled={locked}
                       onChange={(e) =>
                         onUpdate(idx, "content", e.target.value.slice(0, 500))
                       }
                       placeholder="Nhập nội dung..."
-                      className="w-full h-16 border rounded-lg px-3 text-sm"
+                      rows={2}
+                      className="w-full min-h-16 border rounded-lg px-3 py-2 text-sm resize-y whitespace-normal break-words disabled:bg-slate-100 disabled:text-slate-400"
                     />
                   </td>
 
@@ -140,7 +121,8 @@ export default function InputExpenseTable({
                       type="number"
                       min="0"
                       step="0.01"
-                      value={row.totalPeriods || ""}
+                      value={Number(row.totalPeriods) || ""}
+                      disabled={locked}
                       onChange={(e) => {
                         const periods = Number(e.target.value || 0);
 
@@ -153,7 +135,7 @@ export default function InputExpenseTable({
                             : 0,
                         );
                       }}
-                      className="w-full h-16 text-center border rounded-lg text-sm font-semibold"
+                      className="w-full h-16 text-center border rounded-lg text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-400"
                     />
                   </td>
 
@@ -162,11 +144,12 @@ export default function InputExpenseTable({
                       type="number"
                       min="0"
                       step="0.01"
-                      value={row.studentCount || ""}
+                      value={Number(row.studentCount) || ""}
+                      disabled={locked}
                       onChange={(e) => {
                         onUpdate(idx, "studentCount", Number(e.target.value || 0));
                       }}
-                      className="w-full h-16 text-center border rounded-lg text-sm font-semibold"
+                      className="w-full h-16 text-center border rounded-lg text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-400"
                     />
                   </td>
                   <td className="border p-3">
@@ -174,7 +157,8 @@ export default function InputExpenseTable({
                       type="number"
                       step="0.01"
                       min="0"
-                      value={row.monthsCount || ""}
+                      value={Number(row.monthsCount) || ""}
+                      disabled={locked}
                       onChange={(e) => {
                         const value = e.target.value;
 
@@ -184,18 +168,20 @@ export default function InputExpenseTable({
                           value === "" ? 0 : Number(value),
                         );
                       }}
-                      className="w-full h-16 text-center border rounded-lg text-sm font-semibold"
+                      className="w-full h-16 text-center border rounded-lg text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-400"
                     />
                   </td>
 
                   <td className="border p-2 bg-emerald-50">
                     <DecimalInput
                       value={row.unitPrice}
+                      disabled={locked}
                       onValueChange={(value) =>
                         onUpdate(idx, "unitPrice", value)
                       }
                       placeholder="0"
-                      className="w-full h-14 text-center font-bold text-emerald-700 border rounded-lg text-sm"
+                      allowDecimal={false}
+                      className="w-full h-14 text-center font-bold text-emerald-700 border rounded-lg text-sm disabled:bg-slate-100 disabled:text-slate-400"
                     />
                   </td>
 
@@ -207,57 +193,6 @@ export default function InputExpenseTable({
                     />
                   </td>
 
-                  <td className="border p-2 text-center">
-                    <div className="space-y-2">
-                      <select
-                        value={invoiceType}
-                        onChange={(e) => {
-                          const value = e.target
-                            .value as InputExpenseRow["invoiceType"];
-
-                          onUpdate(idx, "invoiceType", value);
-                          onUpdate(idx, "invoiced", isInvoiceIssued(value));
-
-                          if (value !== "other") {
-                            onUpdate(idx, "invoiceOther", "");
-                          }
-                        }}
-                        className="w-full h-14 border rounded-lg px-2 text-sm bg-white"
-                      >
-                        {invoiceOptions.map((option) => (
-                          <option
-                            key={option.value || "empty"}
-                            value={option.value}
-                          >
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-
-                      {invoiceType === "other" && (
-                        <input
-                          value={row.invoiceOther || ""}
-                          onChange={(e) =>
-                            onUpdate(idx, "invoiceOther", e.target.value)
-                          }
-                          placeholder="Nhập HĐ khác"
-                          className="w-full h-11 border rounded-lg px-2 text-sm"
-                        />
-                      )}
-                    </div>
-                  </td>
-
-                  <td className="border p-3">
-                    <input
-                      type="date"
-                      value={row.invoiceDate}
-                      onChange={(e) =>
-                        onUpdate(idx, "invoiceDate", e.target.value)
-                      }
-                      className="w-full h-14 border rounded-lg px-2 text-sm"
-                    />
-                  </td>
-
                   <td className="border p-2 bg-green-50">
                     <DecimalInput
                       value={row.paidAmount}
@@ -265,6 +200,7 @@ export default function InputExpenseTable({
                         onUpdate(idx, "paidAmount", value)
                       }
                       placeholder="0"
+                      allowDecimal={false}
                       className="w-full h-16 text-center font-bold text-sm text-green-700 border rounded-lg"
                     />
                   </td>
@@ -272,10 +208,11 @@ export default function InputExpenseTable({
                   <td className="border p-3">
                     <select
                       value={row.paymentMethod}
+                      disabled={locked}
                       onChange={(e) =>
                         onUpdate(idx, "paymentMethod", e.target.value)
                       }
-                      className="w-full h-14 border rounded-lg px-2 text-sm"
+                      className="w-full h-14 border rounded-lg px-2 text-sm disabled:bg-slate-100 disabled:text-slate-400"
                     >
                       <option value="">Chọn</option>
                       <option value="cash">Tiền mặt</option>
@@ -287,10 +224,11 @@ export default function InputExpenseTable({
                     <input
                       type="date"
                       value={row.paymentDate}
+                      disabled={locked}
                       onChange={(e) =>
                         onUpdate(idx, "paymentDate", e.target.value)
                       }
-                      className="w-full h-14 border rounded-lg px-2 text-sm"
+                      className="w-full h-14 border rounded-lg px-2 text-sm disabled:bg-slate-100 disabled:text-slate-400"
                     />
                   </td>
 
@@ -317,15 +255,6 @@ export default function InputExpenseTable({
             })}
           </tbody>
         </table>
-      </div>
-
-      <div className="px-5 py-3 border-t">
-        <button
-          onClick={onAdd}
-          className="h-14 px-4 rounded-xl bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition"
-        >
-          + Thêm dòng doanh thu
-        </button>
       </div>
 
       <div className="grid grid-cols-3 bg-slate-50 border-t">

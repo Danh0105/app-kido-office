@@ -48,6 +48,7 @@ export const dailyReportApi = {
     },
 
     // 🔥 NEW: Lấy tuần hiện tại
+    // ⚠️ Backend chưa có route này — gọi vào sẽ 404 (xem scripts/check-api-routes.mjs).
     getCurrentWeek: async (employeeId: number) => {
         const res = await api.get(
             `/daily-reports/employee/${employeeId}/current-week`

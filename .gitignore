@@ -45,3 +45,6 @@ public/*
 src/pages/Display/
 android/
 ios/
+
+# Ảnh chụp/snapshot của công cụ test Playwright MCP
+.playwright-mcp/

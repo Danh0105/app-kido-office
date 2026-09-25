@@ -1,7 +1,12 @@
 // Phần "gọi API đăng nhập" tách khỏi component: toàn hàm thuần, không đụng React
 // nên thử tay được, và màn Login chỉ còn phần giao diện.
 
-export const LOGIN_URL = "https://sales.kidoedu.vn/auth/login";
+/**
+ * Phải cùng BE với mọi API khác (`VITE_API_URL`). Trước đây gọi cứng BE
+ * production: bản dev lấy token production rồi gọi api-dev → 401 → interceptor
+ * đẩy về màn đăng nhập, người dùng thấy như bị treo.
+ */
+export const LOGIN_URL = `${String(import.meta.env.VITE_API_URL).replace(/\/+$/, "")}/auth/login`;
 
 /**
  * Quá mức này coi như mạng không tải nổi. `fetch` không tự bỏ cuộc — không đặt

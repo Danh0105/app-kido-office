@@ -1,0 +1,397 @@
+- generic [ref=e149]:
+  - complementary [ref=e150]:
+    - generic [ref=e151]:
+      - generic [ref=e154]:
+        - paragraph [ref=e155]: KIDO SKILL
+        - paragraph [ref=e156]: KNS - CDS - STEM
+      - generic [ref=e157]:
+        - generic [ref=e158]:
+          - paragraph [ref=e159]: Menu
+          - button "Thu hẹp menu" [expanded] [ref=e160] [cursor=pointer]
+        - generic [ref=e164]:
+          - button "Phiếu lương" [ref=e165] [cursor=pointer]
+          - button "Chính sách" [ref=e170] [cursor=pointer]
+          - button "Báo cáo tuần" [ref=e174] [cursor=pointer]
+          - button "Thống kê" [ref=e178] [cursor=pointer]
+          - button "Đề xuất chi" [ref=e182] [cursor=pointer]
+          - button "Thời khoá biểu" [ref=e186] [cursor=pointer]
+      - button "Giao diện cũ" [ref=e192] [cursor=pointer]
+  - main [ref=e198]:
+    - generic [ref=e199]:
+      - generic [ref=e200]:
+        - generic [ref=e201]:
+          - button [ref=e202] [cursor=pointer]
+          - heading "Chính sách" [level=1] [ref=e205]
+        - generic [ref=e206]:
+          - button "Trang chủ" [ref=e207] [cursor=pointer]
+          - button "Cá nhân" [ref=e210] [cursor=pointer]
+      - main [ref=e213]:
+        - generic [ref=e214]:
+          - paragraph [ref=e215]: Chính sách kinh doanh
+          - heading "Toàn bộ chính sách" [level=1] [ref=e216]
+          - paragraph [ref=e217]: Tìm kiếm và lọc theo dữ liệu chính thức từ hệ thống.
+        - navigation [ref=e218]:
+          - button "Tất cả chính sách" [ref=e219] [cursor=pointer]
+          - button "Quản lý trường" [ref=e223] [cursor=pointer]
+          - button "Quản lý môn học" [ref=e229] [cursor=pointer]
+        - button "Tạo chính sách" [ref=e234] [cursor=pointer]
+        - generic [ref=e236]:
+          - generic [ref=e237]:
+            - generic [ref=e238]:
+              - text: Trạng thái
+              - button "Trạng thái" [ref=e240] [cursor=pointer]:
+                - generic [ref=e241]: Tất cả
+            - generic [ref=e244]:
+              - text: Trường
+              - button "Tất cả" [ref=e246] [cursor=pointer]
+            - generic [ref=e250]:
+              - text: Môn học
+              - button "Môn học" [ref=e252] [cursor=pointer]:
+                - generic [ref=e253]: Tất cả
+            - generic [ref=e256]:
+              - text: Năm học
+              - button "Năm học" [ref=e258] [cursor=pointer]:
+                - generic [ref=e259]: Tất cả
+          - generic [ref=e262]:
+            - generic [ref=e263]:
+              - text: Từ ngày
+              - textbox "Từ ngày" [ref=e264]
+            - generic [ref=e265]:
+              - text: Đến ngày
+              - textbox "Đến ngày" [ref=e266]
+          - generic [ref=e267]: 1 chính sách
+        - 'button "TEST XL STEM Nháp 2026-2027 USER TEST Ngày tạo: 04/09/2026 Chọn để chỉnh sửa" [ref=e271] [cursor=pointer]':
+          - generic [ref=e272]:
+            - generic [ref=e273]:
+              - paragraph [ref=e274]: TEST XL
+              - paragraph [ref=e275]: STEM
+            - generic [ref=e278]: Nháp
+          - generic [ref=e279]:
+            - generic [ref=e280]: 2026-2027
+            - generic [ref=e283]: USER TEST
+            - generic [ref=e288]: "Ngày tạo: 04/09/2026"
+            - generic [ref=e289]: Chọn để chỉnh sửa
+        - generic [ref=e290]:
+          - button "Trước" [disabled] [ref=e291]
+          - generic [ref=e292]: 1/1
+          - button "Sau" [disabled] [ref=e293]
+      - generic [ref=e296]:
+        - heading "Danh sách chính sách" [level=1] [ref=e298]
+        - button [ref=e299] [cursor=pointer]
+        - generic [ref=e304]:
+          - button "HP / HS" [ref=e305] [cursor=pointer]
+          - button "HP / Tiết" [ref=e306] [cursor=pointer]
+        - generic [ref=e308]:
+          - table [ref=e311]:
+            - rowgroup [ref=e312]:
+              - row [ref=e313]:
+                - columnheader "Bảng tính chi phí" [ref=e314]
+              - row [ref=e315]:
+                - columnheader [ref=e316]
+                - columnheader "Khoản" [ref=e317]
+                - columnheader "Số tiền" [ref=e318]
+                - columnheader "% HP" [ref=e319]
+                - columnheader "Ghi chú" [ref=e320]
+            - rowgroup [ref=e321]:
+              - row [ref=e322]:
+                - cell "STEM" [ref=e323]
+                - cell "Mức thu" [ref=e324]
+                - cell "90.000 ₫ Trừ 2% thuế trước, tính % trên học phí sau thuế(88.200 ₫)" [ref=e325]:
+                  - text: 90.000 ₫
+                  - generic [ref=e326]:
+                    - checkbox "Trừ 2% thuế trước, tính % trên học phí sau thuế(88.200 ₫)" [checked] [ref=e327]
+                    - generic [ref=e328]:
+                      - text: Trừ 2% thuế trước, tính % trên học phí sau thuế
+                      - generic [ref=e329]: (88.200 ₫)
+                - cell "100%" [ref=e330]
+                - cell "📝" [ref=e331]
+              - row [ref=e332]:
+                - cell "CSVC" [ref=e333]
+                - cell "8.800 ₫" [ref=e334]
+                - cell "10%" [ref=e335]
+                - cell "📝" [ref=e336]
+              - row [ref=e337]:
+                - cell "Số tháng" [ref=e338]
+                - cell [ref=e339]:
+                  - spinbutton [ref=e340]: "8.9"
+                - cell "—" [ref=e341]
+                - cell "📝" [ref=e342]
+              - row [ref=e343]:
+                - cell "Số học sinh" [ref=e344]
+                - cell [ref=e345]:
+                  - textbox [ref=e346]: "1.200"
+                - cell "—" [ref=e347]
+                - cell "📝" [ref=e348]
+              - row [ref=e349]:
+                - cell "Thuế" [ref=e350]
+                - cell "0 ₫" [ref=e351]
+                - cell "0%" [ref=e352]
+                - cell "📝" [ref=e353]
+              - row [ref=e354]:
+                - cell "Giáo viên trường" [ref=e355]
+                - cell "0 ₫" [ref=e356]
+                - cell "0%" [ref=e357]
+                - cell "📝" [ref=e358]
+              - row [ref=e359]:
+                - cell "Giáo viên công ty" [ref=e360]
+                - cell [ref=e361]:
+                  - textbox [ref=e362]
+                - cell "0%" [ref=e363]
+                - cell "📝" [ref=e364]
+              - row [ref=e365]:
+                - cell "CS tháng" [ref=e366]
+                - cell "281 ₫" [ref=e367]
+                - cell "0,3%" [ref=e368]
+                - cell "📝" [ref=e369]
+              - row [ref=e370]:
+                - cell "CS ký HĐ" [ref=e371]
+                - cell "4.630 ₫" [ref=e372]
+                - cell "5,2%" [ref=e373]
+                - cell "📝" [ref=e374]
+              - row [ref=e375]:
+                - cell "Thiết bị" [ref=e376]
+                - cell "1.852 ₫" [ref=e377]
+                - cell "2,1%" [ref=e378]
+                - cell "📝" [ref=e379]
+              - row [ref=e380]:
+                - cell "Giáo cụ" [ref=e381]
+                - cell [ref=e382]:
+                  - textbox [ref=e383]: "16.000"
+                - cell "18,1%" [ref=e384]
+                - cell "📝" [ref=e385]
+              - row [ref=e386]:
+                - cell "Thuế TNDN (CS tháng + CS ký HĐ) × 22%" [ref=e387]:
+                  - text: Thuế TNDN
+                  - generic [ref=e388]: (CS tháng + CS ký HĐ) × 22%
+                - cell "1.080 ₫" [ref=e389]
+                - cell "1,2%" [ref=e390]
+                - cell "📝" [ref=e391]
+              - row [ref=e392]:
+                - cell "Vận hành" [ref=e393]
+                - cell [ref=e394]:
+                  - textbox [ref=e395]: "5.000"
+                - cell "5,7%" [ref=e396]
+                - cell "📝" [ref=e397]
+              - row [ref=e398]:
+                - cell "Công ty thu về" [ref=e399]
+                - cell "52.357 ₫" [ref=e400]
+                - cell "59,4%" [ref=e401]
+                - cell "📝" [ref=e402]
+          - generic [ref=e404]:
+            - heading "📊 Phân bổ chi phí" [level=3] [ref=e405]
+            - generic [ref=e406]:
+              - generic [ref=e407]: "Môn học: STEM"
+              - generic [ref=e408]:
+                - text: "Học phí:"
+                - generic [ref=e409]: 90.000 VND
+            - generic [ref=e410]:
+              - generic [ref=e411]:
+                - application [ref=e414]:
+                  - generic [ref=e442]:
+                    - generic [ref=e443]: 10%
+                    - generic [ref=e445]: 0%
+                    - generic [ref=e447]: 5%
+                    - generic [ref=e449]: 2%
+                    - generic [ref=e451]: 18%
+                    - generic [ref=e453]: 6%
+                    - generic [ref=e455]: 1%
+                    - generic [ref=e457]: 58%
+                - generic:
+                  - generic: Công ty thu về
+                  - generic: 52.356,58
+                  - generic: 58.2%
+              - generic [ref=e459]:
+                - generic [ref=e460] [cursor=pointer]:
+                  - generic [ref=e461]: CSVC
+                  - generic [ref=e464]: 10%
+                - generic [ref=e465] [cursor=pointer]:
+                  - generic [ref=e466]: CS tháng
+                  - generic [ref=e469]: 0%
+                - generic [ref=e470] [cursor=pointer]:
+                  - generic [ref=e471]: CĐ HĐ
+                  - generic [ref=e474]: 5%
+                - generic [ref=e475] [cursor=pointer]:
+                  - generic [ref=e476]: Thiết bị
+                  - generic [ref=e479]: 2%
+                - generic [ref=e480] [cursor=pointer]:
+                  - generic [ref=e481]: Giáo cụ
+                  - generic [ref=e484]: 18%
+                - generic [ref=e485] [cursor=pointer]:
+                  - generic [ref=e486]: Vận hành
+                  - generic [ref=e489]: 6%
+                - generic [ref=e490] [cursor=pointer]:
+                  - generic [ref=e491]: Thuế TNDN
+                  - generic [ref=e494]: 1%
+                - generic [ref=e495] [cursor=pointer]:
+                  - generic [ref=e496]: Công ty
+                  - generic [ref=e499]: 58%
+          - generic [ref=e501]:
+            - generic [ref=e502]:
+              - generic [ref=e503]: Tổng tiền còn khấu hao
+              - generic [ref=e504]: 0 ₫
+              - generic [ref=e505]: = Số tiền − Số tiền khấu hao
+            - generic [ref=e506]:
+              - generic [ref=e507]: Tổng tiền thiết bị còn khấu hao
+              - generic [ref=e508]: 0 ₫
+              - generic [ref=e509]: = Thành tiền thiết bị − Số tiền khấu hao
+          - generic [ref=e510]:
+            - generic [ref=e511]:
+              - generic [ref=e512]:
+                - textbox [ref=e513]: Học phí
+                - button "Xóa" [ref=e514] [cursor=pointer]
+              - generic [ref=e515]:
+                - text: Khoản thu
+                - textbox [ref=e516]: Học phí
+              - generic [ref=e517]:
+                - text: Mức thu
+                - textbox [ref=e518]: "90.000"
+              - generic [ref=e519]:
+                - text: CSVC (VNĐ)
+                - textbox [ref=e520]: "8.800"
+                - generic [ref=e521]: ≈ 10 %
+              - generic [ref=e522]:
+                - text: Thuế (VNĐ)
+                - textbox [ref=e523]: "0"
+              - generic [ref=e524]:
+                - text: Giáo viên (%)
+                - textbox [ref=e525]: "0"
+                - generic [ref=e526]: ≈ 0 %
+              - generic [ref=e527]:
+                - text: QL1 %
+                - textbox [ref=e528]: "0"
+                - generic [ref=e529]: ≈ 0 %
+              - generic [ref=e530]:
+                - text: QL1 Thuế (VNĐ)
+                - textbox [ref=e531]: "0"
+              - generic [ref=e532]:
+                - text: QL2 %
+                - textbox [ref=e533]: "0"
+                - generic [ref=e534]: ≈ 0 %
+              - generic [ref=e535]:
+                - text: QL2 Thuế (VNĐ)
+                - textbox [ref=e536]: "0"
+              - generic [ref=e537]:
+                - text: Chi phí khác
+                - generic [ref=e538]:
+                  - generic [ref=e539]:
+                    - generic [ref=e540]:
+                      - textbox "Tên chi phí" [ref=e541]
+                      - button "Xoá" [ref=e542] [cursor=pointer]
+                    - generic [ref=e543]:
+                      - generic [ref=e544]:
+                        - generic [ref=e545]: Số tiền (VNĐ)
+                        - textbox "0" [ref=e546]: 1.000.000
+                      - generic [ref=e547]:
+                        - generic [ref=e548]: Thuế (VNĐ)
+                        - textbox "0" [ref=e549]
+                  - generic [ref=e550]:
+                    - generic [ref=e551]:
+                      - textbox "Tên chi phí" [ref=e552]
+                      - button "Xoá" [ref=e553] [cursor=pointer]
+                    - generic [ref=e554]:
+                      - generic [ref=e555]:
+                        - generic [ref=e556]: Số tiền (VNĐ)
+                        - textbox "0" [ref=e557]: 2.000.000
+                      - generic [ref=e558]:
+                        - generic [ref=e559]: Thuế (VNĐ)
+                        - textbox "0" [ref=e560]
+                - button "+ Thêm chi phí khác" [ref=e561] [cursor=pointer]
+              - generic [ref=e562]:
+                - text: Tổng chi ngoài
+                - generic [ref=e563]: 281 ₫ ≈ 0.3%
+                - generic [ref=e564]: "Chi phí khác — Công thức tính: Số tiền / số tháng / số học sinh"
+            - button "+ Thêm" [ref=e565] [cursor=pointer]
+          - generic [ref=e566]:
+            - generic [ref=e567]:
+              - generic [ref=e568]:
+                - 'heading "Tiền mặt #1" [level=2] [ref=e570]'
+                - generic [ref=e571]:
+                  - generic [ref=e572]:
+                    - generic [ref=e573]: Loại hỗ trợ
+                    - textbox [ref=e574]: Chính sách
+                  - generic [ref=e575]:
+                    - generic [ref=e576]:
+                      - generic [ref=e577]: Số tiền
+                      - textbox [ref=e578]: 50.000.000
+                    - generic [ref=e579]:
+                      - generic [ref=e580]: Số năm khấu hao
+                      - spinbutton [ref=e581]: "1"
+                    - generic [ref=e582]:
+                      - generic [ref=e583]: Số tiền khấu hao
+                      - textbox [ref=e584]: 50.000.000
+                  - generic [ref=e585]:
+                    - generic [ref=e586]: Số học sinh
+                    - spinbutton [ref=e587]: "1200"
+                  - generic [ref=e588]:
+                    - generic [ref=e589]: Số tháng
+                    - spinbutton [ref=e590]: "9"
+                  - generic [ref=e591]:
+                    - generic [ref=e592]:
+                      - generic [ref=e593]: Mặc định
+                      - generic [ref=e594]: 1,000 HS · 9 tháng
+                      - generic [ref=e595]: Đơn giá
+                      - generic [ref=e596]: 5,556 đ
+                      - generic [ref=e597]: = Số tiền / 1 năm / 1,000 / 9
+                    - generic [ref=e598]:
+                      - generic [ref=e599]: Thực tế nhập
+                      - generic [ref=e600]: 1200 HS · 9 tháng
+                      - generic [ref=e601]: CS ký HĐ
+                      - generic [ref=e602]: 4,630 đ
+                      - generic [ref=e603]: = Số tiền / Số năm khấu hao / Số tháng / Số học sinh thực
+                      - generic [ref=e604]: Thành tiền
+                      - generic [ref=e605]: 60,000,000 đ
+                      - generic [ref=e606]: = Đơn giá × Số học sinh × Số tháng
+              - button "+ Thêm hỗ trợ tiền" [ref=e607] [cursor=pointer]
+            - generic [ref=e608]:
+              - generic [ref=e609]:
+                - 'heading "Thiết bị #1" [level=2] [ref=e611]'
+                - generic [ref=e612]:
+                  - generic [ref=e613]:
+                    - generic [ref=e614]: Danh mục
+                    - textbox [ref=e615]: Thiết bị
+                  - generic [ref=e616]:
+                    - generic [ref=e617]:
+                      - generic [ref=e618]: Số lượng
+                      - spinbutton [ref=e619]: "1"
+                    - generic [ref=e620]:
+                      - generic [ref=e621]: Đơn giá
+                      - textbox [ref=e622]: 20.000.000
+                    - generic [ref=e623]:
+                      - generic [ref=e624]: Số năm khấu hao
+                      - spinbutton [ref=e625]: "1"
+                    - generic [ref=e626]:
+                      - generic [ref=e627]: Số tiền khấu hao
+                      - textbox [ref=e628]: 20.000.000
+                  - generic [ref=e629]:
+                    - generic [ref=e630]: Thành tiền
+                    - generic [ref=e631]: 20,000,000 đ
+                  - generic [ref=e632]:
+                    - generic [ref=e633]: Số học sinh
+                    - spinbutton [ref=e634]: "1200"
+                  - generic [ref=e635]:
+                    - generic [ref=e636]: Số tháng
+                    - spinbutton [ref=e637]: "9"
+                  - generic [ref=e638]:
+                    - generic [ref=e639]:
+                      - generic [ref=e640]: Mặc định
+                      - generic [ref=e641]: 1,000 HS · 9 tháng
+                      - generic [ref=e642]: Đơn giá
+                      - generic [ref=e643]: 2,222 đ
+                      - generic [ref=e644]: = Thành tiền / 1 năm / 1,000 / 9
+                    - generic [ref=e645]:
+                      - generic [ref=e646]: Thực tế nhập
+                      - generic [ref=e647]: 1200 HS · 9 tháng
+                      - generic [ref=e648]: Thiết bị
+                      - generic [ref=e649]: 1,852 đ
+                      - generic [ref=e650]: = Thành tiền / Số năm khấu hao / Số tháng / Số học sinh thực
+                      - generic [ref=e651]: Thành tiền
+                      - generic [ref=e652]: 24,000,000 đ
+                      - generic [ref=e653]: = Đơn giá × Số học sinh × Số tháng
+              - button "+ Thêm thiết bị" [ref=e654] [cursor=pointer]
+          - generic [ref=e656] [cursor=pointer]:
+            - generic [ref=e657]: 📝
+            - generic [ref=e658]: Ghi chú
+          - generic [ref=e659]:
+            - button "Hủy" [ref=e660] [cursor=pointer]
+            - button "Lưu nháp" [ref=e661] [cursor=pointer]
+            - button "Gửi duyệt" [ref=e662] [cursor=pointer]

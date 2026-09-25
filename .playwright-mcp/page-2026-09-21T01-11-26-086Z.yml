@@ -1,0 +1,18 @@
+- generic [ref=e4]:
+  - generic [ref=e5]:
+    - heading "KIDO EDU" [level=1] [ref=e7]
+    - paragraph [ref=e8]: Đăng nhập hệ thống
+  - generic [ref=e9]:
+    - generic [ref=e10]:
+      - button "🔑 Mật khẩu" [ref=e11] [cursor=pointer]
+      - button "📸 FaceID" [ref=e12] [cursor=pointer]
+    - generic [ref=e13]:
+      - text: Số điện thoại
+      - textbox [ref=e14]
+    - generic [ref=e15]:
+      - text: Mật khẩu
+      - textbox [ref=e16]
+    - generic [ref=e18]:
+      - checkbox "Ghi nhớ" [ref=e19]
+      - text: Ghi nhớ
+    - button "Đăng nhập" [disabled] [ref=e20]

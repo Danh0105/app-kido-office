@@ -1,0 +1,36 @@
+- generic [ref=f1e21]:
+  - complementary [ref=f1e22]:
+    - generic [ref=f1e23]:
+      - generic [ref=f1e26]:
+        - paragraph [ref=f1e27]: KIDO SKILL
+        - paragraph [ref=f1e28]: KNS - CDS - STEM
+      - generic [ref=f1e29]:
+        - generic [ref=f1e30]:
+          - paragraph [ref=f1e31]: Menu
+          - button "Thu hẹp menu" [expanded] [ref=f1e32] [cursor=pointer]
+        - generic [ref=f1e36]:
+          - button "Chính sách" [ref=f1e37] [cursor=pointer]
+          - button "Báo cáo" [ref=f1e41] [cursor=pointer]
+          - button "Thống kê" [ref=f1e45] [cursor=pointer]
+          - button "QL thu chi" [ref=f1e49] [cursor=pointer]
+          - button "Nhân viên" [ref=f1e53] [cursor=pointer]
+          - button "Đề xuất chi" [ref=f1e57] [cursor=pointer]
+          - button "Quản lý kho" [ref=f1e61] [cursor=pointer]
+          - button "Phiếu lương" [ref=f1e65] [cursor=pointer]
+          - button "Giáo viên" [ref=f1e70] [cursor=pointer]
+          - button "Lớp học" [ref=f1e76] [cursor=pointer]
+          - button "Thời khóa biểu" [ref=f1e84] [cursor=pointer]
+          - button "Chấm công" [ref=f1e89] [cursor=pointer]
+          - button "Vị trí trường" [ref=f1e96] [cursor=pointer]
+          - button "Nhật ký" [ref=f1e102] [cursor=pointer]
+      - button "Giao diện cũ" [ref=f1e111] [cursor=pointer]
+  - main [ref=f1e117]:
+    - generic [ref=f1e118]:
+      - generic [ref=f1e119]:
+        - generic [ref=f1e120]:
+          - button [ref=f1e121] [cursor=pointer]
+          - heading "Chính sách" [level=1] [ref=f1e124]
+        - generic [ref=f1e125]:
+          - button "Trang chủ" [ref=f1e126] [cursor=pointer]
+          - button "Cá nhân" [ref=f1e129] [cursor=pointer]
+      - generic [ref=f1e132]: Đang tải chính sách...

@@ -1,0 +1,65 @@
+- generic [ref=e149]:
+  - complementary [ref=e150]:
+    - generic [ref=e151]:
+      - generic [ref=e154]:
+        - paragraph [ref=e155]: KIDO SKILL
+        - paragraph [ref=e156]: KNS - CDS - STEM
+      - generic [ref=e157]:
+        - generic [ref=e158]:
+          - paragraph [ref=e159]: Menu
+          - button "Thu hẹp menu" [expanded] [ref=e160] [cursor=pointer]
+        - generic [ref=e164]:
+          - button "Phiếu lương" [ref=e165] [cursor=pointer]
+          - button "Chính sách" [ref=e170] [cursor=pointer]
+          - button "Báo cáo tuần" [ref=e174] [cursor=pointer]
+          - button "Thống kê" [ref=e178] [cursor=pointer]
+          - button "Đề xuất chi" [ref=e182] [cursor=pointer]
+          - button "Thời khoá biểu" [ref=e186] [cursor=pointer]
+      - button "Giao diện cũ" [ref=e192] [cursor=pointer]
+  - main [ref=e198]:
+    - generic [ref=e199]:
+      - generic [ref=e200]:
+        - generic [ref=e201]:
+          - button [ref=e202] [cursor=pointer]
+          - heading "Tạo đề xuất chi" [level=1] [ref=e205]
+        - generic [ref=e206]:
+          - button "Trang chủ" [ref=e207] [cursor=pointer]
+          - button "Cá nhân" [ref=e210] [cursor=pointer]
+      - generic [ref=e213]:
+        - generic [ref=e214]:
+          - generic [ref=e215]:
+            - text: Đối tượng đề xuất
+            - generic [ref=e216]:
+              - button "Đề xuất phường/xã" [ref=e217] [cursor=pointer]
+              - button "Đề xuất trường" [ref=e218] [cursor=pointer]
+          - generic [ref=e219]:
+            - text: Loại đề xuất
+            - generic [ref=e220]:
+              - button "💰 Đề xuất tiền" [ref=e221] [cursor=pointer]
+              - button "🧰 Đề xuất thiết bị" [ref=e222] [cursor=pointer]
+            - paragraph [ref=e223]: "Đề xuất tiền: kế toán lên lệnh chi, thủ quỹ xuất tiền."
+          - generic [ref=e224]:
+            - generic [ref=e225]: Tiêu đề *
+            - 'textbox "VD: Chi tiếp khách" [active] [ref=e226]': Test MCP trừ chính sách
+          - generic [ref=e227]:
+            - text: Nội dung / lý do
+            - textbox "Mô tả chi tiết" [ref=e228]
+          - generic [ref=e229]:
+            - checkbox "Trừ chính sách" [ref=e230]
+            - text: Trừ chính sách
+          - generic [ref=e231]:
+            - text: Thành phần tham gia
+            - 'textbox "VD: Giám đốc, kế toán, khách hàng dự án X" [ref=e232]'
+          - generic [ref=e233]:
+            - generic [ref=e234]: Ngày dự kiến chi *
+            - textbox [ref=e235]
+          - generic [ref=e236]:
+            - paragraph [ref=e237]: Khu vực
+            - generic [ref=e238]:
+              - generic [ref=e239]: Chọn khu vực
+              - generic [ref=e240]: ▾
+          - generic [ref=e241]:
+            - text: Tệp đính kèm
+            - button "Choose File" [ref=e242]
+        - paragraph [ref=e243]: Sau khi gửi, đề xuất sẽ chuyển đến giám đốc duyệt. Có thể sửa lại ở mọi trạng thái; mỗi lần sửa sẽ duyệt lại từ đầu.
+        - button "Gửi đề xuất" [ref=e244] [cursor=pointer]

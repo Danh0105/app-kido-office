@@ -16,6 +16,7 @@ import {
   DAY_OF_WEEK_OPTIONS,
   type BulkResultRow,
   type BulkScheduleItem,
+  type ScheduleQuery,
   type SchoolClass,
   type Teacher,
   type TeachingSchedule,
@@ -38,6 +39,7 @@ import {
   type RefOption,
 } from "../hooks/useTeachingRefData";
 import { schoolPeriodApi } from "@/service/school.api";
+import { fetchAllPages } from "../pagedList";
 import {
   appendMissingTimetableRows,
   normalizeTimetableRows as normalizeRows,
@@ -300,7 +302,9 @@ export default function TimetableTab({
     }
 
     try {
-      const res = await teachingScheduleApi.list({
+      // BE chặn tối đa 100 dòng/trang dù xin nhiều hơn — trường đông tiết phải
+      // đọc hết các trang, không thì các tiết cuối tuần rớt khỏi lưới.
+      const res = await fetchAllPages<TeachingSchedule, ScheduleQuery>(teachingScheduleApi.list, {
         schoolId: Number(schoolId),
         schoolLocationId: schoolLocationId
           ? Number(schoolLocationId)
@@ -328,14 +332,13 @@ export default function TimetableTab({
   const loadRejected = useCallback(async () => {
     const requestId = ++rejectedRequestRef.current;
     try {
-      const res = await teachingScheduleApi.list({
+      const res = await fetchAllPages<TeachingSchedule, ScheduleQuery>(teachingScheduleApi.list, {
         confirmationStatus: "REJECTED",
         schoolId: schoolId ? Number(schoolId) : undefined,
         schoolLocationId: schoolLocationId
           ? Number(schoolLocationId)
           : undefined,
         teacherId: defaultTeacherId ? Number(defaultTeacherId) : undefined,
-        page: 1,
         limit: 100,
       });
       if (requestId !== rejectedRequestRef.current) return;

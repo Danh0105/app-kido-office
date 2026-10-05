@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Trash2 } from "lucide-react";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
 import { formatDecimal } from "@/utils/decimal";
+import { calculateRevenueAmount } from "@/utils/revenueAmount";
 import DecimalInput from "@/components/DecimalInput";
 
 type Props = {
@@ -25,10 +26,7 @@ export default function InputExpenseTable({
     let totalPaid = 0;
 
     rows.forEach((row) => {
-      const students = Number(row.studentCount || 0);
-      const months = Number(row.monthsCount || 0);
-      const price = Number(row.unitPrice || 0);
-      totalInvoice += students * months * price;
+      totalInvoice += calculateRevenueAmount(row);
       totalPaid += Number(row.paidAmount || 0);
     });
 
@@ -93,10 +91,7 @@ export default function InputExpenseTable({
 
           <tbody>
             {rows.map((row, idx) => {
-              const students = Number(row.studentCount || 0);
-              const months = Number(row.monthsCount || 0);
-              const price = Number(row.unitPrice || 0);
-              const invoiceAmount = students * months * price;
+              const invoiceAmount = calculateRevenueAmount(row);
               const remaining = invoiceAmount - Number(row.paidAmount || 0);
               const locked = !!row.invoiceLocked;
 

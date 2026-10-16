@@ -522,6 +522,22 @@ export const recruitmentApi = {
       })
     ).data,
 
+  /** Đối soát tin UNKNOWN (có thể đã tới Zalo): chỉ chạy được khi tin đang UNKNOWN. */
+  markOutboxSent: async (outboxId: number) =>
+    (await api.post(`/recruitment/operations/outbox/${outboxId}/mark-sent`, {}))
+      .data,
+
+  retryOutbox: async (outboxId: number) =>
+    (
+      await api.post(`/recruitment/operations/outbox/${outboxId}/retry`, {
+        confirmDuplicateRisk: true,
+      })
+    ).data,
+
+  deadLetterOutbox: async (outboxId: number) =>
+    (await api.post(`/recruitment/operations/outbox/${outboxId}/dead-letter`))
+      .data,
+
   conversations: async (params: {
     keyword?: string;
     mode?: ConversationControlMode;

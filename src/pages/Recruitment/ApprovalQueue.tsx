@@ -296,6 +296,31 @@ export default function ApprovalQueue({
 }
 
 type Action = "approve" | "edit" | "reject";
+type Reconcile = "sent" | "retry" | "dead";
+
+const RECONCILE_TEXT: Record<
+  Reconcile,
+  { title: string; message: string; label: string }
+> = {
+  sent: {
+    title: "Đánh dấu đã gửi?",
+    message:
+      "Chỉ chọn khi đã kiểm tra (trên OA hoặc hỏi ứng viên) rằng tin đã tới. Tin không được gửi lại.",
+    label: "Đã gửi",
+  },
+  retry: {
+    title: "Gửi lại tin này?",
+    message:
+      "Tin có thể đã tới Zalo — gửi lại có thể khiến ứng viên nhận trùng. Bản duyệt vẫn được kiểm lại trước khi gửi.",
+    label: "Gửi lại",
+  },
+  dead: {
+    title: "Bỏ qua tin này?",
+    message:
+      "Tin chuyển sang Gửi lỗi, không gửi lại. Nhân sự liên hệ ứng viên trực tiếp nếu cần.",
+    label: "Bỏ qua",
+  },
+};
 
 function ApprovalDrawer({
   outboxId,
@@ -314,6 +339,7 @@ function ApprovalDrawer({
   const [draft, setDraft] = useState("");
   const [reason, setReason] = useState("");
   const [confirm, setConfirm] = useState<Action | null>(null);
+  const [reconcile, setReconcile] = useState<Reconcile | null>(null);
   const [busy, setBusy] = useState(false);
   // Giữ requestId cho tới khi thao tác thành công → bấm lại không tạo quyết định thứ hai.
   const requestIds = useRef<Record<Action, string>>({
@@ -387,6 +413,27 @@ function ApprovalDrawer({
     }
   };
 
+  const runReconcile = async (action: Reconcile) => {
+    if (!detail) return;
+    setBusy(true);
+    try {
+      if (action === "sent")
+        await recruitmentApi.markOutboxSent(detail.outboxId);
+      if (action === "retry") await recruitmentApi.retryOutbox(detail.outboxId);
+      if (action === "dead")
+        await recruitmentApi.deadLetterOutbox(detail.outboxId);
+      toast.success("Đã đối soát tin");
+      onChanged();
+      await load();
+    } catch (error) {
+      toast.error(errorMessage(error));
+      if (httpStatus(error) === 409) await load();
+    } finally {
+      setReconcile(null);
+      setBusy(false);
+    }
+  };
+
   const footer =
     canManage && detail && pending ? (
       mode === "view" ? (
@@ -436,6 +483,36 @@ function ApprovalDrawer({
           </button>
         </div>
       )
+    ) : canManage && detail?.status === "UNKNOWN" ? (
+      <div className="space-y-2">
+        <p className="text-[11px] text-slate-500">
+          Tin có thể đã tới Zalo nhưng hệ thống không chắc — hệ thống không tự
+          gửi lại. Kiểm tra rồi chọn:
+        </p>
+        <div className="flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setReconcile("dead")}
+            className="h-10 rounded-xl border border-slate-200 px-4 text-xs font-bold text-slate-600"
+          >
+            Bỏ qua
+          </button>
+          <button
+            type="button"
+            onClick={() => setReconcile("retry")}
+            className="h-10 rounded-xl border border-amber-200 px-4 text-xs font-bold text-amber-700"
+          >
+            Gửi lại
+          </button>
+          <button
+            type="button"
+            onClick={() => setReconcile("sent")}
+            className="h-10 rounded-xl bg-emerald-600 px-4 text-xs font-bold text-white"
+          >
+            Đã gửi
+          </button>
+        </div>
+      </div>
     ) : !canManage ? (
       <p className="flex items-center gap-2 text-xs font-semibold text-blue-800">
         <AlertCircle size={15} /> Chế độ chỉ xem. Duyệt tin thuộc quyền Nhân sự.
@@ -580,6 +657,17 @@ function ApprovalDrawer({
             </ol>
           </section>
         </div>
+      )}
+      {reconcile && detail && (
+        <ConfirmDialog
+          title={RECONCILE_TEXT[reconcile].title}
+          message={RECONCILE_TEXT[reconcile].message}
+          confirmLabel={RECONCILE_TEXT[reconcile].label}
+          tone={reconcile === "retry" ? "danger" : "primary"}
+          busy={busy}
+          onCancel={() => setReconcile(null)}
+          onConfirm={() => void runReconcile(reconcile)}
+        />
       )}
       {confirm && detail && (
         <ConfirmDialog

@@ -13,6 +13,12 @@ export type RevenueItemPayload = {
   invoiceOther?: string;
   invoiceNumber?: string;
   invoiceDate?: string;
+  /** Ngày chi (bảng Hóa Đơn) */
+  invoicePaymentDate?: string;
+  /** Khoản thu/chi — số hiệu tài khoản Nguồn thu chi */
+  invoiceCashAccount?: string;
+  /** Ghi chú (bảng Hóa Đơn) */
+  invoiceNote?: string;
   paidAmount: number;
   paymentMethod?: string;
   paymentDate?: string;

@@ -1,4 +1,5 @@
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
+import { invoiceCashAccountGroups } from "../../RealExpenseDetail/utils/invoiceCashAccounts";
 
 type Props = {
   inputRows: InputExpenseRow[];
@@ -104,7 +105,7 @@ export default function InvoiceTable({
       </div>
 
       <div className="overflow-auto">
-        <table className="w-full min-w-[1550px] border-collapse">
+        <table className="w-full min-w-[1950px] border-collapse">
           <thead>
             <tr className="bg-slate-900 text-white">
               <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm w-16">
@@ -136,6 +137,12 @@ export default function InvoiceTable({
               </th>
               <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
                 🏢 Tổng thanh toán công ty
+              </th>
+              <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
+                📅 Ngày chi
+              </th>
+              <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
+                🏦 Khoản thu/chi
               </th>
               <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
                 📝 Ghi chú
@@ -285,6 +292,38 @@ export default function InvoiceTable({
                       )}
                       className="w-full h-14 text-center font-bold text-violet-700 border rounded-lg text-sm"
                     />
+                  </td>
+
+                  <td className="border p-2">
+                    <input
+                      type="date"
+                      value={row.invoicePaymentDate || ""}
+                      onChange={(e) =>
+                        updateInputRow(idx, "invoicePaymentDate", e.target.value)
+                      }
+                      className="w-full h-14 border rounded-lg px-2 text-sm"
+                    />
+                  </td>
+
+                  <td className="border p-2">
+                    <select
+                      value={row.invoiceCashAccount || ""}
+                      onChange={(e) =>
+                        updateInputRow(idx, "invoiceCashAccount", e.target.value)
+                      }
+                      className="w-full min-w-[230px] h-14 border rounded-lg px-2 text-sm bg-white"
+                    >
+                      <option value="">Chọn</option>
+                      {invoiceCashAccountGroups.map((group) => (
+                        <optgroup key={group.label} label={group.label}>
+                          {group.accounts.map((account) => (
+                            <option key={account.code} value={account.code}>
+                              {account.code} - {account.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
                   </td>
 
                   <td className="border p-2">

@@ -1,16 +1,14 @@
 import { useState } from "react";
-import {
-  FUND_SOURCE_LABEL,
-  type ExpenseAttachment,
-  type FundSource,
-} from "@/types/expenseRequest";
+import type { ExpenseAttachment } from "@/types/expenseRequest";
 import { resolveFileUrl } from "@/service/expenseRequest";
+import CashAccountSelect from "@/pages/Director/expense/component/expense/CashAccountSelect";
 
 export type ActionPayload = {
   note?: string;
   reason?: string;
   files?: File[];
-  fundSource?: FundSource;
+  /** Nguồn chi — số hiệu tài khoản trong danh mục Nguồn thu chi */
+  cashAccount?: string;
 };
 
 type Props = {
@@ -26,14 +24,12 @@ type Props = {
   onDeleteAttachment?: (attachmentId: number) => void | Promise<void>;
   requireReason?: boolean;
   reasonLabel?: string;
-  /** Thủ quỹ chọn nguồn tiền đã dùng để chi khi xác nhận xuất tiền */
-  showFundSource?: boolean;
+  /** Thủ quỹ chọn nguồn chi (tài khoản) đã dùng để chi khi xác nhận xuất tiền */
+  showCashAccount?: boolean;
   loading?: boolean;
   onClose: () => void;
   onSubmit: (payload: ActionPayload) => void;
 };
-
-const FUND_SOURCES: FundSource[] = ["COMPANY_CASH", "BANK_ACCOUNT"];
 
 const MAX_FILES = 5;
 const MAX_SIZE = 50 * 1024 * 1024; // 50MB
@@ -49,7 +45,7 @@ export default function ActionModal({
   onDeleteAttachment,
   requireReason,
   reasonLabel = "Lý do",
-  showFundSource,
+  showCashAccount,
   loading,
   onClose,
   onSubmit,
@@ -57,7 +53,7 @@ export default function ActionModal({
   const [note, setNote] = useState("");
   const [reason, setReason] = useState("");
   const [files, setFiles] = useState<File[]>([]);
-  const [fundSource, setFundSource] = useState<FundSource | null>(null);
+  const [cashAccount, setCashAccount] = useState("");
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
@@ -91,15 +87,15 @@ export default function ActionModal({
       setError("Vui lòng nhập lý do");
       return;
     }
-    if (showFundSource && !fundSource) {
-      setError("Vui lòng chọn nguồn tiền");
+    if (showCashAccount && !cashAccount) {
+      setError("Vui lòng chọn nguồn chi");
       return;
     }
     onSubmit({
       note: showNote ? note.trim() || undefined : undefined,
       reason: requireReason ? reason.trim() : undefined,
       files: showFiles ? files : undefined,
-      fundSource: showFundSource ? fundSource! : undefined,
+      cashAccount: showCashAccount ? cashAccount : undefined,
     });
   };
 
@@ -139,26 +135,16 @@ export default function ActionModal({
             </div>
           )}
 
-          {showFundSource && (
+          {showCashAccount && (
             <div>
               <label className="text-sm text-gray-600">
-                Nguồn tiền <span className="text-red-500">*</span>
+                Nguồn chi <span className="text-red-500">*</span>
               </label>
-              <div className="flex gap-2 mt-1">
-                {FUND_SOURCES.map((src) => (
-                  <button
-                    key={src}
-                    onClick={() => setFundSource(src)}
-                    className={`flex-1 py-2 text-sm rounded-lg border font-medium ${
-                      fundSource === src
-                        ? "bg-blue-500 text-white border-blue-500"
-                        : "bg-white text-gray-600 border-gray-300"
-                    }`}
-                  >
-                    {FUND_SOURCE_LABEL[src]}
-                  </button>
-                ))}
-              </div>
+              <CashAccountSelect
+                value={cashAccount}
+                onChange={setCashAccount}
+                className="w-full mt-1 px-3 py-2 border rounded-lg text-sm bg-white"
+              />
             </div>
           )}
 

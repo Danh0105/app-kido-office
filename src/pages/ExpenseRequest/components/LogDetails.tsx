@@ -8,6 +8,7 @@ import {
   type ExpenseLogPerson,
 } from "@/types/expenseRequest";
 import { formatVnd } from "@/utils/decimal";
+import { invoiceCashAccountLabel } from "@/pages/Director/expense/RealExpenseDetail/utils/invoiceCashAccounts";
 import { formatDate, mainAssigneeLabel } from "../lib";
 import type { ExpenseRequestKind } from "@/types/expenseRequest";
 
@@ -195,6 +196,14 @@ function StepDetails({ log, kind: requestKind }: { log: ExpenseLog; kind?: Expen
     }
 
     case "CONFIRM_CASH_RELEASED":
+      // Log mới lưu tài khoản (Nguồn chi); log cũ chỉ có nhóm (Nguồn tiền).
+      if (d.cashAccount) {
+        return (
+          <Box tone="border-orange-100 bg-orange-50">
+            <Row label="Nguồn chi">{invoiceCashAccountLabel(d.cashAccount)}</Row>
+          </Box>
+        );
+      }
       return d.fundSource ? (
         <Box tone="border-orange-100 bg-orange-50">
           <Row label="Nguồn tiền">{FUND_SOURCE_LABEL[d.fundSource]}</Row>

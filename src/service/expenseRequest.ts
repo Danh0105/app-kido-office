@@ -10,7 +10,6 @@ import type {
   ExpenseRequest,
   EquipmentSource,
   ExpenseRequestKind,
-  FundSource,
   PaymentMethod,
   PaymentOrder,
   SaleAdminReviewStatus,
@@ -285,7 +284,7 @@ export const expenseRequestApi = {
   // ---- THỦ QUỸ: cash released / fund returned ----
   cashReleased: async (
     id: number,
-    data: { fundSource: FundSource; note?: string; files?: File[] },
+    data: { cashAccount: string; note?: string; files?: File[] },
   ): Promise<ExpenseRequest> => {
     const res = await api.post(
       `${BASE}/${id}/cash-released`,

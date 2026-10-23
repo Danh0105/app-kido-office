@@ -3,8 +3,20 @@ import logo from "../../static/Logo.png";
 import { useNavigate } from "react-router-dom";
 import FaceVerify from "../FaceId/FaceVerify";
 import { initWebPush } from "@/utils/webPush";
-import { Capacitor } from "@capacitor/core";
 import { loginErrorMessage, loginWithRetry, networkMessage } from "./lib";
+import LoginNoticeModal, { type LoginNotice } from "./LoginNoticeModal";
+
+const PENDING_LOGIN_NOTICE_KEY = "pending_login_notice";
+
+const savedLoginNotice = (): LoginNotice | null => {
+  try {
+    const raw = localStorage.getItem(PENDING_LOGIN_NOTICE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    localStorage.removeItem(PENDING_LOGIN_NOTICE_KEY);
+    return null;
+  }
+};
 
 type Props = {
   onSuccess?: () => void;
@@ -27,6 +39,16 @@ export default function Login({ onSuccess }: Props) {
   /** Lần gọi thứ 2 trở đi → nói cho người dùng biết đang thử lại, không phải treo. */
   const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState("");
+  const [loginNotice, setLoginNotice] = useState<LoginNotice | null>(
+    savedLoginNotice
+  );
+  const [pendingUser, setPendingUser] = useState<any>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("user") || "null");
+    } catch {
+      return null;
+    }
+  });
   const navigate = useNavigate();
   const [tab, setTab] = useState<"password" | "face">("password");
   const isValid = form.phone && form.password;
@@ -40,6 +62,25 @@ export default function Login({ onSuccess }: Props) {
         ? "/employee/home"
         : "/director"
     );
+  };
+
+  const finishLogin = (user: any, notice?: LoginNotice | null) => {
+    if (!notice) {
+      goHome(user);
+      onSuccess?.();
+      return;
+    }
+
+    localStorage.setItem(PENDING_LOGIN_NOTICE_KEY, JSON.stringify(notice));
+    setPendingUser(user);
+    setLoginNotice(notice);
+  };
+
+  const closeLoginNotice = () => {
+    localStorage.removeItem(PENDING_LOGIN_NOTICE_KEY);
+    setLoginNotice(null);
+    if (pendingUser) goHome(pendingUser);
+    onSuccess?.();
   };
 
   const handleSubmit = async () => {
@@ -91,8 +132,7 @@ export default function Login({ onSuccess }: Props) {
         console.warn("Web push initialization failed after login:", pushError);
       });
 
-      goHome(data.user);
-      onSuccess?.();
+      finishLogin(data.user, data.loginNotice);
     } catch (err: any) {
       console.error("Login error:", err);
       setError(networkMessage(err));
@@ -215,7 +255,7 @@ export default function Login({ onSuccess }: Props) {
           {/* ================= FACE ================= */}
           {tab === "face" && (
             <FaceVerify
-              onSuccess={(user: any) => {
+              onSuccess={(user: any, notice?: LoginNotice) => {
                 // Cùng lý do với đăng nhập mật khẩu: không chờ đăng ký thông báo.
                 void initWebPush().catch((pushError) => {
                   console.warn(
@@ -223,12 +263,16 @@ export default function Login({ onSuccess }: Props) {
                     pushError
                   );
                 });
-                goHome(user);
+                localStorage.setItem("user", JSON.stringify(user));
+                finishLogin(user, notice);
               }}
             />
           )}
         </div>
       </div>
+      {loginNotice && (
+        <LoginNoticeModal notice={loginNotice} onClose={closeLoginNotice} />
+      )}
     </div>
   );
 }

@@ -37,6 +37,8 @@ type ManagedSchool = {
   phone?: string;
   representative?: string;
   taxCode?: string;
+  /** Mã đơn vị quan hệ ngân sách (7 chữ số) — in trên hóa đơn điện tử. */
+  budgetCode?: string | null;
   scale?: number | string | null;
   classCount?: number | string | null;
   latitude?: number | string | null;
@@ -60,7 +62,7 @@ type SubjectPolicyRow = {
 
 const SCHOOL_ACTIVE = 0;
 const SCHOOL_STOPPED = 1;
-const emptySchoolForm = { name: "", address: "", representative: "", phone: "", taxCode: "", scale: "", classCount: "", regionId: "", wardId: "" };
+const emptySchoolForm = { name: "", address: "", representative: "", phone: "", taxCode: "", budgetCode: "", scale: "", classCount: "", regionId: "", wardId: "" };
 const fallbackSchoolYears = () => {
   // Luôn có sẵn năm học đến 2028-2029 để tạo môn/chính sách cho năm tới,
   // kể cả khi hệ thống chưa có dữ liệu năm đó — không phụ thuộc đồng hồ máy chủ.
@@ -347,6 +349,7 @@ export default function PolicySelector() {
       representative: school.representative || "",
       phone: school.phone || "",
       taxCode: school.taxCode || "",
+      budgetCode: school.budgetCode || "",
       scale: school.scale == null ? "" : String(school.scale),
       classCount: school.classCount == null ? "" : String(school.classCount),
       regionId: school.ward?.province?.id ? String(school.ward.province.id) : "",
@@ -372,11 +375,16 @@ export default function PolicySelector() {
       toast.error("Vui lòng chọn phường/xã");
       return;
     }
+    if (schoolForm.budgetCode.trim() && !/^[0-9]{7}$/.test(schoolForm.budgetCode.trim())) {
+      toast.error("Mã ĐV QH ngân sách gồm 7 chữ số");
+      return;
+    }
     setSchoolSaving(true);
     const payload = {
       name: schoolForm.name.trim(), address: schoolForm.address.trim(),
       representative: schoolForm.representative.trim(), phone: schoolForm.phone.trim(),
-      taxCode: schoolForm.taxCode.trim(), scale: Number(schoolForm.scale) || 0,
+      taxCode: schoolForm.taxCode.trim(), budgetCode: schoolForm.budgetCode.trim(),
+      scale: Number(schoolForm.scale) || 0,
       classCount: Number(schoolForm.classCount) || 0,
     };
     try {
@@ -799,6 +807,7 @@ export default function PolicySelector() {
                         <InfoField label="Người đại diện" value={school.representative} />
                         <InfoField label="Số điện thoại" value={school.phone} />
                         <InfoField label="Mã số thuế" value={school.taxCode} />
+                        <InfoField label="Mã ĐVQHNS" value={school.budgetCode} />
                         <InfoField label="Quy mô học sinh" value={formatCount(school.scale)} />
                         <InfoField label="Số lớp" value={formatCount(school.classCount)} />
                         <InfoField label="Phường/Xã" value={school.ward?.name} />
@@ -1300,6 +1309,7 @@ function SchoolFormModal({ form, setForm, regions, wards, setRegion, onClose, on
           {field("representative", "Người đại diện")}
           {field("phone", "Số điện thoại")}
           {field("taxCode", "Mã số thuế")}
+          {field("budgetCode", "Mã ĐV QH ngân sách (7 số)")}
           {field("scale", "Quy mô học sinh")}
           {field("classCount", "Số lớp")}
         </div>

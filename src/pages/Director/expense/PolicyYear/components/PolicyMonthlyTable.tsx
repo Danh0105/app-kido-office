@@ -42,22 +42,23 @@ export default function PolicyMonthlyTable({
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="max-h-[620px] overflow-auto">
-        <table className="w-full min-w-[1180px] table-fixed border-separate border-spacing-0 text-sm">
+        <table className="w-full min-w-[1280px] table-fixed border-separate border-spacing-0 text-sm">
           <colgroup>
-            <col className="w-[13%]" />
+            <col className="w-[12%]" />
             <col className="w-[10%]" />
             <col className="w-[9%]" />
-            <col className="w-[12%]" />
+            <col className="w-[9%]" />
+            <col className="w-[11%]" />
             <col className="w-[10%]" />
+            <col className="w-[11%]" />
+            <col className="w-[14%]" />
             <col className="w-[12%]" />
-            <col className="w-[15%]" />
-            <col className="w-[13%]" />
             <col className="w-[6%]" />
           </colgroup>
           <thead className="sticky top-0 z-30">
             <tr className="text-xs font-black uppercase tracking-wide text-white">
               <th
-                colSpan={5}
+                colSpan={6}
                 className="border-r border-slate-600 bg-slate-800 px-3 py-2.5 text-left"
               >
                 Thông tin nhập
@@ -80,6 +81,7 @@ export default function PolicyMonthlyTable({
               </th>
               <th className={columnHeaderClass}>Năm học</th>
               <th className={columnHeaderClass}>Tháng</th>
+              <th className={columnHeaderClass}>Số tiết</th>
               <th className={columnHeaderClass}>SL HS đã thu</th>
 
               <th className={columnHeaderClass}>Số tháng thu</th>
@@ -102,7 +104,7 @@ export default function PolicyMonthlyTable({
               <tbody key={subject.id}>
                 <tr className="border-y border-blue-200 bg-blue-50">
                   <td
-                    colSpan={9}
+                    colSpan={10}
                     className="px-3 py-2 text-left text-xs font-black uppercase tracking-wide text-blue-800"
                   >
                     Môn học: {subject.name}
@@ -132,7 +134,7 @@ export default function PolicyMonthlyTable({
           ) : (
             <tbody>
               <tr>
-                <td colSpan={9} className="py-16 text-center">
+                <td colSpan={10} className="py-16 text-center">
                   <ClipboardList size={34} className="mx-auto text-slate-300" />
                   <p className="mt-3 font-bold text-slate-500">
                     Không có dòng dữ liệu phù hợp
@@ -152,6 +154,9 @@ export default function PolicyMonthlyTable({
                   className="sticky left-0 z-30 bg-blue-50 px-3 py-4 text-left text-lg text-blue-800"
                 >
                   TỔNG CỘNG
+                </td>
+                <td className="px-3 py-3 text-right text-lg text-blue-700">
+                  {formatCurrency(summary.totalPeriods)}
                 </td>
                 <td className="px-3 py-3 text-right text-lg">
                   {formatCurrency(summary.totalStudents)}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "react-hot-toast";
 import {
   AlertTriangle,
+  Building2,
   ChevronDown,
   ChevronRight,
   Home,
@@ -11,7 +12,12 @@ import {
 } from "lucide-react";
 
 import { getApiErrorMessage } from "@/utils/apiError";
-import { teachingSessionApi } from "@/service/teaching";
+import { teacherApi, teachingSessionApi } from "@/service/teaching";
+import {
+  schoolApi,
+  schoolLocationApi,
+  type SchoolLocation,
+} from "@/service/school.api";
 import {
   fuelAllowanceTierApi,
   type RecomputeGasAllowanceResult,
@@ -28,11 +34,19 @@ import type {
   TravelTeacher,
 } from "@/types/teaching";
 
-import { EmptyState, FilterCard, Loading, selectClass } from "../components/Shared";
+import {
+  EmptyState,
+  FilterCard,
+  Loading,
+  selectClass,
+} from "../components/Shared";
 import Modal from "../components/Modal";
+import TeacherLocationModal from "../components/TeacherLocationModal";
 import MissingAllowanceReport, {
   isReportEmpty,
 } from "../components/MissingAllowanceReport";
+import { SchoolLocationModal, type School } from "../SchoolLocationPage";
+import { SchoolBranchFormModal } from "../SchoolBranchPage";
 import {
   canSetTeachingRates,
   endOfMonth,
@@ -61,8 +75,17 @@ const RECENT_MONTHS = Array.from({ length: 12 }, (_, i) => {
   const d = new Date();
   d.setDate(1);
   d.setMonth(d.getMonth() - i);
-  const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  return { value, label: `Tháng ${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}` };
+  const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}`;
+  return {
+    value,
+    label: `Tháng ${String(d.getMonth() + 1).padStart(
+      2,
+      "0"
+    )}/${d.getFullYear()}`,
+  };
 });
 
 const FLAG_META: Record<TravelFlag, { label: string; className: string }> = {
@@ -95,7 +118,7 @@ const FLAG_META: Record<TravelFlag, { label: string; className: string }> = {
 /** Lý do cụ thể của nhãn "Không có phụ cấp" trên từng lượt. */
 const missingReasonLabel = (
   reason: GasAllowanceMissingReason,
-  distanceKm: number | null,
+  distanceKm: number | null
 ) => {
   switch (reason) {
     case "NO_TEACHER_LOCATION":
@@ -108,6 +131,8 @@ const missingReasonLabel = (
         : "Không khớp bậc phụ cấp";
     case "INVALID_DISTANCE":
       return "Toạ độ nhà/trường sai";
+    case "ROUTE_UNAVAILABLE":
+      return "Chưa tính được tuyến đường xe máy";
   }
 };
 
@@ -152,13 +177,13 @@ const placeName = (stop: TravelStop) =>
 
 export default function TravelReviewTab({ teachers, initialFilter }: Props) {
   const [fromDate, setFromDate] = useState(
-    initialFilter?.fromDate ?? startOfMonth(todayISO()),
+    initialFilter?.fromDate ?? startOfMonth(todayISO())
   );
   const [toDate, setToDate] = useState(
-    initialFilter?.toDate ?? endOfMonth(todayISO()),
+    initialFilter?.toDate ?? endOfMonth(todayISO())
   );
   const [teacherId, setTeacherId] = useState(
-    initialFilter?.teacherId ? String(initialFilter.teacherId) : "",
+    initialFilter?.teacherId ? String(initialFilter.teacherId) : ""
   );
   const [flaggedOnly, setFlaggedOnly] = useState(false);
   const [data, setData] = useState<TravelReview | null>(null);
@@ -168,6 +193,15 @@ export default function TravelReviewTab({ teachers, initialFilter }: Props) {
   const [recomputeResult, setRecomputeResult] =
     useState<RecomputeGasAllowanceResult | null>(null);
   const [reportOpen, setReportOpen] = useState(true);
+  const [teacherLocationTarget, setTeacherLocationTarget] =
+    useState<Teacher | null>(null);
+  const [schoolLocationTarget, setSchoolLocationTarget] =
+    useState<School | null>(null);
+  const [branchLocationTarget, setBranchLocationTarget] = useState<{
+    schoolId: number;
+    schoolName: string;
+    location: SchoolLocation;
+  } | null>(null);
   const canRecompute = canSetTeachingRates();
 
   const rangeValid = isDateOrderValid(fromDate, toDate);
@@ -191,7 +225,7 @@ export default function TravelReviewTab({ teachers, initialFilter }: Props) {
       setData(res);
       // Xem 1 giáo viên thì mở sẵn chi tiết; xem cả danh sách thì để gọn.
       setExpanded(
-        new Set(res.teachers.length === 1 ? [res.teachers[0].teacherId] : []),
+        new Set(res.teachers.length === 1 ? [res.teachers[0].teacherId] : [])
       );
     } catch (error: any) {
       if (error?.response?.status !== 403) {
@@ -243,11 +277,11 @@ export default function TravelReviewTab({ teachers, initialFilter }: Props) {
               daySum +
               day.stops.filter((stop) => stop.flags.includes("NOT_COUNTED"))
                 .length,
-            0,
+            0
           ),
-        0,
+        0
       ),
-    [data],
+    [data]
   );
 
   /**
@@ -259,7 +293,7 @@ export default function TravelReviewTab({ teachers, initialFilter }: Props) {
     setRecomputing(true);
     try {
       const res = await fuelAllowanceTierApi.recompute(
-        teacherId ? Number(teacherId) : undefined,
+        teacherId ? Number(teacherId) : undefined
       );
       // Kết quả đầy đủ (kể cả việc còn phải bổ sung) hiện trong hộp thoại —
       // toast vài giây không đủ chỗ để liệt kê từng giáo viên/trường.
@@ -270,6 +304,57 @@ export default function TravelReviewTab({ teachers, initialFilter }: Props) {
     } finally {
       setRecomputing(false);
     }
+  };
+
+  const openTeacherLocation = async (
+    item: RecomputeGasAllowanceResult["missing"]["teachersWithoutLocation"][number]
+  ) => {
+    setRecomputeResult(null);
+    const cached = teachers.find((teacher) => teacher.id === item.teacherId);
+    if (cached) {
+      setTeacherLocationTarget(cached);
+      return;
+    }
+
+    const toastId = toast.loading("Đang tải hồ sơ giáo viên…");
+    try {
+      setTeacherLocationTarget(await teacherApi.findOne(item.teacherId));
+    } catch (error: any) {
+      toast.error(getApiErrorMessage(error, "Không tải được giáo viên"));
+    } finally {
+      toast.dismiss(toastId);
+    }
+  };
+
+  const openPlaceLocation = async (
+    item: RecomputeGasAllowanceResult["missing"]["placesWithoutLocation"][number]
+  ) => {
+    setRecomputeResult(null);
+    const toastId = toast.loading("Đang tải vị trí…");
+    try {
+      if (item.schoolLocationId != null) {
+        const location = await schoolLocationApi.getOne(item.schoolLocationId);
+        setBranchLocationTarget({
+          schoolId: item.schoolId,
+          schoolName: item.schoolName || `Trường #${item.schoolId}`,
+          location,
+        });
+      } else {
+        setSchoolLocationTarget(
+          (await schoolApi.getOne(item.schoolId)) as School
+        );
+      }
+    } catch (error: any) {
+      toast.error(getApiErrorMessage(error, "Không tải được vị trí"));
+    } finally {
+      toast.dismiss(toastId);
+    }
+  };
+
+  const afterLocationSaved = () => {
+    // Backend sẽ điền lại dữ liệu vừa đủ điều kiện; đồng thời cập nhật ngay
+    // báo cáo trên màn hiện tại mà không cần người dùng chuyển trang.
+    void recompute();
   };
 
   return (
@@ -336,10 +421,13 @@ export default function TravelReviewTab({ teachers, initialFilter }: Props) {
               type="button"
               onClick={recompute}
               disabled={recomputing}
-              title="Điền phụ cấp cho các buổi đang trống. Không sửa buổi đã có phụ cấp, bỏ qua tháng đã gửi lương."
+              title="Tính lại quãng đường xe máy và phụ cấp; bỏ qua tháng đã gửi lương."
               className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 disabled:opacity-60"
             >
-              <RefreshCw size={13} className={recomputing ? "animate-spin" : ""} />
+              <RefreshCw
+                size={13}
+                className={recomputing ? "animate-spin" : ""}
+              />
               {recomputing
                 ? "Đang tính lại…"
                 : `Tính lại phụ cấp${teacherId ? " (giáo viên này)" : ""}`}
@@ -357,9 +445,9 @@ export default function TravelReviewTab({ teachers, initialFilter }: Props) {
         Chỉ giáo viên công ty. Gồm buổi đã chấm <b>Có mặt</b> và buổi đã tới
         ngày nhưng <b>chưa chấm công</b> (không gồm vắng/nghỉ/huỷ và buổi chưa
         tới ngày). Chặng đầu ngày tính từ nhà tới trường; các chặng sau tính từ
-        điểm trường trước. Chưa tính chặng về nhà. Đổi vị trí nhà có hiệu lực
-        từ <b>ngày Nhân sự duyệt</b>: các ngày trước đó vẫn tính theo nhà cũ. Phần "đã chấm" khớp với tab
-        Tổng hợp.
+        điểm trường trước. Chưa tính chặng về nhà. Đổi vị trí nhà có hiệu lực từ{" "}
+        <b>ngày Nhân sự duyệt</b>: các ngày trước đó vẫn tính theo nhà cũ. Phần
+        "đã chấm" khớp với tab Tổng hợp.
       </p>
 
       {!loading &&
@@ -390,6 +478,8 @@ export default function TravelReviewTab({ teachers, initialFilter }: Props) {
                   report={data.missing}
                   needsRecomputeSessions={data.needsRecomputeSessions}
                   onRecompute={canRecompute ? recompute : undefined}
+                  onAddTeacherLocation={openTeacherLocation}
+                  onAddPlaceLocation={openPlaceLocation}
                 />
               </div>
             )}
@@ -434,7 +524,11 @@ export default function TravelReviewTab({ teachers, initialFilter }: Props) {
                   cấp. Bổ sung xong là hệ thống tự điền lại, không cần bấm tính
                   lại.
                 </p>
-                <MissingAllowanceReport report={recomputeResult.missing} />
+                <MissingAllowanceReport
+                  report={recomputeResult.missing}
+                  onAddTeacherLocation={openTeacherLocation}
+                  onAddPlaceLocation={openPlaceLocation}
+                />
               </>
             )}
           </div>
@@ -490,6 +584,32 @@ export default function TravelReviewTab({ teachers, initialFilter }: Props) {
           ))}
         </div>
       )}
+
+      {teacherLocationTarget && (
+        <TeacherLocationModal
+          teacher={teacherLocationTarget}
+          onClose={() => setTeacherLocationTarget(null)}
+          onSaved={afterLocationSaved}
+        />
+      )}
+
+      {schoolLocationTarget && (
+        <SchoolLocationModal
+          school={schoolLocationTarget}
+          onClose={() => setSchoolLocationTarget(null)}
+          onSaved={afterLocationSaved}
+        />
+      )}
+
+      {branchLocationTarget && (
+        <SchoolBranchFormModal
+          schoolId={branchLocationTarget.schoolId}
+          schoolName={branchLocationTarget.schoolName}
+          location={branchLocationTarget.location}
+          onClose={() => setBranchLocationTarget(null)}
+          onSaved={afterLocationSaved}
+        />
+      )}
     </div>
   );
 }
@@ -507,11 +627,13 @@ function ResultStat({
     tone === "ok"
       ? "text-emerald-700 bg-emerald-50"
       : tone === "warn"
-        ? "text-amber-700 bg-amber-50"
-        : "text-gray-600 bg-gray-50";
+      ? "text-amber-700 bg-amber-50"
+      : "text-gray-600 bg-gray-50";
   return (
     <div className={`rounded-xl px-2 py-2 ${color}`}>
-      <p className="text-xl font-bold tabular-nums">{value.toLocaleString("vi-VN")}</p>
+      <p className="text-xl font-bold tabular-nums">
+        {value.toLocaleString("vi-VN")}
+      </p>
       <p className="text-[11px] leading-tight">{label}</p>
     </div>
   );
@@ -538,7 +660,9 @@ function Stat({
       >
         {value}
       </p>
-      {hint && <p className="text-[11px] text-emerald-800/80 tabular-nums">{hint}</p>}
+      {hint && (
+        <p className="text-[11px] text-emerald-800/80 tabular-nums">{hint}</p>
+      )}
     </div>
   );
 }
@@ -613,8 +737,12 @@ function TeacherCard({
                 day={day}
                 // Backend cũ chưa trả `day.home` → lùi về nhà hiện tại.
                 home={day.home !== undefined ? day.home : teacher.home}
+                // Văn phòng không phải nhà: chỉ so giữa các ngày xuất phát từ nhà.
                 movedHome={
-                  index > 0 && !samePoint(day.home, teacher.days[index - 1].home)
+                  index > 0 &&
+                  !day.fromOffice &&
+                  !teacher.days[index - 1].fromOffice &&
+                  !samePoint(day.home, teacher.days[index - 1].home)
                 }
               />
             ))
@@ -666,8 +794,16 @@ function DayRoute({
 
       <ol className="mt-2 space-y-0">
         <li className="flex items-center gap-2 text-xs text-gray-500">
-          <Home size={14} className="shrink-0 text-gray-400" />
-          {home ? "Nhà" : "Nhà (chưa có vị trí)"}
+          {day.fromOffice ? (
+            <Building2 size={14} className="shrink-0 text-gray-400" />
+          ) : (
+            <Home size={14} className="shrink-0 text-gray-400" />
+          )}
+          {day.fromOffice
+            ? "Văn phòng (trường khu vực HCM tính từ văn phòng)"
+            : home
+            ? "Nhà"
+            : "Nhà (chưa có vị trí)"}
           {movedHome && home && (
             <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700">
               Nhà mới từ ngày này
@@ -675,7 +811,10 @@ function DayRoute({
           )}
         </li>
         {day.stops.map((stop, index) => (
-          <StopRow key={`${stop.placeKey}-${stop.startTime}-${index}`} stop={stop} />
+          <StopRow
+            key={`${stop.placeKey}-${stop.startTime}-${index}`}
+            stop={stop}
+          />
         ))}
       </ol>
     </div>
@@ -686,14 +825,14 @@ function StopRow({ stop }: { stop: TravelStop }) {
   const legLabel = !stop.counted
     ? "không tính"
     : stop.distanceKm == null
-      ? "? km"
-      : km(stop.distanceKm);
+    ? "? km"
+    : km(stop.distanceKm);
   const legHint =
     stop.distanceSource === "home"
       ? "nhà → trường"
       : stop.distanceSource === "previous_place"
-        ? "từ điểm trước"
-        : "";
+      ? "từ điểm trước"
+      : "";
 
   return (
     <li>
@@ -718,7 +857,9 @@ function StopRow({ stop }: { stop: TravelStop }) {
         />
         <div className="min-w-0 flex-1 rounded-lg bg-white px-3 py-2 shadow-sm border border-gray-100">
           <div className="flex flex-wrap items-start justify-between gap-x-3">
-            <p className="text-sm font-medium text-gray-800">{placeName(stop)}</p>
+            <p className="text-sm font-medium text-gray-800">
+              {placeName(stop)}
+            </p>
             <p className="text-xs text-gray-500 tabular-nums">
               {formatTime(stop.startTime)}–{formatTime(stop.endTime)} ·{" "}
               {stop.periods} tiết
@@ -727,7 +868,9 @@ function StopRow({ stop }: { stop: TravelStop }) {
 
           <p className="mt-0.5 text-[11px] text-gray-500">
             {stop.sessions
-              .map((s) => [s.className, s.subjectName].filter(Boolean).join(" "))
+              .map((s) =>
+                [s.className, s.subjectName].filter(Boolean).join(" ")
+              )
               .filter(Boolean)
               .join(" · ")}
           </p>
@@ -736,27 +879,32 @@ function StopRow({ stop }: { stop: TravelStop }) {
             <span>
               Phụ cấp:{" "}
               <b className="text-gray-800">
-                {stop.gasAllowance == null ? "—" : formatMoney(stop.gasAllowance)}
+                {stop.gasAllowance == null
+                  ? "—"
+                  : formatMoney(stop.gasAllowance)}
               </b>
             </span>
             {stop.checkin && (
               <span>
                 Check-in {formatCheckedAt(stop.checkin.at)}
                 {stop.checkin.distanceM != null &&
-                  ` · cách trường ${stop.checkin.distanceM.toLocaleString("vi-VN")} m`}
-                {stop.checkin.latitude != null && stop.checkin.longitude != null && (
-                  <>
-                    {" "}
-                    <a
-                      href={`https://www.google.com/maps?q=${stop.checkin.latitude},${stop.checkin.longitude}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-blue-600 hover:underline"
-                    >
-                      (bản đồ)
-                    </a>
-                  </>
-                )}
+                  ` · cách trường ${stop.checkin.distanceM.toLocaleString(
+                    "vi-VN"
+                  )} m`}
+                {stop.checkin.latitude != null &&
+                  stop.checkin.longitude != null && (
+                    <>
+                      {" "}
+                      <a
+                        href={`https://www.google.com/maps?q=${stop.checkin.latitude},${stop.checkin.longitude}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-blue-600 hover:underline"
+                      >
+                        (bản đồ)
+                      </a>
+                    </>
+                  )}
               </span>
             )}
           </div>
@@ -767,17 +915,17 @@ function StopRow({ stop }: { stop: TravelStop }) {
                 flag === "NOT_COUNTED" ? (
                   <NotCountedChips key={flag} stop={stop} />
                 ) : (
-                <span
-                  key={flag}
-                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${FLAG_META[flag].className}`}
-                >
-                  <AlertTriangle size={10} />
-                  {FLAG_META[flag].label}
-                  {flag === "UNCHECKED" &&
-                    stop.uncheckedSessions < stop.sessions.length &&
-                    ` (${stop.uncheckedSessions}/${stop.sessions.length} tiết)`}
-                </span>
-                ),
+                  <span
+                    key={flag}
+                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${FLAG_META[flag].className}`}
+                  >
+                    <AlertTriangle size={10} />
+                    {FLAG_META[flag].label}
+                    {flag === "UNCHECKED" &&
+                      stop.uncheckedSessions < stop.sessions.length &&
+                      ` (${stop.uncheckedSessions}/${stop.sessions.length} tiết)`}
+                  </span>
+                )
               )}
             </div>
           )}
@@ -792,7 +940,11 @@ function StopRow({ stop }: { stop: TravelStop }) {
  * chung — người xem biết ngay phải bổ sung ở đâu.
  */
 function NotCountedChips({ stop }: { stop: TravelStop }) {
-  const chip = (text: string, key: string, tone = FLAG_META.NOT_COUNTED.className) => (
+  const chip = (
+    text: string,
+    key: string,
+    tone = FLAG_META.NOT_COUNTED.className
+  ) => (
     <span
       key={key}
       className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${tone}`}
@@ -807,16 +959,19 @@ function NotCountedChips({ stop }: { stop: TravelStop }) {
     return chip(
       "Không có phụ cấp · đủ dữ liệu, cần tính lại",
       "recompute",
-      "bg-emerald-50 text-emerald-700 border-emerald-200",
+      "bg-emerald-50 text-emerald-700 border-emerald-200"
     );
   }
   return (
     <>
       {reasons.map((reason) =>
         chip(
-          `Không có phụ cấp · ${missingReasonLabel(reason, stop.diagnosedDistanceKm)}`,
-          reason,
-        ),
+          `Không có phụ cấp · ${missingReasonLabel(
+            reason,
+            stop.diagnosedDistanceKm
+          )}`,
+          reason
+        )
       )}
     </>
   );

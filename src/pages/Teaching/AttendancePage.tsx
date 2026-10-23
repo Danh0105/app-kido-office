@@ -41,7 +41,7 @@ export default function AttendancePage() {
   };
 
   const [travelFilter, setTravelFilter] = useState<TravelReviewFilter | null>(
-    null,
+    null
   );
   const [travelVersion, setTravelVersion] = useState(0);
 

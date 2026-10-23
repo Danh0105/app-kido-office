@@ -9,11 +9,9 @@ import { provinceApi } from "@/service/province";
 import { wardApi } from "@/service/ward";
 import { schoolApi } from "@/service/school.api";
 import { subjectApi } from "@/service/subject.api";
+import { expensePeriodApi } from "@/service/expensePeriod";
 import { expenseRequestApi } from "@/service/expenseRequest";
-import {
-  statusLabel,
-  type ExpenseRequest,
-} from "@/types/expenseRequest";
+import { statusLabel, type ExpenseRequest } from "@/types/expenseRequest";
 import { canDoStep, expenseBasePath, todayISO } from "./lib";
 
 const MAX_SIZE = 50 * 1024 * 1024;
@@ -21,7 +19,7 @@ const MAX_SIZE = 50 * 1024 * 1024;
 type Option = { id: number | string; name: string };
 type ProposalTarget = "WARD" | "SCHOOL";
 
-// Tạo đề xuất = gửi duyệt luôn (vào thẳng PENDING_APPROVAL), không có nháp.
+// Chi Năm gửi Giám đốc; chi tháng gửi Kế toán công nợ nhập số tiền trước.
 // Có `:id` trên URL = chế độ sửa: chủ đơn được sửa ở mọi trạng thái; sau khi
 // lưu, đề xuất luôn quay về chờ duyệt để chạy lại quy trình từ đầu. Nhân viên
 // không chọn loại; Giám đốc phân loại khi duyệt. Có thể chuyển qua lại giữa
@@ -41,9 +39,9 @@ export default function ExpenseRequestForm() {
   const [participants, setParticipants] = useState("");
   const [expectedPaymentDate, setExpectedPaymentDate] = useState("");
   const [deductPolicy, setDeductPolicy] = useState(false);
+  const [isMonthlyExpense, setIsMonthlyExpense] = useState(false);
   const [file, setFile] = useState<File | null>(null);
-  const [proposalTarget, setProposalTarget] =
-    useState<ProposalTarget>("WARD");
+  const [proposalTarget, setProposalTarget] = useState<ProposalTarget>("WARD");
 
   // Đề xuất phường/xã: khu vực → phường/xã.
   // Đề xuất trường: chọn trực tiếp trong danh sách trường được phụ trách.
@@ -56,9 +54,17 @@ export default function ExpenseRequestForm() {
   const [selectedSchool, setSelectedSchool] = useState<number | null>(null);
   const [schoolYears, setSchoolYears] = useState<Option[]>([]);
   const [selectedSchoolYear, setSelectedSchoolYear] = useState<string | null>(
-    null,
+    null
   );
   const [schoolYearsLoading, setSchoolYearsLoading] = useState(false);
+  const [subjects, setSubjects] = useState<Option[]>([]);
+  const [selectedSubject, setSelectedSubject] = useState<number | null>(null);
+  const [subjectsLoading, setSubjectsLoading] = useState(false);
+  const [expensePeriods, setExpensePeriods] = useState<Option[]>([]);
+  const [selectedExpensePeriod, setSelectedExpensePeriod] = useState<
+    number | null
+  >(null);
+  const [expensePeriodsLoading, setExpensePeriodsLoading] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -77,12 +83,23 @@ export default function ExpenseRequestForm() {
           return;
         }
         setEditing(req);
-        setProposalTarget(req.schoolId ? "SCHOOL" : "WARD");
+        const monthlyExpense = Boolean(req.isMonthlyExpense);
+        setIsMonthlyExpense(monthlyExpense);
+        setProposalTarget(monthlyExpense || req.schoolId ? "SCHOOL" : "WARD");
         setContent(req.content ?? "");
         setDescription(req.description ?? "");
         setParticipants(req.participants ?? "");
         setExpectedPaymentDate((req.expectedPaymentDate ?? "").slice(0, 10));
         setDeductPolicy(Boolean(req.deductPolicy));
+        setSelectedSchoolYear(req.schoolYear ?? null);
+        setSelectedSubject(
+          req.subjectId ? Number(req.subjectId) : req.subject?.id ?? null
+        );
+        setSelectedExpensePeriod(
+          req.expensePeriodId
+            ? Number(req.expensePeriodId)
+            : req.expensePeriod?.id ?? null
+        );
 
         // Chọn sẵn đúng Khu vực → Phường/Xã → Trường đang lưu. Detail API
         // trả ward trực tiếp cho đề xuất theo xã, hoặc school.ward cho đề xuất
@@ -94,11 +111,16 @@ export default function ExpenseRequestForm() {
         // đang lưu để tra lại trường/phường và vẫn hiện đúng lựa chọn cũ.
         if (req.schoolId && !currentWard) {
           try {
-            const employeeSchools = await schoolApi.getByEmployee(getEmployeeId());
-            const schoolList = Array.isArray(employeeSchools) ? employeeSchools : [];
+            const employeeSchools = await schoolApi.getByEmployee(
+              getEmployeeId()
+            );
+            const schoolList = Array.isArray(employeeSchools)
+              ? employeeSchools
+              : [];
             currentSchool =
-              schoolList.find((school: any) => Number(school.id) === Number(req.schoolId)) ??
-              currentSchool;
+              schoolList.find(
+                (school: any) => Number(school.id) === Number(req.schoolId)
+              ) ?? currentSchool;
             currentWard = currentSchool?.ward ?? currentWard;
           } catch (locationError) {
             console.error("Không tải được địa bàn của trường", locationError);
@@ -115,18 +137,21 @@ export default function ExpenseRequestForm() {
 
         if (!active) return;
         const currentProvinceId = Number(
-          currentWard?.province_id ?? currentWard?.province?.id ?? 0,
+          currentWard?.province_id ?? currentWard?.province?.id ?? 0
         );
         if (currentWard?.id) {
           setWards([{ id: Number(currentWard.id), name: currentWard.name }]);
         }
         if (currentSchool?.id) {
-          setSchools([{ id: Number(currentSchool.id), name: currentSchool.name }]);
+          setSchools([
+            { id: Number(currentSchool.id), name: currentSchool.name },
+          ]);
         }
         if (currentWard?.province?.id) {
           setProvinces((current) =>
             current.some(
-              (province) => Number(province.id) === Number(currentWard.province.id),
+              (province) =>
+                Number(province.id) === Number(currentWard.province.id)
             )
               ? current
               : [
@@ -135,13 +160,12 @@ export default function ExpenseRequestForm() {
                     id: Number(currentWard.province.id),
                     name: currentWard.province.name,
                   },
-                ],
+                ]
           );
         }
         if (currentProvinceId > 0) setSelectedRegion(currentProvinceId);
         if (currentWard?.id) setSelectedWard(Number(currentWard.id));
         setSelectedSchool(req.schoolId ? Number(req.schoolId) : null);
-
       })
       .catch((err) => {
         toast.error(err?.response?.data?.message || "Không tải được đề xuất");
@@ -168,9 +192,7 @@ export default function ExpenseRequestForm() {
           ...assigned,
           ...current.filter(
             (province) =>
-              !assigned.some(
-                (item) => Number(item.id) === Number(province.id),
-              ),
+              !assigned.some((item) => Number(item.id) === Number(province.id))
           ),
         ]);
       })
@@ -190,7 +212,7 @@ export default function ExpenseRequestForm() {
           ...options,
           ...currentOptions.filter(
             (ward) =>
-              !options.some((item) => Number(item.id) === Number(ward.id)),
+              !options.some((item) => Number(item.id) === Number(ward.id))
           ),
         ]);
         setSelectedWard((current) => {
@@ -215,8 +237,8 @@ export default function ExpenseRequestForm() {
         const list = Array.isArray(res)
           ? res
           : Array.isArray(res?.data)
-            ? res.data
-            : [];
+          ? res.data
+          : [];
         const options = list.map((school: any) => ({
           id: school.id,
           name: school?.ward?.name
@@ -227,7 +249,7 @@ export default function ExpenseRequestForm() {
           ...options,
           ...currentOptions.filter(
             (school) =>
-              !options.some((item) => Number(item.id) === Number(school.id)),
+              !options.some((item) => Number(item.id) === Number(school.id))
           ),
         ]);
       })
@@ -248,9 +270,11 @@ export default function ExpenseRequestForm() {
   // sách năm có dữ liệu để chọn, tự chọn sẵn năm hiện tại nếu trường có.
   useEffect(() => {
     setSchoolYears([]);
-    setSelectedSchoolYear(null);
 
-    if (!selectedSchool) return;
+    if (!selectedSchool) {
+      setSelectedSchoolYear(null);
+      return;
+    }
 
     let active = true;
     setSchoolYearsLoading(true);
@@ -263,8 +287,8 @@ export default function ExpenseRequestForm() {
         const subjects = Array.isArray(response)
           ? response
           : Array.isArray(response?.data)
-            ? response.data
-            : [];
+          ? response.data
+          : [];
         const schoolYearValues: string[] = subjects
           .map((subject: any) => String(subject?.schoolYear || "").trim())
           .filter((schoolYear: string) => Boolean(schoolYear));
@@ -277,15 +301,17 @@ export default function ExpenseRequestForm() {
         if (options.length > 0) {
           const now = new Date();
           const startYear =
-            now.getMonth() + 1 >= 8
-              ? now.getFullYear()
-              : now.getFullYear() - 1;
+            now.getMonth() + 1 >= 8 ? now.getFullYear() : now.getFullYear() - 1;
           const currentSchoolYear = `${startYear}-${startYear + 1}`;
           const preferred =
             options.find((option) => option.id === currentSchoolYear) ||
             options[0];
 
-          setSelectedSchoolYear(String(preferred.id));
+          setSelectedSchoolYear((current) =>
+            current && options.some((option) => option.id === current)
+              ? current
+              : String(preferred.id)
+          );
         }
       })
       .catch((e) => {
@@ -300,6 +326,102 @@ export default function ExpenseRequestForm() {
       active = false;
     };
   }, [selectedSchool]);
+
+  // Chi tháng: môn học phụ thuộc đồng thời trường + năm học.
+  useEffect(() => {
+    setSubjects([]);
+    if (!isMonthlyExpense || !selectedSchool || !selectedSchoolYear) {
+      if (!isMonthlyExpense) setSelectedSubject(null);
+      return;
+    }
+
+    let active = true;
+    setSubjectsLoading(true);
+    subjectApi
+      .getBySchool(selectedSchool, selectedSchoolYear)
+      .then((response: any) => {
+        if (!active) return;
+        const list = Array.isArray(response)
+          ? response
+          : Array.isArray(response?.data)
+          ? response.data
+          : [];
+        const options = list.map((subject: any) => ({
+          id: Number(subject.id),
+          name: subject.catalog?.name || subject.name,
+        }));
+        setSubjects(options);
+        setSelectedSubject((current) =>
+          current &&
+          options.some((option: Option) => Number(option.id) === current)
+            ? current
+            : options.length === 1
+            ? Number(options[0].id)
+            : null
+        );
+      })
+      .catch((e) => {
+        console.error(e);
+        if (active) {
+          setSubjects([]);
+          setSelectedSubject(null);
+        }
+      })
+      .finally(() => {
+        if (active) setSubjectsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isMonthlyExpense, selectedSchool, selectedSchoolYear]);
+
+  // Kỳ kế toán được quản lý riêng theo từng trường.
+  useEffect(() => {
+    setExpensePeriods([]);
+    if (!isMonthlyExpense || !selectedSchool) {
+      if (!isMonthlyExpense) setSelectedExpensePeriod(null);
+      return;
+    }
+
+    let active = true;
+    setExpensePeriodsLoading(true);
+    expensePeriodApi
+      .getAll({ schoolId: selectedSchool })
+      .then((periods) => {
+        if (!active) return;
+        const options = periods.map((period) => ({
+          id: period.id,
+          name:
+            period.name ||
+            (period.month <= 12
+              ? `Tháng ${period.month}/${period.year}`
+              : `Kỳ ${period.month}/${period.year}`),
+        }));
+        setExpensePeriods(options);
+        setSelectedExpensePeriod((current) =>
+          current && options.some((option) => Number(option.id) === current)
+            ? current
+            : options.length === 1
+            ? Number(options[0].id)
+            : null
+        );
+      })
+      .catch((e) => {
+        console.error(e);
+        if (active) {
+          setExpensePeriods([]);
+          setSelectedExpensePeriod(null);
+        }
+      })
+      .finally(() => {
+        if (active) setExpensePeriodsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isMonthlyExpense, selectedSchool]);
 
   const pickFile = (list: FileList | null) => {
     const f = list?.[0];
@@ -319,19 +441,32 @@ export default function ExpenseRequestForm() {
   const validate = () => {
     if (!content.trim()) return "Vui lòng nhập tiêu đề";
     if (content.length > 500) return "Tiêu đề tối đa 500 ký tự";
-    if (!expectedPaymentDate) return "Vui lòng chọn ngày mong muốn";
+    if (!expectedPaymentDate)
+      return isMonthlyExpense
+        ? "Vui lòng chọn ngày chi"
+        : "Vui lòng chọn ngày mong muốn";
     // Sửa mà giữ nguyên ngày cũ (có thể đã qua) thì không bắt "từ hôm nay".
     if (dateChanged && expectedPaymentDate < todayISO())
-      return "Ngày mong muốn phải từ hôm nay trở đi";
+      return isMonthlyExpense
+        ? "Ngày chi phải từ hôm nay trở đi"
+        : "Ngày mong muốn phải từ hôm nay trở đi";
     if (proposalTarget === "WARD" && !selectedWard)
       return "Vui lòng chọn phường/xã";
     if (proposalTarget === "SCHOOL" && !selectedSchool)
       return "Vui lòng chọn trường";
     if (proposalTarget === "SCHOOL" && selectedSchool) {
       if (schoolYearsLoading) return "Đang tải danh sách năm học";
-      if (schoolYears.length === 0)
-        return "Trường chưa có dữ liệu năm học";
+      if (schoolYears.length === 0) return "Trường chưa có dữ liệu năm học";
       if (!selectedSchoolYear) return "Vui lòng chọn năm học";
+    }
+    if (isMonthlyExpense) {
+      if (subjectsLoading) return "Đang tải danh sách môn học";
+      if (subjects.length === 0)
+        return "Trường chưa có môn học trong năm học đã chọn";
+      if (!selectedSubject) return "Vui lòng chọn môn học";
+      if (expensePeriodsLoading) return "Đang tải danh sách kỳ kế toán";
+      if (expensePeriods.length === 0) return "Trường chưa có kỳ kế toán";
+      if (!selectedExpensePeriod) return "Vui lòng chọn kỳ kế toán";
     }
     return "";
   };
@@ -346,7 +481,7 @@ export default function ExpenseRequestForm() {
     if (
       isEdit &&
       !window.confirm(
-        "Lưu thay đổi sẽ đưa đề xuất về Chờ duyệt và gửi duyệt lại từ đầu. Tiếp tục?",
+        "Lưu thay đổi sẽ đưa đề xuất về Chờ duyệt và gửi duyệt lại từ đầu. Tiếp tục?"
       )
     ) {
       return;
@@ -359,16 +494,23 @@ export default function ExpenseRequestForm() {
           description: description.trim() || undefined,
           participants: participants.trim() || undefined,
           deductPolicy,
+          isMonthlyExpense,
           expectedPaymentDate: dateChanged ? expectedPaymentDate : undefined,
           schoolId:
             proposalTarget === "SCHOOL" && selectedSchool
               ? Number(selectedSchool)
               : undefined,
           schoolYear:
-            proposalTarget === "SCHOOL" &&
-            selectedSchool &&
-            selectedSchoolYear
+            proposalTarget === "SCHOOL" && selectedSchool && selectedSchoolYear
               ? String(selectedSchoolYear)
+              : undefined,
+          subjectId:
+            isMonthlyExpense && selectedSubject
+              ? Number(selectedSubject)
+              : undefined,
+          expensePeriodId:
+            isMonthlyExpense && selectedExpensePeriod
+              ? Number(selectedExpensePeriod)
               : undefined,
           wardId:
             proposalTarget === "WARD" && selectedWard
@@ -385,6 +527,7 @@ export default function ExpenseRequestForm() {
         description: description.trim() || undefined,
         participants: participants.trim() || undefined,
         deductPolicy,
+        isMonthlyExpense,
         expectedPaymentDate,
         wardId:
           proposalTarget === "WARD" && selectedWard
@@ -395,18 +538,29 @@ export default function ExpenseRequestForm() {
             ? Number(selectedSchool)
             : undefined,
         schoolYear:
-          proposalTarget === "SCHOOL" &&
-          selectedSchool &&
-          selectedSchoolYear
+          proposalTarget === "SCHOOL" && selectedSchool && selectedSchoolYear
             ? String(selectedSchoolYear)
+            : undefined,
+        subjectId:
+          isMonthlyExpense && selectedSubject
+            ? Number(selectedSubject)
+            : undefined,
+        expensePeriodId:
+          isMonthlyExpense && selectedExpensePeriod
+            ? Number(selectedExpensePeriod)
             : undefined,
         file: file || undefined,
       });
-      toast.success("Đã gửi đề xuất, chờ giám đốc duyệt");
+      toast.success(
+        isMonthlyExpense
+          ? "Đã gửi đề xuất, chờ Kế toán công nợ nhập số tiền"
+          : "Đã gửi đề xuất, chờ Giám đốc duyệt"
+      );
       navigate(`${base}/${created.id}`, { replace: true });
     } catch (err: any) {
       toast.error(
-        err?.response?.data?.message || (isEdit ? "Sửa thất bại" : "Gửi thất bại"),
+        err?.response?.data?.message ||
+          (isEdit ? "Sửa thất bại" : "Gửi thất bại")
       );
     } finally {
       setSaving(false);
@@ -420,220 +574,333 @@ export default function ExpenseRequestForm() {
       {loadingEdit ? (
         <p className="mt-[80px] text-center text-sm text-gray-400">Đang tải…</p>
       ) : (
-      <div className="flex-1 mt-[60px] px-3 pb-28 space-y-3">
-        {editing && editing.status !== "PENDING_APPROVAL" && (
-          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
-            ⚠️ Đề xuất <b>{editing.code}</b> đang ở trạng thái{" "}
-            <b>{statusLabel(editing.status, editing.requestKind ?? "CASH")}</b>.
-            Sau khi lưu, đề xuất sẽ quay về <b>Chờ duyệt</b> và chạy lại quy
-            trình từ đầu.
-          </div>
-        )}
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
-          <div>
-            <label className="text-sm text-gray-600">Đối tượng đề xuất</label>
-            <div className="mt-1 grid grid-cols-2 gap-1 rounded-xl border border-gray-100 bg-gray-50 p-1">
-              {(
-                [
-                  { value: "WARD", label: "Đề xuất phường/xã" },
-                  { value: "SCHOOL", label: "Đề xuất trường" },
-                ] as { value: ProposalTarget; label: string }[]
-              ).map((tab) => (
+        <div className="flex-1 mt-[60px] px-3 pb-28 space-y-3">
+          {editing &&
+            !["PENDING_ACCOUNTING", "PENDING_APPROVAL"].includes(
+              editing.status
+            ) && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+                ⚠️ Đề xuất <b>{editing.code}</b> đang ở trạng thái{" "}
+                <b>
+                  {statusLabel(editing.status, editing.requestKind ?? "CASH")}
+                </b>
+                . Sau khi lưu, đề xuất sẽ quay về{" "}
+                <b>
+                  {isMonthlyExpense ? "Chờ Kế toán nhập số tiền" : "Chờ duyệt"}
+                </b>{" "}
+                và chạy lại quy trình từ đầu.
+              </div>
+            )}
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
+            <div>
+              <label className="text-sm text-gray-600">Hình thức đề xuất</label>
+              <div className="mt-1 grid grid-cols-2 gap-1 rounded-xl border border-gray-100 bg-gray-50 p-1">
                 <button
-                  key={tab.value}
                   type="button"
                   onClick={() => {
-                    if (tab.value === proposalTarget) return;
-                    setProposalTarget(tab.value);
-                    setSelectedRegion(null);
-                    setSelectedWard(null);
-                    setSelectedSchool(null);
-                    setSelectedSchoolYear(null);
-                    setWards([]);
-                    setSchools([]);
+                    setIsMonthlyExpense(false);
+                    setSelectedSubject(null);
+                    setSelectedExpensePeriod(null);
+                    setSubjects([]);
+                    setExpensePeriods([]);
                     setError("");
                   }}
                   className={`rounded-lg px-2 py-2 text-xs font-medium transition ${
-                    proposalTarget === tab.value
+                    !isMonthlyExpense
                       ? "bg-blue-500 text-white shadow-sm"
                       : "text-gray-500"
                   }`}
                 >
-                  {tab.label}
+                  Đề xuất chi Năm
                 </button>
-              ))}
-            </div>
-            {isEdit && (
-              <p className="mt-1 text-xs text-gray-400">
-                Đổi đối tượng sẽ chuyển đề xuất sang phường/xã hoặc trường mới đã chọn.
-              </p>
-            )}
-          </div>
-
-          <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-            Giám đốc sẽ quyết định đây là đề xuất tiền, thiết bị hay sửa chữa khi duyệt.
-          </div>
-
-          <div>
-            <label className="text-sm text-gray-600">
-              Tiêu đề <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={content}
-              maxLength={500}
-              onChange={(e) => setContent(e.target.value)}
-              className="w-full mt-1 px-3 py-2 border rounded-lg text-sm"
-              placeholder="VD: Sửa máy chiếu phòng học hoặc chi tiếp khách"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm text-gray-600">Nội dung / lý do</label>
-            <textarea
-              value={description}
-              rows={3}
-              maxLength={500}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full mt-1 px-3 py-2 border rounded-lg text-sm"
-              placeholder="Mô tả chi tiết nhu cầu và lý do đề xuất"
-            />
-          </div>
-
-          <label className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700">
-            <input
-              type="checkbox"
-              checked={deductPolicy}
-              onChange={(e) => setDeductPolicy(e.target.checked)}
-              className="h-4 w-4"
-            />
-            Trừ chính sách
-          </label>
-
-          <div>
-            <label className="text-sm text-gray-600">Thành phần tham gia</label>
-            <textarea
-              value={participants}
-              rows={2}
-              maxLength={500}
-              onChange={(e) => setParticipants(e.target.value)}
-              className="w-full mt-1 px-3 py-2 border rounded-lg text-sm"
-              placeholder="VD: Giám đốc, kế toán, khách hàng dự án X"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm text-gray-600">
-              Ngày mong muốn{" "}
-              <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="date"
-              value={expectedPaymentDate}
-              min={isEdit ? undefined : todayISO()}
-              onChange={(e) => setExpectedPaymentDate(e.target.value)}
-              className="w-full mt-1 px-3 py-2 border rounded-lg text-sm"
-            />
-          </div>
-
-          {proposalTarget === "WARD" && (
-            <MobileSelect
-              label="Khu vực"
-              placeholder="Chọn khu vực"
-              value={selectedRegion}
-              options={provinces}
-              onChange={(value) => {
-                setSelectedRegion(value ? Number(value) : null);
-                setSelectedWard(null);
-                setWards([]);
-              }}
-            />
-          )}
-
-          {proposalTarget === "WARD" && wards.length > 0 && (
-            <MobileSelect
-              label="Phường/Xã *"
-              placeholder="Chọn phường/xã"
-              value={selectedWard}
-              options={wards}
-              onChange={(value) => {
-                setSelectedWard(value ? Number(value) : null);
-              }}
-            />
-          )}
-
-          {proposalTarget === "SCHOOL" && (
-            <MobileSelect
-              label="Trường *"
-              placeholder={schoolsLoading ? "Đang tải trường..." : "Chọn trường"}
-              value={selectedSchool}
-              options={schools}
-              onChange={(value) => setSelectedSchool(value ? Number(value) : null)}
-              disabled={schoolsLoading}
-            />
-          )}
-
-          {proposalTarget === "WARD" && selectedWard && (
-            <p className="-mt-2 text-xs text-blue-600">
-              Đề xuất này sẽ được ghi nhận cho xã/phường đã chọn.
-            </p>
-          )}
-
-          {proposalTarget === "SCHOOL" && selectedSchool && (
-            <MobileSelect
-              label="Năm học *"
-              placeholder={
-                schoolYearsLoading
-                  ? "Đang tải năm học..."
-                  : "Chọn năm học"
-              }
-              value={selectedSchoolYear}
-              options={schoolYears}
-              onChange={setSelectedSchoolYear}
-              disabled={schoolYearsLoading || schoolYears.length === 0}
-            />
-          )}
-
-          <div>
-            <label className="text-sm text-gray-600">
-              Tệp đính kèm{isEdit && editing?.attachments?.length ? " (chọn tệp mới để thay)" : ""}
-            </label>
-            <input
-              type="file"
-              onChange={(e) => pickFile(e.target.files)}
-              className="w-full mt-1 text-sm"
-            />
-            {file && (
-              <div className="mt-2 flex items-center justify-between text-xs bg-gray-50 rounded-lg px-2 py-1">
-                <span className="truncate">📎 {file.name}</span>
-                <button onClick={() => setFile(null)} className="text-red-500 ml-2">
-                  ✕
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMonthlyExpense(true);
+                    setProposalTarget("SCHOOL");
+                    setSelectedRegion(null);
+                    setSelectedWard(null);
+                    setWards([]);
+                    setError("");
+                  }}
+                  className={`rounded-lg px-2 py-2 text-xs font-medium transition ${
+                    isMonthlyExpense
+                      ? "bg-blue-500 text-white shadow-sm"
+                      : "text-gray-500"
+                  }`}
+                >
+                  Đề xuất chi tháng
                 </button>
               </div>
+              {isMonthlyExpense && (
+                <p className="mt-1 text-xs text-blue-600">
+                  Chi tháng được ghi nhận theo trường, môn học và kỳ kế toán.
+                </p>
+              )}
+            </div>
+
+            {!isMonthlyExpense && (
+              <div>
+                <label className="text-sm text-gray-600">
+                  Đối tượng đề xuất
+                </label>
+                <div className="mt-1 grid grid-cols-2 gap-1 rounded-xl border border-gray-100 bg-gray-50 p-1">
+                  {(
+                    [
+                      { value: "WARD", label: "Đề xuất phường/xã" },
+                      { value: "SCHOOL", label: "Đề xuất trường" },
+                    ] as { value: ProposalTarget; label: string }[]
+                  ).map((tab) => (
+                    <button
+                      key={tab.value}
+                      type="button"
+                      onClick={() => {
+                        if (tab.value === proposalTarget) return;
+                        setProposalTarget(tab.value);
+                        setSelectedRegion(null);
+                        setSelectedWard(null);
+                        setSelectedSchool(null);
+                        setSelectedSchoolYear(null);
+                        setSelectedSubject(null);
+                        setSelectedExpensePeriod(null);
+                        setWards([]);
+                        setSchools([]);
+                        setError("");
+                      }}
+                      className={`rounded-lg px-2 py-2 text-xs font-medium transition ${
+                        proposalTarget === tab.value
+                          ? "bg-blue-500 text-white shadow-sm"
+                          : "text-gray-500"
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+                {isEdit && (
+                  <p className="mt-1 text-xs text-gray-400">
+                    Đổi đối tượng sẽ chuyển đề xuất sang phường/xã hoặc trường
+                    mới đã chọn.
+                  </p>
+                )}
+              </div>
             )}
+
+            <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+              Giám đốc sẽ quyết định đây là đề xuất tiền, thiết bị hay sửa chữa
+              khi duyệt.
+            </div>
+
+            <div>
+              <label className="text-sm text-gray-600">
+                Tiêu đề <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={content}
+                maxLength={500}
+                onChange={(e) => setContent(e.target.value)}
+                className="w-full mt-1 px-3 py-2 border rounded-lg text-sm"
+                placeholder="VD: Sửa máy chiếu phòng học hoặc chi tiếp khách"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm text-gray-600">Nội dung / lý do</label>
+              <textarea
+                value={description}
+                rows={3}
+                maxLength={500}
+                onChange={(e) => setDescription(e.target.value)}
+                className="w-full mt-1 px-3 py-2 border rounded-lg text-sm"
+                placeholder="Mô tả chi tiết nhu cầu và lý do đề xuất"
+              />
+            </div>
+
+            <label className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={deductPolicy}
+                onChange={(e) => setDeductPolicy(e.target.checked)}
+                className="h-4 w-4"
+              />
+              Trừ chính sách
+            </label>
+
+            <div>
+              <label className="text-sm text-gray-600">
+                Thành phần tham gia
+              </label>
+              <textarea
+                value={participants}
+                rows={2}
+                maxLength={500}
+                onChange={(e) => setParticipants(e.target.value)}
+                className="w-full mt-1 px-3 py-2 border rounded-lg text-sm"
+                placeholder="VD: Giám đốc, kế toán, khách hàng dự án X"
+              />
+            </div>
+
+            {proposalTarget === "WARD" && (
+              <MobileSelect
+                label="Khu vực"
+                placeholder="Chọn khu vực"
+                value={selectedRegion}
+                options={provinces}
+                onChange={(value) => {
+                  setSelectedRegion(value ? Number(value) : null);
+                  setSelectedWard(null);
+                  setWards([]);
+                }}
+              />
+            )}
+
+            {proposalTarget === "WARD" && wards.length > 0 && (
+              <MobileSelect
+                label="Phường/Xã *"
+                placeholder="Chọn phường/xã"
+                value={selectedWard}
+                options={wards}
+                onChange={(value) => {
+                  setSelectedWard(value ? Number(value) : null);
+                }}
+              />
+            )}
+
+            {proposalTarget === "SCHOOL" && (
+              <MobileSelect
+                label="Trường *"
+                placeholder={
+                  schoolsLoading ? "Đang tải trường..." : "Chọn trường"
+                }
+                value={selectedSchool}
+                options={schools}
+                onChange={(value) => {
+                  setSelectedSchool(value ? Number(value) : null);
+                  setSelectedSchoolYear(null);
+                  setSelectedSubject(null);
+                  setSelectedExpensePeriod(null);
+                }}
+                disabled={schoolsLoading}
+              />
+            )}
+
+            {proposalTarget === "WARD" && selectedWard && (
+              <p className="-mt-2 text-xs text-blue-600">
+                Đề xuất này sẽ được ghi nhận cho xã/phường đã chọn.
+              </p>
+            )}
+
+            {proposalTarget === "SCHOOL" && selectedSchool && (
+              <MobileSelect
+                label="Năm học *"
+                placeholder={
+                  schoolYearsLoading ? "Đang tải năm học..." : "Chọn năm học"
+                }
+                value={selectedSchoolYear}
+                options={schoolYears}
+                onChange={(value) => {
+                  setSelectedSchoolYear(value ? String(value) : null);
+                  setSelectedSubject(null);
+                }}
+                disabled={schoolYearsLoading || schoolYears.length === 0}
+              />
+            )}
+
+            {isMonthlyExpense && selectedSchool && selectedSchoolYear && (
+              <MobileSelect
+                label="Môn học *"
+                placeholder={
+                  subjectsLoading ? "Đang tải môn học..." : "Chọn môn học"
+                }
+                value={selectedSubject}
+                options={subjects}
+                onChange={(value) =>
+                  setSelectedSubject(value ? Number(value) : null)
+                }
+                disabled={subjectsLoading || subjects.length === 0}
+              />
+            )}
+
+            {isMonthlyExpense && selectedSchool && (
+              <MobileSelect
+                label="Kỳ kế toán *"
+                placeholder={
+                  expensePeriodsLoading
+                    ? "Đang tải kỳ kế toán..."
+                    : "Chọn kỳ kế toán"
+                }
+                value={selectedExpensePeriod}
+                options={expensePeriods}
+                onChange={(value) =>
+                  setSelectedExpensePeriod(value ? Number(value) : null)
+                }
+                disabled={expensePeriodsLoading || expensePeriods.length === 0}
+              />
+            )}
+
+            <div>
+              <label className="text-sm text-gray-600">
+                {isMonthlyExpense ? "Ngày chi" : "Ngày mong muốn"}{" "}
+                <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                value={expectedPaymentDate}
+                min={isEdit ? undefined : todayISO()}
+                onChange={(e) => setExpectedPaymentDate(e.target.value)}
+                className="w-full mt-1 px-3 py-2 border rounded-lg text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm text-gray-600">
+                Tệp đính kèm
+                {isEdit && editing?.attachments?.length
+                  ? " (chọn tệp mới để thay)"
+                  : ""}
+              </label>
+              <input
+                type="file"
+                onChange={(e) => pickFile(e.target.files)}
+                className="w-full mt-1 text-sm"
+              />
+              {file && (
+                <div className="mt-2 flex items-center justify-between text-xs bg-gray-50 rounded-lg px-2 py-1">
+                  <span className="truncate">📎 {file.name}</span>
+                  <button
+                    onClick={() => setFile(null)}
+                    className="text-red-500 ml-2"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {error && <p className="text-xs text-red-500">{error}</p>}
           </div>
 
-          {error && <p className="text-xs text-red-500">{error}</p>}
-        </div>
+          <p className="text-xs text-gray-400 text-center px-4">
+            {isEdit
+              ? "Có thể sửa ở mọi trạng thái. Mỗi lần lưu sẽ gửi duyệt lại từ đầu."
+              : "Sau khi gửi, đề xuất sẽ chuyển đến giám đốc duyệt. Có thể sửa lại ở mọi trạng thái; mỗi lần sửa sẽ duyệt lại từ đầu."}
+          </p>
 
-        <p className="text-xs text-gray-400 text-center px-4">
-          {isEdit
-            ? "Có thể sửa ở mọi trạng thái. Mỗi lần lưu sẽ gửi duyệt lại từ đầu."
-            : "Sau khi gửi, đề xuất sẽ chuyển đến giám đốc duyệt. Có thể sửa lại ở mọi trạng thái; mỗi lần sửa sẽ duyệt lại từ đầu."}
-        </p>
-
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="w-full py-3 bg-blue-500 text-white rounded-xl font-medium active:scale-95 disabled:opacity-60"
-        >
-          {saving
-            ? isEdit ? "Đang lưu…" : "Đang gửi…"
-            : isEdit
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="w-full py-3 bg-blue-500 text-white rounded-xl font-medium active:scale-95 disabled:opacity-60"
+          >
+            {saving
+              ? isEdit
+                ? "Đang lưu…"
+                : "Đang gửi…"
+              : isEdit
               ? "Lưu & gửi duyệt lại"
               : "Gửi đề xuất"}
-        </button>
-      </div>
+          </button>
+        </div>
       )}
     </div>
   );

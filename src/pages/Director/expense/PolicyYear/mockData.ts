@@ -47,6 +47,7 @@ const createMonthlyRow = (
   id,
   subjectId,
   month,
+  totalPeriods: 0,
   studentCount,
   unitPrice,
   monthsCount: 1,
@@ -143,4 +144,3 @@ export const MOCK_POLICY_YEARS: PolicyYear[] = [
     updatedAt: "2025-06-30T03:00:00.000Z",
   },
 ];
-

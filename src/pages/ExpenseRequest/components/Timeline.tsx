@@ -16,6 +16,7 @@ import LogDetails, { hasLogDetails } from "./LogDetails";
 
 const APPROVAL_ACTIONS = new Set([
   "APPROVE",
+  "APPROVE_MONTHLY",
   "APPROVED",
   "APPROVE_EXPENSE_REQUEST",
 ]);
@@ -35,10 +36,7 @@ const asRecord = (value: unknown): Record<string, unknown> | null => {
   }
 };
 
-const firstValue = (
-  sources: Record<string, unknown>[],
-  keys: string[],
-) => {
+const firstValue = (sources: Record<string, unknown>[], keys: string[]) => {
   for (const source of sources) {
     for (const key of keys) {
       const value = source[key];
@@ -96,10 +94,10 @@ const personLabel = (value: unknown): string => {
 const approvalDetailsFromLog = (log: ExpenseLog) => {
   const sources = logSources(log);
   const kind = normalizeKind(
-    firstValue(sources, ["requestKind", "approvedRequestKind", "selectedKind"]),
+    firstValue(sources, ["requestKind", "approvedRequestKind", "selectedKind"])
   );
   const amount = normalizeAmount(
-    firstValue(sources, ["amount", "approvedAmount"]),
+    firstValue(sources, ["amount", "approvedAmount"])
   );
   const assignedPerson = firstValue(sources, [
     "assignedTechnician",
@@ -158,16 +156,21 @@ export default function Timeline({
       APPROVAL_ACTIONS.has(log.action) || log.toStatus === "APPROVED"
         ? index
         : latest,
-    -1,
+    -1
   );
   const canUseCurrentApproval =
     !!request &&
-    !["PENDING_APPROVAL", "REJECTED", "WITHDRAWN"].includes(request.status);
+    ![
+      "PENDING_ACCOUNTING",
+      "PENDING_APPROVAL",
+      "REJECTED",
+      "WITHDRAWN",
+    ].includes(request.status);
 
   const latestReleaseIndex = logs.reduce(
     (latest, log, index) =>
       log.action === "CONFIRM_CASH_RELEASED" ? index : latest,
-    -1,
+    -1
   );
 
   // Log cuối cùng của mỗi action — chỉ log đó mới gắn file, tránh lặp lại
@@ -177,7 +180,7 @@ export default function Timeline({
       acc[log.action] = index;
       return acc;
     },
-    {},
+    {}
   );
 
   return (
@@ -194,7 +197,8 @@ export default function Timeline({
           loggedApproval.kind ||
           (useCurrentFallback ? request?.requestKind || kind : undefined);
         const approvalAmount =
-          loggedApproval.amount ?? (useCurrentFallback ? request?.amount : undefined);
+          loggedApproval.amount ??
+          (useCurrentFallback ? request?.amount : undefined);
         const approvalAssignee =
           loggedApproval.assignee ||
           (useCurrentFallback
@@ -208,22 +212,28 @@ export default function Timeline({
           log.fromStatus === "FUND_RETURNED"
             ? "Lên lại lệnh chi"
             : log.action === "CREATE_STOCK_ISSUE_ORDER" &&
-                log.fromStatus === "EQUIPMENT_RETURNED"
-              ? "Lên lại lệnh xuất kho"
-              : ACTION_LABEL[log.action] || log.action;
+              log.fromStatus === "EQUIPMENT_RETURNED"
+            ? "Lên lại lệnh xuất kho"
+            : ACTION_LABEL[log.action] || log.action;
         const transition =
           // Bước không đổi trạng thái (từ chối / thay người) thì không hiện.
           log.fromStatus && log.toStatus && log.fromStatus === log.toStatus
             ? ""
             : log.fromStatus && log.toStatus
-            ? `${statusLabel(log.fromStatus, kind)} → ${statusLabel(log.toStatus, kind)}`
+            ? `${statusLabel(log.fromStatus, kind)} → ${statusLabel(
+                log.toStatus,
+                kind
+              )}`
             : log.toStatus
             ? statusLabel(log.toStatus, kind)
             : "";
         // Log mới có ảnh chụp thông tin của bước — hiện bằng LogDetails; log cũ
         // (data = {}) giữ cách hiển thị cũ với số liệu hiện tại làm fallback.
         const detailed = hasLogDetails(log);
-        const who = log.actorName || log.actor?.name || (log.userId ? `#${log.userId}` : "");
+        const who =
+          log.actorName ||
+          log.actor?.name ||
+          (log.userId ? `#${log.userId}` : "");
         const when = log.createdAt || log.snapshotAt;
         const visibleNote =
           // Lý do từ chối đã hiện trong khung chi tiết.
@@ -252,7 +262,9 @@ export default function Timeline({
               )}
             </div>
             {who && <div className="text-xs text-gray-500">{who}</div>}
-            {detailed && <LogDetails log={log} kind={request?.requestKind || kind} />}
+            {detailed && (
+              <LogDetails log={log} kind={request?.requestKind || kind} />
+            )}
             {!detailed &&
               isApproval &&
               (approvalKind ||
@@ -265,7 +277,8 @@ export default function Timeline({
                     <div>
                       <span className="text-gray-500">Loại đề xuất: </span>
                       <span className="font-medium">
-                        {KIND_META[approvalKind].icon} {KIND_META[approvalKind].label}
+                        {KIND_META[approvalKind].icon}{" "}
+                        {KIND_META[approvalKind].label}
                       </span>
                     </div>
                   )}
@@ -293,14 +306,20 @@ export default function Timeline({
                       người nghiệm thu hiện tại của đề xuất. */}
                   {useCurrentFallback && request?.stockInHandler?.name && (
                     <div>
-                      <span className="text-gray-500">Người xử lý phiếu nhập: </span>
-                      <span className="font-medium">{request.stockInHandler.name}</span>
+                      <span className="text-gray-500">
+                        Người xử lý phiếu nhập:{" "}
+                      </span>
+                      <span className="font-medium">
+                        {request.stockInHandler.name}
+                      </span>
                     </div>
                   )}
                   {useCurrentFallback && request?.acceptor?.name && (
                     <div>
                       <span className="text-gray-500">Người nghiệm thu: </span>
-                      <span className="font-medium">{request.acceptor.name}</span>
+                      <span className="font-medium">
+                        {request.acceptor.name}
+                      </span>
                     </div>
                   )}
                 </div>

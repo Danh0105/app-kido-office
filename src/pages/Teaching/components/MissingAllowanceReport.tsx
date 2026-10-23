@@ -1,5 +1,11 @@
 import { Link } from "react-router-dom";
-import { AlertTriangle, ChevronRight, Home, Layers, School } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronRight,
+  Home,
+  Layers,
+  School,
+} from "lucide-react";
 
 import type { GasAllowanceMissingReport } from "@/types/teaching";
 
@@ -10,6 +16,12 @@ type Props = {
   /** Buổi đã đủ dữ liệu, chỉ cần tính lại — hiện kèm nút nếu có. */
   needsRecomputeSessions?: number;
   onRecompute?: () => void;
+  onAddTeacherLocation?: (
+    item: GasAllowanceMissingReport["teachersWithoutLocation"][number]
+  ) => void;
+  onAddPlaceLocation?: (
+    item: GasAllowanceMissingReport["placesWithoutLocation"][number]
+  ) => void;
 };
 
 export const isReportEmpty = (report?: GasAllowanceMissingReport | null) =>
@@ -41,11 +53,16 @@ export default function MissingAllowanceReport({
   report,
   needsRecomputeSessions = 0,
   onRecompute,
+  onAddTeacherLocation,
+  onAddPlaceLocation,
 }: Props) {
   const canFix = canManageTeaching();
   const canFixTiers = canSetTeachingRates();
-  const { teachersWithoutLocation, placesWithoutLocation, distancesWithoutTier } =
-    report;
+  const {
+    teachersWithoutLocation,
+    placesWithoutLocation,
+    distancesWithoutTier,
+  } = report;
 
   return (
     <div className="space-y-3">
@@ -60,7 +77,16 @@ export default function MissingAllowanceReport({
               key={item.teacherId}
               label={item.teacherName}
               detail={`${item.sessions} buổi chưa có phụ cấp`}
-              to={canFix ? `/nhan-su/giao-vien?edit=${item.teacherId}` : undefined}
+              to={
+                canFix && !onAddTeacherLocation
+                  ? `/nhan-su/giao-vien?edit=${item.teacherId}`
+                  : undefined
+              }
+              onAction={
+                canFix && onAddTeacherLocation
+                  ? () => onAddTeacherLocation(item)
+                  : undefined
+              }
               action="Thêm vị trí"
             />
           ))}
@@ -79,11 +105,16 @@ export default function MissingAllowanceReport({
               label={placeLabel(item)}
               detail={`${item.sessions} buổi chưa có phụ cấp`}
               to={
-                !canFix
+                !canFix || onAddPlaceLocation
                   ? undefined
                   : item.schoolLocationId
-                    ? `/nhan-su/diem-truong?schoolId=${item.schoolId}&locationId=${item.schoolLocationId}`
-                    : `/nhan-su/vi-tri-truong?schoolId=${item.schoolId}`
+                  ? `/nhan-su/diem-truong?schoolId=${item.schoolId}&locationId=${item.schoolLocationId}`
+                  : `/nhan-su/vi-tri-truong?schoolId=${item.schoolId}`
+              }
+              onAction={
+                canFix && onAddPlaceLocation
+                  ? () => onAddPlaceLocation(item)
+                  : undefined
               }
               action="Đặt vị trí"
             />
@@ -94,28 +125,40 @@ export default function MissingAllowanceReport({
       {distancesWithoutTier.length > 0 && (
         <Group
           icon={<Layers size={14} />}
-          title={`${distancesWithoutTier.length} chặng không khớp bậc phụ cấp`}
-          hint="Đã tính được khoảng cách nhưng không bậc phụ cấp xăng nào phủ số km này (khoảng cách quá gần, hoặc rơi vào khe giữa hai bậc). Khai thêm/nới bậc phụ cấp xăng."
+          title={`${distancesWithoutTier.length} chặng chưa tính được phụ cấp`}
+          hint="Kiểm tra lý do ở từng chặng: có thể chưa khớp bậc phụ cấp, toạ độ bất thường, hoặc dịch vụ tính tuyến đường xe máy đang tạm gián đoạn."
         >
           {distancesWithoutTier.map((item) => (
             <Item
-              key={`${item.teacherId}-${item.schoolId}-${item.schoolLocationId ?? ""}`}
+              key={`${item.teacherId}-${item.schoolId}-${
+                item.schoolLocationId ?? ""
+              }`}
               label={`${item.teacherName} → ${placeLabel(item)}`}
               detail={
-                item.reason === "INVALID_DISTANCE"
+                item.reason === "ROUTE_UNAVAILABLE"
+                  ? `Chưa tính được tuyến đường xe máy · ${item.sessions} buổi`
+                  : item.reason === "INVALID_DISTANCE"
                   ? `Khoảng cách bất thường — kiểm tra lại vị trí nhà và trường · ${item.sessions} buổi`
                   : `${km(item.distanceKm ?? 0)} · ${item.sessions} buổi`
               }
               to={
-                item.reason === "INVALID_DISTANCE"
+                item.reason === "ROUTE_UNAVAILABLE"
+                  ? undefined
+                  : item.reason === "INVALID_DISTANCE"
                   ? canFix
                     ? `/nhan-su/giao-vien?edit=${item.teacherId}`
                     : undefined
                   : canFixTiers
-                    ? "/nhan-su/phu-cap-xang"
-                    : undefined
+                  ? "/nhan-su/phu-cap-xang"
+                  : undefined
               }
-              action={item.reason === "INVALID_DISTANCE" ? "Kiểm tra vị trí" : "Sửa bậc"}
+              action={
+                item.reason === "ROUTE_UNAVAILABLE"
+                  ? ""
+                  : item.reason === "INVALID_DISTANCE"
+                  ? "Kiểm tra vị trí"
+                  : "Sửa bậc"
+              }
             />
           ))}
         </Group>
@@ -166,7 +209,9 @@ function Group({
           {icon}
           {title}
         </p>
-        <p className="mt-0.5 text-[11px] leading-relaxed text-amber-700/90">{hint}</p>
+        <p className="mt-0.5 text-[11px] leading-relaxed text-amber-700/90">
+          {hint}
+        </p>
       </div>
       <ul className="mt-2 divide-y divide-amber-100 border-t border-amber-100">
         {children}
@@ -179,11 +224,13 @@ function Item({
   label,
   detail,
   to,
+  onAction,
   action,
 }: {
   label: string;
   detail: string;
   to?: string;
+  onAction?: () => void;
   action: string;
 }) {
   const body = (
@@ -193,7 +240,7 @@ function Item({
         <p className="truncate text-xs font-medium text-gray-800">{label}</p>
         <p className="text-[11px] text-gray-500">{detail}</p>
       </div>
-      {to && (
+      {(to || onAction) && (
         <span className="flex shrink-0 items-center text-[11px] font-medium text-blue-600">
           {action}
           <ChevronRight size={13} />
@@ -205,9 +252,20 @@ function Item({
   return (
     <li>
       {to ? (
-        <Link to={to} className="flex items-center gap-2 px-3 py-2 hover:bg-amber-100/60">
+        <Link
+          to={to}
+          className="flex items-center gap-2 px-3 py-2 hover:bg-amber-100/60"
+        >
           {body}
         </Link>
+      ) : onAction ? (
+        <button
+          type="button"
+          onClick={onAction}
+          className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-amber-100/60"
+        >
+          {body}
+        </button>
       ) : (
         <div className="flex items-center gap-2 px-3 py-2">{body}</div>
       )}

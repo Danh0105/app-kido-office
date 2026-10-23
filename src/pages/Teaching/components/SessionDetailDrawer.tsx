@@ -46,6 +46,7 @@ import {
   useSessionCheckin,
 } from "../hooks/useSessionCheckin";
 import { useLessonSubmit } from "../hooks/useLessonSubmit";
+import { teacherLessonAction } from "../lessonWorkflow";
 import {
   formatCheckedAt,
   formatDate,
@@ -58,6 +59,7 @@ import {
   isValidPeriods,
   MAX_PERIODS,
   RATE_MISSING_LABEL,
+  teacherLabel,
   TEACHING_MONEY_FEATURES_ENABLED,
   todayISO,
 } from "../lib";
@@ -321,16 +323,10 @@ export default function SessionDetailDrawer({
   // Chỉ chấm vị trí trong ngày dạy — BE cũng phải chặn lại, đây chỉ là lớp UX.
   const isTeachingDay = session.date === todayISO();
   /**
-   * Tiết liên tiếp cùng trường: chỉ tiết đầu cần check-in, chỉ tiết cuối cần
-   * check-out (GPS); tiết còn lại chỉ cần nộp nội dung bài dạy.
+   * Mỗi tiết phải có `checkoutAt` riêng trước khi báo giảng. Tiết
+   * cuối block vẫn có thể check-out hộ cả block ở backend.
    */
-  const nextAction: "checkin" | "checkout" | "lesson" | "done" = checkedOut
-    ? "done"
-    : session.checkinRequired && !checkedIn
-    ? "checkin"
-    : session.checkoutRequired
-    ? "checkout"
-    : "lesson";
+  const nextAction = teacherLessonAction(session);
 
   /**
    * Mốc chấm công "ăn theo" tiết khác trong cùng chuỗi (cùng trường / điểm
@@ -422,8 +418,7 @@ export default function SessionDetailDrawer({
     setReassigning(true);
     try {
       const updated = await teachingApplicationApi.assign(session.id, teacherId, force);
-      const teacherName =
-        teachers?.find((t) => t.id === teacherId)?.name || "giáo viên mới";
+      const teacherName = teacherLabel(teachers, teacherId) || "giáo viên mới";
       toast.success(`Đã gán ${teacherName} cho buổi dạy`);
       setReassignOverride(null);
       onChanged(updated);
@@ -434,7 +429,7 @@ export default function SessionDetailDrawer({
       if (error?.response?.status === 409 && data?.requiresOverride) {
         setReassignOverride({
           teacherId,
-          teacherName: teachers?.find((t) => t.id === teacherId)?.name || "Giáo viên này",
+          teacherName: teacherLabel(teachers, teacherId) || "Giáo viên này",
           message: data?.message || "Giáo viên này không thoả điều kiện.",
         });
       } else if (error?.response?.status !== 403) {
@@ -494,7 +489,8 @@ export default function SessionDetailDrawer({
               <Row
                 label="Giáo viên"
                 value={
-                  session.teacherName || (
+                  (session.teacherName &&
+                    teacherLabel(teachers, session.teacherId, session.teacherName)) || (
                     <span className="text-gray-400 font-normal">
                       Chưa phân công
                     </span>
@@ -619,7 +615,7 @@ export default function SessionDetailDrawer({
                     <SearchableSelect
                       value={reassignTeacherId}
                       onChange={setReassignTeacherId}
-                      options={replacementOptions}
+                      options={replacementOptions.map((option) => ({ ...option, name: teacherLabel(teachers, option.id, option.name) }))}
                       disabled={loadingReplacements}
                       placeholder={loadingReplacements ? "Đang tìm giáo viên trống lịch…" : "— Chọn giáo viên phù hợp —"}
                       searchPlaceholder="Tìm giáo viên…"
@@ -747,7 +743,7 @@ export default function SessionDetailDrawer({
                   </div>
                 )}
 
-                {canCheckin && isAssigned && !checkedOut && nextAction === "lesson" && (
+                {canCheckin && isAssigned && nextAction === "lesson" && (
                   <>
                     <button
                       onClick={() => lesson.openLessonOnly(session)}
@@ -758,8 +754,9 @@ export default function SessionDetailDrawer({
                       {lessonLoading ? "Đang gửi…" : "Nộp nội dung bài dạy"}
                     </button>
                     <p className="text-[11px] text-gray-400 mt-1 leading-relaxed">
-                      Tiết này cùng trường với tiết trước/sau nên không cần tự
-                      check-in/check-out — chỉ cần ghi lại nội dung bài dạy.
+                      {checkedOut
+                        ? "Tiết này đã check-out nhưng chưa báo giảng."
+                        : "Tiết này cùng trường với tiết trước/sau nên chỉ cần ghi lại nội dung bài dạy."}
                     </p>
                   </>
                 )}
@@ -1089,7 +1086,7 @@ export default function SessionDetailDrawer({
             ) : (
               <>
                 Xoá buổi dạy ngày <b>{formatDate(session.date)}</b> của{" "}
-                <b>{session.teacherName}</b>?
+                <b>{teacherLabel(teachers, session.teacherId, session.teacherName)}</b>?
               </>
             )
           }

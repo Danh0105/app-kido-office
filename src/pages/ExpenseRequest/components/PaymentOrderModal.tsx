@@ -12,6 +12,7 @@ export default function PaymentOrderModal({
   defaultNote = "",
   retry = false,
   edit = false,
+  monthly = false,
   loading,
   onClose,
   onSubmit,
@@ -22,6 +23,8 @@ export default function PaymentOrderModal({
   retry?: boolean;
   /** Kế toán công nợ sửa lệnh chi đã lập — các bước sau phải làm lại. */
   edit?: boolean;
+  /** Chi tháng: đây là bước nhập số tiền trước khi chuyển Giám đốc duyệt. */
+  monthly?: boolean;
   loading?: boolean;
   onClose: () => void;
   onSubmit: (payload: PaymentOrderPayload) => void;
@@ -57,7 +60,15 @@ export default function PaymentOrderModal({
       >
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <h2 className="font-semibold">
-            {edit ? "Sửa lệnh chi" : retry ? "Lên lại lệnh chi" : "Lên lệnh chi"}
+            {monthly
+              ? edit
+                ? "Sửa số tiền chi tháng"
+                : "Nhập số tiền chi tháng"
+              : edit
+              ? "Sửa lệnh chi"
+              : retry
+              ? "Lên lại lệnh chi"
+              : "Lên lệnh chi"}
           </h2>
           <button
             onClick={onClose}
@@ -137,11 +148,15 @@ export default function PaymentOrderModal({
           >
             {loading
               ? "Đang xử lý…"
+              : monthly
+              ? edit
+                ? "Lưu và gửi duyệt lại"
+                : "Lưu và gửi Giám đốc"
               : edit
-                ? "Lưu thay đổi"
-                : retry
-                  ? "Lên lại lệnh chi"
-                  : "Lên lệnh chi"}
+              ? "Lưu thay đổi"
+              : retry
+              ? "Lên lại lệnh chi"
+              : "Lên lệnh chi"}
           </button>
         </div>
       </div>

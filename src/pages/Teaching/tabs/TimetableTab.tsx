@@ -47,14 +47,18 @@ import {
   updateTimetableRowTime,
 } from "../timetableRows";
 import {
+  addDays,
   catalogsOfSubjects,
   cellKey,
   currentSchoolYear,
+  datesInRange,
+  dayOfWeekOf,
   daysBetween,
   DEFAULT_TIMETABLE_DAYS,
   DEFAULT_TIMETABLE_ROWS,
   endOfMonth,
   formatDate,
+  formatTeacherLabel,
   formatTime,
   isDateOrderValid,
   isTimeOrderValid,
@@ -66,6 +70,7 @@ import {
   MAX_PERIODS,
   SESSION_LABELS,
   teacherColor,
+  teacherLabel,
   todayISO,
   type SchoolCatalogOption,
   type TimetableRow,
@@ -1204,8 +1209,43 @@ export default function TimetableTab({
     return [...byCatalog.values()].flat();
   };
 
+  /**
+   * Thứ đã xếp tiết nhưng không có ngày nào trong khoảng hiệu lực. Giáo viên
+   * xác nhận các tiết này xong vẫn 0 buổi dạy, chấm công trống. "Hiệu lực
+   * đến" mặc định là cuối tháng nên xếp sát cuối tháng rất dễ dính (TH Bình
+   * Châu 30/09/2026: hiệu lực 29/09–30/09 mà xếp cả Thứ 5, Thứ 6).
+   */
+  const daysOutsideRange = () => {
+    if (!effectiveFrom || !effectiveTo) return [];
+    if (!isDateOrderValid(effectiveFrom, effectiveTo)) return [];
+    // Đủ 7 ngày liên tiếp thì thứ nào cũng có mặt.
+    const lastDay =
+      daysBetween(effectiveFrom, effectiveTo) > 7
+        ? addDays(effectiveFrom, 6)
+        : effectiveTo;
+    const covered = new Set(
+      datesInRange(effectiveFrom, lastDay).map(dayOfWeekOf),
+    );
+    return [...new Set(filled.map((item) => item.day))]
+      .filter((day) => !covered.has(day))
+      .sort((a, b) => a - b);
+  };
+
   const save = async () => {
     if (!validate()) return;
+
+    const missingDays = daysOutsideRange();
+    if (
+      missingDays.length > 0 &&
+      !window.confirm(
+        `Khoảng hiệu lực ${formatDate(effectiveFrom)} – ${formatDate(effectiveTo)} ` +
+          `không có ${missingDays.map(dayLabel).join(", ")} nào.\n\n` +
+          "Các tiết xếp vào những thứ này sẽ không có buổi dạy để chấm công. " +
+          "Bấm Huỷ để sửa \"Hiệu lực đến\", hoặc OK để vẫn lưu.",
+      )
+    ) {
+      return;
+    }
 
     const batches = buildBatches();
     // Giữ ảnh chụp ban đầu vì các batch đều dùng index dòng nháp tại thời điểm
@@ -1403,7 +1443,7 @@ export default function TimetableTab({
               onChange={setDefaultTeacherId}
               options={teachers.map((item) => ({
                 id: item.id,
-                name: `${item.name}${item.isActive ? "" : " (ngừng)"}`,
+                name: `${formatTeacherLabel(item.name, item.phone)}${item.isActive ? "" : " (ngừng)"}`,
               }))}
               placeholder="— Tất cả giáo viên —"
               searchPlaceholder="Tìm giáo viên…"
@@ -1422,7 +1462,7 @@ export default function TimetableTab({
               onChange={setBulkReplaceTeacherId}
               options={teachers
                 .filter((item) => String(item.id) !== defaultTeacherId && item.isActive)
-                .map((item) => ({ id: item.id, name: item.name }))}
+                .map((item) => ({ id: item.id, name: formatTeacherLabel(item.name, item.phone) }))}
               placeholder="— Chọn giáo viên thay thế —"
               searchPlaceholder="Tìm giáo viên…"
               portal
@@ -1830,7 +1870,7 @@ export default function TimetableTab({
               key={item.id}
               className={`text-xs font-semibold ${teacherColor(item.id)}`}
             >
-              {item.name}
+              {formatTeacherLabel(item.name, item.phone)}
             </span>
           ))}
         </div>
@@ -1977,7 +2017,7 @@ export default function TimetableTab({
           message={
             <>
               Xoá toàn bộ <b>{existing.length} mẫu lịch</b> đang hiển thị của
-              giáo viên <b>{teachers.find((item) => String(item.id) === defaultTeacherId)?.name}</b>?
+              giáo viên <b>{teacherLabel(teachers, defaultTeacherId)}</b>?
             </>
           }
           hint="Các buổi chưa chấm được sinh từ mẫu cũng sẽ bị xoá. Mẫu đã có buổi chấm công sẽ được giữ lại và báo lỗi riêng. Thao tác có thể hoàn tất một phần."
@@ -2011,8 +2051,8 @@ export default function TimetableTab({
           message={
             <>
               Chuyển <b>{existing.length} mẫu lịch</b> đang hiển thị của giáo viên{" "}
-              <b>{teachers.find((item) => String(item.id) === defaultTeacherId)?.name}</b> sang{" "}
-              <b>{teachers.find((item) => String(item.id) === bulkReplaceTeacherId)?.name}</b>?
+              <b>{teacherLabel(teachers, defaultTeacherId)}</b> sang{" "}
+              <b>{teacherLabel(teachers, bulkReplaceTeacherId)}</b>?
             </>
           }
           hint="Giữ nguyên trường, lớp, môn, thứ và giờ. Lịch nào trùng với giáo viên mới sẽ được giữ lại và báo lỗi riêng; thao tác có thể hoàn tất một phần."
@@ -2031,8 +2071,8 @@ export default function TimetableTab({
             <>
               Đổi chéo toàn bộ lịch (đang áp dụng, trong phạm vi trường/cơ sở đang
               xem) giữa{" "}
-              <b>{teachers.find((item) => String(item.id) === defaultTeacherId)?.name}</b> và{" "}
-              <b>{teachers.find((item) => String(item.id) === bulkReplaceTeacherId)?.name}</b>?
+              <b>{teacherLabel(teachers, defaultTeacherId)}</b> và{" "}
+              <b>{teacherLabel(teachers, bulkReplaceTeacherId)}</b>?
             </>
           }
           hint="Hai chiều cùng lúc: lịch của người này chuyển cho người kia và ngược lại. Lịch nào trùng khung giờ với phần còn lại của người nhận sẽ chặn cả thao tác và báo lỗi."
@@ -2053,7 +2093,7 @@ export default function TimetableTab({
             ) : (
               <>
                 Xoá lịch <b>{deleteTarget.className || "—"}</b> ·{" "}
-                <b>{deleteTarget.teacherName}</b> ({deleteTarget.dayOfWeekLabel}{" "}
+                <b>{teacherLabel(teachers, deleteTarget.teacherId, deleteTarget.teacherName)}</b> ({deleteTarget.dayOfWeekLabel}{" "}
                 {formatTime(deleteTarget.startTime)}–
                 {formatTime(deleteTarget.endTime)})? Các buổi dạy đã sinh từ mẫu
                 này cũng bị xoá.
@@ -2102,7 +2142,7 @@ export default function TimetableTab({
             </div>
 
             <div className="space-y-3 px-4 py-4 text-sm">
-              <DetailRow label="Giáo viên" value={rejectedDetail.teacherName} danger />
+              <DetailRow label="Giáo viên" value={teacherLabel(teachers, rejectedDetail.teacherId, rejectedDetail.teacherName)} danger />
               <DetailRow label="Trường" value={rejectedDetail.schoolName} />
               <DetailRow label="Lớp" value={rejectedDetail.className || "Chưa gắn lớp"} />
               <DetailRow label="Môn" value={rejectedDetail.subjectName} />
@@ -2135,7 +2175,7 @@ export default function TimetableTab({
                   <SearchableSelect
                     value={replaceTeacherId}
                     onChange={setReplaceTeacherId}
-                    options={replacementOptions}
+                    options={replacementOptions.map((option) => ({ ...option, name: teacherLabel(teachers, option.id, option.name) }))}
                     disabled={loadingReplacements}
                     placeholder={loadingReplacements ? "Đang tìm giáo viên trống lịch…" : "— Chọn giáo viên phù hợp —"}
                     searchPlaceholder="Tìm giáo viên…"
@@ -2323,9 +2363,10 @@ function TimetableCell({
         {saved.map((item) => {
           const rejected = String(item.confirmationStatus).toUpperCase() === "REJECTED";
           const open = () => rejected ? onViewRejected(item) : onEdit(item);
+          const teacherText = teacherLabel(teachers, item.teacherId, item.teacherName);
           const title = rejected
             ? `Giáo viên từ chối: ${item.rejectionReason || "Không có lý do"}`
-            : `${item.className || "Chưa gắn lớp"} · ${item.subjectName} · ${item.teacherName}${canManage ? " — bấm để chỉnh sửa" : ""}`;
+            : `${item.className || "Chưa gắn lớp"} · ${item.subjectName} · ${teacherText}${canManage ? " — bấm để chỉnh sửa" : ""}`;
           return (
             <div key={item.id} className={`timetable-entry ${rejected ? "timetable-entry-rejected" : ""}`}>
               <div className="timetable-class-slot">
@@ -2342,12 +2383,12 @@ function TimetableCell({
                 <button type="button" className="timetable-saved-teacher" onClick={open} disabled={!canManage && !rejected} title={title}>
                   <span className={`timetable-teacher-dot ${teacherColor(item.teacherId)}`} aria-hidden="true" />
                   <span className="min-w-0">
-                    <span className={rejected ? "text-rose-700 line-through" : "text-slate-700"}>{item.teacherName}</span>
+                    <span className={rejected ? "text-rose-700 line-through" : "text-slate-700"}>{teacherText}</span>
                     {rejected && <span className="timetable-rejected-label"><AlertTriangle size={10} /> Từ chối</span>}
                   </span>
                 </button>
                 {canManage && (
-                  <button type="button" className="timetable-remove-schedule" onClick={() => onDelete(item)} title="Xoá mẫu lịch" aria-label={`Xoá lịch ${item.className || ""} · ${item.teacherName}`}><X size={14} /></button>
+                  <button type="button" className="timetable-remove-schedule" onClick={() => onDelete(item)} title="Xoá mẫu lịch" aria-label={`Xoá lịch ${item.className || ""} · ${teacherText}`}><X size={14} /></button>
                 )}
               </div>
             </div>
@@ -2364,7 +2405,7 @@ function TimetableCell({
             .sort((a, b) => Number(a.busy) - Number(b.busy) || a.item.name.localeCompare(b.item.name, "vi"))
             .map(({ item, busy }) => ({
               id: item.id,
-              name: `${item.name}${item.isActive ? "" : " (ngừng)"}${busy ? " · đã có tiết giờ này" : ""}`,
+              name: `${formatTeacherLabel(item.name, item.phone)}${item.isActive ? "" : " (ngừng)"}${busy ? " · đã có tiết giờ này" : ""}`,
             }));
           return (
             <div key={`draft-${index}`} className="timetable-entry timetable-draft">

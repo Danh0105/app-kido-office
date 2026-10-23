@@ -1,5 +1,6 @@
 import {
   Fragment,
+  memo,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -21,8 +22,10 @@ import {
   DEFAULT_TIMETABLE_ROWS,
   SESSION_LABELS,
   formatCheckedAt,
+  formatDayMonth,
   formatTime,
   isCheckoutOverdue,
+  teacherLabel,
   weekTitle,
   type TimetableRow,
 } from "../lib";
@@ -37,7 +40,7 @@ type Props = {
   onSelect: (session: TeachingSession) => void;
   /** Hiện tiến độ Check-in / Check-out / Báo giảng cạnh tên giáo viên. */
   showAttendanceBadges?: boolean;
-  teachers?: Pick<Teacher, "id" | "teacherRole">[];
+  teachers?: Pick<Teacher, "id" | "teacherRole" | "name" | "phone">[];
   /**
    * Chọn nhiều tiết ngay trên lưới để đổi giáo viên hàng loạt — checkbox chỉ
    * hiện khi truyền các prop này (Chấm công dùng, các màn khác không cần).
@@ -76,7 +79,7 @@ const FIT_SEARCH_STEPS = 10;
  * Chỉ đọc: khung tiết và các thứ đều **suy ra từ chính dữ liệu đang lọc**, nên
  * lọc theo giáo viên nào là ra đúng TKB của người đó.
  */
-export default function SessionTimetable({
+function SessionTimetable({
   anchorDate,
   sessions,
   onSelect,
@@ -282,6 +285,12 @@ export default function SessionTimetable({
       const key = `${session.dayOfWeek}|${formatTime(session.startTime)}`;
       map.set(key, [...(map.get(key) || []), session]);
     });
+
+    // Lọc nhiều tuần thì một ô gom buổi của nhiều ngày khác nhau — xếp theo
+    // ngày để đọc từ trên xuống đúng thứ tự thời gian.
+    map.forEach((list) =>
+      list.sort((a, b) => (a.date || "").localeCompare(b.date || "")),
+    );
 
     return map;
   }, [sessions]);
@@ -589,6 +598,14 @@ export default function SessionTimetable({
                               expanded={expanded}
                             >
                               <span className="flex flex-col items-center">
+                                {/* Ô gom buổi theo Thứ + giờ, lọc nhiều tuần là
+                                    lẫn nhiều ngày — thiếu ngày thì không biết
+                                    dòng nào là buổi nào. */}
+                                {session.date && (
+                                  <span className="text-[11px] leading-4 font-semibold text-blue-700">
+                                    {formatDayMonth(session.date)}
+                                  </span>
+                                )}
                                 <span>{session.schoolName}</span>
                                 {session.locationName && (
                                   <span className="text-[11px] leading-4 font-normal text-gray-500">
@@ -643,7 +660,8 @@ export default function SessionTimetable({
                               }
                               showAttendanceBadges={showAttendanceBadges}
                             >
-                              {session.teacherName ||
+                              {(session.teacherName &&
+                                teacherLabel(teachers, session.teacherId, session.teacherName)) ||
                                 (session.declinedTeacherName
                                   ? `${session.declinedTeacherName} · Đã từ chối`
                                   : "Chưa phân công")}
@@ -751,6 +769,31 @@ export default function SessionTimetable({
     </>
   );
 }
+
+/**
+ * Một lưới tuần có thể cả nghìn ô — chỉ vẽ lại khi dữ liệu của chính nó đổi.
+ *
+ * Chấm công xếp nhiều tuần nối nhau và tải thêm khi cuộn: không memo thì mỗi
+ * lần tải thêm vẽ lại toàn bộ các tuần đã có (tuần thứ 3 mất ~3,6 giây trên
+ * bản build thật, phần mạng chỉ ~1,2 giây).
+ *
+ * `selectedIds` là một Set dùng chung cho mọi tuần, chọn một tiết là ra Set
+ * mới. Tuần khác chỉ cần vẽ lại khi trạng thái chọn của buổi thuộc tuần đó
+ * thật sự đổi — lưới chỉ đọc `selectedIds.has(session.id)`.
+ */
+function sameTimetableProps(prev: Props, next: Props) {
+  const keys = new Set([...Object.keys(prev), ...Object.keys(next)]) as Set<keyof Props>;
+  for (const key of keys) {
+    if (key !== "selectedIds" && prev[key] !== next[key]) return false;
+  }
+  if (prev.selectedIds === next.selectedIds) return true;
+  if (!prev.selectedIds || !next.selectedIds) return false;
+  return next.sessions.every(
+    (session) => prev.selectedIds!.has(session.id) === next.selectedIds!.has(session.id),
+  );
+}
+
+export default memo(SessionTimetable, sameTimetableProps);
 
 function LegendColor({ color, label }: { color: string; label: string }) {
   return (

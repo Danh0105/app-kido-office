@@ -2,7 +2,10 @@ import { useMemo } from "react";
 import { Trash2 } from "lucide-react";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
 import { formatDecimal } from "@/utils/decimal";
-import { calculateRevenueAmount } from "@/utils/revenueAmount";
+import {
+  applyPeriodsInput,
+  calculateRevenueAmount,
+} from "@/utils/revenueAmount";
 import DecimalInput from "@/components/DecimalInput";
 
 type Props = {
@@ -11,7 +14,6 @@ type Props = {
   onAdd: () => void;
   onRemove: (index: number) => void;
   defaultFee?: number;
-  classCount: number;
 };
 
 export default function InputExpenseTable({
@@ -19,7 +21,6 @@ export default function InputExpenseTable({
   onUpdate,
   onAdd,
   onRemove,
-  classCount,
 }: Props) {
   const totals = useMemo(() => {
     let totalInvoice = 0;
@@ -119,16 +120,9 @@ export default function InputExpenseTable({
                       value={Number(row.totalPeriods) || ""}
                       disabled={locked}
                       onChange={(e) => {
-                        const periods = Number(e.target.value || 0);
-
-                        onUpdate(idx, "totalPeriods", periods);
-                        onUpdate(
-                          idx,
-                          "studentCount",
-                          classCount > 0
-                            ? Math.round((periods / 4) * classCount)
-                            : 0,
-                        );
+                        // Chỉ đổi số tiết — không tự sinh, ghi đè hay xoá HS.
+                        const next = applyPeriodsInput(row, e.target.value);
+                        onUpdate(idx, "totalPeriods", next.totalPeriods);
                       }}
                       className="w-full h-16 text-center border rounded-lg text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-400"
                     />

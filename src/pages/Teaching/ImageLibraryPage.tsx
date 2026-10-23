@@ -6,6 +6,7 @@ import SearchableSelect from "@/components/SearchableSelect";
 import { teachingSessionApi } from "@/service/teaching";
 import type { LessonImage, SessionQuery, TeachingSession } from "@/types/teaching";
 import { resolveApiFileUrl } from "@/utils/fileUrl";
+import { IMAGE_FILE_TYPE, saveBlob } from "@/utils/saveBlob";
 import TeachingLayout from "./components/TeachingLayout";
 import TeachingTabs from "./components/TeachingTabs";
 import { EmptyState, FilterCard, Loading, Pagination, selectClass } from "./components/Shared";
@@ -15,40 +16,6 @@ import { formatDate, formatTime, isDateOrderValid, todayISO } from "./lib";
 
 const PAGE_SIZE = 30;
 type Photo = { image: LessonImage; session: TeachingSession };
-
-type SaveFilePicker = (options: {
-  suggestedName?: string;
-  types?: { description: string; accept: Record<string, string[]> }[];
-}) => Promise<{ createWritable: () => Promise<{ write: (data: Blob) => Promise<void>; close: () => Promise<void> }> }>;
-
-/** Mở hộp thoại "Lưu thành..." khi có File System Access API, nếu không thì
- * rơi về cách tải mặc định của trình duyệt (blob URL + thẻ <a download>). */
-async function saveBlob(blob: Blob, fileName: string) {
-  const picker = (window as unknown as { showSaveFilePicker?: SaveFilePicker }).showSaveFilePicker;
-  if (picker) {
-    try {
-      const handle = await picker({
-        suggestedName: fileName,
-        types: [{ description: "Hình ảnh", accept: { "image/jpeg": [".jpg", ".jpeg"], "image/png": [".png"] } }],
-      });
-      const writable = await handle.createWritable();
-      await writable.write(blob);
-      await writable.close();
-      return;
-    } catch (error) {
-      // Người dùng bấm huỷ thì dừng hẳn, lỗi khác mới dùng cách dự phòng.
-      if ((error as DOMException)?.name === "AbortError") return;
-    }
-  }
-  const objectUrl = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = objectUrl;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(objectUrl);
-}
 
 /** Không gắn `src` cho tới khi ô ảnh gần vùng nhìn thấy — native lazy-load vẫn
  * có thể nạp sớm nhiều ảnh khi lưới dài, còn cách này giới hạn chặt hơn. */
@@ -119,7 +86,7 @@ export default function ImageLibraryPage() {
       const response = await fetch(url, { credentials: "include" });
       if (!response.ok) throw new Error(String(response.status));
       const blob = await response.blob();
-      await saveBlob(blob, fileName);
+      await saveBlob(blob, fileName, IMAGE_FILE_TYPE);
     } catch {
       window.open(url, "_blank", "noreferrer");
     }

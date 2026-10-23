@@ -72,6 +72,7 @@ const DIRECTOR_ACTIVE_PATHS: Record<string, string[]> = {
   "expense-request": ["/director/expense-requests"],
   warehouse: ["/director/warehouse"],
   payroll: ["/director/payrolls"],
+  recruitment: ["/director/recruitment"],
 };
 
 const directorMenus = (): BrandMenuDefinition[] =>
@@ -121,7 +122,11 @@ const employeeMenus = (): BrandMenuDefinition[] => {
       to: "/employee/policy-select",
       from: "policy",
       icon: policyIcon,
-      activePaths: ["/employee/policy", "/employee/region", "/employee/school-list"],
+      activePaths: [
+        "/employee/policy",
+        "/employee/region",
+        "/employee/school-list",
+      ],
     },
     {
       key: "employee-report",
@@ -162,8 +167,8 @@ const teachingMenus = (): BrandMenuDefinition[] => {
   const source = canViewTeaching()
     ? teachingMenusForUser()
     : isTeacher()
-      ? TEACHER_MENUS
-      : [];
+    ? TEACHER_MENUS
+    : [];
 
   return source.map((item) => ({
     key: `teaching-${item.path}`,
@@ -178,7 +183,7 @@ const teachingMenus = (): BrandMenuDefinition[] => {
  * này để chuyển route không làm sidebar đổi hoặc mất mục.
  */
 export const brandMenusForUser = (
-  workspace: BrandMenuWorkspace = "auto",
+  workspace: BrandMenuWorkspace = "auto"
 ): BrandMenuDefinition[] => {
   const resolvedWorkspace =
     workspace === "auto"
@@ -196,7 +201,7 @@ export const brandMenusForUser = (
 export const isBrandMenuActive = (
   item: BrandMenuDefinition,
   pathname: string,
-  locationState?: { from?: string } | null,
+  locationState?: { from?: string } | null
 ) => {
   // Ba mục dùng chung /director/nhan-vien, nên phải dựa thêm state.from.
   if (pathname === "/director/nhan-vien" && item.from) {
@@ -204,6 +209,6 @@ export const isBrandMenuActive = (
   }
 
   return (item.activePaths ?? [item.to]).some((path) =>
-    pathname.startsWith(path),
+    pathname.startsWith(path)
   );
 };

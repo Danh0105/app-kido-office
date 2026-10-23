@@ -1,6 +1,6 @@
 import "./css/tailwind.scss";
 import "./css/directorBrand.css";
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import Index from "./routes";
 import DevRoleSwitcher from "./components/DevRoleSwitcher";
@@ -12,38 +12,16 @@ registerSW({
     immediate: true,
 });
 
-declare global {
-    interface BeforeInstallPromptEvent extends Event {
-        prompt: () => Promise<void>;
-        userChoice: Promise<{
-            outcome: "accepted" | "dismissed";
-            platform: string;
-        }>;
-    }
-}
-
 function App() {
-    const [deferredPrompt, setDeferredPrompt] =
-        useState<BeforeInstallPromptEvent | null>(null);
-
+    // Không mời cài app: chặn luôn thanh gợi ý "Thêm vào màn hình chính" mặc
+    // định của trình duyệt (Chrome Android). Vẫn cài được qua menu trình duyệt.
     useEffect(() => {
-        const handler = (
-            e: BeforeInstallPromptEvent,
-        ) => {
-            e.preventDefault();
-            setDeferredPrompt(e);
-        };
+        const handler = (e: Event) => e.preventDefault();
 
-        window.addEventListener(
-            "beforeinstallprompt",
-            handler as EventListener,
-        );
+        window.addEventListener("beforeinstallprompt", handler);
 
         return () => {
-            window.removeEventListener(
-                "beforeinstallprompt",
-                handler as EventListener,
-            );
+            window.removeEventListener("beforeinstallprompt", handler);
         };
     }, []);
 
@@ -58,48 +36,10 @@ function App() {
         });
     }, []);
 
-    const handleInstall = async () => {
-        if (!deferredPrompt) return;
-
-        await deferredPrompt.prompt();
-
-        const choice =
-            await deferredPrompt.userChoice;
-
-        console.log(choice.outcome);
-
-        setDeferredPrompt(null);
-    };
-
     return (
         <>
             <Index />
             <DevRoleSwitcher />
-
-            {
-                deferredPrompt && (
-                    <div className="fixed bottom-5 left-1/2 -translate-x-1/2 bg-white border rounded-xl shadow-xl p-4 z-50" >
-                        <div className="flex items-center gap-4" >
-                            <div>
-                                <h3 className="font-semibold" >
-                                    Cài ứng dụng
-                                </h3>
-
-                                < p className="text-sm text-gray-500" >
-                                    Thêm app vào màn hình chính
-                                </p>
-                            </div>
-
-                            < button
-                                onClick={handleInstall}
-                                className="bg-blue-600 text-white px-4 py-2 rounded-lg"
-                            >
-                                Cài đặt
-                            </button>
-                        </div>
-                    </div>
-                )
-            }
         </>
     );
 }

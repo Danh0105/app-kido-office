@@ -22,6 +22,7 @@ import {
   useSessionCheckin,
 } from "./hooks/useSessionCheckin";
 import { useLessonSubmit } from "./hooks/useLessonSubmit";
+import { teacherLessonAction } from "./lessonWorkflow";
 import {
   addMonths,
   dayTitle,
@@ -280,8 +281,6 @@ function TodayCard({
   const hasSchoolPoint = !!schoolPointOf(session);
   const stayMinutes = stayMinutesOf(session);
 
-  const lessonSubmitted = !!session.lessonSubmittedAt;
-
   /**
    * Tiết liên tiếp cùng trường: chỉ tiết đầu cần tự check-in — nhưng giờ tiết
    * nào cũng tự check-out trực tiếp được (không chỉ tiết cuối), để giáo viên
@@ -294,14 +293,7 @@ function TodayCard({
   const checkinViaBlock = checkedIn && session.checkinRequired === false;
   const checkoutViaBlock = checkedOut && session.checkoutViaAdjacent === true;
 
-  const nextAction: "checkin" | "checkout" | "lesson" | "done" =
-    session.checkinRequired && !checkedIn
-      ? "checkin"
-      : !checkedOut
-      ? "checkout"
-      : lessonSubmitted
-      ? "done"
-      : "lesson";
+  const nextAction = teacherLessonAction(session);
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3 space-y-2 flex flex-col">

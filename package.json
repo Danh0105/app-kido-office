@@ -54,7 +54,8 @@
     "react-youtube": "^10.1.0",
     "react-zoom-pan-pinch": "^3.7.0",
     "recharts": "^3.8.1",
-    "socket.io-client": "^4.8.3"
+    "socket.io-client": "^4.8.3",
+    "write-excel-file": "^4.1.1"
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",

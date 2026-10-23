@@ -36,6 +36,7 @@ import {
 
 /** Tab loại đề xuất; "" = tất cả. */
 type KindFilter = ExpenseRequestKind | "";
+type MonthlyFilter = "" | "REGULAR" | "MONTHLY";
 
 const KIND_TABS: { value: KindFilter; label: string }[] = [
   { value: "", label: "Tất cả" },
@@ -137,6 +138,7 @@ export default function ExpenseRequestList() {
 
   const [requestKind, setRequestKind] = useState<KindFilter>("");
   const effectiveKind: KindFilter = requestKind;
+  const [monthlyFilter, setMonthlyFilter] = useState<MonthlyFilter>("");
   const [status, setStatus] = useState<ExpenseStatus | "">("");
   const [overdue, setOverdue] = useState(false);
   const [fromDate, setFromDate] = useState("");
@@ -200,6 +202,10 @@ export default function ExpenseRequestList() {
     try {
       const filters = {
         requestKind: effectiveKind || undefined,
+        isMonthlyExpense:
+          monthlyFilter === ""
+            ? undefined
+            : monthlyFilter === "MONTHLY",
         status: status || undefined,
         overdue: overdue || undefined,
         fromDate: fromDate || undefined,
@@ -237,7 +243,17 @@ export default function ExpenseRequestList() {
     } finally {
       setLoading(false);
     }
-  }, [approverSide, effectiveKind, status, overdue, fromDate, toDate, page, viewMode]);
+  }, [
+    approverSide,
+    effectiveKind,
+    monthlyFilter,
+    status,
+    overdue,
+    fromDate,
+    toDate,
+    page,
+    viewMode,
+  ]);
 
   useEffect(() => {
     load();
@@ -363,6 +379,31 @@ export default function ExpenseRequestList() {
               className={`py-1.5 text-xs font-medium rounded-lg transition ${
                 requestKind === tab.value
                   ? "bg-blue-500 text-white"
+                  : "text-gray-500"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-3 gap-1 rounded-xl border border-gray-100 bg-white p-1">
+          {(
+            [
+              { value: "", label: "Tất cả hình thức" },
+              { value: "REGULAR", label: "Chi Năm" },
+              { value: "MONTHLY", label: "Chi tháng" },
+            ] as { value: MonthlyFilter; label: string }[]
+          ).map((tab) => (
+            <button
+              key={tab.value || "all-monthly"}
+              onClick={() => {
+                setPage(1);
+                setMonthlyFilter(tab.value);
+              }}
+              className={`rounded-lg py-1.5 text-xs font-medium transition ${
+                monthlyFilter === tab.value
+                  ? "bg-indigo-500 text-white"
                   : "text-gray-500"
               }`}
             >

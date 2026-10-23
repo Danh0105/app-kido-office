@@ -35,9 +35,9 @@ export const subjectApi = {
         return res.data;
     },
 
-    getBySchool: async (schoolId: number) => {
+    getBySchool: async (schoolId: number, schoolYear?: string) => {
         const res = await api.get(`/subjects`, {
-            params: { schoolId }
+            params: { schoolId, schoolYear }
         });
         return res.data;
     },

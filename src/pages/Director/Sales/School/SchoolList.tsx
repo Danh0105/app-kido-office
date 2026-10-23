@@ -189,6 +189,11 @@ export default function SchoolList() {
                 </div>
 
                 <div className="flex justify-between">
+                  <span className="text-gray-500">Mã ĐVQHNS</span>
+                  <span className="text-gray-800">{item.budgetCode}</span>
+                </div>
+
+                <div className="flex justify-between">
                   <span className="text-gray-500">Quy mô</span>
                   <span className="text-gray-800">{item.scale}</span>
                 </div>

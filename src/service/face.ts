@@ -5,6 +5,8 @@ export const faceApi = {
     login: async (descriptor: number[]) => {
         const res = await api.post(`/face/login`, {
             descriptor,
+        }, {
+            headers: { "X-Login-Notice-Version": "1" },
         });
         return res.data;
     },

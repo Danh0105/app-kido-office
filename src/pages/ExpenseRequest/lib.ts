@@ -57,11 +57,10 @@ export const isApproverSide = () =>
     "thuquy",
     // Phòng kỹ thuật giữ hai chốt của nhánh thiết bị (lệnh xuất kho, nhận lại
     // hàng) — cùng vị trí trong luồng như kế toán công nợ + thủ quỹ bên tiền.
-    "ky_thuat",
+    "ky_thuat"
   );
 
-export const isDebtAccountant = () =>
-  hasRole("ketoan_congno", "ketoan_truong");
+export const isDebtAccountant = () => hasRole("ketoan_congno", "ketoan_truong");
 
 /** Phòng kỹ thuật — xử lý đề xuất thiết bị và sửa chữa. */
 export const isTechnical = () => hasRole("ky_thuat");
@@ -86,7 +85,7 @@ export const isEquipmentOnlyUser = () =>
     "ketoan_congno",
     "ketoan_truong",
     "troly_gd",
-    "thuquy",
+    "thuquy"
   );
 
 /**
@@ -97,11 +96,13 @@ export const requestKindOf = (req?: {
   requestKind?: ExpenseRequestKind | null;
 }): ExpenseRequestKind => req?.requestKind ?? "CASH";
 
-export const isEquipmentRequest = (req?: { requestKind?: ExpenseRequestKind | null }) =>
-  requestKindOf(req) === "EQUIPMENT";
+export const isEquipmentRequest = (req?: {
+  requestKind?: ExpenseRequestKind | null;
+}) => requestKindOf(req) === "EQUIPMENT";
 
-export const isRepairRequest = (req?: { requestKind?: ExpenseRequestKind | null }) =>
-  requestKindOf(req) === "REPAIR";
+export const isRepairRequest = (req?: {
+  requestKind?: ExpenseRequestKind | null;
+}) => requestKindOf(req) === "REPAIR";
 
 /** Nguồn thiết bị; đề xuất thiết bị cũ chưa có trường này = kho. */
 export const equipmentSourceOf = (req?: {
@@ -121,6 +122,7 @@ export const isSupplierEquipment = (req?: {
  */
 export const KIND_STATUSES: Record<ExpenseRequestKind, ExpenseStatus[]> = {
   CASH: [
+    "PENDING_ACCOUNTING",
     "PENDING_APPROVAL",
     "APPROVED",
     "PAYMENT_ORDERED",
@@ -164,7 +166,9 @@ const ALL_EXPENSE_STATUSES: ExpenseStatus[] = [
 
 // Base route for expense pages depends on which nav tree the current user uses.
 export const expenseBasePath = () =>
-  isApproverSide() ? "/director/expense-requests" : "/employee/expense-requests";
+  isApproverSide()
+    ? "/director/expense-requests"
+    : "/employee/expense-requests";
 
 export const expenseTasksPath = () =>
   isApproverSide() ? "/director/expense-tasks" : "/employee/expense-tasks";
@@ -255,7 +259,7 @@ export const EXPENSE_STEPS: Record<ActionKey, ExpenseStepDefinition> = {
   // machine WITHDRAW). Giám đốc rút hộ được đơn của bất kỳ ai (overrideRoles).
   withdraw: {
     roles: ["sales", "director", "director_la"],
-    from: ["PENDING_APPROVAL"],
+    from: ["PENDING_ACCOUNTING", "PENDING_APPROVAL"],
     owner: true,
     overrideRoles: ["director", "director_la"],
   },
@@ -270,18 +274,32 @@ export const EXPENSE_STEPS: Record<ActionKey, ExpenseStepDefinition> = {
   // lệnh chi/xuất quỹ) và chưa xuất kho, giống RESOURCE_MOVED_STATUSES bên BE.
   delete: {
     roles: ["director", "director_la"],
-    from: ["PENDING_APPROVAL", "APPROVED", "REJECTED", "WITHDRAWN"],
+    from: [
+      "PENDING_ACCOUNTING",
+      "PENDING_APPROVAL",
+      "APPROVED",
+      "REJECTED",
+      "WITHDRAWN",
+    ],
     owner: false,
   },
-  saleadminReview: { roles: ["saleadmin", "salesadmin_la"], from: ["PENDING_APPROVAL"], owner: false },
-  saleadminReject: { roles: ["saleadmin", "salesadmin_la"], from: ["PENDING_APPROVAL"], owner: false },
+  saleadminReview: {
+    roles: ["saleadmin", "salesadmin_la"],
+    from: ["PENDING_APPROVAL"],
+    owner: false,
+  },
+  saleadminReject: {
+    roles: ["saleadmin", "salesadmin_la"],
+    from: ["PENDING_APPROVAL"],
+    owner: false,
+  },
 
   // --- nhánh ĐỀ XUẤT TIỀN ---
   // Kế toán trưởng có toàn quyền của kế toán công nợ + thủ quỹ (khớp
   // ExpenseRole.CHIEF_ACCOUNTANT bên BE).
   paymentOrder: {
     roles: ["ketoan_congno", "ketoan_truong"],
-    from: ["APPROVED", "FUND_RETURNED"],
+    from: ["PENDING_ACCOUNTING", "APPROVED", "FUND_RETURNED"],
     owner: false,
     kinds: ["CASH"],
   },
@@ -292,6 +310,7 @@ export const EXPENSE_STEPS: Record<ActionKey, ExpenseStepDefinition> = {
   editPaymentOrder: {
     roles: ["ketoan_congno", "ketoan_truong"],
     from: [
+      "PENDING_APPROVAL",
       "PAYMENT_ORDERED",
       "CASH_RELEASED",
       "CASH_RECEIVED",
@@ -399,9 +418,21 @@ export const EXPENSE_STEPS: Record<ActionKey, ExpenseStepDefinition> = {
 export const canDoStep = (
   step: ActionKey,
   req: ExpenseRequest,
-  user = { id: Number(getEmployeeId()), roles: getEmployeeRoles() },
+  user = { id: Number(getEmployeeId()), roles: getEmployeeRoles() }
 ) => {
   const definition = EXPENSE_STEPS[step];
+
+  if (req.isMonthlyExpense) {
+    if (step === "saleadminReview" || step === "saleadminReject") return false;
+    if (
+      (step === "approve" || step === "reject") &&
+      !user.roles.some((role) => ["director", "director_la"].includes(role))
+    ) {
+      return false;
+    }
+  } else if (step === "editPaymentOrder" && req.status === "PENDING_APPROVAL") {
+    return false;
+  }
 
   if (
     definition.equipmentSources &&
@@ -439,7 +470,7 @@ export const canDoStep = (
   }
 
   const hasOverrideRole = definition.overrideRoles?.some((role) =>
-    user.roles.includes(role),
+    user.roles.includes(role)
   );
   if (hasOverrideRole) return true;
 
@@ -456,11 +487,15 @@ export const availableActions = (req: ExpenseRequest): ActionKey[] => {
   // Giám đốc chọn người thay thế.
   const me = Number(getEmployeeId());
   const declinedHandover = (req.assignments || []).some(
-    (a) => a.role === "HANDOVER" && a.status === "DECLINED" && a.employeeId === me,
+    (a) =>
+      a.role === "HANDOVER" && a.status === "DECLINED" && a.employeeId === me
   );
   return (Object.keys(EXPENSE_STEPS) as ActionKey[]).filter((step) => {
     if (readOnly && !EXPENSE_STEPS[step].assignee) return false;
-    if (declinedHandover && (step === "stockIssueOrder" || step === "repairAccept")) {
+    if (
+      declinedHandover &&
+      (step === "stockIssueOrder" || step === "repairAccept")
+    ) {
       return false;
     }
     // Thiết bị từ nhà cung cấp đã nhập kho thật thì không sửa được nữa (BE
@@ -492,9 +527,17 @@ export const mainAssigneeLabel = (kind?: ExpenseRequestKind | null) =>
   kind === "REPAIR" ? "Người đảm nhận chính" : "Người bàn giao";
 
 /** Còn được từ chối / thay người khi việc chưa bắt đầu (chưa xuất kho). */
-const ASSIGNMENT_OPEN_STATUSES: ExpenseStatus[] = ["APPROVED", "EQUIPMENT_RETURNED"];
+const ASSIGNMENT_OPEN_STATUSES: ExpenseStatus[] = [
+  "APPROVED",
+  "EQUIPMENT_RETURNED",
+];
 
-const ASSIGNMENT_REPLACER_ROLES = ["director", "director_la", "saleadmin", "salesadmin_la"];
+const ASSIGNMENT_REPLACER_ROLES = [
+  "director",
+  "director_la",
+  "saleadmin",
+  "salesadmin_la",
+];
 
 /** Người đang được giao (chưa từ chối, chưa bị thay) + người từ chối chờ thay. */
 export const activeAssignments = (req: ExpenseRequest) =>
@@ -505,7 +548,7 @@ export const activeAssignments = (req: ExpenseRequest) =>
  * giao đề xuất sửa chữa dùng nút "Từ chối" sửa chữa sẵn có nên không tính.
  */
 export const myDeclinableAssignment = (
-  req: ExpenseRequest,
+  req: ExpenseRequest
 ): ExpenseAssignment | null => {
   const me = Number(getEmployeeId());
   if (!me || !ASSIGNMENT_OPEN_STATUSES.includes(req.status)) return null;
@@ -514,14 +557,18 @@ export const myDeclinableAssignment = (
       (a) =>
         a.employeeId === me &&
         a.status === "ASSIGNED" &&
-        !(a.role === "HANDOVER" && isRepairRequest(req)),
+        !(a.role === "HANDOVER" && isRepairRequest(req))
     ) || null
   );
 };
 
 /** Giám đốc/Sales Admin chọn được người thay thế cho người đã từ chối này. */
-export const canReplaceAssignment = (req: ExpenseRequest, a: ExpenseAssignment) => {
-  if (a.status !== "DECLINED" || !hasRole(...ASSIGNMENT_REPLACER_ROLES)) return false;
+export const canReplaceAssignment = (
+  req: ExpenseRequest,
+  a: ExpenseAssignment
+) => {
+  if (a.status !== "DECLINED" || !hasRole(...ASSIGNMENT_REPLACER_ROLES))
+    return false;
   // Người bàn giao sửa chữa thay bằng "Chỉ định người khác" (REPAIR_REJECTED).
   if (a.role === "HANDOVER" && isRepairRequest(req)) return false;
   const open: ExpenseStatus[] =
@@ -538,12 +585,16 @@ export const waitingMessage = (req: ExpenseRequest): string | null => {
   const purchase = isSupplierEquipment(req);
 
   switch (req.status) {
+    case "PENDING_ACCOUNTING":
+      return "Chờ Kế toán công nợ nhập số tiền…";
     case "PENDING_APPROVAL":
-      return "Chờ giám đốc duyệt…";
+      return req.isMonthlyExpense
+        ? "Kế toán đã nhập số tiền, chờ Giám đốc duyệt…"
+        : "Chờ giám đốc duyệt…";
     case "APPROVED":
       if (
         (req.assignments || []).some(
-          (a) => a.role === "HANDOVER" && a.status === "DECLINED",
+          (a) => a.role === "HANDOVER" && a.status === "DECLINED"
         )
       ) {
         return "Người bàn giao đã từ chối, chờ giám đốc chọn người thay thế…";
@@ -638,12 +689,12 @@ const getCreator = (req?: ExpenseCreatorFields) => {
     typeof req.createdBy === "object"
       ? (req.createdBy as CreatorLike)
       : undefined;
-  return (req.creator || req.createdByUser || createdBy) as CreatorLike | undefined;
+  return (req.creator || req.createdByUser || createdBy) as
+    | CreatorLike
+    | undefined;
 };
 
-export const creatorId = (
-  req?: ExpenseCreatorFields,
-) => {
+export const creatorId = (req?: ExpenseCreatorFields) => {
   if (!req) return undefined;
   const creator = getCreator(req);
   const rawId =
@@ -655,9 +706,7 @@ export const creatorId = (
   return Number.isFinite(id) && id > 0 ? id : undefined;
 };
 
-export const creatorName = (
-  req: ExpenseCreatorFields,
-) => {
+export const creatorName = (req: ExpenseCreatorFields) => {
   const name = cleanText(getCreator(req)?.name);
   if (name) return name;
 
@@ -665,26 +714,23 @@ export const creatorName = (
   return id ? `#${id}` : "—";
 };
 
-export const creatorPhone = (
-  req: ExpenseCreatorFields,
-) => cleanText(getCreator(req)?.phone);
+export const creatorPhone = (req: ExpenseCreatorFields) =>
+  cleanText(getCreator(req)?.phone);
 
-export const creatorEmail = (
-  req: ExpenseCreatorFields,
-) => cleanText(getCreator(req)?.email);
+export const creatorEmail = (req: ExpenseCreatorFields) =>
+  cleanText(getCreator(req)?.email);
 
-export const creatorDepartment = (
-  req: ExpenseCreatorFields,
-) => {
+export const creatorDepartment = (req: ExpenseCreatorFields) => {
   const creator = getCreator(req);
   if (!creator) return "";
-  if (typeof creator.department === "string") return cleanText(creator.department);
-  return cleanText(creator.department?.name) || cleanText(creator.departmentName);
+  if (typeof creator.department === "string")
+    return cleanText(creator.department);
+  return (
+    cleanText(creator.department?.name) || cleanText(creator.departmentName)
+  );
 };
 
-export const creatorDetails = (
-  req: ExpenseCreatorFields,
-) => {
+export const creatorDetails = (req: ExpenseCreatorFields) => {
   const details: { label: string; value: string }[] = [];
   const phone = creatorPhone(req);
   const email = creatorEmail(req);
@@ -699,6 +745,5 @@ export const creatorDetails = (
   return details;
 };
 
-export const creatorInlineDetails = (
-  req: ExpenseCreatorFields,
-) => creatorDetails(req).map((item) => `${item.label}: ${item.value}`);
+export const creatorInlineDetails = (req: ExpenseCreatorFields) =>
+  creatorDetails(req).map((item) => `${item.label}: ${item.value}`);

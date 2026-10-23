@@ -1,7 +1,8 @@
 // Types & metadata for the "Đề xuất chi" (expense request) module.
-// Không có DRAFT: tạo đề xuất là vào thẳng PENDING_APPROVAL.
+// Chi Năm vào PENDING_APPROVAL; chi tháng vào PENDING_ACCOUNTING.
 
 export type ExpenseStatus =
+  | "PENDING_ACCOUNTING"
   | "PENDING_APPROVAL"
   | "APPROVED"
   // --- nhánh đề xuất tiền ---
@@ -135,7 +136,12 @@ export type ExpenseLogDetails = {
   // CREATE_STOCK_ISSUE_ORDER
   stockIssueOrder?: {
     code?: string | null;
-    items?: { name: string; quantity: number; unit?: string | null; note?: string | null }[];
+    items?: {
+      name: string;
+      quantity: number;
+      unit?: string | null;
+      note?: string | null;
+    }[];
     warehouse?: string | null;
     expectedDeliveryDate?: string | null;
   } | null;
@@ -307,6 +313,23 @@ export type ExpenseRequest = {
       province?: { id: number; name: string } | null;
     } | null;
   };
+  /** Đề xuất chi tháng gắn với một môn học và kỳ kế toán cụ thể. */
+  isMonthlyExpense?: boolean;
+  subjectId?: number;
+  subject?: {
+    id: number;
+    name: string;
+    schoolId?: number;
+    schoolYear?: string;
+  } | null;
+  expensePeriodId?: number;
+  expensePeriod?: {
+    id: number;
+    name?: string;
+    month: number;
+    year: number;
+    status?: number;
+  } | null;
   wardId?: number;
   ward?: {
     id: number;
@@ -382,6 +405,9 @@ export type ExpenseListQuery = {
   requestKind?: ExpenseRequestKind;
   createdBy?: number;
   schoolId?: number;
+  isMonthlyExpense?: boolean;
+  subjectId?: number;
+  expensePeriodId?: number;
   schoolYear?: string;
   fromDate?: string;
   toDate?: string;
@@ -481,10 +507,23 @@ export const STATUS_META: Record<
   ExpenseStatus,
   { label: string; badge: string; done?: boolean }
 > = {
-  PENDING_APPROVAL: { label: "Chờ duyệt", badge: "bg-yellow-100 text-yellow-700" },
+  PENDING_APPROVAL: {
+    label: "Chờ duyệt",
+    badge: "bg-yellow-100 text-yellow-700",
+  },
+  PENDING_ACCOUNTING: {
+    label: "Chờ Kế toán nhập số tiền",
+    badge: "bg-cyan-100 text-cyan-700",
+  },
   APPROVED: { label: "Đã duyệt", badge: "bg-blue-100 text-blue-700" },
-  PAYMENT_ORDERED: { label: "Đã lên lệnh chi", badge: "bg-purple-100 text-purple-700" },
-  CASH_RELEASED: { label: "Đã xuất tiền", badge: "bg-orange-100 text-orange-700" },
+  PAYMENT_ORDERED: {
+    label: "Đã lên lệnh chi",
+    badge: "bg-purple-100 text-purple-700",
+  },
+  CASH_RELEASED: {
+    label: "Đã xuất tiền",
+    badge: "bg-orange-100 text-orange-700",
+  },
   CASH_RECEIVED: { label: "Đã nhận tiền", badge: "bg-lime-100 text-lime-700" },
   STOCK_ISSUE_ORDERED: {
     label: "Đã lên lệnh xuất kho",
@@ -512,11 +551,23 @@ export const STATUS_META: Record<
     label: "Đã nhập kho, chờ nghiệm thu",
     badge: "bg-cyan-100 text-cyan-700",
   },
-  SPENT: { label: "Đã chi ✓", badge: "bg-green-100 text-green-700", done: true },
+  SPENT: {
+    label: "Đã chi ✓",
+    badge: "bg-green-100 text-green-700",
+    done: true,
+  },
   NOT_SPENT: { label: "Chưa chi", badge: "bg-amber-100 text-amber-700" },
   FUND_RETURNED: { label: "Đã hoàn quỹ", badge: "bg-green-100 text-green-700" },
-  REJECTED: { label: "Từ chối ✗", badge: "bg-red-100 text-red-700", done: true },
-  WITHDRAWN: { label: "Đã rút", badge: "bg-gray-100 text-gray-600", done: true },
+  REJECTED: {
+    label: "Từ chối ✗",
+    badge: "bg-red-100 text-red-700",
+    done: true,
+  },
+  WITHDRAWN: {
+    label: "Đã rút",
+    badge: "bg-gray-100 text-gray-600",
+    done: true,
+  },
 };
 
 /**
@@ -569,7 +620,7 @@ const KIND_STATUS_LABEL: Partial<
 
 export const statusLabel = (
   status?: string,
-  kind: ExpenseRequestKind = "CASH",
+  kind: ExpenseRequestKind = "CASH"
 ) => {
   if (!status) return "";
   const byKind = KIND_STATUS_LABEL[status as ExpenseStatus]?.[kind];
@@ -585,14 +636,18 @@ export const ACTION_LABEL: Record<string, string> = {
   UPDATE: "Sửa đề xuất",
   SUBMIT: "Gửi duyệt",
   APPROVE: "Duyệt",
+  APPROVE_MONTHLY: "Giám đốc duyệt chi tháng",
   APPROVED: "Duyệt",
   APPROVE_EXPENSE_REQUEST: "Duyệt đề xuất",
   REJECT: "Từ chối",
+  REJECT_MONTHLY: "Giám đốc từ chối chi tháng",
   REJECTED: "Từ chối",
   REJECT_EXPENSE_REQUEST: "Từ chối đề xuất",
   PAYMENT_ORDER: "Lên lệnh chi",
   PAYMENT_ORDERED: "Lên lệnh chi",
   CREATE_PAYMENT_ORDER: "Lên lệnh chi",
+  CREATE_MONTHLY_PAYMENT_ORDER: "Kế toán nhập số tiền",
+  EDIT_MONTHLY_PAYMENT_ORDER: "Kế toán sửa số tiền",
   CASH_RELEASE: "Xuất tiền",
   CASH_RELEASED: "Xuất tiền",
   CONFIRM_CASH_RELEASED: "Xác nhận xuất tiền",

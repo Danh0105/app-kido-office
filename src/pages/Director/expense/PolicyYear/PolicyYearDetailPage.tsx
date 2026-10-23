@@ -116,13 +116,15 @@ export default function PolicyYearDetailPage({
     [draft.monthlyRows],
   );
 
-  const months = useMemo(
-    () =>
-      [...new Set(draft.monthlyRows.map((row) => row.month))].sort((a, b) =>
-        a.localeCompare(b),
-      ),
-    [draft.monthlyRows],
-  );
+  const months = useMemo(() => {
+    const labels = new Map<string, string | undefined>();
+    draft.monthlyRows.forEach((row) => {
+      if (!labels.get(row.month)) labels.set(row.month, row.monthLabel);
+    });
+    return [...labels.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, label]) => ({ month, label }));
+  }, [draft.monthlyRows]);
 
   const filteredRows = useMemo(() => {
     return draft.monthlyRows.filter((row) => {
@@ -579,11 +581,11 @@ export default function PolicyYearDetailPage({
               className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 outline-none focus:border-blue-400"
             >
               <option value="">Tất cả tháng</option>
-              {months.map((month) => {
+              {months.map(({ month, label }) => {
                 const [year, number] = month.split("-");
                 return (
                   <option key={month} value={month}>
-                    Tháng {number}/{year}
+                    {label || `Tháng ${number}/${year}`}
                   </option>
                 );
               })}

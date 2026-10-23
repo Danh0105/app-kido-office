@@ -157,6 +157,32 @@ export default function DeviceForm({
         const missingRealInput =
           activeTab === "TIET" && (!form.realStudents || !form.realPeriods);
 
+        // Còn khấu hao = Thành tiền (thực tế nhập) − Số tiền khấu hao.
+        const thanhTienThucTeNhap =
+          activeTab === "TIET" ? thanhTienThucTeTiet : thanhTienThucTe;
+        const hasConKhauHao = thanhTienThucTeNhap > 0 && depreciatedAmount > 0;
+        const conKhauHao = hasConKhauHao
+          ? Math.round(thanhTienThucTeNhap - depreciatedAmount)
+          : 0;
+
+        const conKhauHaoBlock = (
+          <div className="space-y-1.5 border-t border-blue-200 pt-1 sm:border-t-0 sm:border-l sm:pl-3 sm:pt-0">
+            <div className="text-xs text-blue-700">Còn khấu hao</div>
+            {hasConKhauHao ? (
+              <div className="font-semibold text-blue-700">
+                {conKhauHao.toLocaleString()} đ
+              </div>
+            ) : (
+              <div className="text-[11px] italic text-red-500">
+                Chưa nhập đủ số liệu
+              </div>
+            )}
+            <div className="text-[10px] text-blue-500">
+              = Thành tiền − Số tiền khấu hao
+            </div>
+          </div>
+        );
+
         return (
           <div
             key={index}
@@ -420,20 +446,23 @@ export default function DeviceForm({
                       = Thành tiền / Số năm khấu hao / Số tiết thực / Số học
                       sinh thực × Sĩ số lớp
                     </div>
-                    <div className="text-xs text-blue-700 pt-1 border-t border-blue-200">
-                      Thành tiền
-                    </div>
-                    {missingRealInput ? (
-                      <div className="text-[11px] italic text-red-500">
-                        Chưa nhập số học sinh thực hoặc số tiết thực
+                    <div className="grid gap-3 pt-1 border-t border-blue-200 sm:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <div className="text-xs text-blue-700">Thành tiền</div>
+                        {missingRealInput ? (
+                          <div className="text-[11px] italic text-red-500">
+                            Chưa nhập số học sinh thực hoặc số tiết thực
+                          </div>
+                        ) : (
+                          <div className="font-semibold text-blue-700">
+                            {thanhTienThucTeTiet.toLocaleString()} đ
+                          </div>
+                        )}
+                        <div className="text-[10px] text-blue-500">
+                          = Đơn giá 1 tiết × Số học sinh thực × Số tiết thực
+                        </div>
                       </div>
-                    ) : (
-                      <div className="font-semibold text-blue-700">
-                        {thanhTienThucTeTiet.toLocaleString()} đ
-                      </div>
-                    )}
-                    <div className="text-[10px] text-blue-500">
-                      = Đơn giá 1 tiết × Số học sinh thực × Số tiết thực
+                      {conKhauHaoBlock}
                     </div>
                   </div>
                 </div>
@@ -482,20 +511,23 @@ export default function DeviceForm({
                       = Thành tiền / Số năm khấu hao / Số tháng / Số học sinh
                       thực
                     </div>
-                    <div className="text-xs text-blue-700 pt-1 border-t border-blue-200">
-                      Thành tiền
-                    </div>
-                    {missingInput ? (
-                      <div className="text-[11px] italic text-red-500">
-                        Chưa nhập đủ số học sinh hoặc số tháng
+                    <div className="grid gap-3 pt-1 border-t border-blue-200 sm:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <div className="text-xs text-blue-700">Thành tiền</div>
+                        {missingInput ? (
+                          <div className="text-[11px] italic text-red-500">
+                            Chưa nhập đủ số học sinh hoặc số tháng
+                          </div>
+                        ) : (
+                          <div className="font-semibold text-blue-700">
+                            {thanhTienThucTe.toLocaleString()} đ
+                          </div>
+                        )}
+                        <div className="text-[10px] text-blue-500">
+                          = Đơn giá × Số học sinh × Số tháng
+                        </div>
                       </div>
-                    ) : (
-                      <div className="font-semibold text-blue-700">
-                        {thanhTienThucTe.toLocaleString()} đ
-                      </div>
-                    )}
-                    <div className="text-[10px] text-blue-500">
-                      = Đơn giá × Số học sinh × Số tháng
+                      {conKhauHaoBlock}
                     </div>
                   </div>
                 </div>

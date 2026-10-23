@@ -25,6 +25,7 @@ import { hasRole, isChiefAccountant, isAccountantOnly } from "@/utils/auth";
 import { isDirectorBrandUiEnabled } from "@/utils/directorUi";
 import DirectorBrandShell from "@/pages/Director/components/DirectorBrandShell";
 import PayrollPage from "@/pages/Payroll/PayrollPage";
+import RecruitmentPage from "@/pages/Recruitment/RecruitmentPage";
 
 const EXPENSE_HOME = "/director/expense-management";
 const DIRECTOR_HOME = "/director";
@@ -43,7 +44,7 @@ function AccountantGuard({ children }: { children: React.ReactNode }) {
       "thuquy",
       "saleadmin",
       "salesadmin",
-      "salesadmin_la",
+      "salesadmin_la"
     )
   ) {
     return <Navigate to={DIRECTOR_HOME} replace />;
@@ -73,9 +74,16 @@ function ExpenseRequestGuard({ children }: { children: React.ReactNode }) {
       "troly_gd",
       "thuquy",
       // Phòng kỹ thuật xử lý nhánh đề xuất thiết bị.
-      "ky_thuat",
+      "ky_thuat"
     )
   ) {
+    return <Navigate to={DIRECTOR_HOME} replace />;
+  }
+  return <>{children}</>;
+}
+
+function RecruitmentGuard({ children }: { children: React.ReactNode }) {
+  if (!hasRole("nhansu", "director", "director_la", "troly_gd")) {
     return <Navigate to={DIRECTOR_HOME} replace />;
   }
   return <>{children}</>;
@@ -91,10 +99,7 @@ const directorOnly = (children: React.ReactNode) => (
 
 function DirectorFallback() {
   return (
-    <Navigate
-      to={isChiefAccountant() ? EXPENSE_HOME : DIRECTOR_HOME}
-      replace
-    />
+    <Navigate to={isChiefAccountant() ? EXPENSE_HOME : DIRECTOR_HOME} replace />
   );
 }
 
@@ -106,105 +111,160 @@ export default function DirectorRoutes() {
 
   return (
     <DirectorBrandShell enabled={!isHome && isDirectorBrandUiEnabled()}>
-    <Routes>
-      <Route
-        index
-        element={
-          isAccountantOnly() || isChiefAccountant()
-            ? <Home />
-            : directorOnly(<Home />)
-        }
-      />
-      <Route path="subject-list/:id" element={isChiefAccountant() ? <SubjectList /> : directorOnly(<SubjectList />)} />
-      <Route
-        path="school-list/:employeeId"
-        element={isChiefAccountant() ? <SchoolList /> : directorOnly(<SchoolList />)}
-      />
-      <Route
-        path="statistics/:employeeId"
-        element={isChiefAccountant() ? <PolicyStatsPage /> : directorOnly(<PolicyStatsPage />)}
-      />
-      <Route path="phong-ban" element={directorOnly(<Department />)} />
-      <Route path="region/:employeeId" element={directorOnly(<Region />)} />
-      <Route path="nhan-vien" element={isChiefAccountant() ? <EmployeeList /> : directorOnly(<EmployeeList />)} />
-      <Route
-        path="employee-management"
-        element={directorOnly(<EmployeeManagement />)}
-      />
-      <Route
-        path="nhan-vien/profile/:userId"
-        element={directorOnly(<Profile />)}
-      />
-      <Route
-        path="daily-report/:employeeId"
-        element={directorOnly(<DailyReportPage />)}
-      />
-      <Route
-        path="suggest/:employeeId"
-        element={<Navigate to="/director/expense-requests" replace />}
-      />
-      <Route
-        path="suggest-review/:suggestId"
-        element={<Navigate to="/director/expense-requests" replace />}
-      />
-      <Route
-        path="policy-list/:subject"
-        element={isChiefAccountant() ? <PolicyList /> : directorOnly(<PolicyList />)}
-      />
-      <Route
-        path="policy-history-list/:policyId"
-        element={isChiefAccountant() ? <PolicyHistoryPage audience="director" /> : directorOnly(<PolicyHistoryPage audience="director" />)}
-      />
-      <Route path="policy/:id" element={isChiefAccountant() ? <PolicyGD /> : directorOnly(<PolicyGD />)} />
-      <Route
-        path="expense-management"
-        element={
-          <AccountantGuard>
-            <RealExpense />
-          </AccountantGuard>
-        }
-      />
-      <Route
-        path="real-expense/:schoolId"
-        element={
-          <AccountantGuard>
-            <RealExpenseDetail />
-          </AccountantGuard>
-        }
-      />
-      <Route
-        path="real-expense-detail/:schoolExpenseId"
-        element={
-          <AccountantGuard>
-            <RealExpenseDetail />
-          </AccountantGuard>
-        }
-      />
-      {/* Đề xuất chi (director / kế toán công nợ / thủ quỹ / sales admin) */}
-      <Route
-        path="expense-requests"
-        element={expenseAccess(<ExpenseRequestList />)}
-      />
-      <Route
-        path="expense-requests/:id"
-        element={expenseAccess(<ExpenseRequestDetail />)}
-      />
-      <Route path="expense-tasks" element={expenseAccess(<ExpenseTasks />)} />
-      {/* Quản lý kho thiết bị: kỹ thuật quản nhập/xuất/tồn; giám đốc + sales admin xem/duyệt được cùng module. */}
-      <Route path="warehouse" element={expenseAccess(<WarehousePage />)} />
-      {/* Backend tự giới hạn phạm vi: BGĐ/Nhân sự/KTT xem tất cả, role khác chỉ xem chính mình. */}
-      <Route path="payrolls" element={<PayrollPage />} />
-      <Route
-        path="expense-notifications"
-        element={expenseAccess(<ExpenseNotifications />)}
-      />
-      <Route
-        path="expense-reminder-settings"
-        element={isChiefAccountant() ? <Navigate to={EXPENSE_HOME} replace /> : expenseAccess(<ReminderSettings />)}
-      />
+      <Routes>
+        <Route
+          index
+          element={
+            isAccountantOnly() || isChiefAccountant() ? (
+              <Home />
+            ) : (
+              directorOnly(<Home />)
+            )
+          }
+        />
+        <Route
+          path="subject-list/:id"
+          element={
+            isChiefAccountant() ? (
+              <SubjectList />
+            ) : (
+              directorOnly(<SubjectList />)
+            )
+          }
+        />
+        <Route
+          path="school-list/:employeeId"
+          element={
+            isChiefAccountant() ? <SchoolList /> : directorOnly(<SchoolList />)
+          }
+        />
+        <Route
+          path="statistics/:employeeId"
+          element={
+            isChiefAccountant() ? (
+              <PolicyStatsPage />
+            ) : (
+              directorOnly(<PolicyStatsPage />)
+            )
+          }
+        />
+        <Route path="phong-ban" element={directorOnly(<Department />)} />
+        <Route path="region/:employeeId" element={directorOnly(<Region />)} />
+        <Route
+          path="nhan-vien"
+          element={
+            isChiefAccountant() ? (
+              <EmployeeList />
+            ) : (
+              directorOnly(<EmployeeList />)
+            )
+          }
+        />
+        <Route
+          path="employee-management"
+          element={directorOnly(<EmployeeManagement />)}
+        />
+        <Route
+          path="nhan-vien/profile/:userId"
+          element={directorOnly(<Profile />)}
+        />
+        <Route
+          path="daily-report/:employeeId"
+          element={directorOnly(<DailyReportPage />)}
+        />
+        <Route
+          path="suggest/:employeeId"
+          element={<Navigate to="/director/expense-requests" replace />}
+        />
+        <Route
+          path="suggest-review/:suggestId"
+          element={<Navigate to="/director/expense-requests" replace />}
+        />
+        <Route
+          path="policy-list/:subject"
+          element={
+            isChiefAccountant() ? <PolicyList /> : directorOnly(<PolicyList />)
+          }
+        />
+        <Route
+          path="policy-history-list/:policyId"
+          element={
+            isChiefAccountant() ? (
+              <PolicyHistoryPage audience="director" />
+            ) : (
+              directorOnly(<PolicyHistoryPage audience="director" />)
+            )
+          }
+        />
+        <Route
+          path="policy/:id"
+          element={
+            isChiefAccountant() ? <PolicyGD /> : directorOnly(<PolicyGD />)
+          }
+        />
+        <Route
+          path="expense-management"
+          element={
+            <AccountantGuard>
+              <RealExpense />
+            </AccountantGuard>
+          }
+        />
+        <Route
+          path="real-expense/:schoolId"
+          element={
+            <AccountantGuard>
+              <RealExpenseDetail />
+            </AccountantGuard>
+          }
+        />
+        <Route
+          path="real-expense-detail/:schoolExpenseId"
+          element={
+            <AccountantGuard>
+              <RealExpenseDetail />
+            </AccountantGuard>
+          }
+        />
+        {/* Đề xuất chi (director / kế toán công nợ / thủ quỹ / sales admin) */}
+        <Route
+          path="expense-requests"
+          element={expenseAccess(<ExpenseRequestList />)}
+        />
+        <Route
+          path="expense-requests/:id"
+          element={expenseAccess(<ExpenseRequestDetail />)}
+        />
+        <Route path="expense-tasks" element={expenseAccess(<ExpenseTasks />)} />
+        {/* Quản lý kho thiết bị: kỹ thuật quản nhập/xuất/tồn; giám đốc + sales admin xem/duyệt được cùng module. */}
+        <Route path="warehouse" element={expenseAccess(<WarehousePage />)} />
+        {/* Backend tự giới hạn phạm vi: BGĐ/Nhân sự/KTT xem tất cả, role khác chỉ xem chính mình. */}
+        <Route path="payrolls" element={<PayrollPage />} />
+        <Route
+          path="recruitment"
+          element={
+            <RecruitmentGuard>
+              <RecruitmentPage />
+            </RecruitmentGuard>
+          }
+        />
+        <Route
+          path="expense-notifications"
+          element={expenseAccess(<ExpenseNotifications />)}
+        />
+        <Route
+          path="expense-reminder-settings"
+          element={
+            isChiefAccountant() ? (
+              <Navigate to={EXPENSE_HOME} replace />
+            ) : (
+              expenseAccess(<ReminderSettings />)
+            )
+          }
+        />
 
-      <Route path="*" element={<DirectorFallback />} />
-    </Routes>
+        <Route path="*" element={<DirectorFallback />} />
+      </Routes>
     </DirectorBrandShell>
   );
 }

@@ -104,6 +104,7 @@ export default function SchoolList() {
         startDate: "",
         contractNumber: "",
         taxCode: "",
+        budgetCode: "",
         phone: "",
         latitude: "",
         longitude: "",
@@ -126,6 +127,12 @@ export default function SchoolList() {
         }
         if (form.taxCode && !/^[0-9]{10,13}$/.test(form.taxCode)) {
             newErrors.taxCode = "MST phải từ 10-13 số";
+        }
+        // Mã đơn vị quan hệ ngân sách — in trên hóa đơn điện tử.
+        if (!form.budgetCode.trim()) {
+            newErrors.budgetCode = "Vui lòng nhập mã ĐVQHNS";
+        } else if (!/^[0-9]{7}$/.test(form.budgetCode.trim())) {
+            newErrors.budgetCode = "Mã ĐVQHNS gồm 7 chữ số";
         }
 
         if (form.scale && isNaN(Number(form.scale))) {
@@ -268,6 +275,7 @@ export default function SchoolList() {
         setForm({
             ...rest,
             startDate: formatDisplayDate(rest.startDate),
+            budgetCode: rest.budgetCode ?? "",
             // BE trả số / null → form luôn giữ chuỗi.
             latitude: coords ? formatCoord(coords.latitude) : "",
             longitude: coords ? formatCoord(coords.longitude) : "",
@@ -317,6 +325,7 @@ export default function SchoolList() {
             startDate: "",
             contractNumber: "",
             taxCode: "",
+            budgetCode: "",
             phone: "",
             latitude: "",
             longitude: "",
@@ -347,6 +356,7 @@ export default function SchoolList() {
             scale: Number(form.scale),
             classCount: Number(form.classCount),
             startDate: formatDate(form.startDate),
+            budgetCode: form.budgetCode.trim(),
             employeeId: getEmployeeId(),
             wardId: ward.id,
             // Vị trí check-in: gửi số, xoá vị trí thì gửi null.
@@ -487,6 +497,11 @@ export default function SchoolList() {
                                 <span className="text-gray-500 dark:text-gray-400">MST</span>
                                 <span className="text-gray-800 dark:text-gray-200">{item.taxCode}</span>
                             </div>
+
+                            <div className="flex justify-between">
+                                <span className="text-gray-500 dark:text-gray-400">Mã ĐVQHNS</span>
+                                <span className="text-gray-800 dark:text-gray-200">{item.budgetCode}</span>
+                            </div>
                         </div>
 
                         <div className="flex gap-2 pt-2" onClick={(e) => e.stopPropagation()} >
@@ -543,6 +558,14 @@ export default function SchoolList() {
                                 error={errors.classCount}
                             />
                             <FormField label="MST" value={form.taxCode} onChange={(v) => handleChange("taxCode", v)} error={errors.taxCode} />
+                            <FormField
+                                label="Mã ĐV QH ngân sách"
+                                value={form.budgetCode}
+                                onChange={(v) => handleChange("budgetCode", v)}
+                                error={errors.budgetCode}
+                                placeholder="7 chữ số"
+                                inputMode="numeric"
+                            />
                             <FormField label="SĐT trường" value={form.phone} onChange={(v) => handleChange("phone", v)} error={errors.phone} />
 
                             {/* VỊ TRÍ CHECK-IN */}

@@ -1,4 +1,12 @@
+import { useState } from "react";
+import { Loader2, Send } from "lucide-react";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
+import { invoiceCashAccountGroups } from "../../RealExpenseDetail/utils/invoiceCashAccounts";
+import type {
+  RevenueEInvoice,
+  RevenueEInvoiceLine,
+} from "@/service/schoolExpense";
+import { calculateRevenueQuantity } from "@/utils/revenueAmount";
 
 type Props = {
   inputRows: InputExpenseRow[];
@@ -10,7 +18,24 @@ type Props = {
     field: keyof InputExpenseRow,
     value: any,
   ) => void;
+  /** Hóa đơn điện tử (nháp Viettel) của môn — mỗi hóa đơn gộp nhiều dòng. */
+  einvoices?: RevenueEInvoice[];
+  /**
+   * "Đẩy hóa đơn": lưu rồi gộp các dòng "Xuất HĐ Cty" chưa có hóa đơn thành 1
+   * hóa đơn nháp Viettel. Không truyền thì ẩn nút.
+   */
+  onExportInvoices?: () => void;
+  exportingInvoices?: boolean;
+  /** Đang lưu/tải dữ liệu — tạm khóa nút. */
+  loading?: boolean;
+  /** KTT "Bỏ liên kết nháp" (đã xóa nháp trên portal Viettel). Không truyền thì ẩn. */
+  onUnlinkEInvoice?: (einvoice: RevenueEInvoice) => void;
+  /** Hóa đơn đang được bỏ liên kết. */
+  unlinkingEInvoiceId?: number | null;
 };
+
+const invoiceTypeOf = (row: InputExpenseRow) =>
+  row.invoiceType || (row.invoiced ? "company" : "");
 
 export const invoiceOptions: {
   label: string;
@@ -68,43 +93,237 @@ const companyPaymentOf = (
 
 const formatVND = (value: number) => value.toLocaleString("vi-VN");
 
+const formatDateTime = (value: string) =>
+  new Date(value).toLocaleString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+/** Hóa đơn chứa dòng (theo rowIndex) — ưu tiên nháp đã tạo hơn lần đẩy lỗi. */
+const einvoiceLinesByRow = (einvoices: RevenueEInvoice[]) => {
+  const byRow = new Map<
+    number,
+    { einvoice: RevenueEInvoice; line: RevenueEInvoiceLine }
+  >();
+  for (const einvoice of einvoices) {
+    // BE bản cũ (mỗi dòng 1 hóa đơn) không trả `lines` — bỏ qua thay vì làm sập trang.
+    for (const line of einvoice.lines ?? []) {
+      const current = byRow.get(line.rowIndex);
+      if (!current || current.einvoice.status !== "DRAFT_CREATED") {
+        byRow.set(line.rowIndex, { einvoice, line });
+      }
+    }
+  }
+  return byRow;
+};
+
+/** Trạng thái hóa đơn nháp Viettel của 1 dòng "Xuất HĐ Cty". */
+function EInvoiceStatus({
+  einvoice,
+  line,
+  currentAmount,
+  onUnlink,
+  unlinking = false,
+}: {
+  einvoice: RevenueEInvoice;
+  line: RevenueEInvoiceLine;
+  /** Thành tiền hiện tại của dòng — so với số đã gửi Viettel. */
+  currentAmount: number;
+  /** Chỉ truyền ở dòng đầu của hóa đơn — mỗi hóa đơn 1 nút. */
+  onUnlink?: () => void;
+  unlinking?: boolean;
+}) {
+  if (einvoice.status === "DRAFT_CREATED") {
+    const changed = Math.round(currentAmount) !== Number(line.amount);
+    return (
+      <div className="rounded-lg bg-emerald-50 px-2 py-1 text-xs text-emerald-700">
+        <div className="font-bold">✓ Đã tạo nháp HĐĐT (Viettel)</div>
+        <div>
+          {formatVND(Number(line.amount))}đ
+          {(einvoice.lines?.length ?? 0) > 1
+            ? ` · HĐ gộp ${einvoice.lines.length} dòng`
+            : ""}
+          {einvoice.draftedAt ? ` · ${formatDateTime(einvoice.draftedAt)}` : ""}
+        </div>
+        {changed && (
+          <div className="mt-1 whitespace-normal font-semibold text-amber-700">
+            ⚠ Thành tiền đã đổi so với nháp — sửa nháp trên portal Viettel
+          </div>
+        )}
+        {onUnlink && (
+          <button
+            type="button"
+            onClick={onUnlink}
+            disabled={unlinking}
+            title="Dùng khi đã xóa hóa đơn nháp này trên portal Viettel"
+            className="mt-1 inline-flex items-center gap-1 rounded-md border border-red-200 bg-white px-2 py-0.5 font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60"
+          >
+            {unlinking && <Loader2 size={12} className="animate-spin" />}
+            Bỏ liên kết nháp
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="rounded-lg bg-red-50 px-2 py-1 text-xs text-red-700 whitespace-normal"
+      title={einvoice.errorCode ?? undefined}
+    >
+      <div className="font-bold">✗ Chưa xuất được HĐĐT</div>
+      <div>{einvoice.errorMessage}</div>
+    </div>
+  );
+}
+
 export default function InvoiceTable({
   inputRows,
   revenueRows = [],
   subjects,
   updateInputRow,
+  einvoices = [],
+  onExportInvoices,
+  exportingInvoices = false,
+  loading = false,
+  onUnlinkEInvoice,
+  unlinkingEInvoiceId = null,
 }: Props) {
+  const [confirmExport, setConfirmExport] = useState(false);
   const policyData = subjects?.policies?.[0]?.data || {};
+  const einvoiceByRow = einvoiceLinesByRow(einvoices);
 
-  const totalCompanyPayment = inputRows.reduce((sum, row, idx) => {
-    const revenueUnitPrice = Number(row.unitPrice || 0);
-    const companyUnitPayment = companyPaymentOf(
-      revenueUnitPrice,
-      revenueRows[idx],
-      policyData,
-    );
-    return sum + Number(row.studentCount || 0) * companyUnitPayment;
-  }, 0);
+  const rowAmountOf = (row: InputExpenseRow, idx: number) =>
+    calculateRevenueQuantity(row) *
+    companyPaymentOf(Number(row.unitPrice || 0), revenueRows[idx], policyData);
+
+  const totalCompanyPayment = inputRows.reduce(
+    (sum, row, idx) => sum + rowAmountOf(row, idx),
+    0,
+  );
+
+  // Dòng "Xuất HĐ Cty" chưa nằm trong nháp nào — sẽ lên chung 1 hóa đơn khi đẩy.
+  const pendingRows = inputRows.filter(
+    (row, idx) =>
+      invoiceTypeOf(row) === "company" &&
+      rowAmountOf(row, idx) > 0 &&
+      einvoiceByRow.get(idx)?.einvoice.status !== "DRAFT_CREATED",
+  ).length;
+  const hasCompanyRows = inputRows.some(
+    (row) => invoiceTypeOf(row) === "company",
+  );
+
+  /**
+   * Các dòng "Xuất HĐ Cty" lên chung 1 hóa đơn → nhập Số HĐ / Ngày xuất ở dòng
+   * trên thì điền luôn các dòng dưới đang trống hoặc đang giống dòng trên
+   * (dòng đã nhập số khác, hoặc thuộc hóa đơn nháp khác, thì giữ nguyên).
+   */
+  const updateSharedInvoiceField = (
+    idx: number,
+    field: "invoiceNumber" | "invoiceDate",
+    value: string,
+  ) => {
+    const previous = inputRows[idx][field] || "";
+    updateInputRow(idx, field, value);
+    if (invoiceTypeOf(inputRows[idx]) !== "company") return;
+
+    const sourceInvoice = einvoiceByRow.get(idx)?.einvoice;
+    inputRows.forEach((row, i) => {
+      if (i <= idx || row.invoiceLocked) return;
+      if (invoiceTypeOf(row) !== "company") return;
+      const targetInvoice = einvoiceByRow.get(i)?.einvoice;
+      if (
+        sourceInvoice &&
+        targetInvoice &&
+        sourceInvoice.id !== targetInvoice.id
+      ) {
+        return;
+      }
+      const current = row[field] || "";
+      if (current === "" || current === previous) {
+        updateInputRow(i, field, value);
+      }
+    });
+  };
 
   return (
     <div className="rounded-2xl border border-amber-200 overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white">
         <div>
           <h3 className="font-bold text-lg">🧾 Hóa Đơn</h3>
-          <p className="text-sm text-amber-50">
-            Xuất hóa đơn cho từng dòng doanh thu
-          </p>
         </div>
-        <div className="text-right">
-          <div className="text-xs text-amber-50">Tổng thanh toán công ty</div>
-          <div className="font-bold text-2xl">
-            {formatVND(totalCompanyPayment)}đ
+        <div className="flex flex-wrap items-center justify-end gap-4">
+          {onExportInvoices && !confirmExport && (
+            <button
+              type="button"
+              onClick={() => setConfirmExport(true)}
+              disabled={exportingInvoices || loading || pendingRows === 0}
+              title={
+                pendingRows > 0
+                  ? undefined
+                  : hasCompanyRows
+                    ? 'Các dòng "Xuất HĐ Cty" đều đã có hóa đơn nháp'
+                    : 'Chưa có dòng "Xuất HĐ Cty" để đẩy hóa đơn'
+              }
+              className="h-11 px-4 rounded-xl bg-white text-orange-600 font-bold flex items-center gap-2 shadow-sm hover:bg-orange-50 transition disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {exportingInvoices ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <Send size={18} />
+              )}
+              <span>
+                {exportingInvoices ? "Đang đẩy hóa đơn..." : "Đẩy hóa đơn"}
+              </span>
+              {pendingRows > 0 && !exportingInvoices && (
+                <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs">
+                  {pendingRows} dòng
+                </span>
+              )}
+            </button>
+          )}
+
+          {onExportInvoices && confirmExport && (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl bg-white px-3 py-2 text-slate-700 shadow-sm">
+              <span className="text-sm">
+                Lưu và gộp {pendingRows} dòng "Xuất HĐ Cty" thành 1 hóa đơn
+                nháp trên Viettel (bên mua là trường).
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmExport(false);
+                  onExportInvoices();
+                }}
+                disabled={exportingInvoices || loading}
+                className="h-9 px-4 rounded-lg bg-orange-600 text-white text-sm font-bold hover:bg-orange-700 disabled:opacity-60"
+              >
+                Xác nhận đẩy
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmExport(false)}
+                className="h-9 px-3 rounded-lg border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Huỷ
+              </button>
+            </div>
+          )}
+
+          <div className="text-right">
+            <div className="text-xs text-amber-50">Tổng thanh toán công ty</div>
+            <div className="font-bold text-2xl">
+              {formatVND(totalCompanyPayment)}đ
+            </div>
           </div>
         </div>
       </div>
 
       <div className="overflow-auto">
-        <table className="w-full min-w-[1550px] border-collapse">
+        <table className="w-full min-w-[1950px] border-collapse">
           <thead>
             <tr className="bg-slate-900 text-white">
               <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm w-16">
@@ -112,9 +331,6 @@ export default function InvoiceTable({
               </th>
               <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm text-left">
                 📄 Nội dung doanh thu
-              </th>
-              <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
-                📄 HĐ
               </th>
               <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
                 📏 ĐVT
@@ -138,14 +354,26 @@ export default function InvoiceTable({
                 🏢 Tổng thanh toán công ty
               </th>
               <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
+                📅 Ngày chi
+              </th>
+              <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
+                🏦 Khoản thu/chi
+              </th>
+              <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
+                📄 HĐ
+              </th>
+              <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
                 📝 Ghi chú
               </th>
             </tr>
           </thead>
           <tbody>
             {inputRows.map((row, idx) => {
-              const invoiceType =
-                row.invoiceType || (row.invoiced ? "company" : "");
+              const invoiceType = invoiceTypeOf(row);
+              const rowEInvoice = einvoiceByRow.get(idx);
+              // Đã bấm "Xuất hóa đơn" → khoá thông tin hóa đơn (Ngày chi,
+              // Khoản thu/chi và Ghi chú vẫn sửa được).
+              const locked = !!row.invoiceLocked;
               // Đơn giá trên doanh thu - Đơn giá Chi trường của cùng dòng
               const revenueUnitPrice = Number(row.unitPrice || 0);
               const companyPayment = companyPaymentOf(
@@ -153,6 +381,7 @@ export default function InvoiceTable({
                 revenueRows[idx],
                 policyData,
               );
+              const invoiceQuantity = calculateRevenueQuantity(row);
 
               return (
                 <tr key={idx} className="hover:bg-slate-50 transition">
@@ -168,64 +397,22 @@ export default function InvoiceTable({
                   </td>
 
                   <td className="border p-2">
-                    <div className="space-y-2">
-                      <select
-                        value={invoiceType}
-                        onChange={(e) => {
-                          const value = e.target
-                            .value as InputExpenseRow["invoiceType"];
-
-                          updateInputRow(idx, "invoiceType", value);
-                          updateInputRow(idx, "invoiced", isInvoiceIssued(value));
-
-                          if (value !== "other") {
-                            updateInputRow(idx, "invoiceOther", "");
-                          }
-                          if (value !== "company") {
-                            updateInputRow(idx, "invoiceNumber", "");
-                          }
-                        }}
-                        className="w-full h-14 border rounded-lg px-2 text-sm bg-white"
-                      >
-                        {invoiceOptions.map((option) => (
-                          <option
-                            key={option.value || "empty"}
-                            value={option.value}
-                          >
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-
-                      {invoiceType === "other" && (
-                        <input
-                          value={row.invoiceOther || ""}
-                          onChange={(e) =>
-                            updateInputRow(idx, "invoiceOther", e.target.value)
-                          }
-                          placeholder="Nhập HĐ khác"
-                          className="w-full h-11 border rounded-lg px-2 text-sm"
-                        />
-                      )}
-                    </div>
-                  </td>
-
-                  <td className="border p-2">
                     <input
                       value={row.invoiceUnit || ""}
                       maxLength={50}
+                      disabled={locked}
                       onChange={(e) =>
                         updateInputRow(idx, "invoiceUnit", e.target.value)
                       }
                       placeholder="ĐVT"
-                      className="w-full h-14 border rounded-lg px-2 text-sm text-center"
+                      className="w-full h-14 border rounded-lg px-2 text-sm text-center disabled:bg-slate-100 disabled:text-slate-400"
                     />
                   </td>
 
                   <td className="border p-2 bg-slate-50">
                     <input
                       readOnly
-                      value={Number(row.studentCount) || 0}
+                      value={invoiceQuantity}
                       className="w-full h-14 text-center border rounded-lg text-sm font-semibold"
                     />
                   </td>
@@ -241,9 +428,7 @@ export default function InvoiceTable({
                   <td className="border p-2 bg-emerald-50">
                     <input
                       readOnly
-                      value={formatVND(
-                        Number(row.studentCount || 0) * companyPayment,
-                      )}
+                      value={formatVND(invoiceQuantity * companyPayment)}
                       className="w-full h-14 text-center border rounded-lg text-sm font-bold text-emerald-700"
                     />
                   </td>
@@ -253,11 +438,16 @@ export default function InvoiceTable({
                       <input
                         value={row.invoiceNumber || ""}
                         maxLength={100}
+                        disabled={locked}
                         onChange={(e) =>
-                          updateInputRow(idx, "invoiceNumber", e.target.value)
+                          updateSharedInvoiceField(
+                            idx,
+                            "invoiceNumber",
+                            e.target.value,
+                          )
                         }
                         placeholder="Nhập số hóa đơn"
-                        className="w-full h-14 border rounded-lg px-3 text-sm font-semibold"
+                        className="w-full h-14 border rounded-lg px-3 text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-400"
                       />
                     ) : (
                       <div className="h-14 flex items-center justify-center text-slate-300">
@@ -270,21 +460,118 @@ export default function InvoiceTable({
                     <input
                       type="date"
                       value={row.invoiceDate}
+                      disabled={locked}
                       onChange={(e) =>
-                        updateInputRow(idx, "invoiceDate", e.target.value)
+                        updateSharedInvoiceField(
+                          idx,
+                          "invoiceDate",
+                          e.target.value,
+                        )
                       }
-                      className="w-full h-14 border rounded-lg px-2 text-sm"
+                      className="w-full h-14 border rounded-lg px-2 text-sm disabled:bg-slate-100 disabled:text-slate-400"
                     />
                   </td>
 
                   <td className="border p-2 bg-violet-50">
                     <input
                       readOnly
-                      value={formatVND(
-                        Number(row.studentCount || 0) * companyPayment,
-                      )}
+                      value={formatVND(invoiceQuantity * companyPayment)}
                       className="w-full h-14 text-center font-bold text-violet-700 border rounded-lg text-sm"
                     />
+                  </td>
+
+                  <td className="border p-2">
+                    <input
+                      type="date"
+                      value={row.invoicePaymentDate || ""}
+                      onChange={(e) =>
+                        updateInputRow(idx, "invoicePaymentDate", e.target.value)
+                      }
+                      className="w-full h-14 border rounded-lg px-2 text-sm"
+                    />
+                  </td>
+
+                  <td className="border p-2">
+                    <select
+                      value={row.invoiceCashAccount || ""}
+                      onChange={(e) =>
+                        updateInputRow(idx, "invoiceCashAccount", e.target.value)
+                      }
+                      className="w-full min-w-[230px] h-14 border rounded-lg px-2 text-sm bg-white"
+                    >
+                      <option value="">Chọn</option>
+                      {invoiceCashAccountGroups.map((group) => (
+                        <optgroup key={group.label} label={group.label}>
+                          {group.accounts.map((account) => (
+                            <option key={account.code} value={account.code}>
+                              {account.code} - {account.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                  </td>
+
+                  <td className="border p-2">
+                    <div className="space-y-2">
+                      <select
+                        value={invoiceType}
+                        disabled={locked}
+                        onChange={(e) => {
+                          const value = e.target
+                            .value as InputExpenseRow["invoiceType"];
+
+                          updateInputRow(idx, "invoiceType", value);
+                          updateInputRow(idx, "invoiced", isInvoiceIssued(value));
+
+                          if (value !== "other") {
+                            updateInputRow(idx, "invoiceOther", "");
+                          }
+                          if (value !== "company") {
+                            updateInputRow(idx, "invoiceNumber", "");
+                          }
+                        }}
+                        className="w-full h-14 border rounded-lg px-2 text-sm bg-white disabled:bg-slate-100 disabled:text-slate-400"
+                      >
+                        {invoiceOptions.map((option) => (
+                          <option
+                            key={option.value || "empty"}
+                            value={option.value}
+                          >
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+
+                      {invoiceType === "company" && rowEInvoice && (
+                        <EInvoiceStatus
+                          einvoice={rowEInvoice.einvoice}
+                          line={rowEInvoice.line}
+                          currentAmount={invoiceQuantity * companyPayment}
+                          onUnlink={
+                            onUnlinkEInvoice &&
+                            rowEInvoice.einvoice.lines[0]?.rowIndex === idx
+                              ? () => onUnlinkEInvoice(rowEInvoice.einvoice)
+                              : undefined
+                          }
+                          unlinking={
+                            unlinkingEInvoiceId === rowEInvoice.einvoice.id
+                          }
+                        />
+                      )}
+
+                      {invoiceType === "other" && (
+                        <input
+                          value={row.invoiceOther || ""}
+                          disabled={locked}
+                          onChange={(e) =>
+                            updateInputRow(idx, "invoiceOther", e.target.value)
+                          }
+                          placeholder="Nhập HĐ khác"
+                          className="w-full h-11 border rounded-lg px-2 text-sm disabled:bg-slate-100 disabled:text-slate-400"
+                        />
+                      )}
+                    </div>
                   </td>
 
                   <td className="border p-2">

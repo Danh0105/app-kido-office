@@ -21,6 +21,10 @@ export type InputExpenseRow = {
     invoiceUnit: string;
     /** Ghi chú trên hóa đơn */
     invoiceNote: string;
+    /** Ngày chi (bảng Hóa Đơn) */
+    invoicePaymentDate: string;
+    /** Khoản thu/chi — số hiệu tài khoản trong danh mục Nguồn thu chi */
+    invoiceCashAccount: string;
 
     paidAmount: number;
     paymentMethod: "" | "cash" | "bank_transfer";

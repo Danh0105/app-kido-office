@@ -2,6 +2,7 @@ import {
   DAY_OF_WEEK_OPTIONS,
   type CalendarSession,
   type SchoolClass,
+  type Teacher,
   type TeachingSchedule,
   type TeachingSession,
 } from "@/types/teaching";
@@ -62,7 +63,12 @@ export const canApproveTeacherAccount = () => hasRole("nhansu");
 export const canViewActivityLog = () =>
   hasRole("nhansu", "director", "director_la", "troly_gd");
 
-const RATE_FIELDS = ["defaultRatePerPeriod", "ratePerPeriod", "otherCosts"] as const;
+const RATE_FIELDS = [
+  "defaultRatePerPeriod",
+  "rateEffectiveFrom",
+  "ratePerPeriod",
+  "otherCosts",
+] as const;
 
 /** Bỏ field tiền khỏi payload khi user không có quyền khai. */
 export function stripRateFields<T extends object>(payload: T): T {
@@ -858,4 +864,52 @@ export function inLocationScope(
   if (!scope) return true;
   if (Number(scope) === MAIN_SCHOOL_LOCATION_ID) return schoolLocationId == null;
   return String(schoolLocationId ?? "") === scope;
+}
+
+// ================= NHÃN GIÁO VIÊN =================
+
+/**
+ * Tên giáo viên kèm SĐT ("Nguyễn Văn A - 0901234567") để phân biệt người trùng
+ * tên trên thời khoá biểu / chấm công. Không có SĐT thì chỉ hiện tên.
+ */
+export function formatTeacherLabel(
+  name: string | null | undefined,
+  phone?: string | null,
+): string {
+  const label = (name ?? "").trim();
+  const tel = (phone ?? "").trim();
+  if (!tel) return label;
+  return label ? `${label} - ${tel}` : tel;
+}
+
+type TeacherContact = Pick<Teacher, "id" | "name" | "phone">;
+
+const teacherIndexCache = new WeakMap<readonly TeacherContact[], Map<string, TeacherContact>>();
+
+/** Tra giáo viên theo id trong danh sách `/teachers` (mỗi mảng chỉ đánh chỉ mục một lần). */
+export function findTeacher(
+  teachers: readonly TeacherContact[] | undefined,
+  id: number | string | null | undefined,
+): TeacherContact | undefined {
+  if (!teachers || id == null || id === "") return undefined;
+  let index = teacherIndexCache.get(teachers);
+  if (!index) {
+    index = new Map(teachers.map((teacher) => [String(teacher.id), teacher]));
+    teacherIndexCache.set(teachers, index);
+  }
+  return index.get(String(id));
+}
+
+/**
+ * Nhãn "Tên - SĐT" theo id giáo viên. `fallbackName` (tên BE trả kèm lịch/buổi)
+ * được ưu tiên giữ nguyên; SĐT lấy từ danh bạ `/teachers` — role không xem được
+ * danh bạ (kinh doanh) có danh sách rỗng nên chỉ thấy tên như trước.
+ */
+export function teacherLabel(
+  teachers: readonly TeacherContact[] | undefined,
+  id: number | string | null | undefined,
+  fallbackName?: string | null,
+): string {
+  const teacher = findTeacher(teachers, id);
+  return formatTeacherLabel(fallbackName || teacher?.name, teacher?.phone);
 }

@@ -596,8 +596,11 @@ export default function AllPoliciesTab({ employees }: Props) {
             const createdAt = getCreatedAt(item);
             const updatedAt = getUpdatedAt(item);
 
-            // Backend chỉ cho upload hợp đồng khi chính sách đã DIRECTOR_APPROVED.
-            const approved = getStatus(item) === PolicyStatus.DIRECTOR_APPROVED;
+            const canUploadForStatus = [
+              PolicyStatus.PENDING,
+              PolicyStatus.SALE_ADMIN_APPROVED,
+              PolicyStatus.DIRECTOR_APPROVED,
+            ].includes(getStatus(item) as PolicyStatus);
             // Ưu tiên danh sách nhiều file; bản ghi cũ chưa có thì dựng từ cột đơn.
             const contractFiles: PolicyContractFile[] =
               item.contractFiles?.length
@@ -641,7 +644,7 @@ export default function AllPoliciesTab({ employees }: Props) {
                   <p>Ngày gửi duyệt: <span className="font-medium">{updatedAt ? new Date(updatedAt).toLocaleDateString("vi-VN") : "-"}</span></p>
                 </div>
                 </button>
-                {(contractUrl || (canUploadContract && approved)) && (
+                {(contractUrl || (canUploadContract && canUploadForStatus)) && (
                   <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3">
                     <button
                       type="button"
@@ -649,7 +652,7 @@ export default function AllPoliciesTab({ employees }: Props) {
                         setFilesModal({
                           policyId,
                           files: contractFiles,
-                          canUpload: canUploadContract && approved,
+                          canUpload: canUploadContract && canUploadForStatus,
                         })
                       }
                       className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-blue-200 px-2.5 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-50"
@@ -658,11 +661,6 @@ export default function AllPoliciesTab({ employees }: Props) {
                       {contractFiles.length > 0 ? `Upload file (${contractFiles.length})` : "Upload file"}
                     </button>
                   </div>
-                )}
-                {!approved && canUploadContract && !contractUrl && (
-                  <p className="mt-3 border-t border-gray-100 pt-3 text-xs text-gray-400">
-                    Chỉ được upload hợp đồng khi chính sách đã được Giám đốc duyệt
-                  </p>
                 )}
               </div>
             );

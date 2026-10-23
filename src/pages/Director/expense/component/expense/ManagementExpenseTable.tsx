@@ -9,6 +9,7 @@ import {
   getOtherCostTax,
   getPolicyOtherCosts,
 } from "../../utils/policyOtherCosts";
+import { calculateRevenueQuantity } from "@/utils/revenueAmount";
 import ManagementExpenseRow from "./ManagementExpenseRow";
 
 type Props = {
@@ -22,12 +23,16 @@ type Props = {
   ) => void;
   updateRow: (index: number, field: any, value: any) => void;
   removeRow: (index: number) => void;
+  /** false → ẩn cột thao tác (xoá dòng), dùng cho sales admin. */
+  showActions?: boolean;
   /** Đã được sales admin xác nhận (khoá) chưa. */
   isConfirmed?: boolean;
   /** true khi bảng bị khoá với người xem hiện tại (đã confirm và không phải kế toán trưởng). */
   readOnly?: boolean;
   /** Có quyền bấm nút "Xác nhận" (sales admin) không. */
   canConfirm?: boolean;
+  /** Đã "Xác nhận đúng BBCS" → khoá phần chính sách, kể cả với KTT. */
+  policyLocked?: boolean;
   confirming?: boolean;
   onConfirm?: () => void;
   /** Tên sales admin đã xác nhận. */
@@ -43,9 +48,11 @@ export default function ManagementExpenseTable({
   updateInputRow,
   updateRow,
   removeRow,
+  showActions = true,
   isConfirmed = false,
   readOnly = false,
   canConfirm = false,
+  policyLocked = false,
   confirming = false,
   onConfirm,
   confirmedByName,
@@ -78,23 +85,23 @@ export default function ManagementExpenseTable({
     "140px",
     "160px",
     "200px",
-    "70px",
+    ...(showActions ? ["100px"] : []),
   ].join(" ");
-  const tableMinWidth = 2470 + otherCosts.length * 450;
+  const tableMinWidth =
+    (showActions ? 2500 : 2400) + otherCosts.length * 450;
 
   const totals = rows.reduce(
     (sum, row, index) => {
       const inputData = inputRows[index] || fallbackInputData;
-      const students = Number(inputData.studentCount || 0);
-      const months = Number(inputData.monthsCount || 0);
+      const quantity = calculateRevenueQuantity(inputData);
       const ql1UnitPrice = Number(row.ql1UnitPrice ?? ql1);
       const ql2UnitPrice = Number(row.ql2UnitPrice ?? ql2);
       const rowQl1Tax = Number(row.ql1Tax ?? ql1Tax);
       const rowQl2Tax = Number(row.ql2Tax ?? ql2Tax);
       const totalQL1Expense =
-        Math.max(0, ql1UnitPrice - rowQl1Tax) * students * months;
+        Math.max(0, ql1UnitPrice - rowQl1Tax) * quantity;
       const totalQL2Expense =
-        Math.max(0, ql2UnitPrice - rowQl2Tax) * students * months;
+        Math.max(0, ql2UnitPrice - rowQl2Tax) * quantity;
       const otherCostExpenses = otherCosts.map((item, otherCostIndex) => {
         const key = getOtherCostKey(item, otherCostIndex);
         const grossPrice = Number(
@@ -277,7 +284,7 @@ export default function ManagementExpenseTable({
               📝 Ghi chú
             </div>
 
-            <div className="p-3 text-center">⚙️</div>
+            {showActions && <div className="p-3 text-center">⚙️</div>}
           </div>
 
           {/* BODY */}
@@ -293,8 +300,10 @@ export default function ManagementExpenseTable({
                 gridTemplateColumns={gridTemplateColumns}
                 updateInputRow={updateInputRow}
                 removeRow={removeRow}
+                showActions={showActions}
                 updateRow={updateRow}
                 readOnly={readOnly}
+                policyLocked={policyLocked}
               />
             ))}
           </div>
@@ -384,7 +393,7 @@ export default function ManagementExpenseTable({
             <div className={footerCellClass} />
 
             {/* Action */}
-            <div className="min-h-[72px]" />
+            {showActions && <div className="min-h-[72px]" />}
           </div>
         </div>
       </div>
@@ -395,7 +404,7 @@ export default function ManagementExpenseTable({
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
               <Lock size={14} />
-              Đã xác nhận
+              Đã xác nhận đúng BBCS
               {confirmedByName ? ` — ${confirmedByName}` : ""}
             </span>
             <span className="text-sm text-slate-500">
@@ -408,7 +417,8 @@ export default function ManagementExpenseTable({
                     minute: "2-digit",
                   })} — `
                 : ""}
-              Bảng đã khoá, chỉ kế toán trưởng còn sửa được.
+              Bảng đã khoá. Kế toán trưởng chỉ còn sửa được Ngày chi, Đã chi,
+              Người chi, Ghi chú.
             </span>
           </div>
         ) : (
@@ -425,7 +435,7 @@ export default function ManagementExpenseTable({
             className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:opacity-60"
           >
             <ShieldCheck size={16} />
-            {confirming ? "Đang xác nhận…" : "Xác nhận Chi Ngoài"}
+            {confirming ? "Đang xác nhận…" : "Xác nhận đúng BBCS"}
           </button>
         )}
       </div>

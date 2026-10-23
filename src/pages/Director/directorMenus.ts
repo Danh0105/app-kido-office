@@ -6,7 +6,7 @@ import report from "@/pages/Director/static/report.png";
 import statistics from "@/pages/Director/static/statistics.png";
 import suggest from "@/pages/Director/static/suggest.png";
 import team from "@/pages/Director/static/team.png";
-import { ReceiptText, type LucideIcon } from "lucide-react";
+import { ReceiptText, UserRoundSearch, type LucideIcon } from "lucide-react";
 
 export type DirectorMenu = {
   title: string;
@@ -22,6 +22,13 @@ const PAYROLL_MENU: DirectorMenu = {
   lucideIcon: ReceiptText,
   path: "payrolls",
   from: "payroll",
+};
+
+const RECRUITMENT_MENU: DirectorMenu = {
+  title: "Tuyển dụng",
+  lucideIcon: UserRoundSearch,
+  path: "recruitment",
+  from: "recruitment",
 };
 
 const ALL_MENUS = [
@@ -91,9 +98,24 @@ const TECHNICAL_MENUS = [
 ];
 
 const CHIEF_ACCOUNTANT_MENUS = [
-  { title: "Quản lý thu chi", icon: expense, path: "expense-management", from: "expense" },
-  { title: "Thống kê", icon: statistics, path: "nhan-vien", from: "statistics" },
-  { title: "Đề xuất chi", icon: suggest, path: "expense-requests", from: "expense-request" },
+  {
+    title: "Quản lý thu chi",
+    icon: expense,
+    path: "expense-management",
+    from: "expense",
+  },
+  {
+    title: "Thống kê",
+    icon: statistics,
+    path: "nhan-vien",
+    from: "statistics",
+  },
+  {
+    title: "Đề xuất chi",
+    icon: suggest,
+    path: "expense-requests",
+    from: "expense-request",
+  },
   { title: "Chính sách", icon: policy, path: "nhan-vien", from: "policy" },
 ];
 
@@ -128,21 +150,32 @@ export const directorBaseMenus = (): DirectorMenu[] => {
   const menus: DirectorMenu[] = hasRole(...BROAD_ROLES)
     ? ALL_MENUS
     : hasRole("ketoan_truong")
-      ? CHIEF_ACCOUNTANT_MENUS
-      // Chỉ thu gọn menu khi tài khoản **chỉ** là phòng kỹ thuật; người kiêm
-      // thêm giám đốc/kế toán/kinh doanh vẫn phải giữ nguyên menu của vai đó.
-      : isEquipmentOnlyUser()
-        ? TECHNICAL_MENUS
-        : hasRole("accountant", "ketoan_congno", "troly_gd", "thuquy")
-          ? LIMITED_MENUS
-          : hasRole("nhansu", "giaovu", "giaovien_congty", "giaovien_ctv")
-            ? [] // Nhân sự / Giáo vụ / giáo viên chỉ dùng module Giảng dạy
-            : ALL_MENUS;
+    ? CHIEF_ACCOUNTANT_MENUS
+    : // Chỉ thu gọn menu khi tài khoản **chỉ** là phòng kỹ thuật; người kiêm
+    // thêm giám đốc/kế toán/kinh doanh vẫn phải giữ nguyên menu của vai đó.
+    isEquipmentOnlyUser()
+    ? TECHNICAL_MENUS
+    : hasRole("accountant", "ketoan_congno", "troly_gd", "thuquy")
+    ? LIMITED_MENUS
+    : hasRole("nhansu", "giaovu", "giaovien_congty", "giaovien_ctv")
+    ? [] // Nhân sự / Giáo vụ / giáo viên chỉ dùng module Giảng dạy
+    : ALL_MENUS;
   const visibleMenus = menus.filter(
-    (item) => item.from !== "expense" || hasRole(...EXPENSE_ROLES),
+    (item) => item.from !== "expense" || hasRole(...EXPENSE_ROLES)
   );
   // Mọi tài khoản đều được xem phiếu của chính mình; backend tự mở rộng phạm
   // vi cho Nhân sự/KTT/BGĐ. Vì các role không-sales cũng dùng trang /director,
   // mục này được nối vào tất cả biến thể menu tại một chỗ.
-  return [...visibleMenus, PAYROLL_MENU];
+  const canViewRecruitment = hasRole(
+    "nhansu",
+    "director",
+    "director_la",
+    "troly_gd"
+  );
+
+  return [
+    ...visibleMenus,
+    ...(canViewRecruitment ? [RECRUITMENT_MENU] : []),
+    PAYROLL_MENU,
+  ];
 };

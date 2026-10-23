@@ -444,7 +444,8 @@ export type GasAllowanceMissingReason =
   | "NO_TEACHER_LOCATION"
   | "NO_SCHOOL_LOCATION"
   | "NO_MATCHING_TIER"
-  | "INVALID_DISTANCE";
+  | "INVALID_DISTANCE"
+  | "ROUTE_UNAVAILABLE";
 
 /** Việc cần bổ sung để các buổi có phụ cấp, gộp theo đối tượng phải sửa. */
 export interface GasAllowanceMissingReport {
@@ -469,7 +470,7 @@ export interface GasAllowanceMissingReport {
     locationName: string | null;
     /** null = khoảng cách vô lý, toạ độ nhà hoặc trường đang sai. */
     distanceKm: number | null;
-    reason: "NO_MATCHING_TIER" | "INVALID_DISTANCE";
+    reason: "NO_MATCHING_TIER" | "INVALID_DISTANCE" | "ROUTE_UNAVAILABLE";
     sessions: number;
   }[];
 }
@@ -530,6 +531,11 @@ export interface TravelDay {
    * duyệt) — xem lại tháng cũ vẫn xuất phát từ nhà cũ.
    */
   home: TravelPoint | null;
+  /**
+   * Lượt đầu ngày ở trường khu vực TP.HCM → giáo viên công ty tính phụ cấp từ
+   * văn phòng (231 Nguyễn Phúc Chu), `home` khi đó là toạ độ văn phòng.
+   */
+  fromOffice?: boolean;
   totalDistanceKm: number;
   fuelAllowanceAmount: number;
   stops: TravelStop[];
@@ -697,6 +703,12 @@ export type SessionQuery = {
   scheduleId?: number;
   status?: SessionStatus;
   unchecked?: boolean;
+  /** Loại buổi có trạng thái này (Chấm công: ẩn tiết đã chấm "Có dạy"). */
+  excludeStatus?: SessionStatus;
+  /** Tiến độ IN · OUT · BG: đủ (đã check-out + báo giảng) hoặc còn thiếu. */
+  progress?: "COMPLETE" | "INCOMPLETE";
+  /** Chỉ buổi đã dạy mà chưa có đơn giá tiết ("thiếu giá" ở bảng tổng hợp). */
+  missingRate?: boolean;
   fromDate?: string;
   toDate?: string;
   page?: number;
@@ -777,10 +789,22 @@ export type PendingTeacherAccount = {
   message?: string;
 };
 
-export type TeacherSaveResult = Teacher | PendingTeacherAccount;
+/** Kết quả áp đơn giá mới vào các buổi dạy khi sửa đơn giá/tiết của giáo viên. */
+export type TeacherRateRecompute = {
+  /** null = chỉ điền buổi thiếu giá. */
+  fromDate: string | null;
+  /** Buổi thiếu giá (mọi ngày) được điền giá mới. */
+  filledMissing: number;
+  /** Buổi từ ngày áp dụng đổi từ giá cũ sang giá mới. */
+  repriced: number;
+};
+
+export type TeacherSaveResult =
+  | (Teacher & { rateRecompute?: TeacherRateRecompute })
+  | PendingTeacherAccount;
 
 export const isPendingTeacherAccount = (
-  result: TeacherSaveResult,
+  result: TeacherSaveResult
 ): result is PendingTeacherAccount =>
   (result as PendingTeacherAccount)?.requiresApproval === true;
 
@@ -823,6 +847,11 @@ export type TeacherPayload = {
   maxPeriodsPerWeek?: number | null;
   /** Đơn giá mặc định cho các mẫu lịch/buổi dạy tạo về sau. */
   defaultRatePerPeriod?: number | null;
+  /**
+   * Kèm `defaultRatePerPeriod` khi sửa: mọi buổi từ ngày này (kể cả buổi đã có
+   * giá) tính theo giá mới. Bỏ trống = chỉ điền các buổi còn thiếu giá.
+   */
+  rateEffectiveFrom?: string;
   /** null / chuỗi rỗng = xoá. */
   zaloUid?: string | null;
   /** null / chuỗi rỗng = xoá. */
@@ -989,10 +1018,11 @@ export type CheckinPayload = {
   accuracy?: number | null;
 };
 
-/** Tên bài + đánh giá buổi học — bắt buộc ở check-out lẫn nộp bài không GPS. */
+/** Nội dung báo giảng bắt buộc, đúng contract của endpoint `/lesson`. */
 export type LessonContentPayload = {
   lessonName: string;
   lessonEvaluation: string;
+  actualStudentCount: number;
 };
 
 /**
@@ -1004,7 +1034,7 @@ export type CheckoutPayload = CheckinPayload;
 
 /** Nộp nội dung bài dạy không cần GPS — cho tiết giữa/đầu một block nhiều tiết. */
 export type SubmitLessonPayload = LessonContentPayload & {
-  images?: File[];
+  images: File[];
 };
 
 export type DeclineSessionPayload = {
@@ -1118,7 +1148,11 @@ export const ATTENDANCE_OPTIONS: {
 ];
 
 // ⚠️ Không có giá trị 1. Chủ Nhật là 8.
-export const DAY_OF_WEEK_OPTIONS: { value: number; label: string; short: string }[] = [
+export const DAY_OF_WEEK_OPTIONS: {
+  value: number;
+  label: string;
+  short: string;
+}[] = [
   { value: 2, label: "Thứ Hai", short: "T2" },
   { value: 3, label: "Thứ Ba", short: "T3" },
   { value: 4, label: "Thứ Tư", short: "T4" },

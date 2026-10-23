@@ -9,6 +9,7 @@ import {
   type PolicyOtherCost,
 } from "../../utils/policyOtherCosts";
 import { formatDecimal } from "@/utils/decimal";
+import { calculateRevenueQuantity } from "@/utils/revenueAmount";
 import DecimalInput from "@/components/DecimalInput";
 
 type Props = {
@@ -27,8 +28,12 @@ type Props = {
   ) => void;
   updateRow: (index: number, field: string, value: any) => void;
   removeRow: (index: number) => void;
+  /** false → ẩn cột thao tác (xoá dòng), dùng cho sales admin. */
+  showActions?: boolean;
   /** Bảng đã bị khoá (đã xác nhận) và người xem không phải kế toán trưởng. */
   readOnly?: boolean;
+  /** Đã "Xác nhận đúng BBCS" → khoá phần chính sách (Nội dung → Chi ngoài), cột chi vẫn sửa được. */
+  policyLocked?: boolean;
 };
 
 export default function ManagementExpenseRow({
@@ -41,10 +46,16 @@ export default function ManagementExpenseRow({
   updateInputRow,
   updateRow,
   removeRow,
+  showActions = true,
   readOnly = false,
+  policyLocked = false,
 }: Props) {
-  const students = Number(inputData.studentCount || 0);
-  const months = Number(inputData.monthsCount || 0);
+  // Có Số HS thì tính theo HS, không thì theo Số tiết (× Số tháng) — khớp backend.
+  const quantity = calculateRevenueQuantity(inputData);
+  // Nội dung / Số tiết / Số HS / Số tháng dùng chung với Doanh Thu, Chi Trường,
+  // Hóa Đơn — đã xuất hóa đơn thì khoá để các bảng trên không bị đổi số.
+  const sharedLocked = readOnly || policyLocked || !!inputData.invoiceLocked;
+  const policyReadOnly = readOnly || policyLocked;
   const policyQl1 = Number(
     subjects?.policies?.[0]?.data?.ttcs?.[0]?.ql1Percent || 0
   );
@@ -63,10 +74,10 @@ export default function ManagementExpenseRow({
   const rowQl2Tax = Number(row.ql2Tax ?? ql2Tax);
 
   const totalQL1Expense =
-    Math.max(0, ql1UnitPrice - rowQl1Tax) * students * months;
+    Math.max(0, ql1UnitPrice - rowQl1Tax) * quantity;
 
   const totalQL2Expense =
-    Math.max(0, ql2UnitPrice - rowQl2Tax) * students * months;
+    Math.max(0, ql2UnitPrice - rowQl2Tax) * quantity;
 
   const otherCostValues = otherCosts.map((item, otherCostIndex) => {
     const key = getOtherCostKey(item, otherCostIndex);
@@ -121,7 +132,7 @@ export default function ManagementExpenseRow({
         <input
           value={inputData.content || ""}
           maxLength={500}
-          disabled={readOnly}
+          disabled={sharedLocked}
           onChange={(e) =>
             updateInputRow(index, "content", e.target.value.slice(0, 500))
           }
@@ -137,7 +148,7 @@ export default function ManagementExpenseRow({
           min="0"
           step="0.01"
           value={Number(inputData.totalPeriods) || ""}
-          disabled={readOnly}
+          disabled={sharedLocked}
           onChange={(e) =>
             updateInputRow(index, "totalPeriods", Number(e.target.value || 0))
           }
@@ -152,7 +163,7 @@ export default function ManagementExpenseRow({
           min="0"
           step="0.01"
           value={Number(inputData.studentCount) || ""}
-          disabled={readOnly}
+          disabled={sharedLocked}
           onChange={(e) =>
             updateInputRow(index, "studentCount", Number(e.target.value || 0))
           }
@@ -167,7 +178,7 @@ export default function ManagementExpenseRow({
           min="0"
           step="0.01"
           value={Number(inputData.monthsCount) || ""}
-          disabled={readOnly}
+          disabled={sharedLocked}
           onChange={(e) =>
             updateInputRow(index, "monthsCount", Number(e.target.value || 0))
           }
@@ -178,7 +189,7 @@ export default function ManagementExpenseRow({
       <div className="p-2">
         <DecimalInput
           value={ql1UnitPrice}
-          disabled={readOnly}
+          disabled={policyReadOnly}
           onValueChange={(value) => updateRow(index, "ql1UnitPrice", value)}
           allowDecimal={false}
           className={`${metricInputClass} text-emerald-700`}
@@ -188,7 +199,7 @@ export default function ManagementExpenseRow({
       <div className="p-2">
         <DecimalInput
           value={rowQl1Tax}
-          disabled={readOnly}
+          disabled={policyReadOnly}
           onValueChange={(value) => updateRow(index, "ql1Tax", value)}
           allowDecimal={false}
           className={`${metricInputClass} text-rose-700`}
@@ -217,7 +228,7 @@ export default function ManagementExpenseRow({
       <div className="p-2">
         <DecimalInput
           value={ql2UnitPrice}
-          disabled={readOnly}
+          disabled={policyReadOnly}
           onValueChange={(value) => updateRow(index, "ql2UnitPrice", value)}
           allowDecimal={false}
           className={`${metricInputClass} text-cyan-700`}
@@ -227,7 +238,7 @@ export default function ManagementExpenseRow({
       <div className="p-2">
         <DecimalInput
           value={rowQl2Tax}
-          disabled={readOnly}
+          disabled={policyReadOnly}
           onValueChange={(value) => updateRow(index, "ql2Tax", value)}
           allowDecimal={false}
           className={`${metricInputClass} text-rose-700`}
@@ -261,7 +272,7 @@ export default function ManagementExpenseRow({
           <div key={`${key}-unit`} className="p-2">
             <DecimalInput
               value={values.unitPrice}
-              disabled={readOnly}
+              disabled={policyReadOnly}
               onValueChange={(value) =>
                 updateRow(index, "otherCostUnitPrices", {
                   ...(row.otherCostUnitPrices || {}),
@@ -275,7 +286,7 @@ export default function ManagementExpenseRow({
           <div key={`${key}-tax`} className="p-2">
             <DecimalInput
               value={values.tax}
-              disabled={readOnly}
+              disabled={policyReadOnly}
               onValueChange={(value) =>
                 updateRow(index, "otherCostTaxes", {
                   ...(row.otherCostTaxes || {}),
@@ -399,24 +410,27 @@ export default function ManagementExpenseRow({
           "
         />
       </div>
-      <div className="flex items-center justify-center">
-        {!readOnly && (
-          <button
-            onClick={() => removeRow(index)}
-            className="
-      flex items-center justify-center
-      w-9 h-9
-      rounded-lg
-      text-red-500
-      hover:bg-red-50
-      hover:text-red-600
-      transition-colors
-    "
-          >
-            <Trash2 size={18} />
-          </button>
-        )}
-      </div>
+      {showActions && (
+        <div className="flex items-center justify-center gap-1">
+          {!policyReadOnly && (
+            <button
+              onClick={() => removeRow(index)}
+              title="Xoá dòng"
+              className="
+        flex items-center justify-center
+        w-9 h-9
+        rounded-lg
+        text-red-500
+        hover:bg-red-50
+        hover:text-red-600
+        transition-colors
+      "
+            >
+              <Trash2 size={18} />
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

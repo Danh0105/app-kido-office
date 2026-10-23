@@ -62,6 +62,10 @@ export type CreateExpensePayload = {
   /** Có trường = đề xuất theo trường; để trống = đề xuất theo xã/phường. */
   schoolId?: number;
   schoolYear?: string;
+  /** Chi tháng bắt buộc có schoolId, schoolYear, subjectId và expensePeriodId. */
+  isMonthlyExpense?: boolean;
+  subjectId?: number;
+  expensePeriodId?: number;
   wardId?: number;
   /** Kinh doanh tự đánh dấu: đề xuất này nên trừ vào chính sách liên quan (chỉ để hiển thị). */
   deductPolicy?: boolean;
@@ -84,7 +88,8 @@ export type PaymentOrderPayload = {
  */
 export type ApproveExpensePayload = {
   amount?: number;
-  requestKind: ExpenseRequestKind;
+  /** Chi tháng đã cố định là CASH nên Giám đốc không cần gửi lại loại. */
+  requestKind?: ExpenseRequestKind;
   /** Người bàn giao — chỉ khi requestKind là EQUIPMENT (lấy từ kho) hoặc REPAIR. */
   assignedTechnicianId?: number;
   /** Người hỗ trợ người bàn giao; bỏ trống = không có người hỗ trợ. */
@@ -118,7 +123,7 @@ export type StockIssueOrderPayload = {
 };
 
 export const expenseRequestApi = {
-  // ---- SALES: tạo (vào thẳng PENDING_APPROVAL) ----
+  // ---- SALES: chi Năm chờ duyệt; chi tháng chờ Kế toán nhập số tiền ----
   create: async (data: CreateExpensePayload): Promise<ExpenseRequest> => {
     const res = await api.post(BASE, buildFormData(data), multipart);
     return res.data;
@@ -127,16 +132,20 @@ export const expenseRequestApi = {
   // ---- SALES: chủ đơn sửa ở mọi trạng thái; lưu xong luôn gửi duyệt lại từ đầu ----
   update: async (
     id: number,
-    data: UpdateExpensePayload,
+    data: UpdateExpensePayload
   ): Promise<ExpenseRequest> => {
-    const res = await api.patch(`${BASE}/${id}`, buildFormData(data), multipart);
+    const res = await api.patch(
+      `${BASE}/${id}`,
+      buildFormData(data),
+      multipart
+    );
     return res.data;
   },
 
   // ---- DIRECTOR: approve / reject ----
   approve: async (
     id: number,
-    data?: ApproveExpensePayload,
+    data?: ApproveExpensePayload
   ): Promise<ExpenseRequest> => {
     const res = await api.post(`${BASE}/${id}/approve`, data || {});
     return res.data;
@@ -147,7 +156,7 @@ export const expenseRequestApi = {
     return res.data;
   },
 
-  // ---- SALES: chủ đơn tự rút — chỉ khi còn đang chờ duyệt (PENDING_APPROVAL) ----
+  // ---- SALES: chủ đơn tự rút khi còn chờ Kế toán hoặc chờ duyệt ----
   withdraw: async (id: number, reason?: string): Promise<ExpenseRequest> => {
     const res = await api.post(`${BASE}/${id}/withdraw`, { reason });
     return res.data;
@@ -162,7 +171,7 @@ export const expenseRequestApi = {
   // ---- SALES ADMIN: kiểm duyệt song song (cố vấn, không chặn giám đốc) ----
   saleAdminReview: async (
     id: number,
-    data: { status: SaleAdminReviewStatus; note?: string },
+    data: { status: SaleAdminReviewStatus; note?: string }
   ): Promise<ExpenseRequest> => {
     const res = await api.post(`${BASE}/${id}/sale-admin-review`, data);
     return res.data;
@@ -171,7 +180,7 @@ export const expenseRequestApi = {
   // ---- KẾ TOÁN CÔNG NỢ: payment order (response bọc { suggest, paymentOrder }) ----
   createPaymentOrder: async (
     id: number,
-    data: PaymentOrderPayload,
+    data: PaymentOrderPayload
   ): Promise<{ suggest: ExpenseRequest; paymentOrder: PaymentOrder }> => {
     const res = await api.post(`${BASE}/${id}/payment-order`, data);
     return res.data;
@@ -180,7 +189,7 @@ export const expenseRequestApi = {
   // ---- KẾ TOÁN CÔNG NỢ: sửa lệnh chi đã lập — các bước sau phải làm lại ----
   editPaymentOrder: async (
     id: number,
-    data: PaymentOrderPayload,
+    data: PaymentOrderPayload
   ): Promise<{ suggest: ExpenseRequest; paymentOrder: PaymentOrder }> => {
     const res = await api.post(`${BASE}/${id}/payment-order/edit`, data);
     return res.data;
@@ -196,7 +205,7 @@ export const expenseRequestApi = {
   // timeline vẫn giữ đủ lịch sử.
   createStockIssueOrder: async (
     id: number,
-    data: StockIssueOrderPayload,
+    data: StockIssueOrderPayload
   ): Promise<{ suggest: ExpenseRequest; stockIssueOrder: StockIssueOrder }> => {
     const res = await api.post(`${BASE}/${id}/stock-issue-order`, data);
     return res.data;
@@ -204,7 +213,7 @@ export const expenseRequestApi = {
 
   equipmentReturned: async (
     id: number,
-    note?: string,
+    note?: string
   ): Promise<ExpenseRequest> => {
     const res = await api.post(`${BASE}/${id}/equipment-returned`, { note });
     return res.data;
@@ -213,7 +222,7 @@ export const expenseRequestApi = {
   // ---- THIẾT BỊ TỪ NHÀ CUNG CẤP: người xử lý (do Giám đốc chỉ định) lập phiếu nhập kho ----
   createStockInReceipt: async (
     id: number,
-    data: StockInReceiptPayload,
+    data: StockInReceiptPayload
   ): Promise<{ suggest: ExpenseRequest; stockInOrder: StockInOrder }> => {
     const res = await api.post(`${BASE}/${id}/stock-in-receipt`, data);
     return res.data;
@@ -222,18 +231,21 @@ export const expenseRequestApi = {
   // ---- THIẾT BỊ TỪ NHÀ CUNG CẤP: người nghiệm thu xác nhận hoàn thành → về QL thu chi ----
   stockInAccept: async (
     id: number,
-    data: { note?: string; files?: File[] },
+    data: { note?: string; files?: File[] }
   ): Promise<ExpenseRequest> => {
     const res = await api.post(
       `${BASE}/${id}/stock-in-accept`,
       buildFormData(data),
-      multipart,
+      multipart
     );
     return res.data;
   },
 
   // ---- NGƯỜI BÀN GIAO / NGƯỜI HỖ TRỢ: từ chối việc được giao, lý do về Giám đốc ----
-  declineAssignment: async (id: number, reason: string): Promise<ExpenseRequest> => {
+  declineAssignment: async (
+    id: number,
+    reason: string
+  ): Promise<ExpenseRequest> => {
     const res = await api.post(`${BASE}/${id}/assignments/decline`, { reason });
     return res.data;
   },
@@ -242,11 +254,11 @@ export const expenseRequestApi = {
   replaceAssignment: async (
     id: number,
     assignmentId: number,
-    employeeId: number,
+    employeeId: number
   ): Promise<ExpenseRequest> => {
     const res = await api.post(
       `${BASE}/${id}/assignments/${assignmentId}/replace`,
-      { employeeId },
+      { employeeId }
     );
     return res.data;
   },
@@ -265,7 +277,7 @@ export const expenseRequestApi = {
   // ---- GIÁM ĐỐC/SALES ADMIN: chỉ định người khác sau khi bị từ chối ----
   repairReassign: async (
     id: number,
-    assignedTechnicianId: number,
+    assignedTechnicianId: number
   ): Promise<ExpenseRequest> => {
     const res = await api.post(`${BASE}/${id}/repair-reassign`, {
       assignedTechnicianId,
@@ -276,7 +288,7 @@ export const expenseRequestApi = {
   // ---- SALES (chủ đề xuất): xác nhận đã nhận thiết bị ----
   equipmentReceived: async (
     id: number,
-    note?: string,
+    note?: string
   ): Promise<ExpenseRequest> => {
     const res = await api.post(`${BASE}/${id}/equipment-received`, { note });
     return res.data;
@@ -285,12 +297,12 @@ export const expenseRequestApi = {
   // ---- THỦ QUỸ: cash released / fund returned ----
   cashReleased: async (
     id: number,
-    data: { fundSource: FundSource; note?: string; files?: File[] },
+    data: { fundSource: FundSource; note?: string; files?: File[] }
   ): Promise<ExpenseRequest> => {
     const res = await api.post(
       `${BASE}/${id}/cash-released`,
       buildFormData(data),
-      multipart,
+      multipart
     );
     return res.data;
   },
@@ -308,28 +320,35 @@ export const expenseRequestApi = {
 
   confirmSpent: async (
     id: number,
-    data: { note?: string; files?: File[] },
+    data: { note?: string; files?: File[] }
   ): Promise<ExpenseRequest> => {
     const res = await api.post(
       `${BASE}/${id}/confirm-spent`,
       buildFormData(data),
-      multipart,
+      multipart
     );
     return res.data;
   },
 
-  confirmNotSpent: async (id: number, reason: string): Promise<ExpenseRequest> => {
+  confirmNotSpent: async (
+    id: number,
+    reason: string
+  ): Promise<ExpenseRequest> => {
     const res = await api.post(`${BASE}/${id}/confirm-not-spent`, { reason });
     return res.data;
   },
 
   // Tắt/bật nhắc quá hạn cho riêng đề xuất này — không ảnh hưởng đề xuất khác.
-  muteOverdueAlert: async (id: number): Promise<{ id: number; overdueAlertMuted: boolean }> => {
+  muteOverdueAlert: async (
+    id: number
+  ): Promise<{ id: number; overdueAlertMuted: boolean }> => {
     const res = await api.post(`${BASE}/${id}/mute-overdue-alert`);
     return res.data;
   },
 
-  unmuteOverdueAlert: async (id: number): Promise<{ id: number; overdueAlertMuted: boolean }> => {
+  unmuteOverdueAlert: async (
+    id: number
+  ): Promise<{ id: number; overdueAlertMuted: boolean }> => {
     const res = await api.post(`${BASE}/${id}/unmute-overdue-alert`);
     return res.data;
   },
@@ -342,7 +361,7 @@ export const expenseRequestApi = {
 
   // Danh sách gom nhóm theo nhân viên (page/limit phân trang theo nhân viên).
   groupedByEmployee: async (
-    query: ExpenseListQuery = {},
+    query: ExpenseListQuery = {}
   ): Promise<ExpenseGroupedByEmployeeResponse> => {
     const res = await api.get(`${BASE}/grouped-by-employee`, { params: query });
     return res.data;
@@ -365,9 +384,11 @@ export const expenseRequestApi = {
   },
 
   updateReminderSettings: async (
-    remindBeforeDays: number,
+    remindBeforeDays: number
   ): Promise<{ remindBeforeDays: number }> => {
-    const res = await api.patch(`${BASE}/reminder-settings`, { remindBeforeDays });
+    const res = await api.patch(`${BASE}/reminder-settings`, {
+      remindBeforeDays,
+    });
     return res.data;
   },
 };
@@ -380,7 +401,7 @@ export const expenseNotificationApi = {
   },
 
   getGroupedByEmployee: async (
-    query: ExpenseNotificationQuery = {},
+    query: ExpenseNotificationQuery = {}
   ): Promise<ExpenseNotificationGroupedResponse> => {
     const res = await api.get(`/notifications/expense/grouped-by-employee`, {
       params: query,
@@ -392,7 +413,7 @@ export const expenseNotificationApi = {
     page = 1,
     limit = 20,
     tab?: "unread" | "read",
-    query: ExpenseNotificationQuery = {},
+    query: ExpenseNotificationQuery = {}
   ): Promise<ExpenseNotificationListResponse> => {
     const res = await api.get(`/notifications/expense`, {
       params: { ...query, page, limit, tab },
@@ -406,7 +427,7 @@ export const expenseNotificationApi = {
   },
 
   markAllAsRead: async (
-    query: Pick<ExpenseNotificationQuery, "scope" | "employeeId"> = {},
+    query: Pick<ExpenseNotificationQuery, "scope" | "employeeId"> = {}
   ): Promise<{ success: boolean }> => {
     const res = await api.patch(`/notifications/expense/read-all`, undefined, {
       params: query,

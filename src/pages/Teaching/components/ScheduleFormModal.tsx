@@ -24,11 +24,13 @@ import {
   amountOf,
   dateRangesOverlap,
   formatMoney,
+  formatTeacherLabel,
   formatTime,
   isDateOrderValid,
   isTimeOrderValid,
   isValidPeriods,
   MAX_PERIODS,
+  teacherLabel,
   TEACHING_MONEY_FEATURES_ENABLED,
   timeRangesOverlap,
   todayISO,
@@ -291,7 +293,7 @@ export default function ScheduleFormModal({
             onChange={(value) => { setTeacherId(value); setSuggestionSignature(""); }}
             options={teachers.map((teacher) => ({
               id: teacher.id,
-              name: `${teacher.name}${teacher.isActive ? "" : " (ngừng)"}`,
+              name: `${formatTeacherLabel(teacher.name, teacher.phone)}${teacher.isActive ? "" : " (ngừng)"}`,
             }))}
             placeholder="— Chọn giáo viên —"
             searchPlaceholder="Tìm giáo viên…"
@@ -465,7 +467,7 @@ export default function ScheduleFormModal({
         <div className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
           Lớp {classConflict.className} đã có lịch môn {classConflict.subjectName}{" "}
           {classConflict.dayOfWeekLabel} {formatTime(classConflict.startTime)}–
-          {formatTime(classConflict.endTime)} của {classConflict.teacherName} trong
+          {formatTime(classConflict.endTime)} của {teacherLabel(teachers, classConflict.teacherId, classConflict.teacherName)} trong
           khoảng thời gian này.
         </div>
       )}

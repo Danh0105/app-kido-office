@@ -6,7 +6,10 @@ import { toast } from "react-hot-toast";
 import HeaderWithBack from "@/components/HeaderWithBack";
 import Tabs from "./components/Tabs";
 import Pagination from "./components/Pagination";
-import { schoolExpenseApi } from "@/service/schoolExpense";
+import {
+  RevenueEInvoice,
+  schoolExpenseApi,
+} from "@/service/schoolExpense";
 import { subjectApi } from "@/service/subject.api";
 
 import { expensePeriodApi } from "@/service/expensePeriod";
@@ -29,12 +32,14 @@ import { hasRole } from "@/utils/auth";
 import ExpenseSummary from "./components/ExpenseSummary";
 import ExpenseSummaryTable from "./components/ExpenseSummaryTable";
 import SubjectContractCard from "./components/SubjectContractCard";
+import SavedDataSection from "./components/SavedDataSection";
 import {
   getOtherCostGrossPrice,
   getOtherCostKey,
   getOtherCostTax,
   getPolicyOtherCosts,
 } from "../utils/policyOtherCosts";
+import { revenueQuantityDefaultsFromPolicy } from "@/utils/revenueAmount";
 
 type CashPolicyRowType = {
   payer: string;
@@ -51,16 +56,6 @@ type RealExpenseDetailProps = {
   onSchoolYearChange?: (schoolYear: string) => void;
   onSchoolYearsChange?: (schoolYears: string[]) => void;
 };
-const invoiceTypeLabel = (r: any) =>
-  r.invoiceType === "company"
-    ? "Xuất HĐ Cty"
-    : r.invoiceType === "student"
-      ? "Xuất HĐ HS"
-      : r.invoiceType === "none"
-        ? "Không xuất"
-        : r.invoiceType === "other"
-          ? r.invoiceOther || "Khác"
-          : "-";
 
 const initialInputData: InputExpenseRow = {
   content: "",
@@ -76,6 +71,8 @@ const initialInputData: InputExpenseRow = {
   invoiceDate: "",
   invoiceUnit: "",
   invoiceNote: "",
+  invoicePaymentDate: "",
+  invoiceCashAccount: "",
   paidAmount: 0,
   paymentMethod: "",
   paymentDate: "",
@@ -140,6 +137,11 @@ export default function RealExpenseDetail({
     string | null
   >(null);
   const [confirmingManagement, setConfirmingManagement] = useState(false);
+  // Kế toán trưởng "Kết thúc" kỳ thu chi → khoá toàn bộ, kể cả KTT (phải mở lại).
+  const [finalized, setFinalized] = useState(false);
+  const [finalizedByName, setFinalizedByName] = useState<string | null>(null);
+  const [finalizedAt, setFinalizedAt] = useState<string | null>(null);
+  const [lockActionLoading, setLockActionLoading] = useState(false);
   const { schoolId: schoolIdParam, schoolExpenseId: schoolExpenseIdParam } =
     useParams();
   const [tab, setTab] = useState<string>("expense");
@@ -176,7 +178,12 @@ export default function RealExpenseDetail({
   const [savedRevenues, setSavedRevenues] = useState<any[]>([]);
   const [savedSchoolItems, setSavedSchoolItems] = useState<any[]>([]);
   const [savedMgmtItems, setSavedMgmtItems] = useState<any[]>([]);
-  const [showSavedData, setShowSavedData] = useState(false);
+  // Hóa đơn điện tử (nháp Viettel) theo rowIndex của các dòng doanh thu.
+  const [einvoices, setEInvoices] = useState<RevenueEInvoice[]>([]);
+  const [exportingInvoices, setExportingInvoices] = useState(false);
+  const [unlinkingEInvoiceId, setUnlinkingEInvoiceId] = useState<
+    number | null
+  >(null);
   const [historyList, setHistoryList] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -206,31 +213,31 @@ export default function RealExpenseDetail({
   const resolvedSchoolId =
     Number(resolvedSchool?.id || schoolIdParam || 0) || null;
 
-  // Trạng thái khoá bảng "Chi Ngoài" — mọi vai trò xem trang này đều cần biết
-  // (để hiện badge đã khoá và disable form), không chỉ salesadmin/kế toán trưởng.
+  /** Trạng thái khoá "Xác nhận đúng BBCS" + "Kết thúc" từ phiếu thu chi. */
+  const applyLockState = (res: any) => {
+    setManagementConfirmed(!!res?.managementExpenseConfirmed);
+    setManagementConfirmedByName(res?.managementExpenseConfirmedByName || null);
+    setManagementConfirmedAt(res?.managementExpenseConfirmedAt || null);
+    setFinalized(!!res?.finalized);
+    setFinalizedByName(res?.finalizedByName || null);
+    setFinalizedAt(res?.finalizedAt || null);
+  };
+
+  // Trạng thái khoá bảng "Chi Ngoài" + kết thúc kỳ — mọi vai trò xem trang này
+  // đều cần biết (để hiện badge đã khoá và disable form).
   useEffect(() => {
     if (!resolvedSchoolExpenseId) {
-      setManagementConfirmed(false);
-      setManagementConfirmedByName(null);
-      setManagementConfirmedAt(null);
+      applyLockState(null);
       return;
     }
     let active = true;
     schoolExpenseApi
       .getById(resolvedSchoolExpenseId)
       .then((res: any) => {
-        if (!active) return;
-        setManagementConfirmed(!!res?.managementExpenseConfirmed);
-        setManagementConfirmedByName(
-          res?.managementExpenseConfirmedByName || null,
-        );
-        setManagementConfirmedAt(res?.managementExpenseConfirmedAt || null);
+        if (active) applyLockState(res);
       })
       .catch(() => {
-        if (!active) return;
-        setManagementConfirmed(false);
-        setManagementConfirmedByName(null);
-        setManagementConfirmedAt(null);
+        if (active) applyLockState(null);
       });
     return () => {
       active = false;
@@ -245,18 +252,46 @@ export default function RealExpenseDetail({
       const res: any = await schoolExpenseApi.confirmManagementExpense(
         resolvedSchoolExpenseId,
       );
-      setManagementConfirmed(true);
-      setManagementConfirmedByName(
-        res?.managementExpenseConfirmedByName || null,
-      );
-      setManagementConfirmedAt(res?.managementExpenseConfirmedAt || null);
-      toast.success('Đã xác nhận bảng "Chi Ngoài" — bảng đã được khoá');
+      applyLockState(res);
+      toast.success("Đã xác nhận đúng BBCS — bảng Chi Ngoài đã được khoá");
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Xác nhận thất bại"));
     } finally {
       setConfirmingManagement(false);
     }
   };
+
+  // Kế toán trưởng: mở khoá BBCS / Kết thúc / Mở lại kỳ thu chi.
+  const runLockAction = async (
+    action: (id: number) => Promise<any>,
+    successMessage: string,
+  ) => {
+    if (!resolvedSchoolExpenseId) return;
+    setLockActionLoading(true);
+    try {
+      applyLockState(await action(resolvedSchoolExpenseId));
+      toast.success(successMessage);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Thao tác thất bại"));
+    } finally {
+      setLockActionLoading(false);
+    }
+  };
+
+  const handleUnconfirmManagementExpense = () =>
+    runLockAction(
+      schoolExpenseApi.unconfirmManagementExpense,
+      "Đã mở khoá BBCS — bảng Chi Ngoài sửa được lại",
+    );
+
+  const handleFinalize = () =>
+    runLockAction(
+      schoolExpenseApi.finalize,
+      "Đã kết thúc kỳ thu chi — toàn bộ dữ liệu đã khoá",
+    );
+
+  const handleReopen = () =>
+    runLockAction(schoolExpenseApi.reopen, "Đã mở lại kỳ thu chi");
 
   // FETCH PERIODS
   const fetchPeriods = async () => {
@@ -524,6 +559,8 @@ export default function RealExpenseDetail({
     invoiceOther: "HĐ khác",
     invoiceNumber: "Số HĐ",
     invoiceDate: "Ngày HĐ",
+    invoicePaymentDate: "Ngày chi (HĐ)",
+    invoiceCashAccount: "Khoản thu/chi",
     paymentMethod: "PT thanh toán",
     paymentDate: "Ngày thanh toán",
     expenseDate: "Ngày chi",
@@ -761,14 +798,6 @@ export default function RealExpenseDetail({
     );
   }, [data]);
 
-  const addRevenueRow = () => {
-    setRevenueRows((prev) => [...prev, { ...initialRevenueRow }]);
-  };
-
-  const addManagementRow = () => {
-    setManagementRows((prev) => [...prev, { ...initialManagementRow }]);
-  };
-
   const updateInputRow = (
     index: number,
     field: keyof InputExpenseRow,
@@ -781,11 +810,13 @@ export default function RealExpenseDetail({
 
   const addInputRow = () => {
     const fee = Number(activeSubject?.policies?.[0]?.data?.fee || 0);
+    const quantityDefaults = revenueQuantityDefaultsFromPolicy(activeSubject);
 
     setInputRows((prev) => [
       ...prev,
       {
         ...initialInputData,
+        ...quantityDefaults,
         unitPrice: fee,
       },
     ]);
@@ -838,7 +869,8 @@ export default function RealExpenseDetail({
     if (!resolvedSchoolExpenseId || !subId) return;
 
     try {
-      const [revenues, schoolItems, mgmtItems, history] = await Promise.all([
+      const [revenues, schoolItems, mgmtItems, history, invoices] =
+        await Promise.all([
         revenueItemApi.getAll({
           schoolExpenseId: resolvedSchoolExpenseId,
           subjectId: subId,
@@ -854,9 +886,13 @@ export default function RealExpenseDetail({
         schoolExpenseApi
           .getHistory(resolvedSchoolExpenseId, { subjectId: subId })
           .catch(() => []),
+        schoolExpenseApi
+          .getEInvoices(resolvedSchoolExpenseId, subId)
+          .catch(() => []),
       ]);
 
       setSavedRevenues(revenues || []);
+      setEInvoices(invoices || []);
       setSavedSchoolItems(schoolItems || []);
       setHistoryList(normalizeHistory(history));
       setSavedMgmtItems(mgmtItems || []);
@@ -866,25 +902,46 @@ export default function RealExpenseDetail({
       const loadedSubject = subjects.find((s: any) => s.id === subId);
       const policyOtherCosts = getPolicyOtherCosts(loadedSubject);
       const fee = Number(loadedPolicyData?.fee || 0);
+      const quantityDefaults = revenueQuantityDefaultsFromPolicy(loadedSubject);
 
       const nextInputRows =
         revenues?.length > 0
-          ? revenues.map((r: any) => ({
-              content: r.content || "",
-              totalPeriods: r.totalPeriods || 0,
-              unitPrice: r.unitPrice || fee,
-              studentCount: r.studentCount || 0,
-              monthsCount: r.monthsCount ?? 0,
-              invoiced: r.invoiced || false,
-              invoiceType: r.invoiceType || (r.invoiced ? "company" : ""),
-              invoiceOther: r.invoiceOther || "",
-              invoiceNumber: r.invoiceNumber || "",
-              invoiceDate: r.invoiceDate || "",
-              paidAmount: r.paidAmount || 0,
-              paymentMethod: r.paymentMethod || "",
-              paymentDate: r.paymentDate || "",
-            }))
-          : [{ ...initialInputData, unitPrice: fee }];
+          ? revenues.map((r: any) => {
+              const hasSavedQuantity =
+                Number(r.totalPeriods || 0) > 0 ||
+                Number(r.studentCount || 0) > 0;
+
+              return {
+                content: r.content || "",
+                totalPeriods: hasSavedQuantity
+                  ? r.totalPeriods || 0
+                  : quantityDefaults.totalPeriods,
+                unitPrice: r.unitPrice || fee,
+                studentCount: hasSavedQuantity
+                  ? r.studentCount || 0
+                  : quantityDefaults.studentCount,
+                monthsCount: r.monthsCount ?? 0,
+                invoiced: r.invoiced || false,
+                invoiceType: r.invoiceType || (r.invoiced ? "company" : ""),
+                invoiceOther: r.invoiceOther || "",
+                invoiceNumber: r.invoiceNumber || "",
+                invoiceDate: r.invoiceDate || "",
+                invoiceUnit: r.invoiceUnit || "",
+                invoicePaymentDate: r.invoicePaymentDate || "",
+                invoiceCashAccount: r.invoiceCashAccount || "",
+                invoiceLocked: !!r.invoiceLocked,
+                paidAmount: r.paidAmount || 0,
+                paymentMethod: r.paymentMethod || "",
+                paymentDate: r.paymentDate || "",
+              };
+            })
+          : [
+              {
+                ...initialInputData,
+                ...quantityDefaults,
+                unitPrice: fee,
+              },
+            ];
 
       setInputRows(nextInputRows);
 
@@ -906,6 +963,7 @@ export default function RealExpenseDetail({
               collectedDate: r.expenseDate || "",
               paidAmount: r.paidAmount || 0,
               paymentDate: r.expenseDate || "",
+              paymentType: r.paymentType || "",
               remainingOutsideExpense: r.remaining || 0,
               payer: r.payer || "",
               note: r.note || "",
@@ -1001,6 +1059,110 @@ export default function RealExpenseDetail({
   };
 
   // SUBMIT EXPENSE
+  const saveExpense = async (
+    schoolExpenseId: number,
+    subjectId: number,
+    rows: InputExpenseRow[],
+  ) => {
+    const policy = activeSubject?.policies?.[0];
+    const policyData = policy?.data || {};
+    const ttcs = policyData.ttcs?.[0] || {};
+
+    await schoolExpenseApi.saveAll(schoolExpenseId, {
+      subjectId,
+      revenueItems: rows.map((row, index) => ({
+        rowIndex: index,
+        subjectId,
+        content: (row.content || "").slice(0, 500),
+        totalPeriods: Number(row.totalPeriods || 0),
+        studentCount: Number(row.studentCount || 0),
+        monthsCount: Number(row.monthsCount ?? 0),
+        unitPrice: Number(row.unitPrice || 0),
+        invoiced: row.invoiced || false,
+        invoiceType: row.invoiceType || undefined,
+        invoiceOther:
+          row.invoiceType === "other" ? row.invoiceOther : undefined,
+        invoiceNumber:
+          row.invoiceType === "company"
+            ? row.invoiceNumber || undefined
+            : undefined,
+        invoiceDate: row.invoiceDate || undefined,
+        invoiceUnit: (row.invoiceUnit || "").slice(0, 50) || undefined,
+        invoicePaymentDate: row.invoicePaymentDate || undefined,
+        invoiceCashAccount: row.invoiceCashAccount || undefined,
+        invoiceLocked: !!row.invoiceLocked,
+        paidAmount: Number(row.paidAmount || 0),
+        paymentMethod: row.paymentMethod || undefined,
+        paymentDate: row.paymentDate || undefined,
+      })),
+      schoolExpenseItems: revenueRows.map((row, index) => {
+        const inputRow = rows[index] || rows[0] || initialInputData;
+
+        return {
+          rowIndex: index,
+          subjectId,
+          totalPeriods: Number(inputRow.totalPeriods || 0),
+          studentCount: Number(inputRow.studentCount || 0),
+          monthsCount: Number(inputRow.monthsCount ?? 0),
+          teacherUnitPrice: Number(
+            row.teacherUnitPrice ?? policyData.giaovien ?? 0,
+          ),
+          taxUnitPrice: Number(
+            row.taxUnitPrice ?? policyData.thue ?? policyData.tax ?? 0,
+          ),
+          csvcUnitPrice: Number(row.csvcUnitPrice ?? policyData.csvc ?? 0),
+          paidAmount: Number(row.paidAmount || 0),
+          expenseDate: row.paymentDate || undefined,
+          paymentType: row.paymentType || undefined,
+          payer: row.payer || "",
+          note: row.note || "",
+        };
+      }),
+      managementExpenseItems: managementRows.map((row, index) => {
+        const inputRow = rows[index] || rows[0] || initialInputData;
+
+        return {
+          rowIndex: index,
+          subjectId,
+          totalPeriods: Number(inputRow.totalPeriods || 0),
+          studentCount: Number(inputRow.studentCount || 0),
+          monthsCount: Number(inputRow.monthsCount ?? 0),
+          ql1UnitPrice: Number(
+            row.ql1UnitPrice ??
+              Number(ttcs.ql1Percent || 0),
+          ),
+          ql1Tax: Number(row.ql1Tax ?? ttcs.ql1Tax ?? 0),
+          ql2UnitPrice: Number(
+            row.ql2UnitPrice ??
+              Number(ttcs.ql2Percent || 0),
+          ),
+          ql2Tax: Number(row.ql2Tax ?? ttcs.ql2Tax ?? 0),
+          otherCosts: getPolicyOtherCosts(activeSubject).map(
+            (item, otherCostIndex) => {
+              const key = getOtherCostKey(item, otherCostIndex);
+              return {
+                id: item.id,
+                name: item.name,
+                unitPrice: Number(
+                  row.otherCostUnitPrices?.[key] ??
+                    getOtherCostGrossPrice(item),
+                ),
+                tax: Number(
+                  row.otherCostTaxes?.[key] ?? getOtherCostTax(item),
+                ),
+              };
+            },
+          ),
+          invoiceAmount: 0,
+          paidAmount: Number(row.paidAmount || 0),
+          expenseDate: row.paymentDate || undefined,
+          payer: row.payer || "",
+          note: row.note || "",
+        };
+      }),
+    });
+  };
+
   const handleSubmit = async () => {
     if (!resolvedSchoolExpenseId || !activeSubjectId) {
       toast.error("Vui lòng chọn môn học");
@@ -1009,106 +1171,136 @@ export default function RealExpenseDetail({
 
     try {
       setLoading(true);
-
-      const policy = activeSubject?.policies?.[0];
-      const policyData = policy?.data || {};
-      const ttcs = policyData.ttcs?.[0] || {};
-
-      await schoolExpenseApi.saveAll(resolvedSchoolExpenseId, {
-        subjectId: activeSubjectId,
-        revenueItems: inputRows.map((row, index) => ({
-          rowIndex: index,
-          subjectId: activeSubjectId,
-          content: (row.content || "").slice(0, 500),
-          totalPeriods: Number(row.totalPeriods || 0),
-          studentCount: Number(row.studentCount || 0),
-          monthsCount: Number(row.monthsCount ?? 0),
-          unitPrice: Number(row.unitPrice || 0),
-          invoiced: row.invoiced || false,
-          invoiceType: row.invoiceType || undefined,
-          invoiceOther:
-            row.invoiceType === "other" ? row.invoiceOther : undefined,
-          invoiceNumber:
-            row.invoiceType === "company"
-              ? row.invoiceNumber || undefined
-              : undefined,
-          invoiceDate: row.invoiceDate || undefined,
-          paidAmount: Number(row.paidAmount || 0),
-          paymentMethod: row.paymentMethod || undefined,
-          paymentDate: row.paymentDate || undefined,
-        })),
-        schoolExpenseItems: revenueRows.map((row, index) => {
-          const inputRow = inputRows[index] || inputRows[0] || initialInputData;
-
-          return {
-            rowIndex: index,
-            subjectId: activeSubjectId,
-            totalPeriods: Number(inputRow.totalPeriods || 0),
-            studentCount: Number(inputRow.studentCount || 0),
-            monthsCount: Number(inputRow.monthsCount ?? 0),
-            teacherUnitPrice: Number(
-              row.teacherUnitPrice ?? policyData.giaovien ?? 0,
-            ),
-            taxUnitPrice: Number(
-              row.taxUnitPrice ?? policyData.thue ?? policyData.tax ?? 0,
-            ),
-            csvcUnitPrice: Number(row.csvcUnitPrice ?? policyData.csvc ?? 0),
-            paidAmount: Number(row.paidAmount || 0),
-            expenseDate: row.paymentDate || undefined,
-            payer: row.payer || "",
-            note: row.note || "",
-          };
-        }),
-        managementExpenseItems: managementRows.map((row, index) => {
-          const inputRow = inputRows[index] || inputRows[0] || initialInputData;
-
-          return {
-            rowIndex: index,
-            subjectId: activeSubjectId,
-            totalPeriods: Number(inputRow.totalPeriods || 0),
-            studentCount: Number(inputRow.studentCount || 0),
-            monthsCount: Number(inputRow.monthsCount ?? 0),
-            ql1UnitPrice: Number(
-              row.ql1UnitPrice ??
-                Number(ttcs.ql1Percent || 0),
-            ),
-            ql1Tax: Number(row.ql1Tax ?? ttcs.ql1Tax ?? 0),
-            ql2UnitPrice: Number(
-              row.ql2UnitPrice ??
-                Number(ttcs.ql2Percent || 0),
-            ),
-            ql2Tax: Number(row.ql2Tax ?? ttcs.ql2Tax ?? 0),
-            otherCosts: getPolicyOtherCosts(activeSubject).map(
-              (item, otherCostIndex) => {
-                const key = getOtherCostKey(item, otherCostIndex);
-                return {
-                  id: item.id,
-                  name: item.name,
-                  unitPrice: Number(
-                    row.otherCostUnitPrices?.[key] ??
-                      getOtherCostGrossPrice(item),
-                  ),
-                  tax: Number(
-                    row.otherCostTaxes?.[key] ?? getOtherCostTax(item),
-                  ),
-                };
-              },
-            ),
-            invoiceAmount: 0,
-            paidAmount: Number(row.paidAmount || 0),
-            expenseDate: row.paymentDate || undefined,
-            payer: row.payer || "",
-            note: row.note || "",
-          };
-        }),
-      });
-
+      await saveExpense(resolvedSchoolExpenseId, activeSubjectId, inputRows);
       toast.success("Lưu dữ liệu thành công");
       await loadExpenseData(activeSubjectId);
     } catch (error: any) {
       toast.error(getApiErrorMessage(error, "Không thể lưu dữ liệu thu chi"));
     } finally {
       setLoading(false);
+    }
+  };
+
+  /**
+   * "Đẩy hóa đơn": lưu dữ liệu đang nhập rồi gộp các dòng "Xuất HĐ Cty" chưa
+   * có hóa đơn thành 1 hóa đơn nháp trên Viettel — bên mua là trường. Server
+   * khóa các dòng đã lên hóa đơn.
+   */
+  const handleExportInvoices = async () => {
+    if (!resolvedSchoolExpenseId || !activeSubjectId) {
+      toast.error("Vui lòng chọn môn học");
+      return;
+    }
+
+    setExportingInvoices(true);
+    try {
+      // Viettel nhận số liệu đã lưu trên server, nên phải lưu trước.
+      await saveExpense(resolvedSchoolExpenseId, activeSubjectId, inputRows);
+    } catch (error: any) {
+      // Không tải lại: giữ nguyên dữ liệu người dùng đang nhập.
+      toast.error(
+        getApiErrorMessage(error, "Không thể lưu dữ liệu trước khi đẩy hóa đơn"),
+      );
+      setExportingInvoices(false);
+      return;
+    }
+
+    try {
+      const summary = await schoolExpenseApi.exportEInvoiceDrafts(
+        resolvedSchoolExpenseId,
+        activeSubjectId,
+      );
+      if (!Array.isArray(summary?.existing)) {
+        // BE bản cũ (mỗi dòng 1 hóa đơn) trả kết quả khác — không đoán kết quả.
+        toast.error(
+          "Máy chủ chưa cập nhật bản đẩy hóa đơn gộp — kiểm tra lại hóa đơn nháp trên portal Viettel",
+          { duration: 8000 },
+        );
+        return;
+      }
+      const { draft, existing, skipped } = summary;
+      const rowList = (rowIndexes: number[]) =>
+        rowIndexes.map((i) => i + 1).join(", ");
+
+      if (draft?.status === "error") {
+        toast.error(`Chưa đẩy được hóa đơn: ${draft.message ?? ""}`, {
+          duration: 8000,
+        });
+      } else if (draft?.status === "created") {
+        toast.success(
+          `Viettel S-Invoice: đã tạo 1 hóa đơn nháp gồm ${draft.rowIndexes.length} dòng (dòng ${rowList(draft.rowIndexes)}) — ${money(draft.amount ?? 0)}đ`,
+        );
+      }
+
+      // Viettel không cho sửa nháp qua API — kế toán sửa trực tiếp trên portal.
+      const changedRows = [draft, ...existing]
+        .filter((r) => r?.status === "changed")
+        .flatMap((r) => r?.rowIndexes ?? []);
+      if (changedRows.length) {
+        toast(
+          `Dòng ${rowList(changedRows)} đã đổi số liệu sau khi tạo nháp — hãy sửa hóa đơn nháp trên portal Viettel`,
+          { icon: "⚠️", duration: 8000 },
+        );
+      }
+      if (skipped.length) {
+        toast(
+          `Bỏ qua dòng ${rowList(skipped.map((s) => s.rowIndex))}: thành tiền bằng 0`,
+          { icon: "ℹ️" },
+        );
+      }
+      if (!draft && !changedRows.length && !skipped.length) {
+        toast.success(
+          'Các dòng "Xuất HĐ Cty" đều đã có hóa đơn nháp, dữ liệu không đổi',
+        );
+      }
+    } catch (error: any) {
+      toast.error(getApiErrorMessage(error, "Đẩy hóa đơn thất bại"));
+    } finally {
+      setExportingInvoices(false);
+      await loadExpenseData(activeSubjectId);
+    }
+  };
+
+  /**
+   * KTT "Bỏ liên kết nháp": API Viettel không xóa được nháp — sau khi xóa trên
+   * portal, bỏ liên kết để các dòng đẩy lại được. Server mở khóa các dòng đó
+   * (chặn nếu hóa đơn đã phát hành).
+   */
+  const handleUnlinkEInvoice = async (einvoice: RevenueEInvoice) => {
+    if (!resolvedSchoolExpenseId || !activeSubjectId) return;
+    const rowList = (rowIndexes: number[]) =>
+      rowIndexes.map((i) => i + 1).join(", ");
+    const confirmed = window.confirm(
+      `Bỏ liên kết hóa đơn nháp gồm dòng ${rowList(
+        (einvoice.lines ?? []).map((l) => l.rowIndex),
+      )} (${money(Number(einvoice.amount))}đ)?\n\n` +
+        "Chỉ làm khi đã XÓA hóa đơn nháp này trên portal Viettel — nếu nháp vẫn còn, đẩy lại sẽ tạo thêm 1 hóa đơn nháp trùng.",
+    );
+    if (!confirmed) return;
+
+    setUnlinkingEInvoiceId(einvoice.id);
+    try {
+      const { rowIndexes } = await schoolExpenseApi.unlinkEInvoice(
+        resolvedSchoolExpenseId,
+        activeSubjectId,
+        einvoice.id,
+      );
+      // Cập nhật tại chỗ thay vì tải lại — giữ dữ liệu đang nhập dở.
+      setInputRows((rows) =>
+        rows.map((row, idx) =>
+          rowIndexes.includes(idx) ? { ...row, invoiceLocked: false } : row,
+        ),
+      );
+      setEInvoices((list) => list.filter((e) => e.id !== einvoice.id));
+      toast.success(
+        `Đã bỏ liên kết — dòng ${rowList(rowIndexes)} có thể đẩy hóa đơn lại`,
+      );
+    } catch (error: any) {
+      toast.error(
+        getApiErrorMessage(error, "Không bỏ liên kết được hóa đơn nháp"),
+      );
+    } finally {
+      setUnlinkingEInvoiceId(null);
     }
   };
 
@@ -1461,16 +1653,20 @@ export default function RealExpenseDetail({
             {/* SUB TABS */}
 
             <div className="space-y-5">
-              {!isSalesAdmin && <InputExpenseTable
-                rows={inputRows}
-                defaultFee={Number(
-                  activeSubject?.policies?.[0]?.data?.fee || 0,
-                )}
-                onUpdate={updateInputRow}
-                onAdd={addInputRow}
-                onRemove={removeInputRow}
-                classCount={activeSubject.classCount}
-              />}
+              {!isSalesAdmin && (
+                // Đã "Kết thúc" → fieldset disabled khoá mọi ô nhập/nút bên trong.
+                <fieldset disabled={finalized} className="m-0 min-w-0 border-0 p-0">
+                  <InputExpenseTable
+                    rows={inputRows}
+                    defaultFee={Number(
+                      activeSubject?.policies?.[0]?.data?.fee || 0,
+                    )}
+                    onUpdate={updateInputRow}
+                    onAdd={addInputRow}
+                    onRemove={removeInputRow}
+                  />
+                </fieldset>
+              )}
               {!isSalesAdmin && <ExpenseFormTable
                 inputRows={inputRows}
                 revenueRows={revenueRows}
@@ -1478,8 +1674,7 @@ export default function RealExpenseDetail({
                 subjects={activeSubject}
                 editingItem={editingItem}
                 loading={loading}
-                addRevenueRow={addRevenueRow}
-                addManagementRow={addManagementRow}
+                addRow={addInputRow}
                 removeRevenueRow={removeRevenueRow}
                 removeManagementRow={removeManagementRow}
                 updateInputRow={updateInputRow}
@@ -1491,10 +1686,24 @@ export default function RealExpenseDetail({
                 historyLoading={historyLoading}
                 managementConfirmed={managementConfirmed}
                 managementReadOnly={managementConfirmed && !isChief}
+                managementPolicyLocked={managementConfirmed}
                 managementConfirmedByName={managementConfirmedByName}
                 managementConfirmedAt={managementConfirmedAt}
                 historyCount={historyList.length}
                 isChief={isChief}
+                finalized={finalized}
+                finalizedByName={finalizedByName}
+                finalizedAt={finalizedAt}
+                lockActionLoading={lockActionLoading || confirmingManagement}
+                onConfirmManagement={handleConfirmManagementExpense}
+                onUnconfirmManagement={handleUnconfirmManagementExpense}
+                onFinalize={handleFinalize}
+                onReopen={handleReopen}
+                onExportInvoices={handleExportInvoices}
+                exportingInvoices={exportingInvoices}
+                einvoices={einvoices}
+                onUnlinkEInvoice={isChief ? handleUnlinkEInvoice : undefined}
+                unlinkingEInvoiceId={unlinkingEInvoiceId}
               />}
 
               {/*
@@ -1508,8 +1717,7 @@ export default function RealExpenseDetail({
                 subjects={activeSubject}
                 editingItem={editingItem}
                 loading={loading}
-                addRevenueRow={addRevenueRow}
-                addManagementRow={addManagementRow}
+                addRow={addInputRow}
                 removeRevenueRow={removeRevenueRow}
                 removeManagementRow={removeManagementRow}
                 updateInputRow={updateInputRow}
@@ -1525,502 +1733,19 @@ export default function RealExpenseDetail({
                 canConfirmManagement={isSalesAdmin}
                 confirmingManagement={confirmingManagement}
                 onConfirmManagement={handleConfirmManagementExpense}
+                finalized={finalized}
+                finalizedByName={finalizedByName}
+                finalizedAt={finalizedAt}
               />}
 
               {/* SAVED DATA */}
-              {(savedRevenues.length > 0 ||
-                savedSchoolItems.length > 0 ||
-                savedMgmtItems.length > 0) && (
-                <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => setShowSavedData((prev) => !prev)}
-                    className="w-full flex items-center justify-between px-6 py-4 bg-slate-800 text-white font-bold text-xl"
-                  >
-                    <span>📋 Dữ liệu đã lưu</span>
-                    <span className="text-sm font-normal">
-                      {showSavedData ? "Ẩn ▲" : "Hiện ▼"}
-                    </span>
-                  </button>
-
-                  {showSavedData && (
-                  <>
-                  {/* REVENUE */}
-                  {savedRevenues.length > 0 && (
-                    <div>
-                      <div className="px-6 py-3 bg-indigo-50 text-indigo-700 text-base font-bold border-b">
-                        💰 Doanh Thu ({savedRevenues.length})
-                      </div>
-                      <div className="overflow-x-auto">
-                        <table className="w-full min-w-max whitespace-nowrap">
-                          <thead style={{ fontSize: "14px", lineHeight: "20px" }}>
-                            <tr className="bg-slate-900 text-white font-bold">
-                              <th className="px-5 py-4 text-left">Số tiết</th>
-                              <th className="px-5 py-4 text-left">HS</th>
-                              <th className="px-5 py-4 text-left">Tháng</th>
-                              <th className="px-5 py-4 text-right">Đơn giá</th>
-                              <th className="px-5 py-4 text-right">
-                                Thành tiền
-                              </th>
-                              <th className="px-5 py-4 text-right">Đã thu</th>
-                              <th className="px-5 py-4 text-left">Hình thức</th>
-                              <th className="px-5 py-4 text-left">Ngày thu</th>
-                              <th className="px-5 py-4 text-right">Còn lại</th>
-                              <th className="px-5 py-4 text-left">Nội dung</th>
-                            </tr>
-                          </thead>
-                          <tbody style={{ fontSize: "32px", lineHeight: "42px" }}>
-                            {savedRevenues.map((r: any) => {
-                              const invoiceAmount =
-                                Number(r.invoiceAmount || 0) ||
-                                Number(r.studentCount || 0) *
-                                  Number(r.monthsCount || 0) *
-                                  Number(r.unitPrice || 0);
-                              const remaining =
-                                invoiceAmount - Number(r.paidAmount || 0);
-
-                              return (
-                                <tr
-                                  key={r.id}
-                                  className="border-t hover:bg-slate-50"
-                                >
-                                  <td className="px-5 py-4 font-semibold">
-                                    {r.totalPeriods}
-                                  </td>
-                                  <td className="px-5 py-4 font-semibold">
-                                    {r.studentCount}
-                                  </td>
-                                  <td className="px-5 py-4 font-semibold">
-                                    {r.monthsCount}
-                                  </td>
-                                  <td className="px-5 py-4 text-right font-semibold">
-                                    {Number(r.unitPrice || 0).toLocaleString()}
-                                  </td>
-                                  <td className="px-5 py-4 text-right font-bold text-blue-700">
-                                    {invoiceAmount.toLocaleString()}
-                                  </td>
-                                  <td className="px-5 py-4 text-right font-bold text-green-700">
-                                    {Number(r.paidAmount || 0).toLocaleString()}
-                                  </td>
-                                  <td className="px-5 py-4 font-semibold">
-                                    {r.paymentMethod === "cash"
-                                      ? "Tiền mặt"
-                                      : r.paymentMethod === "bank_transfer"
-                                      ? "Chuyển khoản"
-                                      : "-"}
-                                  </td>
-                                  <td className="px-5 py-4 font-semibold">
-                                    {r.paymentDate || "-"}
-                                  </td>
-                                  <td className="px-5 py-4 text-right font-bold text-orange-700">
-                                    {remaining.toLocaleString()}
-                                  </td>
-                                  <td className="px-5 py-4 font-semibold whitespace-normal break-words">
-                                    {r.content || "-"}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* SCHOOL EXPENSE */}
-                  {savedSchoolItems.length > 0 && (
-                    <div>
-                      <div className="px-6 py-3 bg-blue-50 text-blue-700 text-base font-bold border-y">
-                        🏫 Chi Trường ({savedSchoolItems.length})
-                      </div>
-                      <div className="overflow-x-auto">
-                        <table className="w-full min-w-max whitespace-nowrap">
-                          <thead style={{ fontSize: "14px", lineHeight: "20px" }}>
-                            <tr className="bg-slate-900 text-white font-bold">
-                              <th className="px-5 py-4 text-left">Số tiết</th>
-                              <th className="px-5 py-4 text-left">HS</th>
-                              <th className="px-5 py-4 text-left">Tháng</th>
-                              <th className="px-5 py-4 text-right">ĐG GV</th>
-                              <th className="px-5 py-4 text-right">
-                                Giáo viên
-                              </th>
-                              <th className="px-5 py-4 text-right">ĐG Thuế</th>
-                              <th className="px-5 py-4 text-right">Thuế</th>
-                              <th className="px-5 py-4 text-right">ĐG CSVC</th>
-                              <th className="px-5 py-4 text-right">CSVC</th>
-                              <th className="px-5 py-4 text-right">
-                                Chi trường
-                              </th>
-                              <th className="px-5 py-4 text-right">Đã chi</th>
-                              <th className="px-5 py-4 text-right">Còn lại</th>
-                              <th className="px-5 py-4 text-left">Ngày chi</th>
-                              <th className="px-5 py-4 text-left">Người chi</th>
-                              <th className="px-5 py-4 text-left">Ghi chú</th>
-                            </tr>
-                          </thead>
-                          <tbody style={{ fontSize: "32px", lineHeight: "42px" }}>
-                            {savedSchoolItems.map((r: any) => {
-                              const students = Number(r.studentCount || 0);
-                              const months = Number(r.monthsCount || 0);
-                              const teacherUP = Number(
-                                r.teacherUnitPrice ?? r.giaovien ?? 0,
-                              );
-                              const taxUP = Number(
-                                r.taxUnitPrice ?? r.thue ?? r.tax ?? 0,
-                              );
-                              const csvcUP = Number(
-                                r.csvcUnitPrice ?? r.csvc ?? 0,
-                              );
-                              const teacherAmt = students * months * teacherUP;
-                              const taxAmt = students * months * taxUP;
-                              const csvcAmt = students * months * csvcUP;
-                              const totalSchool =
-                                Number(r.schoolExpenseAmount || 0) ||
-                                teacherAmt + taxAmt + csvcAmt;
-                              const remaining =
-                                totalSchool - Number(r.paidAmount || 0);
-
-                              return (
-                                <tr
-                                  key={r.id}
-                                  className="border-t hover:bg-slate-50"
-                                >
-                                  <td className="px-5 py-4 font-semibold">
-                                    {r.totalPeriods}
-                                  </td>
-                                  <td className="px-5 py-4 font-semibold">
-                                    {r.studentCount}
-                                  </td>
-                                  <td className="px-5 py-4 font-semibold">
-                                    {r.monthsCount}
-                                  </td>
-                                  <td className="px-5 py-4 text-right font-semibold">
-                                    {teacherUP.toLocaleString()}
-                                  </td>
-                                  <td className="px-5 py-4 text-right font-bold text-amber-700">
-                                    {teacherAmt.toLocaleString()}
-                                  </td>
-                                  <td className="px-5 py-4 text-right font-semibold">
-                                    {taxUP.toLocaleString()}
-                                  </td>
-                                  <td className="px-5 py-4 text-right font-bold text-rose-700">
-                                    {taxAmt.toLocaleString()}
-                                  </td>
-                                  <td className="px-5 py-4 text-right font-semibold">
-                                    {csvcUP.toLocaleString()}
-                                  </td>
-                                  <td className="px-5 py-4 text-right font-bold text-emerald-700">
-                                    {csvcAmt.toLocaleString()}
-                                  </td>
-                                  <td className="px-5 py-4 text-right font-bold text-blue-700">
-                                    {totalSchool.toLocaleString()}
-                                  </td>
-                                  <td className="px-5 py-4 text-right font-bold text-green-700">
-                                    {Number(r.paidAmount || 0).toLocaleString()}
-                                  </td>
-                                  <td className="px-5 py-4 text-right font-bold text-orange-700">
-                                    {remaining.toLocaleString()}
-                                  </td>
-                                  <td className="px-5 py-4 font-semibold">
-                                    {r.expenseDate || "-"}
-                                  </td>
-                                  <td className="px-5 py-4 font-semibold whitespace-normal break-words">
-                                    {r.payer || "-"}
-                                  </td>
-                                  <td className="px-5 py-4 font-semibold whitespace-normal break-words">
-                                    {r.note || "-"}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* INVOICE — hóa đơn của từng dòng doanh thu */}
-                  {savedRevenues.length > 0 && (
-                    <div>
-                      <div className="px-6 py-3 bg-amber-50 text-amber-700 text-base font-bold border-y">
-                        🧾 Hóa Đơn ({savedRevenues.length})
-                      </div>
-                      <div className="overflow-x-auto">
-                        <table className="w-full min-w-max whitespace-nowrap">
-                          <thead style={{ fontSize: "14px", lineHeight: "20px" }}>
-                            <tr className="bg-slate-900 text-white font-bold">
-                              <th className="px-5 py-4 text-left">Nội dung</th>
-                              <th className="px-5 py-4 text-center">HĐ</th>
-                              <th className="px-5 py-4 text-left">Số HĐ</th>
-                              <th className="px-5 py-4 text-left">Ngày xuất HĐ</th>
-                              <th className="px-5 py-4 text-right">
-                                Tổng thanh toán công ty
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody style={{ fontSize: "32px", lineHeight: "42px" }}>
-                            {savedRevenues.map((r: any, idx: number) => {
-                              // Đơn giá trên doanh thu - Đơn giá Chi trường của dòng cùng rowIndex
-                              const revenueUnitPrice = Number(r.unitPrice || 0);
-                              const sc =
-                                savedSchoolItems.find(
-                                  (x: any) => x.rowIndex === r.rowIndex,
-                                ) || savedSchoolItems[idx];
-                              const schoolUnitPrice = sc
-                                ? Number(sc.teacherUnitPrice ?? sc.giaovien ?? 0) +
-                                  Number(sc.taxUnitPrice ?? sc.thue ?? sc.tax ?? 0) +
-                                  Number(sc.csvcUnitPrice ?? sc.csvc ?? 0)
-                                : 0;
-                              const companyPayment =
-                                sc?.paymentType === "not_in_contract"
-                                  ? revenueUnitPrice
-                                  : revenueUnitPrice - schoolUnitPrice;
-
-                              return (
-                              <tr key={r.id} className="border-t hover:bg-slate-50">
-                                <td className="px-5 py-4 font-semibold whitespace-normal break-words">
-                                  {r.content || "-"}
-                                </td>
-                                <td className="px-5 py-4 text-center font-semibold">
-                                  {invoiceTypeLabel(r)}
-                                </td>
-                                <td className="px-5 py-4 font-semibold">
-                                  {r.invoiceType === "company"
-                                    ? r.invoiceNumber || "-"
-                                    : "-"}
-                                </td>
-                                <td className="px-5 py-4 font-semibold">
-                                  {r.invoiceDate || "-"}
-                                </td>
-                                <td className="px-5 py-4 text-right font-bold text-violet-700">
-                                  {companyPayment.toLocaleString()}
-                                </td>
-                              </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* MANAGEMENT */}
-                  {savedMgmtItems.length > 0 && (
-                    <div>
-                      <div className="px-6 py-3 bg-emerald-50 text-emerald-700 text-base font-bold border-y">
-                        💸 Chi Ngoài ({savedMgmtItems.length})
-                      </div>
-                      <div className="overflow-x-auto">
-                        <table className="w-full min-w-max whitespace-nowrap">
-                          <thead style={{ fontSize: "14px", lineHeight: "20px" }}>
-                            <tr className="bg-slate-900 text-white font-bold">
-                              <th className="px-5 py-4 text-left">Số tiết</th>
-                              <th className="px-5 py-4 text-left">HS</th>
-                              <th className="px-5 py-4 text-left">Tháng</th>
-                              <th className="px-5 py-4 text-right">ĐG QL1</th>
-                              <th className="px-5 py-4 text-right">
-                                Thuế QL1
-                              </th>
-                              <th className="px-5 py-4 text-right">Chi QL1</th>
-                              <th className="px-5 py-4 text-right">ĐG QL2</th>
-                              <th className="px-5 py-4 text-right">
-                                Thuế QL2
-                              </th>
-                              <th className="px-5 py-4 text-right">Chi QL2</th>
-                              {activeOtherCosts.map((item, index) => {
-                                const label =
-                                  item.name || `Chi khác ${index + 1}`;
-                                const key = getOtherCostKey(item, index);
-
-                                return [
-                                  <th
-                                    key={`${key}-unit`}
-                                    className="px-5 py-4 text-right"
-                                  >
-                                    ĐG {label}
-                                  </th>,
-                                  <th
-                                    key={`${key}-tax`}
-                                    className="px-5 py-4 text-right"
-                                  >
-                                    Thuế {label}
-                                  </th>,
-                                  <th
-                                    key={`${key}-expense`}
-                                    className="px-5 py-4 text-right"
-                                  >
-                                    Chi {label}
-                                  </th>,
-                                ];
-                              })}
-                              <th className="px-5 py-4 text-right">
-                                Tổng chi ngoài
-                              </th>
-                              <th className="px-5 py-4 text-right">Tiền HĐ</th>
-                              <th className="px-5 py-4 text-right">Đã chi</th>
-                              <th className="px-5 py-4 text-right">Còn chi</th>
-                              <th className="px-5 py-4 text-left">Ngày chi</th>
-                              <th className="px-5 py-4 text-left">Người chi</th>
-                              <th className="px-5 py-4 text-left">Ghi chú</th>
-                            </tr>
-                          </thead>
-                          <tbody style={{ fontSize: "32px", lineHeight: "42px" }}>
-                            {savedMgmtItems.map((r: any) => {
-                              const students = Number(r.studentCount || 0);
-                              const months = Number(r.monthsCount || 0);
-                              const ql1UP = Number(
-                                r.ql1UnitPrice ?? activeTtcs.ql1Percent ?? 0,
-                              );
-                              const ql2UP = Number(
-                                r.ql2UnitPrice ?? activeTtcs.ql2Percent ?? 0,
-                              );
-                              const ql1Tax = Number(
-                                r.ql1Tax ?? activeTtcs.ql1Tax ?? 0,
-                              );
-                              const ql2Tax = Number(
-                                r.ql2Tax ?? activeTtcs.ql2Tax ?? 0,
-                              );
-                              const ql1Amt =
-                                Math.max(0, ql1UP - ql1Tax) *
-                                students *
-                                months;
-                              const ql2Amt =
-                                Math.max(0, ql2UP - ql2Tax) *
-                                students *
-                                months;
-                              const otherCostValues = activeOtherCosts.map(
-                                (item, otherCostIndex) => {
-                                  const key = getOtherCostKey(
-                                    item,
-                                    otherCostIndex,
-                                  );
-                                  const savedCost = (r.otherCosts || []).find(
-                                    (cost: any, savedIndex: number) =>
-                                      getOtherCostKey(cost, savedIndex) === key ||
-                                      (cost.name &&
-                                        item.name &&
-                                        cost.name === item.name),
-                                  );
-                                  const unitPrice = savedCost
-                                    ? getOtherCostGrossPrice(savedCost)
-                                    : getOtherCostGrossPrice(item);
-                                  const tax =
-                                    savedCost?.tax !== undefined &&
-                                    savedCost?.tax !== null
-                                      ? getOtherCostTax(savedCost)
-                                      : getOtherCostTax(item);
-
-                                  return {
-                                    unitPrice,
-                                    tax,
-                                    expense: Math.max(0, unitPrice - tax),
-                                  };
-                                },
-                              );
-                              const otherCostTotal = otherCostValues.reduce(
-                                (total, item) => total + item.expense,
-                                0,
-                              );
-                              const calculatedTotalOutside =
-                                ql1Amt + ql2Amt + otherCostTotal;
-                              const totalOutside = calculatedTotalOutside;
-                              const remaining =
-                                totalOutside - Number(r.paidAmount || 0);
-
-                              return (
-                                <tr
-                                  key={r.id}
-                                  className="border-t hover:bg-slate-50"
-                                >
-                                  <td className="px-5 py-4 font-semibold">
-                                    {r.totalPeriods}
-                                  </td>
-                                  <td className="px-5 py-4 font-semibold">
-                                    {r.studentCount}
-                                  </td>
-                                  <td className="px-5 py-4 font-semibold">
-                                    {r.monthsCount}
-                                  </td>
-                                  <td className="px-5 py-4 text-right font-semibold">
-                                    {ql1UP.toLocaleString()}
-                                  </td>
-                                  <td className="px-5 py-4 text-right font-semibold text-rose-700">
-                                    {ql1Tax.toLocaleString()}
-                                  </td>
-                                  <td className="px-5 py-4 text-right font-bold text-emerald-700">
-                                    {ql1Amt.toLocaleString()}
-                                  </td>
-                                  <td className="px-5 py-4 text-right font-semibold">
-                                    {ql2UP.toLocaleString()}
-                                  </td>
-                                  <td className="px-5 py-4 text-right font-semibold text-rose-700">
-                                    {ql2Tax.toLocaleString()}
-                                  </td>
-                                  <td className="px-5 py-4 text-right font-bold text-cyan-700">
-                                    {ql2Amt.toLocaleString()}
-                                  </td>
-                                  {activeOtherCosts.map((item, index) => {
-                                    const key = getOtherCostKey(item, index);
-                                    const values = otherCostValues[index];
-
-                                    return [
-                                      <td
-                                        key={`${key}-unit`}
-                                        className="px-5 py-4 text-right font-semibold text-fuchsia-700"
-                                      >
-                                        {values.unitPrice.toLocaleString(
-                                          "vi-VN",
-                                        )}
-                                      </td>,
-                                      <td
-                                        key={`${key}-tax`}
-                                        className="px-5 py-4 text-right font-semibold text-rose-700"
-                                      >
-                                        {values.tax.toLocaleString("vi-VN")}
-                                      </td>,
-                                      <td
-                                        key={`${key}-expense`}
-                                        className="px-5 py-4 text-right font-bold text-fuchsia-700"
-                                      >
-                                        {values.expense.toLocaleString("vi-VN")}
-                                      </td>,
-                                    ];
-                                  })}
-                                  <td className="px-5 py-4 text-right font-bold text-red-600">
-                                    {totalOutside.toLocaleString()}
-                                  </td>
-                                  <td className="px-5 py-4 text-right font-bold text-blue-600">
-                                    {Number(
-                                      r.invoiceAmount || 0,
-                                    ).toLocaleString()}
-                                  </td>
-                                  <td className="px-5 py-4 text-right font-bold text-green-700">
-                                    {Number(r.paidAmount || 0).toLocaleString()}
-                                  </td>
-                                  <td className="px-5 py-4 text-right font-bold text-orange-700">
-                                    {remaining.toLocaleString()}
-                                  </td>
-                                  <td className="px-5 py-4 font-semibold">
-                                    {r.expenseDate || "-"}
-                                  </td>
-                                  <td className="px-5 py-4 font-semibold whitespace-normal break-words">
-                                    {r.payer || "-"}
-                                  </td>
-                                  <td className="px-5 py-4 font-semibold whitespace-normal break-words">
-                                    {r.note || "-"}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-                  </>
-                  )}
-                </div>
-              )}
+              <SavedDataSection
+                savedRevenues={savedRevenues}
+                savedSchoolItems={savedSchoolItems}
+                savedMgmtItems={savedMgmtItems}
+                otherCosts={activeOtherCosts}
+                ttcs={activeTtcs}
+              />
             </div>
 
             {/* CASH POLICY */}

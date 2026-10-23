@@ -43,7 +43,7 @@ const MAX_RADIUS = 2000;
 /** Số trường mỗi trang. Lọc/tìm kiếm chạy ở client nên phân trang cũng ở client. */
 const PAGE_SIZE = 20;
 
-type School = {
+export type School = {
   id: number;
   name: string;
   address?: string | null;
@@ -108,12 +108,12 @@ export default function SchoolLocationPage() {
                 school.ward?.province_id ??
                   school.ward?.provinceId ??
                   school.provinceId ??
-                  0,
+                  0
               ) || undefined,
             isVungTau: VUNG_TAU_WARD_IDS.has(wardId),
             isBinhDuong: BINH_DUONG_WARD_IDS.has(wardId),
           };
-        }),
+        })
       );
     } catch (error: any) {
       toast.error(getApiErrorMessage(error, "Không tải được danh sách trường"));
@@ -127,7 +127,9 @@ export default function SchoolLocationPage() {
     load();
     provinceApi
       .getAll()
-      .then((res: any) => setProvinces(Array.isArray(res) ? res : res?.data || []))
+      .then((res: any) =>
+        setProvinces(Array.isArray(res) ? res : res?.data || [])
+      )
       .catch(() => setProvinces([]));
   }, []);
 
@@ -138,7 +140,8 @@ export default function SchoolLocationPage() {
     return schools.filter((school) => {
       if (onlyMissing && schoolLatLng(school)) return false;
       if (regionId === VUNG_TAU_REGION_ID && !school.isVungTau) return false;
-      if (regionId === BINH_DUONG_REGION_ID && !school.isBinhDuong) return false;
+      if (regionId === BINH_DUONG_REGION_ID && !school.isBinhDuong)
+        return false;
       if (
         regionId &&
         regionId !== VUNG_TAU_REGION_ID &&
@@ -236,9 +239,7 @@ export default function SchoolLocationPage() {
               ? "Tất cả trường đều đã gắn vị trí"
               : "Không tìm thấy trường nào"
           }
-          description={
-            onlyMissing ? undefined : "Thử đổi từ khoá tìm kiếm."
-          }
+          description={onlyMissing ? undefined : "Thử đổi từ khoá tìm kiếm."}
         />
       )}
 
@@ -283,7 +284,8 @@ export default function SchoolLocationPage() {
                       </span>
                     )}
                     <span className="text-gray-500">
-                      Bán kính {school.checkinRadius || DEFAULT_CHECKIN_RADIUS} m
+                      Bán kính {school.checkinRadius || DEFAULT_CHECKIN_RADIUS}{" "}
+                      m
                     </span>
                     <a
                       href={mapsLinkOf(school.googleMapsUrl, point)}
@@ -334,7 +336,7 @@ export default function SchoolLocationPage() {
 }
 
 /** Form gắn toạ độ + bán kính cho 1 trường. */
-function SchoolLocationModal({
+export function SchoolLocationModal({
   school,
   onClose,
   onSaved,
@@ -346,13 +348,13 @@ function SchoolLocationModal({
   const point = schoolLatLng(school);
 
   const [latitude, setLatitude] = useState(
-    point ? formatCoord(point.latitude) : "",
+    point ? formatCoord(point.latitude) : ""
   );
   const [longitude, setLongitude] = useState(
-    point ? formatCoord(point.longitude) : "",
+    point ? formatCoord(point.longitude) : ""
   );
   const [radius, setRadius] = useState(
-    String(school.checkinRadius || DEFAULT_CHECKIN_RADIUS),
+    String(school.checkinRadius || DEFAULT_CHECKIN_RADIUS)
   );
   const [accuracy, setAccuracy] = useState<number | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -410,7 +412,7 @@ function SchoolLocationModal({
       setErrors({
         mapsLink: getApiErrorMessage(
           error,
-          "Không đọc được vị trí từ link Google Maps",
+          "Không đọc được vị trí từ link Google Maps"
         ),
       });
     } finally {
@@ -439,7 +441,8 @@ function SchoolLocationModal({
     const next: Record<string, string> = {};
 
     if (!current) {
-      next.point = "Chưa đặt vị trí — dán link Google Maps hoặc lấy vị trí hiện tại";
+      next.point =
+        "Chưa đặt vị trí — dán link Google Maps hoặc lấy vị trí hiện tại";
     }
 
     const radiusValue = Number(radius);

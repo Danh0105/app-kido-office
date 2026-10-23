@@ -74,13 +74,14 @@ export default function ManagementExpenseTable({
     ...otherCosts.flatMap(() => ["150px", "140px", "160px"]),
     "180px",
     "140px",
+    "230px",
     "140px",
     "140px",
     "160px",
     "200px",
     "70px",
   ].join(" ");
-  const tableMinWidth = 2470 + otherCosts.length * 450;
+  const tableMinWidth = 2700 + otherCosts.length * 450;
 
   const totals = rows.reduce(
     (sum, row, index) => {
@@ -259,6 +260,10 @@ export default function ManagementExpenseTable({
             </div>
 
             <div className="p-3 text-center border-r border-slate-700">
+              🏦 Nguồn chi
+            </div>
+
+            <div className="p-3 text-center border-r border-slate-700">
               <div className="flex items-center justify-center gap-2">
                 <Wallet size={14} />
                 Đã chi
@@ -363,6 +368,9 @@ export default function ManagementExpenseTable({
             </div>
 
             {/* Ngày chi */}
+            <div className={footerCellClass} />
+
+            {/* Nguồn chi */}
             <div className={footerCellClass} />
 
             {/* Đã chi */}

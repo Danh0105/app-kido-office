@@ -1,6 +1,6 @@
 /**
- * Danh mục "Nguồn thu chi" — chọn ở cột "Khoản thu/chi" bảng Hóa Đơn, lưu theo
- * số hiệu tài khoản. BE (sales-management src/revenue-item/invoice-cash-account.ts)
+ * Danh mục "Nguồn thu chi" — chọn ở cột "Khoản thu/chi" bảng Hóa Đơn và cột
+ * "Nguồn chi" bảng Chi Ngoài, lưu theo số hiệu tài khoản. BE (sales-management src/revenue-item/invoice-cash-account.ts)
  * giữ cùng danh mục để kiểm tra — thêm/bớt tài khoản phải sửa cả hai nơi.
  */
 export const invoiceCashAccountGroups = [

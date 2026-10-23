@@ -9,6 +9,8 @@ export type ManagementRow = {
   paidAmount: number;
   remainingOutsideExpense: number;
   paymentDate: string;
+  /** Nguồn chi — số hiệu tài khoản trong danh mục Nguồn thu chi */
+  cashAccount: string;
   payer: string;
   note: string;
 };

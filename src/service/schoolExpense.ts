@@ -58,6 +58,8 @@ export type ManagementExpenseItemPayload = {
   invoiceAmount?: number;
   paidAmount: number;
   expenseDate?: string;
+  /** Nguồn chi — số hiệu tài khoản Nguồn thu chi */
+  cashAccount?: string;
   payer?: string;
   note?: string;
 };

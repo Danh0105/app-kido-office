@@ -2,6 +2,7 @@
 
 import { Trash2 } from "lucide-react";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
+import CashAccountSelect from "./CashAccountSelect";
 import {
   getOtherCostGrossPrice,
   getOtherCostKey,
@@ -326,6 +327,21 @@ export default function ManagementExpenseRow({
             border border-slate-200
             px-3 text-sm
             text-center
+            disabled:bg-slate-100 disabled:text-slate-400
+          "
+        />
+      </div>
+
+      {/* PAYMENT SOURCE — Nguồn chi */}
+      <div className="p-2 border-r border-slate-100">
+        <CashAccountSelect
+          value={row.cashAccount}
+          disabled={readOnly}
+          onChange={(value) => updateRow(index, "cashAccount", value)}
+          className="
+            w-full h-11 rounded-lg
+            border border-slate-200
+            bg-white px-2 text-sm
             disabled:bg-slate-100 disabled:text-slate-400
           "
         />

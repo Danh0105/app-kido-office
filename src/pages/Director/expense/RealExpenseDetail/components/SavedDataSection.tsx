@@ -35,6 +35,9 @@ const TEXT = 190;
 const FLEX_MIN = 240; // tối thiểu của cột co giãn
 
 const fmt = (value: unknown) => Number(value || 0).toLocaleString("vi-VN");
+// Tháng lưu tới 4 chữ số thập phân — toLocaleString mặc định chỉ hiện 3.
+const fmtMonths = (value: unknown) =>
+  Number(value || 0).toLocaleString("vi-VN", { maximumFractionDigits: 4 });
 const text = (value: unknown) =>
   value === null || value === undefined || value === "" ? "-" : String(value);
 
@@ -237,7 +240,7 @@ export default function SavedDataSection({
       label: "Tháng",
       width: NUM,
       align: "right",
-      render: (r) => fmt(r.monthsCount),
+      render: (r) => fmtMonths(r.monthsCount),
     },
     {
       key: "unitPrice",
@@ -341,7 +344,7 @@ export default function SavedDataSection({
       label: "Tháng",
       width: NUM,
       align: "right",
-      render: (r) => fmt(r.monthsCount),
+      render: (r) => fmtMonths(r.monthsCount),
     },
     {
       key: "teacherUP",
@@ -582,7 +585,7 @@ export default function SavedDataSection({
       label: "Tháng",
       width: NUM,
       align: "right",
-      render: (r) => fmt(r.monthsCount),
+      render: (r) => fmtMonths(r.monthsCount),
     },
     {
       key: "ql1UP",

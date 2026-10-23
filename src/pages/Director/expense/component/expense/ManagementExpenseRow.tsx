@@ -8,7 +8,7 @@ import {
   getOtherCostTax,
   type PolicyOtherCost,
 } from "../../utils/policyOtherCosts";
-import { formatDecimal } from "@/utils/decimal";
+import { formatDecimal, roundDecimal } from "@/utils/decimal";
 import { calculateRevenueQuantity } from "@/utils/revenueAmount";
 import DecimalInput from "@/components/DecimalInput";
 
@@ -171,16 +171,20 @@ export default function ManagementExpenseRow({
         />
       </div>
 
-      {/* Số tháng */}
+      {/* Số tháng — tối đa 4 chữ số thập phân, khớp numeric(15,4) ở DB */}
       <div className="flex items-center justify-center p-3 text-center flex items-center">
         <input
           type="number"
           min="0"
-          step="0.01"
+          step="any"
           value={Number(inputData.monthsCount) || ""}
           disabled={sharedLocked}
           onChange={(e) =>
-            updateInputRow(index, "monthsCount", Number(e.target.value || 0))
+            updateInputRow(
+              index,
+              "monthsCount",
+              roundDecimal(Number(e.target.value || 0), 4),
+            )
           }
           className={`${metricInputClass} text-indigo-700 disabled:bg-slate-100 disabled:text-slate-400`}
         />

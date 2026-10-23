@@ -3,7 +3,7 @@
 import { Trash2 } from "lucide-react";
 import { useMemo } from "react";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
-import { formatDecimal } from "@/utils/decimal";
+import { formatDecimal, roundDecimal } from "@/utils/decimal";
 import DecimalInput from "@/components/DecimalInput";
 
 type Props = {
@@ -170,16 +170,20 @@ export default function RevenueExpenseRow({
         />
       </div>
 
-      {/* SỐ THÁNG */}
+      {/* SỐ THÁNG — tối đa 4 chữ số thập phân, khớp numeric(15,4) ở DB */}
       <div className="flex text-center items-center justify-center border-r border-slate-200 px-2 py-2 font-semibold text-indigo-700">
         <input
           type="number"
           min="0"
-          step="0.01"
+          step="any"
           value={Number(inputData.monthsCount) || ""}
           disabled={locked}
           onChange={(e) =>
-            updateInputRow(index, "monthsCount", Number(e.target.value || 0))
+            updateInputRow(
+              index,
+              "monthsCount",
+              roundDecimal(Number(e.target.value || 0), 4),
+            )
           }
           className={`${metricInputClass} text-indigo-700`}
         />

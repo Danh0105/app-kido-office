@@ -1084,7 +1084,9 @@ export default function PolicyStatsPage({
                                     <td className="px-2 py-1">{r.content || "-"}</td>
                                     <td className="px-2 py-1 text-center">{r.totalPeriods}</td>
                                     <td className="px-2 py-1 text-center">{r.studentCount}</td>
-                                    <td className="px-2 py-1 text-center">{r.monthsCount}</td>
+                                    <td className="px-2 py-1 text-center">
+                                      {Number(r.monthsCount || 0).toLocaleString("vi-VN", { maximumFractionDigits: 4 })}
+                                    </td>
                                     <td className="px-2 py-1 text-right">{fmt(Number(r.unitPrice || 0))}</td>
                                     <td className="px-2 py-1 text-right font-semibold">{fmt(amount)}</td>
                                     <td className="px-2 py-1 text-right text-blue-600">{fmt(paid)}</td>

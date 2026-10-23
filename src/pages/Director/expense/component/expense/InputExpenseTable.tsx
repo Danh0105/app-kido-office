@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Trash2 } from "lucide-react";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
-import { formatDecimal } from "@/utils/decimal";
+import { formatDecimal, roundDecimal } from "@/utils/decimal";
 import {
   applyPeriodsInput,
   calculateRevenueAmount,
@@ -144,17 +144,18 @@ export default function InputExpenseTable({
                   <td className="border p-3">
                     <input
                       type="number"
-                      step="0.01"
+                      step="any"
                       min="0"
                       value={Number(row.monthsCount) || ""}
                       disabled={locked}
                       onChange={(e) => {
                         const value = e.target.value;
 
+                        // Tối đa 4 chữ số thập phân, khớp numeric(15,4) ở DB.
                         onUpdate(
                           idx,
                           "monthsCount",
-                          value === "" ? 0 : Number(value),
+                          value === "" ? 0 : roundDecimal(Number(value), 4),
                         );
                       }}
                       className="w-full h-16 text-center border rounded-lg text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-400"

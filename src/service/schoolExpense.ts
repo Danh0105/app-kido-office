@@ -19,6 +19,8 @@ export type RevenueItemPayload = {
   invoicePaymentDate?: string;
   /** Khoản thu/chi — số hiệu tài khoản Nguồn thu chi */
   invoiceCashAccount?: string;
+  /** Ghi chú (bảng Hóa Đơn) */
+  invoiceNote?: string;
   /** Đã bấm "Xuất hóa đơn" — khóa dòng */
   invoiceLocked?: boolean;
   paidAmount: number;
@@ -62,6 +64,8 @@ export type ManagementExpenseItemPayload = {
   invoiceAmount?: number;
   paidAmount: number;
   expenseDate?: string;
+  /** Nguồn chi — số hiệu tài khoản Nguồn thu chi */
+  cashAccount?: string;
   payer?: string;
   note?: string;
 };

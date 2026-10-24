@@ -42,6 +42,7 @@ import StockIssueOrderModal from "./components/StockIssueOrderModal";
 import StockInReceiptModal from "./components/StockInReceiptModal";
 import { enrichExpenseRequestWithCreator } from "./creatorProfiles";
 import { useExpenseSocket } from "./useExpenseSocket";
+import { invoiceCashAccountLabel } from "@/pages/Director/expense/RealExpenseDetail/utils/invoiceCashAccounts";
 import {
   activeAssignments,
   availableActions,
@@ -406,7 +407,7 @@ export default function ExpenseRequestDetail({
         run(
           () =>
             expenseRequestApi.cashReleased(reqId, {
-              fundSource: payload.fundSource!,
+              cashAccount: payload.cashAccount!,
               note: payload.note,
               files: payload.files,
             }),
@@ -817,11 +818,18 @@ export default function ExpenseRequestDetail({
                   PAYMENT_METHOD_LABEL[po.paymentMethod] || po.paymentMethod
                 }
               />
-              {po.fundSource && (
+              {po.cashAccount ? (
                 <Field
-                  label="Nguồn tiền"
-                  value={FUND_SOURCE_LABEL[po.fundSource] || po.fundSource}
+                  label="Nguồn chi"
+                  value={invoiceCashAccountLabel(po.cashAccount)}
                 />
+              ) : (
+                po.fundSource && (
+                  <Field
+                    label="Nguồn tiền"
+                    value={FUND_SOURCE_LABEL[po.fundSource] || po.fundSource}
+                  />
+                )
               )}
               {po.note && <Field label="Ghi chú" value={po.note} span />}
             </div>
@@ -1071,7 +1079,7 @@ export default function ExpenseRequestDetail({
           title="Xác nhận xuất tiền"
           submitLabel="Xuất tiền"
           submitColor="bg-orange-500"
-          showFundSource
+          showCashAccount
           showNote
           showFiles
           existingAttachments={releasedAttachments}

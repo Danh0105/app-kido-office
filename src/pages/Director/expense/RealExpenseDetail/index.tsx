@@ -96,6 +96,7 @@ const initialManagementRow: ManagementRow = {
   paidAmount: 0,
   remainingOutsideExpense: 0,
   paymentDate: "",
+  cashAccount: "",
   payer: "",
   note: "",
 };
@@ -561,9 +562,11 @@ export default function RealExpenseDetail({
     invoiceDate: "Ngày HĐ",
     invoicePaymentDate: "Ngày chi (HĐ)",
     invoiceCashAccount: "Khoản thu/chi",
+    invoiceNote: "Ghi chú (HĐ)",
     paymentMethod: "PT thanh toán",
     paymentDate: "Ngày thanh toán",
     expenseDate: "Ngày chi",
+    cashAccount: "Nguồn chi",
     payer: "Người thực hiện",
     note: "Ghi chú",
   };
@@ -929,6 +932,7 @@ export default function RealExpenseDetail({
                 invoiceUnit: r.invoiceUnit || "",
                 invoicePaymentDate: r.invoicePaymentDate || "",
                 invoiceCashAccount: r.invoiceCashAccount || "",
+                invoiceNote: r.invoiceNote || "",
                 invoiceLocked: !!r.invoiceLocked,
                 paidAmount: r.paidAmount || 0,
                 paymentMethod: r.paymentMethod || "",
@@ -1039,6 +1043,7 @@ export default function RealExpenseDetail({
                 paidAmount: r.paidAmount || 0,
                 remainingOutsideExpense: r.remaining || 0,
                 paymentDate: r.expenseDate || "",
+                cashAccount: r.cashAccount || "",
                 payer: r.payer || "",
                 note: r.note || "",
               };
@@ -1090,6 +1095,7 @@ export default function RealExpenseDetail({
         invoiceUnit: (row.invoiceUnit || "").slice(0, 50) || undefined,
         invoicePaymentDate: row.invoicePaymentDate || undefined,
         invoiceCashAccount: row.invoiceCashAccount || undefined,
+        invoiceNote: (row.invoiceNote || "").slice(0, 500) || undefined,
         invoiceLocked: !!row.invoiceLocked,
         paidAmount: Number(row.paidAmount || 0),
         paymentMethod: row.paymentMethod || undefined,
@@ -1156,6 +1162,7 @@ export default function RealExpenseDetail({
           invoiceAmount: 0,
           paidAmount: Number(row.paidAmount || 0),
           expenseDate: row.paymentDate || undefined,
+          cashAccount: row.cashAccount || undefined,
           payer: row.payer || "",
           note: row.note || "",
         };

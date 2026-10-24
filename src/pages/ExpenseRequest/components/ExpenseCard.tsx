@@ -1,5 +1,6 @@
 import { FUND_SOURCE_LABEL, type ExpenseRequest } from "@/types/expenseRequest";
 import { hasRole } from "@/utils/auth";
+import { invoiceCashAccountLabel } from "@/pages/Director/expense/RealExpenseDetail/utils/invoiceCashAccounts";
 import StatusBadge from "./StatusBadge";
 import KindBadge from "./KindBadge";
 import {
@@ -46,6 +47,9 @@ export default function ExpenseCard({
     null;
   const fundSource = hasActiveOrder
     ? item.paymentOrder?.fundSource ?? null
+    : null;
+  const cashAccount = hasActiveOrder
+    ? item.paymentOrder?.cashAccount ?? null
     : null;
   const directorApprovedAmount =
     hasRole("thuquy") &&
@@ -156,11 +160,15 @@ export default function ExpenseCard({
             </span>
           )}
         {/* Thủ quỹ cần biết xuất tiền từ quỹ tiền mặt hay tài khoản ngân hàng */}
-        {fundSource && (
+        {cashAccount ? (
+          <span>🏦 Nguồn chi: {invoiceCashAccountLabel(cashAccount)}</span>
+        ) : (
+          fundSource && (
             <span>
               🏦 Nguồn tiền: {FUND_SOURCE_LABEL[fundSource] ?? fundSource}
             </span>
-          )}
+          )
+        )}
         {item.school?.name && <span>🏫 {item.school.name}</span>}
         {item.schoolYear && <span>🎓 {item.schoolYear}</span>}
         {item.subject?.name && <span>📘 {item.subject.name}</span>}

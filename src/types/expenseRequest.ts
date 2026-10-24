@@ -133,6 +133,8 @@ export type ExpenseLogDetails = {
   } | null;
   // CONFIRM_CASH_RELEASED
   fundSource?: FundSource | null;
+  /** Nguồn chi — số hiệu tài khoản Nguồn thu chi (log từ 23/10/2026). */
+  cashAccount?: string | null;
   // CREATE_STOCK_ISSUE_ORDER
   stockIssueOrder?: {
     code?: string | null;
@@ -188,6 +190,8 @@ export type PaymentOrder = {
   amount: number;
   paymentMethod: PaymentMethod;
   fundSource?: FundSource;
+  /** Nguồn chi thủ quỹ chọn khi xuất tiền — số hiệu tài khoản Nguồn thu chi. */
+  cashAccount?: string | null;
   note?: string | null;
   createdBy?: number;
   creator?: { id: number; name?: string };

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Loader2, Send } from "lucide-react";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
-import { invoiceCashAccountGroups } from "../../RealExpenseDetail/utils/invoiceCashAccounts";
+import CashAccountSelect from "./CashAccountSelect";
 import type {
   RevenueEInvoice,
   RevenueEInvoiceLine,
@@ -492,24 +492,13 @@ export default function InvoiceTable({
                   </td>
 
                   <td className="border p-2">
-                    <select
-                      value={row.invoiceCashAccount || ""}
-                      onChange={(e) =>
-                        updateInputRow(idx, "invoiceCashAccount", e.target.value)
+                    <CashAccountSelect
+                      value={row.invoiceCashAccount}
+                      onChange={(value) =>
+                        updateInputRow(idx, "invoiceCashAccount", value)
                       }
                       className="w-full min-w-[230px] h-14 border rounded-lg px-2 text-sm bg-white"
-                    >
-                      <option value="">Chọn</option>
-                      {invoiceCashAccountGroups.map((group) => (
-                        <optgroup key={group.label} label={group.label}>
-                          {group.accounts.map((account) => (
-                            <option key={account.code} value={account.code}>
-                              {account.code} - {account.name}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
+                    />
                   </td>
 
                   <td className="border p-2">

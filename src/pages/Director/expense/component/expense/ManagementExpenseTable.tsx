@@ -81,6 +81,7 @@ export default function ManagementExpenseTable({
     ...otherCosts.flatMap(() => ["150px", "140px", "160px"]),
     "180px",
     "140px",
+    "230px",
     "140px",
     "140px",
     "160px",
@@ -88,7 +89,7 @@ export default function ManagementExpenseTable({
     ...(showActions ? ["100px"] : []),
   ].join(" ");
   const tableMinWidth =
-    (showActions ? 2500 : 2400) + otherCosts.length * 450;
+    (showActions ? 2730 : 2630) + otherCosts.length * 450;
 
   const totals = rows.reduce(
     (sum, row, index) => {
@@ -266,6 +267,10 @@ export default function ManagementExpenseTable({
             </div>
 
             <div className="p-3 text-center border-r border-slate-700">
+              🏦 Nguồn chi
+            </div>
+
+            <div className="p-3 text-center border-r border-slate-700">
               <div className="flex items-center justify-center gap-2">
                 <Wallet size={14} />
                 Đã chi
@@ -374,6 +379,9 @@ export default function ManagementExpenseTable({
             {/* Ngày chi */}
             <div className={footerCellClass} />
 
+            {/* Nguồn chi */}
+            <div className={footerCellClass} />
+
             {/* Đã chi */}
             <div className={`${footerCellClass} text-orange-600`}>
               <span className="text-lg">{formatVND(totals.paidAmount)}</span>
@@ -417,8 +425,8 @@ export default function ManagementExpenseTable({
                     minute: "2-digit",
                   })} — `
                 : ""}
-              Bảng đã khoá. Kế toán trưởng chỉ còn sửa được Ngày chi, Đã chi,
-              Người chi, Ghi chú.
+              Bảng đã khoá. Kế toán trưởng chỉ còn sửa được Ngày chi, Nguồn
+              chi, Đã chi, Người chi, Ghi chú.
             </span>
           </div>
         ) : (

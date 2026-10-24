@@ -6,7 +6,12 @@ import report from "@/pages/Director/static/report.png";
 import statistics from "@/pages/Director/static/statistics.png";
 import suggest from "@/pages/Director/static/suggest.png";
 import team from "@/pages/Director/static/team.png";
-import { ReceiptText, UserRoundSearch, type LucideIcon } from "lucide-react";
+import {
+  Landmark,
+  ReceiptText,
+  UserRoundSearch,
+  type LucideIcon,
+} from "lucide-react";
 
 export type DirectorMenu = {
   title: string;
@@ -30,6 +35,23 @@ const RECRUITMENT_MENU: DirectorMenu = {
   path: "recruitment",
   from: "recruitment",
 };
+
+const CASHFLOW_REPORT_MENU: DirectorMenu = {
+  title: "Tổng hợp thu chi",
+  lucideIcon: Landmark,
+  path: "cashflow-report",
+  from: "cashflow-report",
+};
+
+// Phải khớp CashflowReportGuard (routes/Director.tsx) và READ_ROLES của backend.
+const CASHFLOW_REPORT_ROLES = [
+  "accountant",
+  "ketoan_congno",
+  "ketoan_truong",
+  "thuquy",
+  "troly_gd",
+  "director",
+];
 
 const ALL_MENUS = [
   { title: "Chính sách", icon: policy, path: "nhan-vien", from: "policy" },
@@ -175,6 +197,7 @@ export const directorBaseMenus = (): DirectorMenu[] => {
 
   return [
     ...visibleMenus,
+    ...(hasRole(...CASHFLOW_REPORT_ROLES) ? [CASHFLOW_REPORT_MENU] : []),
     ...(canViewRecruitment ? [RECRUITMENT_MENU] : []),
     PAYROLL_MENU,
   ];

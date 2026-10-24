@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
 import { formatDecimal, roundDecimal } from "@/utils/decimal";
 import DecimalInput from "@/components/DecimalInput";
+import CashAccountSelect from "./CashAccountSelect";
 
 type Props = {
   row: any;
@@ -119,7 +120,7 @@ export default function RevenueExpenseRow({
     <div
       className={`
         grid
-        grid-cols-[200px_120px_90px_120px_140px_150px_160px_140px_120px_140px_150px_160px_180px_150px_150px_160px_180px_70px]
+        grid-cols-[200px_120px_90px_120px_140px_150px_160px_140px_120px_140px_150px_160px_180px_230px_150px_150px_160px_180px_70px]
         border-b
         hover:bg-blue-50/40
         transition-all
@@ -315,6 +316,15 @@ export default function RevenueExpenseRow({
           value={row.paymentDate || ""}
           disabled={locked}
           onChange={(e) => updateRow(index, "paymentDate", e.target.value)}
+          className={inputClass}
+        />
+      </div>
+
+      {/* NGUỒN CHI — tài khoản tiền đã chi (báo cáo thu chi) */}
+      <div className="p-2 border-r border-slate-200">
+        <CashAccountSelect
+          value={row.cashAccount}
+          onChange={(value) => updateRow(index, "cashAccount", value)}
           className={inputClass}
         />
       </div>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Loader2, Send } from "lucide-react";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
 import CashAccountSelect from "./CashAccountSelect";
+import DecimalInput from "@/components/DecimalInput";
 import type {
   RevenueEInvoice,
   RevenueEInvoiceLine,
@@ -323,7 +324,7 @@ export default function InvoiceTable({
       </div>
 
       <div className="overflow-auto">
-        <table className="w-full min-w-[1950px] border-collapse">
+        <table className="w-full min-w-[2300px] border-collapse">
           <thead>
             <tr className="bg-slate-900 text-white">
               <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm w-16">
@@ -358,6 +359,12 @@ export default function InvoiceTable({
               </th>
               <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
                 🏦 Khoản thu/chi
+              </th>
+              <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
+                ↔️ Thu/Chi
+              </th>
+              <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
+                💸 Số tiền thu/chi
               </th>
               <th className="p-4 border border-slate-700 font-bold whitespace-nowrap text-sm">
                 📄 HĐ
@@ -498,6 +505,38 @@ export default function InvoiceTable({
                         updateInputRow(idx, "invoiceCashAccount", value)
                       }
                       className="w-full min-w-[230px] h-14 border rounded-lg px-2 text-sm bg-white"
+                    />
+                  </td>
+
+                  {/* Thu vào hay chi ra khỏi tài khoản ở cột "Khoản thu/chi" — tuỳ dòng */}
+                  <td className="border p-2">
+                    <select
+                      value={row.invoiceCashDirection || ""}
+                      onChange={(e) =>
+                        updateInputRow(
+                          idx,
+                          "invoiceCashDirection",
+                          e.target.value as InputExpenseRow["invoiceCashDirection"],
+                        )
+                      }
+                      className="w-full min-w-[100px] h-14 border rounded-lg px-2 text-sm bg-white"
+                    >
+                      <option value="">Chọn</option>
+                      <option value="IN">Thu</option>
+                      <option value="OUT">Chi</option>
+                    </select>
+                  </td>
+
+                  {/* Số tiền thực thu/chi — báo cáo thu chi lấy đúng số này */}
+                  <td className="border p-2">
+                    <DecimalInput
+                      value={row.invoiceCashAmount}
+                      onValueChange={(value) =>
+                        updateInputRow(idx, "invoiceCashAmount", value)
+                      }
+                      placeholder="0"
+                      allowDecimal={false}
+                      className="w-full min-w-[150px] h-14 text-center font-bold border rounded-lg text-sm"
                     />
                   </td>
 

@@ -73,6 +73,8 @@ const initialInputData: InputExpenseRow = {
   invoiceNote: "",
   invoicePaymentDate: "",
   invoiceCashAccount: "",
+  invoiceCashDirection: "",
+  invoiceCashAmount: null,
   paidAmount: 0,
   paymentMethod: "",
   paymentDate: "",
@@ -85,6 +87,7 @@ const initialRevenueRow: RevenueRow = {
   paidAmount: 0,
   paymentDate: "",
   remainingOutsideExpense: 0,
+  cashAccount: "",
   payer: "",
   note: "",
 };
@@ -562,6 +565,8 @@ export default function RealExpenseDetail({
     invoiceDate: "Ngày HĐ",
     invoicePaymentDate: "Ngày chi (HĐ)",
     invoiceCashAccount: "Khoản thu/chi",
+    invoiceCashDirection: "Thu/Chi (HĐ)",
+    invoiceCashAmount: "Số tiền thu/chi (HĐ)",
     invoiceNote: "Ghi chú (HĐ)",
     paymentMethod: "PT thanh toán",
     paymentDate: "Ngày thanh toán",
@@ -932,6 +937,12 @@ export default function RealExpenseDetail({
                 invoiceUnit: r.invoiceUnit || "",
                 invoicePaymentDate: r.invoicePaymentDate || "",
                 invoiceCashAccount: r.invoiceCashAccount || "",
+                invoiceCashDirection: r.invoiceCashDirection || "",
+                invoiceCashAmount:
+                  r.invoiceCashAmount === null ||
+                  r.invoiceCashAmount === undefined
+                    ? null
+                    : Number(r.invoiceCashAmount),
                 invoiceNote: r.invoiceNote || "",
                 invoiceLocked: !!r.invoiceLocked,
                 paidAmount: r.paidAmount || 0,
@@ -968,6 +979,7 @@ export default function RealExpenseDetail({
               paidAmount: r.paidAmount || 0,
               paymentDate: r.expenseDate || "",
               paymentType: r.paymentType || "",
+              cashAccount: r.cashAccount || "",
               remainingOutsideExpense: r.remaining || 0,
               payer: r.payer || "",
               note: r.note || "",
@@ -1095,6 +1107,9 @@ export default function RealExpenseDetail({
         invoiceUnit: (row.invoiceUnit || "").slice(0, 50) || undefined,
         invoicePaymentDate: row.invoicePaymentDate || undefined,
         invoiceCashAccount: row.invoiceCashAccount || undefined,
+        invoiceCashDirection: row.invoiceCashDirection || undefined,
+        invoiceCashAmount:
+          row.invoiceCashAmount === null ? undefined : row.invoiceCashAmount,
         invoiceNote: (row.invoiceNote || "").slice(0, 500) || undefined,
         invoiceLocked: !!row.invoiceLocked,
         paidAmount: Number(row.paidAmount || 0),
@@ -1120,6 +1135,7 @@ export default function RealExpenseDetail({
           paidAmount: Number(row.paidAmount || 0),
           expenseDate: row.paymentDate || undefined,
           paymentType: row.paymentType || undefined,
+          cashAccount: row.cashAccount || undefined,
           payer: row.payer || "",
           note: row.note || "",
         };

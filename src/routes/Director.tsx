@@ -14,6 +14,7 @@ import DailyReportPage from "@/pages/Director/Sales/Report/DailyReportPage";
 import PolicyStatsPage from "@/pages/Director/Sales/Statistics/PolicyStatsPage";
 import RealExpense from "@/pages/Director/expense/RealExpense";
 import RealExpenseDetail from "@/pages/Director/expense/RealExpenseDetail";
+import CashflowReportPage from "@/pages/Director/CashflowReport/CashflowReportPage";
 import EmployeeManagement from "@/pages/Director/EmployeeManagement";
 import ExpenseRequestList from "@/pages/ExpenseRequest/ExpenseRequestList";
 import ExpenseRequestDetail from "@/pages/ExpenseRequest/ExpenseRequestDetail";
@@ -32,6 +33,23 @@ const DIRECTOR_HOME = "/director";
 
 // Expense routes: accountant, director, ketoan_congno, ketoan_truong, troly_gd,
 // thuquy, saleadmin (saleadmin chỉ sửa được bảng "Chi Ngoài" — xem ManagementExpenseTable).
+// Phải khớp READ_ROLES của backend (cashflow-report.controller.ts).
+function CashflowReportGuard({ children }: { children: React.ReactNode }) {
+  if (
+    !hasRole(
+      "accountant",
+      "ketoan_congno",
+      "ketoan_truong",
+      "thuquy",
+      "troly_gd",
+      "director"
+    )
+  ) {
+    return <Navigate to={DIRECTOR_HOME} replace />;
+  }
+  return <>{children}</>;
+}
+
 function AccountantGuard({ children }: { children: React.ReactNode }) {
   if (
     !hasRole(
@@ -224,6 +242,14 @@ export default function DirectorRoutes() {
             <AccountantGuard>
               <RealExpenseDetail />
             </AccountantGuard>
+          }
+        />
+        <Route
+          path="cashflow-report"
+          element={
+            <CashflowReportGuard>
+              <CashflowReportPage />
+            </CashflowReportGuard>
           }
         />
         {/* Đề xuất chi (director / kế toán công nợ / thủ quỹ / sales admin) */}

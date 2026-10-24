@@ -113,12 +113,12 @@ export default function RevenueExpenseTable({
 
       {/* TABLE */}
       <div className="overflow-x-auto">
-        <div className="min-w-[2590px]">
+        <div className="min-w-[2820px]">
           {/* HEADER ROW */}
           <div
             className="
               grid
-              grid-cols-[200px_120px_90px_120px_140px_150px_160px_140px_120px_140px_150px_160px_180px_150px_150px_160px_180px_70px]
+              grid-cols-[200px_120px_90px_120px_140px_150px_160px_140px_120px_140px_150px_160px_180px_230px_150px_150px_160px_180px_70px]
               bg-slate-900
               text-white
               font-semibold
@@ -182,6 +182,10 @@ export default function RevenueExpenseTable({
             </div>
 
             <div className="p-3 text-center border-r border-slate-700">
+              🏦 Nguồn chi
+            </div>
+
+            <div className="p-3 text-center border-r border-slate-700">
               <div className="flex items-center justify-center gap-2">
                 <Wallet size={14} />
                 Đã chi
@@ -223,7 +227,7 @@ export default function RevenueExpenseTable({
           <div
             className="
               grid
-              grid-cols-[200px_120px_90px_120px_140px_150px_160px_140px_120px_140px_150px_160px_180px_150px_150px_160px_180px_70px]
+              grid-cols-[200px_120px_90px_120px_140px_150px_160px_140px_120px_140px_150px_160px_180px_230px_150px_150px_160px_180px_70px]
               bg-slate-100
               border-t-2
               border-slate-300
@@ -257,6 +261,9 @@ export default function RevenueExpenseTable({
 
             <div className={footerCellClass} />
 
+            <div className={footerCellClass} />
+
+            {/* Nguồn chi */}
             <div className={footerCellClass} />
 
             <div className={`${footerCellClass} text-red-600`}>

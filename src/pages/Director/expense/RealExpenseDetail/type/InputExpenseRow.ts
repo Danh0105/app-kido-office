@@ -25,6 +25,10 @@ export type InputExpenseRow = {
     invoicePaymentDate: string;
     /** Khoản thu/chi — số hiệu tài khoản trong danh mục Nguồn thu chi */
     invoiceCashAccount: string;
+    /** Khoản ở cột "Khoản thu/chi" là thu vào (IN) hay chi ra (OUT) — tuỳ dòng */
+    invoiceCashDirection: "" | "IN" | "OUT";
+    /** Số tiền thực thu/chi qua tài khoản đó (kế toán nhập); null = chưa nhập */
+    invoiceCashAmount: number | null;
 
     paidAmount: number;
     paymentMethod: "" | "cash" | "bank_transfer";

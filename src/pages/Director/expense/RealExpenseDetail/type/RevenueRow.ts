@@ -8,6 +8,8 @@ export type RevenueRow = {
     paidAmount: number;
     paymentDate: string;
     paymentType?: 'in_contract' | 'not_in_contract' | '';
+    /** Nguồn chi — số hiệu tài khoản trong danh mục Nguồn thu chi */
+    cashAccount?: string;
     remainingOutsideExpense: number;
     payer: string;
     note: string;

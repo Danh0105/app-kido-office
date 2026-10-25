@@ -1727,6 +1727,8 @@ export default function RealExpenseDetail({
                 einvoices={einvoices}
                 onUnlinkEInvoice={isChief ? handleUnlinkEInvoice : undefined}
                 unlinkingEInvoiceId={unlinkingEInvoiceId}
+                schoolName={resolvedSchool?.name}
+                schoolYear={selectedSchoolYear}
               />}
 
               {/*
@@ -1759,6 +1761,8 @@ export default function RealExpenseDetail({
                 finalized={finalized}
                 finalizedByName={finalizedByName}
                 finalizedAt={finalizedAt}
+                schoolName={resolvedSchool?.name}
+                schoolYear={selectedSchoolYear}
               />}
 
               {/* SAVED DATA */}

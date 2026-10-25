@@ -13,6 +13,7 @@ import {
 import RevenueExpenseTable from "./RevenueExpenseTable";
 import ManagementExpenseTable from "./ManagementExpenseTable";
 import InvoiceTable from "./InvoiceTable";
+import ExpensePrintButton from "./ExpensePrintButton";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
 import type { RevenueEInvoice } from "@/service/schoolExpense";
 
@@ -87,6 +88,9 @@ type Props = {
   /** KTT "Bỏ liên kết nháp" ở bảng Hóa Đơn. Không truyền thì ẩn nút. */
   onUnlinkEInvoice?: (einvoice: RevenueEInvoice) => void;
   unlinkingEInvoiceId?: number | null;
+  /** Tiêu đề trang in. */
+  schoolName?: string;
+  schoolYear?: string;
 };
 
 const formatDateTime = (value: string | Date) =>
@@ -145,6 +149,8 @@ export default function ExpenseFormTable({
   einvoices = [],
   onUnlinkEInvoice,
   unlinkingEInvoiceId = null,
+  schoolName,
+  schoolYear,
 }: Props) {
   const [confirmFinalize, setConfirmFinalize] = useState(false);
   const lockAllInvoices = () => {
@@ -434,6 +440,18 @@ export default function ExpenseFormTable({
               </span>
             </button>
           )}
+
+          <ExpensePrintButton
+            availableSections={
+              managementOnly ? ["management"] : undefined
+            }
+            inputRows={inputRows}
+            revenueRows={revenueRows}
+            managementRows={managementRows}
+            subject={subjects}
+            schoolName={schoolName}
+            schoolYear={schoolYear}
+          />
 
           {handleViewHistory && (
             <button

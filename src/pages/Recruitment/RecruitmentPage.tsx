@@ -41,7 +41,11 @@ import CandidatesPanel from "./CandidatesPanel";
 import ConversationsPanel from "./ConversationsPanel";
 import OperationsPanel from "./OperationsPanel";
 import InterviewsPanel, { InterviewForm } from "./InterviewsPanel";
-import ScreeningCriteriaEditor from "./ScreeningCriteriaEditor";
+import ScreeningCriteriaEditor, {
+  ScreeningCriteriaFields,
+  toCriteriaForm,
+  toScreeningCriteria
+} from "./ScreeningCriteriaEditor";
 import PositionSelect from "./PositionSelect";
 import { usePagedRecruitment } from "./usePagedRecruitment";
 import {
@@ -224,11 +228,6 @@ export default function RecruitmentPage() {
     toast.success("Đã cập nhật dữ liệu tuyển dụng");
   };
 
-  const primaryAction = () => {
-    if (tab === "jobs") setShowCreateJob(true);
-    else setShowCreateCandidate(true);
-  };
-
   const today = new Intl.DateTimeFormat("vi-VN", {
     timeZone: "Asia/Ho_Chi_Minh",
     weekday: "long",
@@ -264,13 +263,11 @@ export default function RecruitmentPage() {
             {canManage && (
               <button
                 type="button"
-                onClick={primaryAction}
+                onClick={() => setShowCreateCandidate(true)}
                 className="flex h-10 items-center gap-2 rounded-xl bg-[#005BEA] px-4 text-xs font-bold text-white shadow-lg shadow-blue-600/15 transition hover:bg-blue-700"
               >
                 <Plus size={16} />
-                <span className="hidden sm:inline">
-                  {tab === "jobs" ? "Tạo vị trí" : "Thêm ứng viên"}
-                </span>
+                <span className="hidden sm:inline">Thêm ứng viên</span>
               </button>
             )}
           </div>
@@ -456,6 +453,16 @@ export default function RecruitmentPage() {
                     className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
                   />
                 </label>
+                {tab === "jobs" && canManage && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateJob(true)}
+                    className="flex h-9 shrink-0 items-center gap-1.5 rounded-xl bg-[#005BEA] px-3 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700"
+                  >
+                    <Plus size={15} />
+                    Tạo vị trí
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -2322,6 +2329,7 @@ function CreateJobModal({
   const [saving, setSaving] = useState(false);
   const [positionRole, setPositionRole] = useState("");
   const [positionTitle, setPositionTitle] = useState("");
+  const [criteria, setCriteria] = useState(() => toCriteriaForm());
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -2334,7 +2342,8 @@ function CreateJobModal({
       title: positionTitle,
       numberOfPositions: Number(raw.numberOfPositions || 1),
       salaryMin: raw.salaryMin ? Number(raw.salaryMin) : undefined,
-      salaryMax: raw.salaryMax ? Number(raw.salaryMax) : undefined
+      salaryMax: raw.salaryMax ? Number(raw.salaryMax) : undefined,
+      screeningCriteria: toScreeningCriteria(criteria)
     };
     setSaving(true);
     try {
@@ -2420,6 +2429,16 @@ function CreateJobModal({
               />
             </Field>
           </div>
+          <div className="border-t border-slate-100 pt-4 sm:col-span-2">
+            <p className="text-xs font-black text-slate-800">
+              Tiêu chí sàng lọc
+            </p>
+            <p className="mt-1 text-[10px] text-slate-500">
+              Hệ thống dùng để sàng lọc hồ sơ; để trống nếu chưa có. Có thể sửa
+              sau trong chi tiết vị trí.
+            </p>
+          </div>
+          <ScreeningCriteriaFields value={criteria} onChange={setCriteria} />
         </div>
         <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-4">
           <button

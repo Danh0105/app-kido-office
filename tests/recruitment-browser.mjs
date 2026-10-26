@@ -172,16 +172,27 @@ try {
   check("cancelling interviews requires a reason");
   await closeModal();
 
+  assert.equal(await page.getByRole("button", { name: "Tạo vị trí", exact: true }).count(), 0);
   await page.getByRole("button", { name: /^Vị trí tuyển\s*1$/ }).click();
+  await page.getByPlaceholder("Tìm tên hoặc mã vị trí…").waitFor();
+  assert.equal(await page.locator("header").getByRole("button", { name: "Tạo vị trí", exact: true }).count(), 0);
+  assert.equal(await page.locator("header").getByRole("button", { name: "Thêm ứng viên", exact: true }).count(), 1);
+  check("create-job button lives in the jobs tab, header keeps add-candidate");
   await page.getByRole("button", { name: "Tạo vị trí", exact: true }).click();
   await page.getByRole("dialog").getByLabel("Mã vị trí", { exact: true }).fill("NEW-SYNTHETIC");
   assert.equal(await page.getByRole("dialog").locator('input[name="title"]').count(), 0);
   await page.getByLabel("Chức danh hệ thống", { exact: true }).selectOption("giaovien_ctv");
+  await page.getByRole("dialog").getByLabel("Kinh nghiệm tối thiểu (tháng)", { exact: true }).fill("12");
+  await page.getByRole("dialog").getByLabel("Kỹ năng bắt buộc (dấu phẩy)", { exact: true }).fill("Giao tiếp, Excel, Giao tiếp");
+  await page.getByRole("dialog").getByRole("checkbox", { name: "Ưu tiên có thể bắt đầu ngay" }).check();
+  if (process.env.RECRUITMENT_JOB_SCREENSHOT) await page.screenshot({ path: process.env.RECRUITMENT_JOB_SCREENSHOT });
   await page.getByRole("button", { name: "Tạo bản nháp", exact: true }).click();
   await until(() => !!write("/recruitment/jobs", "POST"));
   assert.equal(write("/recruitment/jobs", "POST").body.positionRole, "giaovien_ctv");
   assert.equal(write("/recruitment/jobs", "POST").body.title, "Giáo viên CTV");
   check("new job selects an existing system position, not a free-form role");
+  assert.deepEqual(write("/recruitment/jobs", "POST").body.screeningCriteria, { minimumExperienceMonths: 12, requiredSkills: ["Giao tiếp", "Excel"], preferredSkills: [], locations: [], availableImmediatelyPreferred: true });
+  check("new job sends screening criteria in the create request");
   await page.getByRole("button", { name: /TEST-ONLY/ }).click();
   await page.getByRole("button", { name: "Chỉnh sửa", exact: true }).click();
   await page.getByLabel("Chức danh hệ thống", { exact: true }).selectOption("sales");
@@ -276,6 +287,9 @@ try {
   await page.evaluate(value => localStorage.setItem("access_token", value), token("director"));
   await page.reload();
   await page.getByText("Bạn đang ở chế độ chỉ xem.", { exact: false }).waitFor();
+  await page.getByRole("button", { name: /^Vị trí tuyển\s*1$/ }).click();
+  await page.getByPlaceholder("Tìm tên hoặc mã vị trí…").waitFor();
+  assert.equal(await page.getByRole("button", { name: "Tạo vị trí", exact: true }).count(), 0);
   await page.getByRole("button", { name: /^Phỏng vấn\s*1$/ }).click();
   assert.equal(await page.getByRole("button", { name: "Tạo lịch phỏng vấn", exact: true }).count(), 0);
   await page.getByRole("button", { name: /^Ứng viên\s*1$/ }).click();

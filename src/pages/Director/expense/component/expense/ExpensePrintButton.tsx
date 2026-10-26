@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Printer, X } from "lucide-react";
+import { FileSpreadsheet, Printer, X } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import {
@@ -9,18 +9,49 @@ import {
   type ExpensePrintData,
   type ExpensePrintSection,
 } from "../../RealExpenseDetail/utils/expensePrint";
+import {
+  buildExpenseExcel,
+  expenseExcelFileName,
+} from "../../RealExpenseDetail/utils/expenseExcel";
+import { EXCEL_FILE_TYPE, saveBlob } from "@/utils/saveBlob";
 
 type Props = Omit<ExpensePrintData, "sections"> & {
-  /** Bảng được phép in (sales admin chỉ có Chi ngoài). */
+  /** Bảng được phép in / xuất (sales admin chỉ có Chi ngoài). */
   availableSections?: ExpensePrintSection[];
 };
 
-/** Nút "In" + hộp chọn bảng cần in (Doanh thu / Chi trường / Chi ngoài). */
+type Mode = "print" | "excel";
+
+const MODE_TEXT: Record<Mode, { title: string; action: string; note: string }> = {
+  print: {
+    title: "Chọn bảng cần in",
+    action: "In",
+    note: "In theo số liệu đang hiện trên màn hình (kể cả phần chưa lưu).",
+  },
+  excel: {
+    title: "Chọn bảng cần xuất Excel",
+    action: "Xuất Excel",
+    note: "Mỗi bảng một sheet, theo số liệu đang hiện trên màn hình (kể cả phần chưa lưu).",
+  },
+};
+
+const triggerClassName = `
+  h-12 px-5 rounded-2xl
+  border border-slate-200
+  bg-white
+  text-slate-700 font-bold
+  flex items-center gap-2
+  hover:border-slate-300 hover:bg-slate-100
+  transition-all
+`;
+
+/** Nút "In" và "Xuất Excel" + hộp chọn bảng (Doanh thu / Chi trường / Chi ngoài). */
 export default function ExpensePrintButton({
   availableSections = EXPENSE_PRINT_SECTIONS.map((section) => section.key),
   ...data
 }: Props) {
-  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<Mode | null>(null);
+  const [exporting, setExporting] = useState(false);
   const [selected, setSelected] =
     useState<ExpensePrintSection[]>(availableSections);
 
@@ -28,6 +59,12 @@ export default function ExpensePrintButton({
     availableSections.includes(section.key),
   );
   const sections = selected.filter((key) => availableSections.includes(key));
+  const text = MODE_TEXT[mode || "print"];
+  const ActionIcon = mode === "excel" ? FileSpreadsheet : Printer;
+
+  const close = () => {
+    if (!exporting) setMode(null);
+  };
 
   const toggle = (key: ExpensePrintSection) =>
     setSelected((current) =>
@@ -37,37 +74,58 @@ export default function ExpensePrintButton({
     );
 
   const handlePrint = () => {
-    if (!sections.length) return;
     if (!printHtml(buildExpensePrintHtml({ ...data, sections }))) {
       toast.error("Trình duyệt không mở được trang in");
       return;
     }
-    setOpen(false);
+    setMode(null);
+  };
+
+  const handleExcel = async () => {
+    setExporting(true);
+    try {
+      const exportData = { ...data, sections };
+      const blob = await buildExpenseExcel(exportData);
+      await saveBlob(blob, expenseExcelFileName(exportData), EXCEL_FILE_TYPE);
+      setMode(null);
+    } catch (error) {
+      console.error(error);
+      toast.error("Không xuất được file Excel");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleAction = () => {
+    if (!sections.length || exporting) return;
+    if (mode === "excel") void handleExcel();
+    else handlePrint();
   };
 
   return (
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
-        className="
-          h-12 px-5 rounded-2xl
-          border border-slate-200
-          bg-white
-          text-slate-700 font-bold
-          flex items-center gap-2
-          hover:border-slate-300 hover:bg-slate-100
-          transition-all
-        "
+        onClick={() => setMode("print")}
+        className={triggerClassName}
       >
         <Printer size={18} />
         <span>In</span>
       </button>
 
-      {open && (
+      <button
+        type="button"
+        onClick={() => setMode("excel")}
+        className={triggerClassName}
+      >
+        <FileSpreadsheet size={18} />
+        <span>Xuất Excel</span>
+      </button>
+
+      {mode && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={() => setOpen(false)}
+          onClick={close}
         >
           <div
             role="dialog"
@@ -81,11 +139,11 @@ export default function ExpensePrintButton({
                 id="expense-print-title"
                 className="text-lg font-bold text-slate-800"
               >
-                Chọn bảng cần in
+                {text.title}
               </h3>
               <button
                 type="button"
-                onClick={() => setOpen(false)}
+                onClick={close}
                 aria-label="Đóng"
                 className="flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
               >
@@ -110,27 +168,26 @@ export default function ExpensePrintButton({
                   </span>
                 </label>
               ))}
-              <p className="pt-1 text-xs text-slate-500">
-                In theo số liệu đang hiện trên màn hình (kể cả phần chưa lưu).
-              </p>
+              <p className="pt-1 text-xs text-slate-500">{text.note}</p>
             </div>
 
             <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4">
               <button
                 type="button"
-                onClick={() => setOpen(false)}
-                className="h-10 rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                onClick={close}
+                disabled={exporting}
+                className="h-10 rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60"
               >
                 Huỷ
               </button>
               <button
                 type="button"
-                onClick={handlePrint}
-                disabled={!sections.length}
+                onClick={handleAction}
+                disabled={!sections.length || exporting}
                 className="flex h-10 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-bold text-white hover:bg-blue-700 disabled:bg-slate-300 disabled:text-slate-500"
               >
-                <Printer size={16} />
-                In
+                <ActionIcon size={16} />
+                {exporting ? "Đang xuất..." : text.action}
               </button>
             </div>
           </div>

@@ -11,7 +11,7 @@ import {
   calculateRevenueQuantity,
 } from "@/utils/revenueAmount";
 
-/** Các bảng in được ở màn "Quản lý thu chi". */
+/** Các bảng in / xuất Excel được ở màn "Quản lý thu chi". */
 export type ExpensePrintSection = "revenue" | "school" | "management";
 
 export const EXPENSE_PRINT_SECTIONS: {
@@ -34,12 +34,50 @@ export type ExpensePrintData = {
   schoolYear?: string;
 };
 
+/**
+ * Cách hiện một ô:
+ * - money: số tiền / đơn giá, luôn hiện kể cả 0;
+ * - quantity: STT / số tiết / HS / tháng, bỏ trống khi 0 như trên màn hình;
+ * - date: ngày dạng "YYYY-MM-DD";
+ * - text: chữ.
+ */
+export type ExpenseCellKind = "money" | "quantity" | "date" | "text";
+export type ExpenseCellAlign = "left" | "center" | "right";
+export type ExpenseCellValue = string | number;
+
 type PrintColumn<T> = {
   header: string;
-  cell: (row: T, index: number) => string;
-  align?: "left" | "center" | "right";
+  value: (row: T, index: number) => ExpenseCellValue;
+  /** Mặc định "text". */
+  kind?: ExpenseCellKind;
+  /** Mặc định theo kind. */
+  align?: ExpenseCellAlign;
   /** Có giá trị → hiện ở dòng "Tổng cộng". */
   total?: number;
+};
+
+export type ExpenseTableColumn = {
+  header: string;
+  kind: ExpenseCellKind;
+  align: ExpenseCellAlign;
+  total?: number;
+};
+
+/** Một bảng đã tính sẵn giá trị từng ô — trang in và file Excel dùng chung. */
+export type ExpenseTable = {
+  key: ExpensePrintSection;
+  label: string;
+  columns: ExpenseTableColumn[];
+  rows: ExpenseCellValue[][];
+  /** Bảng nhiều cột: in chữ nhỏ hơn. */
+  dense: boolean;
+};
+
+const DEFAULT_ALIGN: Record<ExpenseCellKind, ExpenseCellAlign> = {
+  money: "right",
+  quantity: "center",
+  date: "center",
+  text: "left",
 };
 
 const escapeHtml = (value: unknown) =>
@@ -63,11 +101,34 @@ const quantity = (value: unknown) => {
     : "";
 };
 
+/** "2026-09-15" → [2026, 9, 15]. */
+export const parseIsoDate = (value?: string | null) => {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : null;
+};
+
 /** "2026-09-15" → "15/09/2026". */
 const date = (value?: string | null) => {
-  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
-  return match ? `${match[3]}/${match[2]}/${match[1]}` : value || "";
+  const parts = parseIsoDate(value);
+  return parts
+    ? parts
+        .reverse()
+        .map((part) => String(part).padStart(2, "0"))
+        .join("/")
+    : value || "";
 };
+
+/** Giá trị ô → chữ đúng như trên màn hình / trang in. */
+export function formatExpenseCell(kind: ExpenseCellKind, value: ExpenseCellValue) {
+  if (kind === "money") return money(Number(value));
+  if (kind === "quantity") return quantity(value);
+  if (kind === "date") return date(String(value));
+  return String(value ?? "");
+}
+
+/** Cột tổng đầu tiên — "Tổng cộng" gộp các cột đứng trước nó. */
+export const firstTotalColumn = (columns: ExpenseTableColumn[]) =>
+  columns.findIndex((column) => column.total !== undefined);
 
 const sum = <T>(rows: T[], pick: (row: T) => number) =>
   rows.reduce((total, row) => total + pick(row), 0);
@@ -82,11 +143,24 @@ const PAYMENT_TYPE_LABELS: Record<string, string> = {
   not_in_contract: "Không có trong HĐ",
 };
 
-function renderTable<T>(
-  columns: PrintColumn<T>[],
-  rows: T[],
-  className = "",
-) {
+function makeTable<T>(columns: PrintColumn<T>[], rows: T[], dense = false) {
+  return {
+    columns: columns.map(
+      ({ header, kind = "text", align, total }): ExpenseTableColumn => ({
+        header,
+        kind,
+        align: align || DEFAULT_ALIGN[kind],
+        total,
+      }),
+    ),
+    rows: rows.map((row, index) =>
+      columns.map((column) => column.value(row, index)),
+    ),
+    dense,
+  };
+}
+
+function renderTable({ columns, rows, dense }: ExpenseTable) {
   const head = columns
     .map((column) => `<th>${escapeHtml(column.header)}</th>`)
     .join("");
@@ -94,12 +168,12 @@ function renderTable<T>(
   const body = rows.length
     ? rows
         .map(
-          (row, index) =>
-            `<tr>${columns
+          (row) =>
+            `<tr>${row
               .map(
-                (column) =>
-                  `<td class="${column.align || "left"}">${escapeHtml(
-                    column.cell(row, index),
+                (value, index) =>
+                  `<td class="${columns[index].align}">${escapeHtml(
+                    formatExpenseCell(columns[index].kind, value),
                   )}</td>`,
               )
               .join("")}</tr>`,
@@ -107,8 +181,7 @@ function renderTable<T>(
         .join("")
     : `<tr><td class="center" colspan="${columns.length}">Không có dữ liệu</td></tr>`;
 
-  // "Tổng cộng" gộp các cột đứng trước cột tổng đầu tiên.
-  const firstTotal = columns.findIndex((column) => column.total !== undefined);
+  const firstTotal = firstTotalColumn(columns);
   const foot =
     firstTotal > 0
       ? `<tfoot><tr><td class="center" colspan="${firstTotal}">Tổng cộng</td>${columns
@@ -122,29 +195,29 @@ function renderTable<T>(
           .join("")}</tr></tfoot>`
       : "";
 
-  return `<table class="${className}"><thead><tr>${head}</tr></thead><tbody>${body}</tbody>${foot}</table>`;
+  return `<table class="${dense ? "dense" : ""}"><thead><tr>${head}</tr></thead><tbody>${body}</tbody>${foot}</table>`;
 }
 
 const sharedColumns = <T extends { input: InputExpenseRow }>(
   studentHeader: string,
   monthHeader: string,
 ): PrintColumn<T>[] => [
-  { header: "STT", cell: (_, index) => String(index + 1), align: "center" },
-  { header: "Nội dung", cell: (item) => item.input.content || "" },
+  { header: "STT", value: (_, index) => index + 1, kind: "quantity" },
+  { header: "Nội dung", value: (item) => item.input.content || "" },
   {
     header: "Số tiết",
-    cell: (item) => quantity(item.input.totalPeriods),
-    align: "center",
+    value: (item) => Number(item.input.totalPeriods || 0),
+    kind: "quantity",
   },
   {
     header: studentHeader,
-    cell: (item) => quantity(item.input.studentCount),
-    align: "center",
+    value: (item) => Number(item.input.studentCount || 0),
+    kind: "quantity",
   },
   {
     header: monthHeader,
-    cell: (item) => quantity(item.input.monthsCount),
-    align: "center",
+    value: (item) => Number(item.input.monthsCount || 0),
+    kind: "quantity",
   },
 ];
 
@@ -158,40 +231,40 @@ function revenueSection(inputRows: InputExpenseRow[]) {
     return { input, amount, paid, remaining: amount - paid };
   });
 
-  return renderTable<(typeof rows)[number]>(
+  return makeTable<(typeof rows)[number]>(
     [
       ...sharedColumns("HS", "Tháng"),
       {
         header: "Đơn giá",
-        cell: (item) => money(item.input.unitPrice),
-        align: "right",
+        value: (item) => Number(item.input.unitPrice || 0),
+        kind: "money",
       },
       {
         header: "Thành tiền",
-        cell: (item) => money(item.amount),
-        align: "right",
+        value: (item) => item.amount,
+        kind: "money",
         total: sum(rows, (item) => item.amount),
       },
       {
         header: "Đã thu",
-        cell: (item) => money(item.paid),
-        align: "right",
+        value: (item) => item.paid,
+        kind: "money",
         total: sum(rows, (item) => item.paid),
       },
       {
         header: "Hình thức",
-        cell: (item) => PAYMENT_METHOD_LABELS[item.input.paymentMethod] || "",
+        value: (item) => PAYMENT_METHOD_LABELS[item.input.paymentMethod] || "",
         align: "center",
       },
       {
         header: "Ngày thu",
-        cell: (item) => date(item.input.paymentDate),
-        align: "center",
+        value: (item) => item.input.paymentDate || "",
+        kind: "date",
       },
       {
         header: "Còn lại",
-        cell: (item) => money(item.remaining),
-        align: "right",
+        value: (item) => item.remaining,
+        kind: "money",
         total: sum(rows, (item) => item.remaining),
       },
     ],
@@ -246,75 +319,75 @@ function schoolSection(
     };
   });
 
-  return renderTable<(typeof rows)[number]>(
+  return makeTable<(typeof rows)[number]>(
     [
       ...sharedColumns("HS", "Tháng"),
       {
         header: "ĐG CSVC",
-        cell: (item) => money(item.csvcUnitPrice),
-        align: "right",
+        value: (item) => item.csvcUnitPrice,
+        kind: "money",
       },
       {
         header: "CSVC",
-        cell: (item) => money(item.csvcAmount),
-        align: "right",
+        value: (item) => item.csvcAmount,
+        kind: "money",
         total: sum(rows, (item) => item.csvcAmount),
       },
       {
         header: "ĐG giáo viên",
-        cell: (item) => money(item.teacherUnitPrice),
-        align: "right",
+        value: (item) => item.teacherUnitPrice,
+        kind: "money",
       },
       {
         header: "Giáo viên",
-        cell: (item) => money(item.teacherAmount),
-        align: "right",
+        value: (item) => item.teacherAmount,
+        kind: "money",
         total: sum(rows, (item) => item.teacherAmount),
       },
       {
         header: "ĐG thuế",
-        cell: (item) => money(item.taxUnitPrice),
-        align: "right",
+        value: (item) => item.taxUnitPrice,
+        kind: "money",
       },
       {
         header: "Thuế",
-        cell: (item) => money(item.taxAmount),
-        align: "right",
+        value: (item) => item.taxAmount,
+        kind: "money",
         total: sum(rows, (item) => item.taxAmount),
       },
       {
         header: "Chi trường",
-        cell: (item) => money(item.total),
-        align: "right",
+        value: (item) => item.total,
+        kind: "money",
         total: sum(rows, (item) => item.total),
       },
       {
         header: "Hình thức chi",
-        cell: (item) => PAYMENT_TYPE_LABELS[item.row.paymentType] || "",
+        value: (item) => PAYMENT_TYPE_LABELS[item.row.paymentType] || "",
         align: "center",
       },
       {
         header: "Ngày chi",
-        cell: (item) => date(item.row.paymentDate),
-        align: "center",
+        value: (item) => item.row.paymentDate || "",
+        kind: "date",
       },
       {
         header: "Đã chi",
-        cell: (item) => money(item.paid),
-        align: "right",
+        value: (item) => item.paid,
+        kind: "money",
         total: sum(rows, (item) => item.paid),
       },
       {
         header: "Còn lại",
-        cell: (item) => money(item.remaining),
-        align: "right",
+        value: (item) => item.remaining,
+        kind: "money",
         total: sum(rows, (item) => item.remaining),
       },
-      { header: "Người chi", cell: (item) => item.row.payer || "" },
-      { header: "Ghi chú", cell: (item) => item.row.note || "" },
+      { header: "Người chi", value: (item) => item.row.payer || "" },
+      { header: "Ghi chú", value: (item) => item.row.note || "" },
     ],
     rows,
-    "dense",
+    true,
   );
 }
 
@@ -371,86 +444,127 @@ function managementSection(
       return [
         {
           header: `Đơn giá ${label}`,
-          cell: (item) => money(item.others[otherIndex].unitPrice),
-          align: "right",
+          value: (item) => item.others[otherIndex].unitPrice,
+          kind: "money",
         },
         {
           header: `Thuế ${label}`,
-          cell: (item) => money(item.others[otherIndex].tax),
-          align: "right",
+          value: (item) => item.others[otherIndex].tax,
+          kind: "money",
         },
         {
           header: `Chi ${label}`,
-          cell: (item) => money(item.others[otherIndex].expense),
-          align: "right",
+          value: (item) => item.others[otherIndex].expense,
+          kind: "money",
           total: sum(rows, (item) => item.others[otherIndex].expense),
         },
       ];
     },
   );
 
-  return renderTable<Item>(
+  return makeTable<Item>(
     [
       ...sharedColumns("Số HS", "Số tháng"),
       {
         header: "Đơn giá QL1",
-        cell: (item) => money(item.ql1UnitPrice),
-        align: "right",
+        value: (item) => item.ql1UnitPrice,
+        kind: "money",
       },
-      { header: "Thuế QL1", cell: (item) => money(item.ql1Tax), align: "right" },
+      { header: "Thuế QL1", value: (item) => item.ql1Tax, kind: "money" },
       {
         header: "Chi QL1",
-        cell: (item) => money(item.ql1Expense),
-        align: "right",
+        value: (item) => item.ql1Expense,
+        kind: "money",
         total: sum(rows, (item) => item.ql1Expense),
       },
       {
         header: "Đơn giá QL2",
-        cell: (item) => money(item.ql2UnitPrice),
-        align: "right",
+        value: (item) => item.ql2UnitPrice,
+        kind: "money",
       },
-      { header: "Thuế QL2", cell: (item) => money(item.ql2Tax), align: "right" },
+      { header: "Thuế QL2", value: (item) => item.ql2Tax, kind: "money" },
       {
         header: "Chi QL2",
-        cell: (item) => money(item.ql2Expense),
-        align: "right",
+        value: (item) => item.ql2Expense,
+        kind: "money",
         total: sum(rows, (item) => item.ql2Expense),
       },
       ...otherColumns,
       {
         header: "Chi ngoài",
-        cell: (item) => money(item.total),
-        align: "right",
+        value: (item) => item.total,
+        kind: "money",
         total: sum(rows, (item) => item.total),
       },
       {
         header: "Ngày chi",
-        cell: (item) => date(item.row.paymentDate),
-        align: "center",
+        value: (item) => item.row.paymentDate || "",
+        kind: "date",
       },
       {
         header: "Nguồn chi",
-        cell: (item) => invoiceCashAccountLabel(item.row.cashAccount),
+        value: (item) => invoiceCashAccountLabel(item.row.cashAccount),
       },
       {
         header: "Đã chi",
-        cell: (item) => money(item.paid),
-        align: "right",
+        value: (item) => item.paid,
+        kind: "money",
         total: sum(rows, (item) => item.paid),
       },
       {
         header: "Còn chi",
-        cell: (item) => money(item.remaining),
-        align: "right",
+        value: (item) => item.remaining,
+        kind: "money",
         total: sum(rows, (item) => item.remaining),
       },
-      { header: "Người chi", cell: (item) => item.row.payer || "" },
-      { header: "Ghi chú", cell: (item) => item.row.note || "" },
+      { header: "Người chi", value: (item) => item.row.payer || "" },
+      { header: "Ghi chú", value: (item) => item.row.note || "" },
     ],
     rows,
-    "dense",
+    true,
   );
 }
+
+/** Các bảng đã chọn, theo đúng thứ tự Doanh thu → Chi trường → Chi ngoài. */
+export function buildExpenseTables(data: ExpensePrintData): ExpenseTable[] {
+  const { sections, inputRows, revenueRows, managementRows, subject } = data;
+  const builders: Record<
+    ExpensePrintSection,
+    () => Omit<ExpenseTable, "key" | "label">
+  > = {
+    revenue: () => revenueSection(inputRows),
+    school: () => schoolSection(revenueRows, inputRows, subject),
+    management: () => managementSection(managementRows, inputRows, subject),
+  };
+
+  return EXPENSE_PRINT_SECTIONS.filter(({ key }) => sections.includes(key)).map(
+    ({ key, label }) => ({ key, label, ...builders[key]() }),
+  );
+}
+
+export const expenseSubjectName = (subject: any): string =>
+  subject?.catalog?.name || subject?.name || "";
+
+/** "Trường: … · Môn: … · Năm học: …" ở đầu trang in / file Excel. */
+export function expenseMetaLine(data: ExpensePrintData) {
+  const subjectName = expenseSubjectName(data.subject);
+  return [
+    data.schoolName && `Trường: ${data.schoolName}`,
+    subjectName && `Môn: ${subjectName}`,
+    data.schoolYear && `Năm học: ${data.schoolYear}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+export const formatNow = () =>
+  new Date().toLocaleString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
 const PRINT_STYLES = `
   @page { size: A4 landscape; margin: 10mm; }
@@ -475,46 +589,23 @@ const PRINT_STYLES = `
 
 /** Dựng trang HTML để in các bảng đã chọn, theo số liệu đang hiện trên màn hình. */
 export function buildExpensePrintHtml(data: ExpensePrintData) {
-  const { sections, inputRows, revenueRows, managementRows, subject } = data;
-  const subjectName = subject?.catalog?.name || subject?.name || "";
-  const metaParts = [
-    data.schoolName && `Trường: ${data.schoolName}`,
-    subjectName && `Môn: ${subjectName}`,
-    data.schoolYear && `Năm học: ${data.schoolYear}`,
-  ].filter(Boolean);
-  const printedAt = new Date().toLocaleString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
-  const renderers: Record<ExpensePrintSection, () => string> = {
-    revenue: () => revenueSection(inputRows),
-    school: () => schoolSection(revenueRows, inputRows, subject),
-    management: () => managementSection(managementRows, inputRows, subject),
-  };
-
-  const body = EXPENSE_PRINT_SECTIONS.filter(({ key }) =>
-    sections.includes(key),
-  )
+  const body = buildExpenseTables(data)
     .map(
-      ({ key, label }) =>
-        `<section><h2>${escapeHtml(label)}</h2>${renderers[key]()}</section>`,
+      (table) =>
+        `<section><h2>${escapeHtml(table.label)}</h2>${renderTable(table)}</section>`,
     )
     .join("");
 
-  const title = ["Thu chi", data.schoolName, subjectName]
+  const title = ["Thu chi", data.schoolName, expenseSubjectName(data.subject)]
     .filter(Boolean)
     .join(" - ");
 
   return `<!doctype html><html lang="vi"><head><meta charset="utf-8" /><title>${escapeHtml(
     title,
   )}</title><style>${PRINT_STYLES}</style></head><body><h1>Bảng thu chi</h1><p class="meta">${escapeHtml(
-    metaParts.join(" · "),
+    expenseMetaLine(data),
   )}</p><p class="printed-at">In lúc ${escapeHtml(
-    printedAt,
+    formatNow(),
   )}</p>${body}</body></html>`;
 }
 

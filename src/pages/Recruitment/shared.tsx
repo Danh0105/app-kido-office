@@ -30,7 +30,7 @@ export const STATUS_LABEL: Record<string, string> = {
   NO_SHOW: "Không đến",
   OPEN: "Đang chờ",
   RESOLVED: "Đã xử lý",
-  RETURNED_TO_AI: "Đã trả AI",
+  RETURNED_TO_AI: "Đã trả AI"
 };
 
 export const formatNumber = (value: number | null | undefined) =>
@@ -51,7 +51,7 @@ export const formatDate = (value?: string | null, withTime = false) => {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
-    ...(withTime ? { hour: "2-digit", minute: "2-digit" } : {}),
+    ...(withTime ? { hour: "2-digit", minute: "2-digit" } : {})
   }).format(new Date(value));
 };
 
@@ -78,18 +78,18 @@ export function StatusBadge({ status }: { status: string }) {
     "HIRED",
     "CONFIRMED",
     "COMPLETED",
-    "RESOLVED",
+    "RESOLVED"
   ].includes(status)
     ? "bg-emerald-50 text-emerald-700 ring-emerald-600/15"
     : ["NEEDS_HR_REVIEW", "REJECTED", "CANCELLED", "NO_SHOW", "OPEN"].includes(
-        status
-      )
-    ? "bg-rose-50 text-rose-700 ring-rose-600/15"
-    : ["SCREENING", "OFFER", "PAUSED"].includes(status)
-    ? "bg-amber-50 text-amber-700 ring-amber-600/15"
-    : ["INTERVIEW", "RETURNED_TO_AI"].includes(status)
-    ? "bg-violet-50 text-violet-700 ring-violet-600/15"
-    : "bg-sky-50 text-sky-700 ring-sky-600/15";
+          status
+        )
+      ? "bg-rose-50 text-rose-700 ring-rose-600/15"
+      : ["SCREENING", "OFFER", "PAUSED"].includes(status)
+        ? "bg-amber-50 text-amber-700 ring-amber-600/15"
+        : ["INTERVIEW", "RETURNED_TO_AI"].includes(status)
+          ? "bg-violet-50 text-violet-700 ring-violet-600/15"
+          : "bg-sky-50 text-sky-700 ring-sky-600/15";
 
   return (
     <span
@@ -103,7 +103,7 @@ export function StatusBadge({ status }: { status: string }) {
 
 export function Avatar({
   name,
-  className = "",
+  className = ""
 }: {
   name?: string | null;
   className?: string;
@@ -200,7 +200,7 @@ export function UsageMeter({
   used,
   max,
   hint,
-  format,
+  format
 }: {
   label: string;
   used: number;
@@ -213,8 +213,8 @@ export function UsageMeter({
     percent >= 90
       ? "bg-rose-500"
       : percent >= 70
-      ? "bg-amber-500"
-      : "bg-[#005BEA]";
+        ? "bg-amber-500"
+        : "bg-[#005BEA]";
   return (
     <div>
       <div className="flex items-baseline justify-between gap-2">
@@ -267,7 +267,7 @@ export function ModalShell({
   title,
   subtitle,
   onClose,
-  children,
+  children
 }: {
   title: string;
   subtitle: string;
@@ -280,9 +280,14 @@ export function ModalShell({
         type="button"
         aria-label="Đóng"
         onClick={onClose}
-        className="fixed inset-0 z-40 bg-slate-950/35 backdrop-blur-[2px]"
+        className="fixed inset-0 z-[60] bg-slate-950/35 backdrop-blur-[2px]"
       />
-      <div className="fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-3xl bg-white shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="fixed left-1/2 top-1/2 z-[70] max-h-[90vh] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-3xl bg-white shadow-2xl"
+      >
         <header className="flex items-start justify-between border-b border-slate-100 px-6 py-5">
           <div>
             <h2 className="text-lg font-black text-slate-900">{title}</h2>
@@ -312,7 +317,7 @@ export const invalidRing =
 
 export function Field({
   label,
-  children,
+  children
 }: {
   label: string;
   children: React.ReactNode;
@@ -331,7 +336,7 @@ export const CONTROL_MODE_LABEL: Record<string, string> = {
   AI_ACTIVE: "AI đang hỗ trợ",
   AI_PAUSED: "AI tạm dừng",
   HUMAN_TAKEOVER: "HR đang xử lý",
-  CLOSED: "Đã đóng",
+  CLOSED: "Đã đóng"
 };
 
 export const APPROVAL_STATE_LABEL: Record<string, string> = {
@@ -339,7 +344,7 @@ export const APPROVAL_STATE_LABEL: Record<string, string> = {
   APPROVED: "Đã duyệt",
   REJECTED: "Đã từ chối",
   REVOKED: "Đã thu hồi",
-  EXPIRED: "Hết hạn duyệt",
+  EXPIRED: "Hết hạn duyệt"
 };
 
 export const OUTBOX_STATUS_LABEL: Record<string, string> = {
@@ -350,14 +355,14 @@ export const OUTBOX_STATUS_LABEL: Record<string, string> = {
   SENT: "Đã gửi",
   UNKNOWN: "Chưa rõ kết quả",
   DEAD_LETTER: "Gửi lỗi",
-  SUPPRESSED: "Không gửi",
+  SUPPRESSED: "Không gửi"
 };
 
 export const SENDER_LABEL: Record<string, string> = {
   CANDIDATE: "Ứng viên",
   AI: "AI",
   HR: "Nhân sự",
-  SYSTEM: "Hệ thống",
+  SYSTEM: "Hệ thống"
 };
 
 export const ALERT_TYPE_LABEL: Record<string, string> = {
@@ -369,14 +374,14 @@ export const ALERT_TYPE_LABEL: Record<string, string> = {
   CHANNEL_EVENT_DEAD_LETTER: "Tin đến xử lý lỗi",
   REFRESH_OUTCOME_UNKNOWN: "Làm mới token Zalo chưa rõ",
   REPEATED_AI_FAILURE: "AI lỗi lặp lại",
-  AI_LIMIT_REACHED: "Chạm giới hạn AI",
+  AI_LIMIT_REACHED: "Chạm giới hạn AI"
 };
 
 export const SEVERITY_TONE: Record<string, string> = {
   LOW: "bg-slate-100 text-slate-600",
   MEDIUM: "bg-amber-50 text-amber-700",
   HIGH: "bg-rose-50 text-rose-700",
-  CRITICAL: "bg-rose-600 text-white",
+  CRITICAL: "bg-rose-600 text-white"
 };
 
 /** Mã idempotency cho thao tác duyệt: giữ nguyên khi người dùng bấm lại cùng một thao tác. */
@@ -401,7 +406,7 @@ export function Pagination({
   page,
   limit,
   total,
-  onChange,
+  onChange
 }: {
   page: number;
   limit: number;
@@ -447,7 +452,7 @@ export function DrawerShell({
   onClose,
   footer,
   busy = false,
-  children,
+  children
 }: {
   title: React.ReactNode;
   eyebrow?: React.ReactNode;
@@ -537,7 +542,7 @@ export function ConfirmDialog({
   confirmDisabled = false,
   onConfirm,
   onCancel,
-  children,
+  children
 }: {
   title: string;
   message: React.ReactNode;

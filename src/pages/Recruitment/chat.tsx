@@ -6,7 +6,7 @@ import {
   APPROVAL_STATE_LABEL,
   OUTBOX_STATUS_LABEL,
   SENDER_LABEL,
-  formatDate,
+  formatDate
 } from "./shared";
 
 /** Trạng thái gửi / duyệt của một tin đi (AI hoặc HR). */
@@ -28,7 +28,7 @@ export function deliveryLabel(message: RecruitmentChatMessage): {
         message.approvalState && message.approvalState !== "APPROVED"
           ? APPROVAL_STATE_LABEL[message.approvalState] || "Không gửi"
           : "Không gửi",
-      tone: "bg-slate-100 text-slate-500",
+      tone: "bg-slate-100 text-slate-500"
     };
   if (
     message.outboxStatus === "UNKNOWN" ||
@@ -36,12 +36,12 @@ export function deliveryLabel(message: RecruitmentChatMessage): {
   )
     return {
       text: OUTBOX_STATUS_LABEL[message.outboxStatus],
-      tone: "bg-rose-50 text-rose-700",
+      tone: "bg-rose-50 text-rose-700"
     };
   if (message.outboxStatus)
     return {
       text: OUTBOX_STATUS_LABEL[message.outboxStatus] || message.outboxStatus,
-      tone: "bg-blue-50 text-[#005BEA]",
+      tone: "bg-blue-50 text-[#005BEA]"
     };
   return null;
 }
@@ -53,28 +53,40 @@ const STYLE: Record<
   CANDIDATE: {
     align: "justify-start",
     bubble: "bg-white border border-slate-200 text-slate-700",
-    icon: UserRound,
+    icon: UserRound
   },
   AI: {
     align: "justify-end",
     bubble: "bg-violet-50 border border-violet-100 text-slate-800",
-    icon: Bot,
+    icon: Bot
   },
   HR: {
     align: "justify-end",
     bubble: "bg-[#005BEA] text-white",
-    icon: UsersRound,
+    icon: UsersRound
   },
   SYSTEM: {
     align: "justify-center",
     bubble: "bg-slate-100 text-slate-500",
-    icon: Bot,
-  },
+    icon: Bot
+  }
+};
+
+const SEND_ERROR_LABEL: Record<string, string> = {
+  OUTBOUND_RECIPIENT_WINDOW_LIMIT:
+    "Đã chạm hạn mức gửi cho ứng viên trong cửa sổ giờ.",
+  OUTBOUND_RECIPIENT_DAILY_LIMIT: "Đã chạm hạn mức gửi cho ứng viên hôm nay.",
+  OUTBOUND_DAILY_LIMIT: "Đã chạm hạn mức gửi toàn hệ thống hôm nay.",
+  OUTBOUND_DAILY_COST_LIMIT: "Đã chạm ngân sách tin tính phí trong ngày.",
+  OUTBOUND_MONTHLY_COST_LIMIT: "Đã chạm ngân sách tin tính phí trong tháng.",
+  ZALO_INTERACTION_EXPIRED:
+    "Đã hết cửa sổ phản hồi kể từ lần ứng viên nhắn gần nhất.",
+  HR_MESSAGE_EXPIRED: "Tin HR đã hết hạn chờ gửi."
 };
 
 export function MessageBubble({
   message,
-  highlight = false,
+  highlight = false
 }: {
   message: RecruitmentChatMessage;
   highlight?: boolean;
@@ -111,6 +123,11 @@ export function MessageBubble({
               className={`rounded-full px-2 py-0.5 font-bold ${status.tone}`}
             >
               {status.text}
+            </span>
+          )}
+          {message.outboxError && (
+            <span className="w-full text-right text-rose-700">
+              {SEND_ERROR_LABEL[message.outboxError] || message.outboxError}
             </span>
           )}
         </div>

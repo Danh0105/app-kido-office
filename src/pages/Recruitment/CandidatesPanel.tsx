@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertCircle, MessageCircle, Search } from "lucide-react";
 import toast from "react-hot-toast";
+import CandidateActions from "./CandidateActions";
 
 import {
   recruitmentApi,
   type RecruitmentCandidate,
-  type RecruitmentCandidateDetail,
+  type RecruitmentCandidateDetail
 } from "@/service/recruitment";
 
 import {
@@ -18,7 +19,7 @@ import {
   StatusBadge,
   errorMessage,
   formatDate,
-  formatNumber,
+  formatNumber
 } from "./shared";
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -27,10 +28,20 @@ const SOURCE_LABEL: Record<string, string> = {
   FACEBOOK: "Facebook",
   REFERRAL: "Giới thiệu",
   MANUAL: "Nhập tay",
-  OTHER: "Khác",
+  OTHER: "Khác"
 };
 
-export default function CandidatesPanel({ reloadKey }: { reloadKey: number }) {
+export default function CandidatesPanel({
+  reloadKey,
+  canManage,
+  onChanged,
+  onOpenApplication
+}: {
+  reloadKey: number;
+  canManage: boolean;
+  onChanged: () => void;
+  onOpenApplication: (id: number) => void;
+}) {
   const [keyword, setKeyword] = useState("");
   const [query, setQuery] = useState("");
   const [source, setSource] = useState("");
@@ -50,7 +61,7 @@ export default function CandidatesPanel({ reloadKey }: { reloadKey: number }) {
         keyword: query || undefined,
         source: source || undefined,
         page,
-        limit,
+        limit
       });
       setResult({ data: data.data, total: data.total });
     } catch (error) {
@@ -162,7 +173,14 @@ export default function CandidatesPanel({ reloadKey }: { reloadKey: number }) {
       )}
       {selected !== null && (
         <CandidateDrawer
+          key={selected}
           candidateId={selected}
+          canManage={canManage}
+          onChanged={() => {
+            void load();
+            onChanged();
+          }}
+          onOpenApplication={onOpenApplication}
           onClose={() => setSelected(null)}
         />
       )}
@@ -173,9 +191,15 @@ export default function CandidatesPanel({ reloadKey }: { reloadKey: number }) {
 function CandidateDrawer({
   candidateId,
   onClose,
+  canManage,
+  onChanged,
+  onOpenApplication
 }: {
   candidateId: number;
   onClose: () => void;
+  canManage: boolean;
+  onChanged: () => void;
+  onOpenApplication: (id: number) => void;
 }) {
   const [candidate, setCandidate] = useState<RecruitmentCandidateDetail | null>(
     null
@@ -190,16 +214,12 @@ function CandidateDrawer({
       .then(async (data) => {
         if (!active) return;
         setCandidate(data);
-        // Số hội thoại Zalo của ứng viên (tìm theo SĐT/tên; bỏ qua nếu backend cũ chưa có API).
-        const key = data.phone || data.fullName;
-        if (key) {
+        // Exact candidate identity also works before the candidate has supplied a name/phone.
+        {
           const list = await recruitmentApi
-            .conversations({ keyword: key, limit: 20 })
+            .conversations({ candidateId, limit: 1 })
             .catch(() => null);
-          if (active && list)
-            setConversations(
-              list.data.filter((c) => c.candidateId === candidateId).length
-            );
+          if (active && list) setConversations(list.total);
         }
       })
       .catch((error) => active && toast.error(errorMessage(error)))
@@ -228,6 +248,15 @@ function CandidateDrawer({
         )
       ) : (
         <div className="space-y-5 p-5">
+          {canManage && (
+            <CandidateActions
+              candidate={candidate}
+              onChanged={async () => {
+                setCandidate(await recruitmentApi.candidate(candidateId));
+                onChanged();
+              }}
+            />
+          )}
           {candidate.deletionRequestedAt && (
             <p className="flex gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
               <AlertCircle size={15} className="shrink-0" /> Ứng viên đã yêu cầu
@@ -320,7 +349,14 @@ function CandidateDrawer({
                     key={application.id}
                     className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3"
                   >
-                    <div className="min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onOpenApplication(application.id);
+                      }}
+                      className="min-w-0 text-left hover:text-blue-700"
+                    >
                       <p className="truncate text-xs font-bold text-slate-700">
                         {application.job?.title || "Vị trí"} · #{application.id}
                       </p>
@@ -330,7 +366,7 @@ function CandidateDrawer({
                           : ""}
                         {formatDate(application.createdAt)}
                       </p>
-                    </div>
+                    </button>
                     <StatusBadge status={application.status} />
                   </li>
                 ))}

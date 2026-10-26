@@ -87,6 +87,7 @@ export type UpdateRecruitmentJobPayload = Partial<{
   salaryMax: number | null;
   requirements: string | null;
   responsibilities: string | null;
+  screeningCriteria: RecruitmentScreeningCriteria;
 }>;
 
 export type RecruitmentApplication = {
@@ -123,7 +124,45 @@ export type RecruitmentInterview = {
   location: string | null;
   meetingUrl: string | null;
   status: string;
+  allowedNextStatuses?: string[];
+  slotId?: number | null;
+  interviewerId?: number | null;
+  interviewer?: { id: number; name: string } | null;
+  timezone?: string;
+  notes?: string | null;
+  cancellationReason?: string | null;
 };
+
+export type RecruitmentInterviewSlot = {
+  id: number;
+  jobId: number | null;
+  startAt: string;
+  endAt: string;
+  timezone: string;
+  location: string | null;
+  meetingUrl: string | null;
+  capacity: number;
+  bookedCount: number;
+  isActive: boolean;
+  notes?: string | null;
+};
+
+export type CandidateProfilePayload = Partial<{
+  fullName: string | null;
+  phone: string | null;
+  email: string | null;
+  location: string | null;
+  education: string | null;
+  currentJob: string | null;
+  totalExperienceMonths: number | null;
+  expectedSalary: number | null;
+  experienceSummary: string | null;
+  availableFrom: string | null;
+  skills: string[];
+  cvUrl: string | null;
+  notes: string | null;
+  allowDuplicate: boolean;
+}>;
 
 export type RecruitmentHandoff = {
   id: number;
@@ -156,6 +195,23 @@ export type RecruitmentAiUsage = {
     tokenReservationPerTurn: number;
   };
   pilot: { enabled: boolean; senders: number };
+};
+
+export type RecruitmentOutboundUsage = {
+  productionMode: boolean;
+  authorizationId: number | null;
+  today: { requests: number; estimatedCostVnd: number };
+  month: { requests: number; estimatedCostVnd: number };
+  limits: null | {
+    maxRequestsPerRecipientWindow?: number;
+    recipientWindowHours?: number;
+    maxRequestsPerRecipientDay: number;
+    maxRequestsPerDay: number;
+    dailyCostBudgetVnd: number;
+    monthlyCostBudgetVnd: number;
+    interactionWindowHours: number;
+    freeWindowHours: number;
+  };
 };
 
 // ---- Màn Nhân sự: hội thoại Zalo, duyệt tin AI (p32), vận hành --------------------------
@@ -373,6 +429,19 @@ export type RecruitmentCandidateDetail = RecruitmentCandidate & {
 };
 
 export const recruitmentApi = {
+  outboundUsage: async () =>
+    (
+      await api.get<RecruitmentOutboundUsage>(
+        "/recruitment/operations/outbound-usage"
+      )
+    ).data,
+
+  cancelHrMessage: async (outboxId: number, reason: string) =>
+    (
+      await api.post(`/recruitment/operations/outbox/${outboxId}/cancel`, {
+        reason
+      })
+    ).data,
   summary: async () =>
     (await api.get<RecruitmentSummary>("/recruitment/dashboard/summary")).data,
 
@@ -404,7 +473,7 @@ export const recruitmentApi = {
   jobs: async (params: Record<string, unknown> = {}) =>
     (
       await api.get<Paginated<RecruitmentJob>>("/recruitment/jobs", {
-        params,
+        params
       })
     ).data,
 
@@ -419,7 +488,7 @@ export const recruitmentApi = {
   handoffs: async (params: Record<string, unknown> = {}) =>
     (
       await api.get<Paginated<RecruitmentHandoff>>("/recruitment/handoffs", {
-        params,
+        params
       })
     ).data,
 
@@ -440,6 +509,112 @@ export const recruitmentApi = {
   publishJob: async (id: number) =>
     (await api.post<RecruitmentJob>(`/recruitment/jobs/${id}/publish`)).data,
 
+  pauseJob: async (id: number) =>
+    (await api.post<RecruitmentJob>(`/recruitment/jobs/${id}/pause`)).data,
+
+  closeJob: async (id: number) =>
+    (await api.post<RecruitmentJob>(`/recruitment/jobs/${id}/close`)).data,
+
+  updateCandidate: async (id: number, payload: CandidateProfilePayload) =>
+    (
+      await api.patch<RecruitmentCandidateDetail>(
+        `/recruitment/candidates/${id}`,
+        payload
+      )
+    ).data,
+
+  requestCandidateDeletion: async (id: number, note: string) =>
+    (await api.post(`/recruitment/candidates/${id}/deletion-request`, { note }))
+      .data,
+
+  createApplication: async (candidateId: number, jobId: number) =>
+    (
+      await api.post<RecruitmentApplication>("/recruitment/applications", {
+        candidateId,
+        jobId
+      })
+    ).data,
+
+  interview: async (id: number) =>
+    (await api.get<RecruitmentInterview>(`/recruitment/interviews/${id}`)).data,
+
+  createInterview: async (payload: {
+    applicationId: number;
+    slotId?: number;
+    scheduledStart?: string;
+    scheduledEnd?: string;
+    location?: string;
+    meetingUrl?: string;
+    notes?: string;
+  }) =>
+    (await api.post<RecruitmentInterview>("/recruitment/interviews", payload))
+      .data,
+
+  updateInterview: async (
+    id: number,
+    payload: {
+      status?: string;
+      cancellationReason?: string;
+      scheduledStart?: string;
+      scheduledEnd?: string;
+      location?: string;
+      meetingUrl?: string | null;
+      notes?: string;
+    }
+  ) =>
+    (
+      await api.patch<RecruitmentInterview>(
+        `/recruitment/interviews/${id}`,
+        payload
+      )
+    ).data,
+
+  interviewSlots: async (params: Record<string, unknown> = {}) =>
+    (
+      await api.get<Paginated<RecruitmentInterviewSlot>>(
+        "/recruitment/interview-slots",
+        { params }
+      )
+    ).data,
+
+  createInterviewSlot: async (payload: {
+    jobId?: number;
+    startAt: string;
+    endAt: string;
+    capacity: number;
+    location?: string;
+    meetingUrl?: string;
+    notes?: string;
+  }) =>
+    (
+      await api.post<RecruitmentInterviewSlot>(
+        "/recruitment/interview-slots",
+        payload
+      )
+    ).data,
+
+  updateInterviewSlot: async (
+    id: number,
+    payload: Partial<
+      Pick<
+        RecruitmentInterviewSlot,
+        | "isActive"
+        | "capacity"
+        | "location"
+        | "meetingUrl"
+        | "notes"
+        | "startAt"
+        | "endAt"
+      >
+    >
+  ) =>
+    (
+      await api.patch<RecruitmentInterviewSlot>(
+        `/recruitment/interview-slots/${id}`,
+        payload
+      )
+    ).data,
+
   changeApplicationStatus: async (
     id: number,
     payload: { status: string; rejectedReason?: string; note?: string }
@@ -457,7 +632,7 @@ export const recruitmentApi = {
         `/recruitment/applications/${id}/resume-ai`,
         {
           status: "COLLECTING_INFO",
-          note: "HR trả hồ sơ lại cho AI từ giao diện quản trị",
+          note: "HR trả hồ sơ lại cho AI từ giao diện quản trị"
         }
       )
     ).data,
@@ -498,7 +673,7 @@ export const recruitmentApi = {
   approveOutbox: async (outboxId: number, requestId: string) =>
     (
       await api.post(`/recruitment/operations/outbox/${outboxId}/approve`, {
-        requestId,
+        requestId
       })
     ).data,
 
@@ -518,7 +693,7 @@ export const recruitmentApi = {
     (
       await api.post(`/recruitment/operations/outbox/${outboxId}/reject`, {
         requestId,
-        reason,
+        reason
       })
     ).data,
 
@@ -530,7 +705,7 @@ export const recruitmentApi = {
   retryOutbox: async (outboxId: number) =>
     (
       await api.post(`/recruitment/operations/outbox/${outboxId}/retry`, {
-        confirmDuplicateRisk: true,
+        confirmDuplicateRisk: true
       })
     ).data,
 
@@ -539,6 +714,7 @@ export const recruitmentApi = {
       .data,
 
   conversations: async (params: {
+    candidateId?: number;
     keyword?: string;
     mode?: ConversationControlMode;
     pendingOnly?: boolean;
@@ -574,14 +750,14 @@ export const recruitmentApi = {
     (
       await api.post(`/recruitment/conversations/${id}/messages`, {
         content,
-        clientMessageId,
+        clientMessageId
       })
     ).data,
 
   resumeConversationAi: async (id: number, note?: string) =>
     (
       await api.post(`/recruitment/conversations/${id}/resume-ai`, {
-        note: note || undefined,
+        note: note || undefined
       })
     ).data,
 
@@ -624,7 +800,7 @@ export const recruitmentApi = {
   }) =>
     (
       await api.get<RecruitmentHrAlert[]>("/recruitment/operations/alerts", {
-        params,
+        params
       })
     ).data,
 
@@ -633,5 +809,5 @@ export const recruitmentApi = {
 
   candidate: async (id: number) =>
     (await api.get<RecruitmentCandidateDetail>(`/recruitment/candidates/${id}`))
-      .data,
+      .data
 };

@@ -4,7 +4,7 @@ import {
   CheckCircle2,
   OctagonPause,
   PlayCircle,
-  RefreshCw,
+  RefreshCw
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -14,8 +14,9 @@ import {
   type RecruitmentEventStats,
   type RecruitmentHrAlert,
   type RecruitmentOverview,
+  type RecruitmentOutboundUsage,
   type RecruitmentRuntimeControls,
-  type RuntimeScope,
+  type RuntimeScope
 } from "@/service/recruitment";
 
 import {
@@ -25,7 +26,7 @@ import {
   SEVERITY_TONE,
   errorMessage,
   formatDate,
-  formatNumber,
+  formatNumber
 } from "./shared";
 
 const SCOPES: {
@@ -38,20 +39,20 @@ const SCOPES: {
     scope: "AI",
     key: "aiHalted",
     label: "AI xử lý",
-    hint: "API AI + lượt mới của worker",
+    hint: "API AI + lượt mới của worker"
   },
   {
     scope: "WORKER",
     key: "workerHalted",
     label: "Worker tin đến",
-    hint: "nhận và xử lý tin Zalo đến",
+    hint: "nhận và xử lý tin Zalo đến"
   },
   {
     scope: "OUTBOUND",
     key: "outboundHalted",
     label: "Gửi Zalo",
-    hint: "mở kết nối gửi tin đã duyệt",
-  },
+    hint: "mở kết nối gửi tin đã duyệt"
+  }
 ];
 
 const ACTION_LABEL: Record<string, string> = {
@@ -96,14 +97,14 @@ const ACTION_LABEL: Record<string, string> = {
   OUTBOX_APPROVAL_EXPIRE: "Duyệt hết hạn",
   HR_ALERT_ACKNOWLEDGE: "Xác nhận cảnh báo",
   RUNTIME_STOP: "Dừng khẩn",
-  RUNTIME_RESUME: "Mở lại sau dừng khẩn",
+  RUNTIME_RESUME: "Mở lại sau dừng khẩn"
 };
 
 export default function OperationsPanel({
   canManage,
   overview,
   aiUsage,
-  onChanged,
+  onChanged
 }: {
   canManage: boolean;
   overview: RecruitmentOverview | null;
@@ -114,6 +115,8 @@ export default function OperationsPanel({
     null
   );
   const [stats, setStats] = useState<RecruitmentEventStats | null>(null);
+  const [outboundUsage, setOutboundUsage] =
+    useState<RecruitmentOutboundUsage | null>(null);
   const [alerts, setAlerts] = useState<RecruitmentHrAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [pendingAction, setPendingAction] = useState<{
@@ -125,14 +128,16 @@ export default function OperationsPanel({
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [r, s, a] = await Promise.allSettled([
+    const [r, s, a, outbound] = await Promise.allSettled([
       recruitmentApi.runtimeControls(),
       recruitmentApi.eventStats(),
       recruitmentApi.alerts({ status: "OPEN", limit: 50 }),
+      recruitmentApi.outboundUsage()
     ]);
     if (r.status === "fulfilled") setRuntime(r.value);
     if (s.status === "fulfilled") setStats(s.value);
     if (a.status === "fulfilled") setAlerts(a.value);
+    setOutboundUsage(outbound.status === "fulfilled" ? outbound.value : null);
     if ([r, s, a].some((x) => x.status === "rejected"))
       toast.error("Một phần dữ liệu vận hành chưa tải được");
     setLoading(false);
@@ -244,7 +249,7 @@ export default function OperationsPanel({
                     onClick={() =>
                       setPendingAction({
                         kind: halted ? "resume" : "stop",
-                        scopes: [item.scope],
+                        scopes: [item.scope]
                       })
                     }
                     className={`mt-2 flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-bold ${
@@ -271,7 +276,7 @@ export default function OperationsPanel({
             onClick={() =>
               setPendingAction({
                 kind: "stop",
-                scopes: ["AI", "WORKER", "OUTBOUND"],
+                scopes: ["AI", "WORKER", "OUTBOUND"]
               })
             }
             className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-rose-600 text-xs font-bold text-white sm:w-auto sm:px-4"
@@ -288,6 +293,52 @@ export default function OperationsPanel({
       </section>
 
       {aiUsage && <AiUsagePanel usage={aiUsage} />}
+      <section className="rounded-2xl border border-slate-200 bg-white p-4">
+        <h3 className="text-sm font-extrabold">
+          Hạn mức gửi Zalo đang áp dụng
+        </h3>
+        {outboundUsage?.limits ? (
+          <div className="mt-2 space-y-1 text-xs text-slate-600">
+            <p>
+              Hôm nay: {outboundUsage.today.requests}/
+              {outboundUsage.limits.maxRequestsPerDay} lượt gửi · mỗi ứng viên
+              tối đa {outboundUsage.limits.maxRequestsPerRecipientDay}{" "}
+              lượt/ngày.
+            </p>
+            {outboundUsage.limits.maxRequestsPerRecipientWindow != null && (
+              <p>
+                Cửa sổ trượt:{" "}
+                {outboundUsage.limits.maxRequestsPerRecipientWindow} lượt/ứng
+                viên trong {outboundUsage.limits.recipientWindowHours} giờ.
+              </p>
+            )}
+            <p>
+              Chi phí ước tính hôm nay:{" "}
+              {formatNumber(outboundUsage.today.estimatedCostVnd)}/
+              {formatNumber(outboundUsage.limits.dailyCostBudgetVnd)} VND ·
+              tháng: {formatNumber(outboundUsage.month.estimatedCostVnd)}/
+              {formatNumber(outboundUsage.limits.monthlyCostBudgetVnd)} VND.
+            </p>
+            <p>
+              Cửa sổ tương tác: {outboundUsage.limits.interactionWindowHours}{" "}
+              giờ · miễn phí: {outboundUsage.limits.freeWindowHours} giờ · uỷ
+              quyền:{" "}
+              {outboundUsage.authorizationId
+                ? `#${outboundUsage.authorizationId}`
+                : "Chưa có"}
+              .
+            </p>
+            <p>
+              Mỗi lần thử gửi đều tính hạn mức, kể cả gửi lại hoặc chưa rõ kết
+              quả.
+            </p>
+          </div>
+        ) : (
+          <p className="mt-2 text-xs text-amber-700">
+            Chưa tải được hạn mức gửi đang áp dụng.
+          </p>
+        )}
+      </section>
 
       <section className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 bg-white p-4">

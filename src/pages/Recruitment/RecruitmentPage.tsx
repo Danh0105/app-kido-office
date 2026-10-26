@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
   ArrowRight,
@@ -21,7 +21,7 @@ import {
   Sparkles,
   UserRound,
   UsersRound,
-  X,
+  X
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -30,17 +30,19 @@ import {
   type RecruitmentAiUsage,
   type RecruitmentApplication,
   type RecruitmentHandoff,
-  type RecruitmentInterview,
   type RecruitmentJob,
   type RecruitmentOverview,
   type RecruitmentSummary,
-  type UpdateRecruitmentJobPayload,
+  type UpdateRecruitmentJobPayload
 } from "@/service/recruitment";
 import { departmentApi } from "@/service/department";
 import ApprovalQueue from "./ApprovalQueue";
 import CandidatesPanel from "./CandidatesPanel";
 import ConversationsPanel from "./ConversationsPanel";
 import OperationsPanel from "./OperationsPanel";
+import InterviewsPanel, { InterviewForm } from "./InterviewsPanel";
+import ScreeningCriteriaEditor from "./ScreeningCriteriaEditor";
+import { usePagedRecruitment } from "./usePagedRecruitment";
 import {
   AiUsagePanel,
   Avatar,
@@ -48,7 +50,9 @@ import {
   Field,
   Info,
   LoadingState,
+  ConfirmDialog,
   ModalShell,
+  Pagination,
   STATUS_LABEL,
   StatusBadge,
   errorCode,
@@ -56,7 +60,7 @@ import {
   formatDate,
   formatNumber,
   inputClass,
-  invalidRing,
+  invalidRing
 } from "./shared";
 
 import { getEmployeeName, hasRole } from "@/utils/auth";
@@ -77,6 +81,8 @@ const SELF_SEARCH_TABS: Tab[] = [
   "conversations",
   "candidates",
   "operations",
+  "interviews",
+  "handoffs"
 ];
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -85,7 +91,7 @@ const SOURCE_LABEL: Record<string, string> = {
   FACEBOOK: "Facebook",
   REFERRAL: "Giới thiệu",
   MANUAL: "Nhập tay",
-  OTHER: "Khác",
+  OTHER: "Khác"
 };
 
 const HANDOFF_LABEL: Record<string, string> = {
@@ -96,7 +102,7 @@ const HANDOFF_LABEL: Record<string, string> = {
   DATA_DELETION_REQUEST: "Yêu cầu xoá dữ liệu",
   SPECIAL_CASE: "Trường hợp đặc biệt",
   FINAL_DECISION_REQUIRED: "Cần quyết định cuối",
-  OTHER: "Lý do khác",
+  OTHER: "Lý do khác"
 };
 
 const EMPLOYMENT_LABEL: Record<string, string> = {
@@ -104,7 +110,7 @@ const EMPLOYMENT_LABEL: Record<string, string> = {
   PART_TIME: "Bán thời gian",
   CONTRACT: "Hợp đồng",
   INTERNSHIP: "Thực tập",
-  COLLABORATOR: "Cộng tác viên",
+  COLLABORATOR: "Cộng tác viên"
 };
 
 /**
@@ -117,7 +123,7 @@ const PIPELINE_COLUMNS = [
   {
     label: "Tiếp nhận",
     statuses: ["NEW", "COLLECTING_INFO"],
-    dot: "bg-sky-500",
+    dot: "bg-sky-500"
   },
   { label: "Sàng lọc", statuses: ["SCREENING"], dot: "bg-amber-500" },
   { label: "Phù hợp", statuses: ["QUALIFIED"], dot: "bg-emerald-500" },
@@ -125,13 +131,13 @@ const PIPELINE_COLUMNS = [
   {
     label: "Phỏng vấn",
     statuses: ["INTERVIEW", "OFFER"],
-    dot: "bg-violet-500",
+    dot: "bg-violet-500"
   },
   {
     label: "Hoàn tất",
     statuses: ["HIRED", "REJECTED", "WITHDRAWN"],
-    dot: "bg-slate-500",
-  },
+    dot: "bg-slate-500"
+  }
 ];
 
 const EMPTY_SUMMARY: RecruitmentSummary = {
@@ -146,7 +152,7 @@ const EMPTY_SUMMARY: RecruitmentSummary = {
   openHandoffs: 0,
   upcomingInterviews: 0,
   activeJobs: 0,
-  byStatus: {},
+  byStatus: {}
 };
 
 const formatMoney = (value: number | null | undefined) =>
@@ -155,22 +161,13 @@ const formatMoney = (value: number | null | undefined) =>
     : new Intl.NumberFormat("vi-VN", {
         style: "currency",
         currency: "VND",
-        maximumFractionDigits: 0,
+        maximumFractionDigits: 0
       }).format(value);
 
 export default function RecruitmentPage() {
   const canManage = hasRole("nhansu");
   const [tab, setTab] = useState<Tab>("pipeline");
   const [summary, setSummary] = useState(EMPTY_SUMMARY);
-  const [applications, setApplications] = useState<RecruitmentApplication[]>(
-    []
-  );
-  const [applicationCounts, setApplicationCounts] = useState<
-    Record<string, number>
-  >({});
-  const [interviews, setInterviews] = useState<RecruitmentInterview[]>([]);
-  const [handoffs, setHandoffs] = useState<RecruitmentHandoff[]>([]);
-  const [jobs, setJobs] = useState<RecruitmentJob[]>([]);
   const [aiUsage, setAiUsage] = useState<RecruitmentAiUsage | null>(null);
   const [overview, setOverview] = useState<RecruitmentOverview | null>(null);
   const [candidateTotal, setCandidateTotal] = useState(0);
@@ -187,34 +184,17 @@ export default function RecruitmentPage() {
   const load = useCallback(async (silent = false) => {
     silent ? setRefreshing(true) : setLoading(true);
     try {
-      const [
-        summaryData,
-        applicationData,
-        candidateData,
-        interviewData,
-        handoffData,
-        jobData,
-        aiUsageData,
-        overviewData,
-      ] = await Promise.all([
-        recruitmentApi.summary(),
-        recruitmentApi.applications({ limit: 100 }),
-        recruitmentApi.candidates({ limit: 1 }),
-        recruitmentApi.interviews({ limit: 100 }),
-        recruitmentApi.handoffs({ limit: 100 }),
-        recruitmentApi.jobs({ limit: 100 }),
-        // Backend chưa có endpoint (404) hoặc không đủ quyền → ẩn khối, không chặn trang.
-        recruitmentApi.aiUsage().catch(() => null),
-        // Màn duyệt tin / hội thoại / vận hành chỉ hiện khi backend có API (release G8).
-        recruitmentApi.overview().catch(() => null),
-      ]);
+      const [summaryData, candidateData, aiUsageData, overviewData] =
+        await Promise.all([
+          recruitmentApi.summary(),
+          recruitmentApi.candidates({ limit: 1 }),
+          // Backend chưa có endpoint (404) hoặc không đủ quyền → ẩn khối, không chặn trang.
+          recruitmentApi.aiUsage().catch(() => null),
+          // Màn duyệt tin / hội thoại / vận hành chỉ hiện khi backend có API (release G8).
+          recruitmentApi.overview().catch(() => null)
+        ]);
       setSummary(summaryData);
-      setApplications(applicationData.data);
-      setApplicationCounts(applicationData.countsByStatus);
       setCandidateTotal(candidateData.total);
-      setInterviews(interviewData.data);
-      setHandoffs(handoffData.data);
-      setJobs(jobData.data);
       setAiUsage(aiUsageData);
       setOverview(overviewData);
       setReloadKey((key) => key + 1);
@@ -229,31 +209,6 @@ export default function RecruitmentPage() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  const query = search.trim().toLocaleLowerCase("vi");
-  const visibleApplications = useMemo(
-    () =>
-      applications.filter((item) =>
-        [
-          item.candidate?.fullName,
-          item.candidate?.phone,
-          item.candidate?.email,
-          item.job?.title,
-        ]
-          .filter(Boolean)
-          .some((value) => value!.toLocaleLowerCase("vi").includes(query))
-      ),
-    [applications, query]
-  );
-  const visibleJobs = useMemo(
-    () =>
-      jobs.filter((item) =>
-        [item.title, item.code, item.location]
-          .filter(Boolean)
-          .some((value) => value!.toLocaleLowerCase("vi").includes(query))
-      ),
-    [jobs, query]
-  );
 
   const openApplication = async (id: number) => {
     try {
@@ -277,7 +232,7 @@ export default function RecruitmentPage() {
     timeZone: "Asia/Ho_Chi_Minh",
     weekday: "long",
     day: "2-digit",
-    month: "long",
+    month: "long"
   }).format(new Date());
 
   return (
@@ -438,13 +393,13 @@ export default function RecruitmentPage() {
                         [
                           "approvals",
                           "Duyệt tin AI",
-                          overview.counts.awaitingApproval,
+                          overview.counts.awaitingApproval
                         ],
                         [
                           "conversations",
                           "Hội thoại Zalo",
-                          overview.counts.activeConversations,
-                        ],
+                          overview.counts.activeConversations
+                        ]
                       ] as [Tab, string, number][])
                     : []),
                   ["candidates", "Ứng viên", candidateTotal],
@@ -453,9 +408,9 @@ export default function RecruitmentPage() {
                   ["jobs", "Vị trí tuyển", summary.activeJobs],
                   ...(overview
                     ? ([
-                        ["operations", "Vận hành", overview.counts.openAlerts],
+                        ["operations", "Vận hành", overview.counts.openAlerts]
                       ] as [Tab, string, number][])
-                    : []),
+                    : [])
                 ] as [Tab, string, number][]
               ).map(([value, label, count]) => (
                 <button
@@ -491,7 +446,12 @@ export default function RecruitmentPage() {
                   <input
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Tìm tên, SĐT, vị trí…"
+                    placeholder={
+                      tab === "jobs"
+                        ? "Tìm tên hoặc mã vị trí…"
+                        : "Tìm tên, SĐT, email ứng viên…"
+                    }
+                    maxLength={100}
                     className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
                   />
                 </label>
@@ -502,9 +462,9 @@ export default function RecruitmentPage() {
           {loading ? (
             <LoadingState />
           ) : tab === "pipeline" ? (
-            <Pipeline
-              applications={visibleApplications}
-              counts={applicationCounts}
+            <PagedPipeline
+              keyword={search}
+              revision={reloadKey}
               onOpen={openApplication}
             />
           ) : tab === "approvals" ? (
@@ -526,23 +486,37 @@ export default function RecruitmentPage() {
               onChanged={() => void load(true)}
             />
           ) : tab === "candidates" ? (
-            <CandidatesPanel reloadKey={reloadKey} />
+            <CandidatesPanel
+              reloadKey={reloadKey}
+              canManage={canManage}
+              onChanged={() => void load(true)}
+              onOpenApplication={openApplication}
+            />
           ) : tab === "interviews" ? (
-            <InterviewsList interviews={interviews} />
+            <InterviewsPanel
+              canManage={canManage}
+              reloadKey={reloadKey}
+              onChanged={() => void load(true)}
+            />
           ) : tab === "handoffs" ? (
-            <HandoffsTable
-              handoffs={handoffs}
+            <PagedHandoffs
+              revision={reloadKey}
               canManage={canManage}
               onResolved={() => void load(true)}
             />
           ) : (
-            <JobsGrid jobs={visibleJobs} onOpen={setSelectedJob} />
+            <PagedJobs
+              keyword={search}
+              revision={reloadKey}
+              onOpen={setSelectedJob}
+            />
           )}
         </section>
       </main>
 
       {selectedApplication && (
         <ApplicationDrawer
+          key={selectedApplication.id}
           application={selectedApplication}
           canManage={canManage}
           onClose={() => setSelectedApplication(null)}
@@ -588,7 +562,7 @@ function MetricCard({
   label,
   value,
   hint,
-  tone,
+  tone
 }: {
   icon: typeof UsersRound;
   label: string;
@@ -600,7 +574,7 @@ function MetricCard({
     blue: "bg-blue-50 text-[#005BEA]",
     rose: "bg-rose-50 text-rose-600",
     violet: "bg-violet-50 text-violet-600",
-    amber: "bg-amber-50 text-amber-600",
+    amber: "bg-amber-50 text-amber-600"
   };
   return (
     <article className="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm md:p-5">
@@ -620,10 +594,228 @@ function MetricCard({
   );
 }
 
+function PagedPipeline({
+  keyword,
+  revision,
+  onOpen
+}: {
+  keyword: string;
+  revision: number;
+  onOpen: (id: number) => void;
+}) {
+  const [page, setPage] = useState(1);
+  const [status, setStatus] = useState("");
+  const [query, setQuery] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setQuery(keyword.trim());
+      setPage(1);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [keyword]);
+  const fetch = recruitmentApi.applications;
+  const { result, loading, error, reload } = usePagedRecruitment(
+    fetch,
+    {
+      page,
+      limit: 30,
+      keyword: query || undefined,
+      status: status || undefined
+    },
+    revision
+  );
+  const data = result as typeof result & {
+    countsByStatus?: Record<string, number>;
+  };
+  return (
+    <div>
+      <div className="p-4 flex items-center gap-3">
+        <select
+          aria-label="Lọc giai đoạn hồ sơ"
+          className={inputClass}
+          value={status}
+          onChange={(e) => {
+            setStatus(e.target.value);
+            setPage(1);
+          }}
+        >
+          <option value="">Mọi giai đoạn</option>
+          {PIPELINE_COLUMNS.map((c) => (
+            <option key={c.label} value={c.statuses.join(",")}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+        <span className="text-xs text-slate-500">
+          {result?.total ?? 0} hồ sơ phù hợp · tối đa 30 hồ sơ/trang
+        </span>
+      </div>
+      {error && (
+        <p role="alert" className="p-4 text-rose-700">
+          {error} <button onClick={reload}>Thử lại</button>
+        </p>
+      )}
+      {loading ? (
+        <LoadingState />
+      ) : (
+        <Pipeline
+          applications={result?.data ?? []}
+          counts={data?.countsByStatus ?? {}}
+          onOpen={onOpen}
+        />
+      )}
+      {result && (
+        <Pagination
+          page={page}
+          limit={30}
+          total={result.total}
+          onChange={setPage}
+        />
+      )}
+    </div>
+  );
+}
+
+function PagedJobs({
+  keyword,
+  revision,
+  onOpen
+}: {
+  keyword: string;
+  revision: number;
+  onOpen: (job: RecruitmentJob) => void;
+}) {
+  const [page, setPage] = useState(1);
+  const [status, setStatus] = useState("");
+  const [query, setQuery] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setQuery(keyword.trim());
+      setPage(1);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [keyword]);
+  const { result, loading, error, reload } = usePagedRecruitment(
+    recruitmentApi.jobs,
+    {
+      page,
+      limit: 20,
+      keyword: query || undefined,
+      status: status || undefined
+    },
+    revision
+  );
+  return (
+    <div>
+      <div className="p-4">
+        <select
+          aria-label="Lọc trạng thái vị trí"
+          className={inputClass}
+          value={status}
+          onChange={(e) => {
+            setStatus(e.target.value);
+            setPage(1);
+          }}
+        >
+          <option value="">Mọi trạng thái</option>
+          {["DRAFT", "ACTIVE", "PAUSED", "CLOSED"].map((s) => (
+            <option key={s} value={s}>
+              {STATUS_LABEL[s]}
+            </option>
+          ))}
+        </select>
+      </div>
+      {error && (
+        <p role="alert">
+          {error} <button onClick={reload}>Thử lại</button>
+        </p>
+      )}
+      {loading ? (
+        <LoadingState />
+      ) : (
+        <JobsGrid jobs={result?.data ?? []} onOpen={onOpen} />
+      )}
+      {result && (
+        <Pagination
+          page={page}
+          limit={20}
+          total={result.total}
+          onChange={setPage}
+        />
+      )}
+    </div>
+  );
+}
+
+function PagedHandoffs({
+  revision,
+  canManage,
+  onResolved
+}: {
+  revision: number;
+  canManage: boolean;
+  onResolved: () => void;
+}) {
+  const [page, setPage] = useState(1);
+  const [status, setStatus] = useState("OPEN");
+  const { result, loading, error, reload } = usePagedRecruitment(
+    recruitmentApi.handoffs,
+    { page, limit: 20, status: status || undefined },
+    revision
+  );
+  return (
+    <div>
+      <div className="p-4">
+        <select
+          aria-label="Lọc bàn giao HR"
+          className={inputClass}
+          value={status}
+          onChange={(e) => {
+            setStatus(e.target.value);
+            setPage(1);
+          }}
+        >
+          <option value="">Mọi trạng thái</option>
+          {["OPEN", "RESOLVED", "RETURNED_TO_AI"].map((s) => (
+            <option key={s} value={s}>
+              {STATUS_LABEL[s]}
+            </option>
+          ))}
+        </select>
+      </div>
+      {error && (
+        <p role="alert">
+          {error} <button onClick={reload}>Thử lại</button>
+        </p>
+      )}
+      {loading ? (
+        <LoadingState />
+      ) : (
+        <HandoffsTable
+          handoffs={result?.data ?? []}
+          canManage={canManage}
+          onResolved={() => {
+            reload();
+            onResolved();
+          }}
+        />
+      )}
+      {result && (
+        <Pagination
+          page={page}
+          limit={20}
+          total={result.total}
+          onChange={setPage}
+        />
+      )}
+    </div>
+  );
+}
+
 function Pipeline({
   applications,
   counts,
-  onOpen,
+  onOpen
 }: {
   applications: RecruitmentApplication[];
   counts: Record<string, number>;
@@ -672,7 +864,7 @@ function Pipeline({
 
 function ApplicationCard({
   item,
-  onOpen,
+  onOpen
 }: {
   item: RecruitmentApplication;
   onOpen: (id: number) => void;
@@ -722,85 +914,30 @@ function ApplicationCard({
   );
 }
 
-function InterviewsList({
-  interviews,
-}: {
-  interviews: RecruitmentInterview[];
-}) {
-  if (!interviews.length)
-    return (
-      <EmptyState
-        title="Chưa có lịch phỏng vấn"
-        text="Lịch do AI đề xuất hoặc HR tạo sẽ xuất hiện tại đây."
-      />
-    );
-  return (
-    <div className="space-y-2 p-4">
-      {interviews.map((item) => (
-        <article
-          key={item.id}
-          className="grid grid-cols-[76px_1fr_auto] items-center gap-4 rounded-xl border border-slate-200 p-4 md:grid-cols-[90px_1fr_1fr_auto]"
-        >
-          <div className="border-r border-slate-100">
-            <p className="text-base font-black text-slate-900">
-              {new Intl.DateTimeFormat("vi-VN", {
-                timeZone: "Asia/Ho_Chi_Minh",
-                hour: "2-digit",
-                minute: "2-digit",
-                hour12: false,
-              }).format(new Date(item.scheduledStart))}
-            </p>
-            <p className="mt-1 text-[9px] text-slate-400">
-              {formatDate(item.scheduledStart)}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs font-extrabold text-slate-800">
-              {item.candidate?.fullName || `Ứng viên #${item.candidateId}`}
-            </p>
-            <p className="mt-1 text-[10px] text-slate-500">
-              {item.job?.title || `Vị trí #${item.jobId}`}
-            </p>
-          </div>
-          <div className="hidden items-center gap-2 text-xs text-slate-500 md:flex">
-            <MapPin size={14} className="text-[#005BEA]" />
-            {item.location ||
-              (item.meetingUrl ? "Trực tuyến" : "Chưa cập nhật")}
-          </div>
-          <StatusBadge status={item.status} />
-        </article>
-      ))}
-    </div>
-  );
-}
-
 function HandoffsTable({
   handoffs,
   canManage,
-  onResolved,
+  onResolved
 }: {
   handoffs: RecruitmentHandoff[];
   canManage: boolean;
   onResolved: () => void;
 }) {
-  const resolve = async (item: RecruitmentHandoff) => {
-    if (
-      !window.confirm(
-        `Đánh dấu yêu cầu của ${
-          item.candidate?.fullName || "ứng viên"
-        } là đã xử lý?`
-      )
-    )
-      return;
+  const [selected, setSelected] = useState<RecruitmentHandoff | null>(null);
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const resolve = async () => {
+    if (!selected || busy || !note.trim()) return;
+    setBusy(true);
     try {
-      await recruitmentApi.resolveHandoff(
-        item.id,
-        "HR đã xử lý từ giao diện tuyển dụng"
-      );
+      await recruitmentApi.resolveHandoff(selected.id, note.trim());
       toast.success("Đã xử lý yêu cầu HR");
+      setSelected(null);
       onResolved();
     } catch (error) {
       toast.error(errorMessage(error));
+    } finally {
+      setBusy(false);
     }
   };
   if (!handoffs.length)
@@ -861,7 +998,11 @@ function HandoffsTable({
                 {canManage && item.status === "OPEN" && (
                   <button
                     type="button"
-                    onClick={() => void resolve(item)}
+                    disabled={busy}
+                    onClick={() => {
+                      setSelected(item);
+                      setNote("");
+                    }}
                     className="rounded-lg bg-[#005BEA] px-3 py-2 text-[10px] font-bold text-white"
                   >
                     Đã xử lý
@@ -872,13 +1013,36 @@ function HandoffsTable({
           ))}
         </tbody>
       </table>
+      {selected && (
+        <ConfirmDialog
+          title="Hoàn tất yêu cầu HR"
+          message={`Ghi lại cách xử lý yêu cầu của ${selected.candidate?.fullName || "ứng viên"}. Hoàn tất yêu cầu không tự mở lại AI.`}
+          confirmLabel="Lưu kết quả xử lý"
+          busy={busy}
+          confirmDisabled={!note.trim()}
+          onCancel={() => {
+            if (!busy) setSelected(null);
+          }}
+          onConfirm={() => void resolve()}
+        >
+          <Field label="Kết quả xử lý">
+            <textarea
+              required
+              maxLength={2000}
+              className={`${inputClass} mt-3 min-h-24`}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+            />
+          </Field>
+        </ConfirmDialog>
+      )}
     </div>
   );
 }
 
 function JobsGrid({
   jobs,
-  onOpen,
+  onOpen
 }: {
   jobs: RecruitmentJob[];
   onOpen: (job: RecruitmentJob) => void;
@@ -983,7 +1147,7 @@ const toJobForm = (job: RecruitmentJob): JobForm => {
     salaryMax: job.salaryMax == null ? "" : String(job.salaryMax),
     description: job.description ?? "",
     responsibilities: job.responsibilities ?? "",
-    requirements: job.requirements ?? "",
+    requirements: job.requirements ?? ""
   };
 };
 
@@ -1014,7 +1178,7 @@ function validateJobForm(form: JobForm): JobFormErrors {
   for (const key of [
     "description",
     "responsibilities",
-    "requirements",
+    "requirements"
   ] as const)
     if (form[key].trim().length > MAX_LONG_TEXT)
       errors[key] = "Tối đa 20.000 ký tự";
@@ -1028,20 +1192,23 @@ function jobChanges(
 ): UpdateRecruitmentJobPayload {
   const text = (value: string) => value.trim() || null;
   const money = (value: string) => (value.trim() ? Number(value) : null);
-  const next: Required<UpdateRecruitmentJobPayload> = {
-    code: form.code.trim().toUpperCase(),
-    title: form.title.trim(),
-    departmentId: form.departmentId ? Number(form.departmentId) : null,
-    location: text(form.location),
-    employmentType: form.employmentType,
-    numberOfPositions: Number(form.numberOfPositions),
-    salaryMin: money(form.salaryMin),
-    salaryMax: money(form.salaryMax),
-    description: text(form.description),
-    responsibilities: text(form.responsibilities),
-    requirements: text(form.requirements),
-  };
-  const current: Required<UpdateRecruitmentJobPayload> = {
+  const next: Required<Omit<UpdateRecruitmentJobPayload, "screeningCriteria">> =
+    {
+      code: form.code.trim().toUpperCase(),
+      title: form.title.trim(),
+      departmentId: form.departmentId ? Number(form.departmentId) : null,
+      location: text(form.location),
+      employmentType: form.employmentType,
+      numberOfPositions: Number(form.numberOfPositions),
+      salaryMin: money(form.salaryMin),
+      salaryMax: money(form.salaryMax),
+      description: text(form.description),
+      responsibilities: text(form.responsibilities),
+      requirements: text(form.requirements)
+    };
+  const current: Required<
+    Omit<UpdateRecruitmentJobPayload, "screeningCriteria">
+  > = {
     code: job.code,
     title: job.title,
     departmentId: jobDepartmentId(job),
@@ -1052,7 +1219,7 @@ function jobChanges(
     salaryMax: job.salaryMax ?? null,
     description: job.description ?? null,
     responsibilities: job.responsibilities ?? null,
-    requirements: job.requirements ?? null,
+    requirements: job.requirements ?? null
   };
   return Object.fromEntries(
     Object.entries(next).filter(
@@ -1066,7 +1233,7 @@ const formatSalaryRange = (job: RecruitmentJob) => {
     new Intl.NumberFormat("vi-VN", {
       style: "currency",
       currency: job.currency || "VND",
-      maximumFractionDigits: 0,
+      maximumFractionDigits: 0
     }).format(value);
   if (job.salaryMin == null && job.salaryMax == null) return "Thương lượng";
   if (job.salaryMax == null) return `Từ ${money(job.salaryMin!)}`;
@@ -1078,7 +1245,7 @@ function JobDrawer({
   initial,
   canManage,
   onClose,
-  onChanged,
+  onChanged
 }: {
   initial: RecruitmentJob;
   canManage: boolean;
@@ -1246,6 +1413,34 @@ function JobDrawer({
     }
   };
 
+  const changeJobState = async (action: "pause" | "close") => {
+    if (
+      !window.confirm(
+        action === "pause"
+          ? "Tạm dừng nhận hồ sơ cho vị trí này?"
+          : "Đóng vị trí này? Vị trí đã đóng không thể chỉnh sửa hay mở lại."
+      )
+    )
+      return;
+    setPublishing(true);
+    try {
+      setJob(
+        await (action === "pause"
+          ? recruitmentApi.pauseJob(job.id)
+          : recruitmentApi.closeJob(job.id))
+      );
+      toast.success(
+        action === "pause" ? "Đã tạm dừng vị trí" : "Đã đóng vị trí"
+      );
+      onChanged();
+    } catch (e) {
+      toast.error(errorMessage(e));
+      recruitmentApi.job(job.id).then(setJob, () => undefined);
+    } finally {
+      setPublishing(false);
+    }
+  };
+
   const departmentOptions = [...(departments ?? [])];
   if (
     form.departmentId &&
@@ -1253,7 +1448,7 @@ function JobDrawer({
   )
     departmentOptions.unshift({
       id: Number(form.departmentId),
-      name: job.department?.name || `Phòng ban #${form.departmentId}`,
+      name: job.department?.name || `Phòng ban #${form.departmentId}`
     });
   const criteria = job.screeningCriteria ?? {};
   const criteriaRows = [
@@ -1266,13 +1461,13 @@ function JobDrawer({
     criteria.locations?.length && `Khu vực: ${criteria.locations.join(", ")}`,
     criteria.availableImmediatelyPreferred && "Ưu tiên đi làm ngay",
     criteria.maxStartDelayDays != null &&
-      `Bắt đầu chậm nhất sau ${criteria.maxStartDelayDays} ngày`,
+      `Bắt đầu chậm nhất sau ${criteria.maxStartDelayDays} ngày`
   ].filter(Boolean) as string[];
   const fieldProps = (key: keyof JobForm) => ({
     value: form[key],
     onChange: update(key),
     "aria-invalid": Boolean(errors[key]),
-    "aria-describedby": errors[key] ? `${formId}-${key}-error` : undefined,
+    "aria-describedby": errors[key] ? `${formId}-${key}-error` : undefined
   });
   const fieldError = (key: keyof JobForm) =>
     errors[key] ? (
@@ -1505,7 +1700,7 @@ function JobDrawer({
                 [
                   ["Mô tả công việc", job.description],
                   ["Trách nhiệm", job.responsibilities],
-                  ["Yêu cầu", job.requirements],
+                  ["Yêu cầu", job.requirements]
                 ] as const
               ).map(([label, value]) => (
                 <section key={label}>
@@ -1540,6 +1735,16 @@ function JobDrawer({
                     <p className="text-slate-400">Chưa khai báo tiêu chí.</p>
                   )}
                 </div>
+                {canManage && job.status !== "CLOSED" && !loading && (
+                  <ScreeningCriteriaEditor
+                    key={`${job.id}-${job.updatedAt}`}
+                    job={job}
+                    onChanged={(updated) => {
+                      setJob(updated);
+                      onChanged();
+                    }}
+                  />
+                )}
               </section>
               <p className="text-[10px] text-slate-400">
                 Tạo {formatDate(job.createdAt, true)}
@@ -1584,6 +1789,24 @@ function JobDrawer({
             </p>
           ) : (
             <div className="flex flex-wrap justify-end gap-2">
+              {job.status === "ACTIVE" && (
+                <button
+                  type="button"
+                  disabled={loading || busy}
+                  className={inputClass}
+                  onClick={() => void changeJobState("pause")}
+                >
+                  Tạm dừng tuyển
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={loading || busy}
+                className={inputClass}
+                onClick={() => void changeJobState("close")}
+              >
+                Đóng vị trí
+              </button>
               <button
                 type="button"
                 onClick={startEdit}
@@ -1619,18 +1842,17 @@ function ApplicationDrawer({
   application,
   canManage,
   onClose,
-  onChanged,
+  onChanged
 }: {
   application: RecruitmentApplication;
   canManage: boolean;
   onClose: () => void;
   onChanged: () => void;
 }) {
-  const [status, setStatus] = useState(
-    application.allowedNextStatuses?.[0] || ""
-  );
+  const [status, setStatus] = useState("");
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
+  const [showInterview, setShowInterview] = useState(false);
   const saveStatus = async () => {
     if (!status) return;
     if (status === "REJECTED" && !reason.trim()) {
@@ -1641,7 +1863,7 @@ function ApplicationDrawer({
     try {
       await recruitmentApi.changeApplicationStatus(application.id, {
         status,
-        rejectedReason: status === "REJECTED" ? reason : undefined,
+        rejectedReason: status === "REJECTED" ? reason : undefined
       });
       toast.success("Đã cập nhật hồ sơ");
       onChanged();
@@ -1773,16 +1995,32 @@ function ApplicationDrawer({
               <h3 className="text-xs font-extrabold text-slate-800">
                 Thao tác của HR
               </h3>
-              {application.aiPaused && (
+              {["QUALIFIED", "NEEDS_HR_REVIEW", "INTERVIEW"].includes(
+                application.status
+              ) && (
                 <button
                   type="button"
-                  onClick={() => void resume()}
+                  className={inputClass}
                   disabled={saving}
-                  className="mt-3 flex w-full items-center justify-between rounded-xl border border-blue-200 bg-white px-4 py-3 text-xs font-bold text-[#005BEA]"
+                  onClick={() => setShowInterview(true)}
                 >
-                  Trả hồ sơ lại cho AI <ArrowRight size={15} />
+                  Tạo lịch phỏng vấn
                 </button>
               )}
+              {application.aiPaused &&
+                !["HIRED", "REJECTED", "WITHDRAWN"].includes(
+                  application.status
+                ) &&
+                !application.candidate?.deletionRequestedAt && (
+                  <button
+                    type="button"
+                    onClick={() => void resume()}
+                    disabled={saving}
+                    className="mt-3 flex w-full items-center justify-between rounded-xl border border-blue-200 bg-white px-4 py-3 text-xs font-bold text-[#005BEA]"
+                  >
+                    Trả hồ sơ lại cho AI <ArrowRight size={15} />
+                  </button>
+                )}
               {application.allowedNextStatuses?.length ? (
                 <div className="mt-3 space-y-2">
                   <select
@@ -1820,30 +2058,47 @@ function ApplicationDrawer({
           )}
         </div>
       </aside>
+      {showInterview && (
+        <InterviewForm
+          application={application}
+          onClose={() => setShowInterview(false)}
+          onChanged={() => {
+            setShowInterview(false);
+            onChanged();
+          }}
+        />
+      )}
     </>
   );
 }
 
 function CreateCandidateModal({
   onClose,
-  onCreated,
+  onCreated
 }: {
   onClose: () => void;
   onCreated: () => void;
 }) {
   const [saving, setSaving] = useState(false);
+  const [duplicate, setDuplicate] = useState(false);
+  const [allowDuplicate, setAllowDuplicate] = useState(false);
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (saving || (duplicate && !allowDuplicate)) return;
     const form = new FormData(event.currentTarget);
     const payload = Object.fromEntries(
       [...form.entries()].filter(([, value]) => String(value).trim() !== "")
     );
     setSaving(true);
     try {
-      await recruitmentApi.createCandidate(payload);
+      await recruitmentApi.createCandidate({
+        ...payload,
+        ...(allowDuplicate ? { allowDuplicate: true } : {})
+      });
       toast.success("Đã tạo ứng viên");
       onCreated();
     } catch (error) {
+      if (errorCode(error) === "POSSIBLE_DUPLICATE") setDuplicate(true);
       toast.error(errorMessage(error));
     } finally {
       setSaving(false);
@@ -1853,9 +2108,20 @@ function CreateCandidateModal({
     <ModalShell
       title="Thêm ứng viên"
       subtitle="Chỉ thu thập thông tin phục vụ tuyển dụng."
-      onClose={onClose}
+      onClose={() => {
+        if (!saving) onClose();
+      }}
     >
-      <form onSubmit={(event) => void submit(event)}>
+      <form
+        onSubmit={(event) => void submit(event)}
+        onChange={(e) => {
+          const name = e.target instanceof HTMLInputElement ? e.target.name : "";
+          if (name === "phone" || name === "email") {
+            setDuplicate(false);
+            setAllowDuplicate(false);
+          }
+        }}
+      >
         <div className="grid gap-4 p-6 sm:grid-cols-2">
           <Field label="Họ và tên">
             <input
@@ -1900,6 +2166,16 @@ function CreateCandidateModal({
             <input name="currentJob" className={inputClass} />
           </Field>
         </div>
+        {duplicate && (
+          <label className="mx-6 mb-4 block text-xs text-amber-800">
+            <input
+              type="checkbox"
+              checked={allowDuplicate}
+              onChange={(e) => setAllowDuplicate(e.target.checked)}
+            />{" "}
+            Tôi đã đối chiếu liên hệ trùng và muốn tạo riêng ứng viên này.
+          </label>
+        )}
         <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-4">
           <button
             type="button"
@@ -1910,7 +2186,7 @@ function CreateCandidateModal({
           </button>
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || (duplicate && !allowDuplicate)}
             className="flex h-10 items-center gap-2 rounded-xl bg-[#005BEA] px-4 text-xs font-bold text-white disabled:opacity-50"
           >
             {saving && <Loader2 size={14} className="animate-spin" />}Tạo ứng
@@ -1924,7 +2200,7 @@ function CreateCandidateModal({
 
 function CreateJobModal({
   onClose,
-  onCreated,
+  onCreated
 }: {
   onClose: () => void;
   onCreated: () => void;
@@ -1940,7 +2216,7 @@ function CreateJobModal({
       ...raw,
       numberOfPositions: Number(raw.numberOfPositions || 1),
       salaryMin: raw.salaryMin ? Number(raw.salaryMin) : undefined,
-      salaryMax: raw.salaryMax ? Number(raw.salaryMax) : undefined,
+      salaryMax: raw.salaryMax ? Number(raw.salaryMax) : undefined
     };
     setSaving(true);
     try {

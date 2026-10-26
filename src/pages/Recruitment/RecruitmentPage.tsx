@@ -42,6 +42,7 @@ import ConversationsPanel from "./ConversationsPanel";
 import OperationsPanel from "./OperationsPanel";
 import InterviewsPanel, { InterviewForm } from "./InterviewsPanel";
 import ScreeningCriteriaEditor from "./ScreeningCriteriaEditor";
+import PositionSelect from "./PositionSelect";
 import { usePagedRecruitment } from "./usePagedRecruitment";
 import {
   AiUsagePanel,
@@ -1016,7 +1017,9 @@ function HandoffsTable({
       {selected && (
         <ConfirmDialog
           title="Hoàn tất yêu cầu HR"
-          message={`Ghi lại cách xử lý yêu cầu của ${selected.candidate?.fullName || "ứng viên"}. Hoàn tất yêu cầu không tự mở lại AI.`}
+          message={`Ghi lại cách xử lý yêu cầu của ${
+            selected.candidate?.fullName || "ứng viên"
+          }. Hoàn tất yêu cầu không tự mở lại AI.`}
           confirmLabel="Lưu kết quả xử lý"
           busy={busy}
           confirmDisabled={!note.trim()}
@@ -1111,6 +1114,7 @@ function JobsGrid({
 }
 
 type JobForm = {
+  positionRole: string;
   code: string;
   title: string;
   departmentId: string;
@@ -1138,6 +1142,7 @@ const toJobForm = (job: RecruitmentJob): JobForm => {
   const departmentId = jobDepartmentId(job);
   return {
     code: job.code,
+    positionRole: job.positionRole ?? "",
     title: job.title,
     departmentId: departmentId == null ? "" : String(departmentId),
     location: job.location ?? "",
@@ -1195,6 +1200,7 @@ function jobChanges(
   const next: Required<Omit<UpdateRecruitmentJobPayload, "screeningCriteria">> =
     {
       code: form.code.trim().toUpperCase(),
+      positionRole: form.positionRole || null,
       title: form.title.trim(),
       departmentId: form.departmentId ? Number(form.departmentId) : null,
       location: text(form.location),
@@ -1210,6 +1216,7 @@ function jobChanges(
     Omit<UpdateRecruitmentJobPayload, "screeningCriteria">
   > = {
     code: job.code,
+    positionRole: job.positionRole ?? null,
     title: job.title,
     departmentId: jobDepartmentId(job),
     location: job.location ?? null,
@@ -1556,6 +1563,13 @@ function JobDrawer({
                   </Field>
                   {fieldError("title")}
                 </div>
+                <PositionSelect
+                  value={form.positionRole}
+                  required={false}
+                  onChange={(value) =>
+                    setForm((current) => ({ ...current, positionRole: value }))
+                  }
+                />
                 <Field label="Phòng ban">
                   <select
                     {...fieldProps("departmentId")}
@@ -1850,22 +1864,50 @@ function ApplicationDrawer({
   onChanged: () => void;
 }) {
   const [status, setStatus] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmAccountRole, setConfirmAccountRole] = useState(false);
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [showInterview, setShowInterview] = useState(false);
   const saveStatus = async () => {
     if (!status) return;
+    if (
+      status === "HIRED" &&
+      (!application.job?.positionRole ||
+        !confirmAccountRole ||
+        password.trim().length < 8)
+    ) {
+      toast.error(
+        "Cần chức danh hệ thống, mật khẩu ít nhất 8 ký tự và xác nhận quyền tài khoản"
+      );
+      return;
+    }
     if (status === "REJECTED" && !reason.trim()) {
       toast.error("Vui lòng nhập lý do không phù hợp");
       return;
     }
     setSaving(true);
     try {
-      await recruitmentApi.changeApplicationStatus(application.id, {
-        status,
-        rejectedReason: status === "REJECTED" ? reason : undefined
-      });
-      toast.success("Đã cập nhật hồ sơ");
+      const updated = await recruitmentApi.changeApplicationStatus(
+        application.id,
+        {
+          status,
+          ...(status === "HIRED"
+            ? {
+                password,
+                confirmAccountRole,
+                accountPositionRole: application.job?.positionRole ?? undefined
+              }
+            : {}),
+          rejectedReason: status === "REJECTED" ? reason : undefined
+        }
+      );
+      setPassword("");
+      toast.success(
+        updated.employeeId
+          ? `Đã tuyển và tạo tài khoản #${updated.employeeId}`
+          : "Đã cập nhật hồ sơ"
+      );
       onChanged();
     } catch (error) {
       toast.error(errorMessage(error));
@@ -1962,6 +2004,12 @@ function ApplicationDrawer({
               </p>
             )}
           </section>
+          {application.employeeId && (
+            <p className="rounded-xl bg-emerald-50 p-4 text-xs text-emerald-800">
+              Đã tạo tài khoản nhân viên #{application.employeeId}. Đăng nhập
+              bằng số điện thoại ứng viên. HR bàn giao mật khẩu qua kênh riêng.
+            </p>
+          )}
           {(application.aiStrengths?.length ||
             application.aiConcerns?.length) && (
             <section>
@@ -2025,7 +2073,12 @@ function ApplicationDrawer({
                 <div className="mt-3 space-y-2">
                   <select
                     value={status}
-                    onChange={(event) => setStatus(event.target.value)}
+                    aria-label="Trạng thái hồ sơ mới"
+                    onChange={(event) => {
+                      setStatus(event.target.value);
+                      setPassword("");
+                      setConfirmAccountRole(false);
+                    }}
                     className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs outline-none"
                   >
                     <option value="">Chọn trạng thái mới</option>
@@ -2043,10 +2096,70 @@ function ApplicationDrawer({
                       className="min-h-20 w-full rounded-xl border border-slate-200 p-3 text-xs outline-none"
                     />
                   )}
+                  {status === "HIRED" && (
+                    <div className="space-y-3 rounded-xl border border-blue-200 bg-white p-3 text-xs">
+                      <p>
+                        HR xác nhận tuyển thành công sẽ tự động tạo tài khoản.
+                        Không cấp tài khoản chỉ vì nộp hồ sơ hoặc AI đánh giá
+                        phù hợp.
+                      </p>
+                      {!application.job?.positionRole ? (
+                        <p role="alert" className="text-rose-600">
+                          Vị trí cũ chưa gắn chức danh. Hãy sửa vị trí và chọn
+                          chức danh hệ thống trước.
+                        </p>
+                      ) : (
+                        <>
+                          <p>
+                            Quyền tài khoản:{" "}
+                            <strong>
+                              {application.job.title} (
+                              {application.job.positionRole})
+                            </strong>
+                            . Đây là quyền truy cập thực tế, gồm quyền quản lý
+                            nếu chọn chức danh quản lý.
+                          </p>
+                          <Field label="Mật khẩu ban đầu">
+                            <input
+                              type="password"
+                              autoComplete="new-password"
+                              minLength={8}
+                              maxLength={72}
+                              value={password}
+                              onChange={(e) => setPassword(e.target.value)}
+                              className={inputClass}
+                            />
+                          </Field>
+                          <label className="flex gap-2">
+                            <input
+                              type="checkbox"
+                              checked={confirmAccountRole}
+                              onChange={(e) =>
+                                setConfirmAccountRole(e.target.checked)
+                              }
+                            />
+                            Tôi xác nhận tuyển thành công và cấp đúng quyền chức
+                            danh trên
+                          </label>
+                          <p>
+                            Bàn giao mật khẩu qua kênh riêng; hệ thống không tự
+                            gửi qua Zalo và không dùng mật khẩu mặc định.
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  )}
                   <button
                     type="button"
                     onClick={() => void saveStatus()}
-                    disabled={saving || !status}
+                    disabled={
+                      saving ||
+                      !status ||
+                      (status === "HIRED" &&
+                        (!application.job?.positionRole ||
+                          !confirmAccountRole ||
+                          password.trim().length < 8))
+                    }
                     className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#005BEA] text-xs font-bold text-white disabled:opacity-50"
                   >
                     {saving && <Loader2 size={14} className="animate-spin" />}{" "}
@@ -2115,7 +2228,8 @@ function CreateCandidateModal({
       <form
         onSubmit={(event) => void submit(event)}
         onChange={(e) => {
-          const name = e.target instanceof HTMLInputElement ? e.target.name : "";
+          const name =
+            e.target instanceof HTMLInputElement ? e.target.name : "";
           if (name === "phone" || name === "email") {
             setDuplicate(false);
             setAllowDuplicate(false);
@@ -2206,6 +2320,8 @@ function CreateJobModal({
   onCreated: () => void;
 }) {
   const [saving, setSaving] = useState(false);
+  const [positionRole, setPositionRole] = useState("");
+  const [positionTitle, setPositionTitle] = useState("");
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -2214,6 +2330,8 @@ function CreateJobModal({
     );
     const payload: Record<string, unknown> = {
       ...raw,
+      positionRole,
+      title: positionTitle,
       numberOfPositions: Number(raw.numberOfPositions || 1),
       salaryMin: raw.salaryMin ? Number(raw.salaryMin) : undefined,
       salaryMax: raw.salaryMax ? Number(raw.salaryMax) : undefined
@@ -2245,14 +2363,13 @@ function CreateJobModal({
               placeholder="SALES-HCM-01"
             />
           </Field>
-          <Field label="Tên vị trí">
-            <input
-              name="title"
-              required
-              className={inputClass}
-              placeholder="Nhân viên kinh doanh"
-            />
-          </Field>
+          <PositionSelect
+            value={positionRole}
+            onChange={(value, label) => {
+              setPositionRole(value);
+              setPositionTitle(label);
+            }}
+          />
           <Field label="Địa điểm">
             <input
               name="location"

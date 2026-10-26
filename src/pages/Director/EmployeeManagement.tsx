@@ -54,7 +54,6 @@ const roleColor = (r: string) => {
   return "bg-gray-100 text-gray-600";
 };
 
-const roleLabel = (r: string) => ROLE_OPTIONS.find((o) => o.value === r)?.label ?? r;
 
 type Employee = {
   id: number;
@@ -77,6 +76,15 @@ const employeeInitial = (employee: Employee) =>
   (employee.name || employee.email || "U").trim().charAt(0).toUpperCase() || "U";
 
 export default function EmployeeManagement() {
+  const [roleOptions, setRoleOptions] = useState(ROLE_OPTIONS);
+  const roleLabel = (role: string) => roleOptions.find(option => option.value === role)?.label ?? role;
+  useEffect(() => {
+    let active = true;
+    employeeApi.getPositions().then(positions => {
+      if (active) setRoleOptions([...positions, { value: "probation", label: "Thử việc" }, { value: "employee_la", label: "Long An" }]);
+    }).catch(() => { /* Giữ danh mục cũ khi server chưa rollout endpoint. */ });
+    return () => { active = false; };
+  }, []);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -193,7 +201,7 @@ export default function EmployeeManagement() {
     const commonRoles = (() => {
       const selected = employees.filter((e) => selectedIds.has(e.id));
       if (!selected.length) return [];
-      return ROLE_OPTIONS.map((o) => o.value).filter((r) =>
+      return roleOptions.map((o) => o.value).filter((r) =>
         selected.every((e) => (e.roles ?? []).includes(r)),
       );
     })();
@@ -266,14 +274,14 @@ export default function EmployeeManagement() {
   const roleFilterOptions = useMemo(() => {
     const present = new Set<string>();
     tabEmployees.forEach((e) => (e.roles ?? []).forEach((r) => present.add(r)));
-    const known = ROLE_OPTIONS.filter(
+    const known = roleOptions.filter(
       (o) => present.has(o.value) && !(tab === "ctv" && o.value === CTV_ROLE),
     );
     const unknown = [...present]
-      .filter((r) => !ROLE_OPTIONS.some((o) => o.value === r) && r !== CTV_ROLE)
+      .filter((r) => !roleOptions.some((o) => o.value === r) && r !== CTV_ROLE)
       .map((r) => ({ value: r, label: r }));
     return [...known, ...unknown];
-  }, [tabEmployees, tab]);
+  }, [tabEmployees, tab, roleOptions]);
 
   const filteredEmployees = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -561,7 +569,7 @@ export default function EmployeeManagement() {
               <div className="border rounded-xl p-3">
                 <p className="text-sm font-medium text-gray-600 mb-2">Chọn quyền</p>
                 <div className="grid grid-cols-2 gap-1">
-                  {ROLE_OPTIONS.map(({ value, label }) => (
+                  {roleOptions.map(({ value, label }) => (
                     <label key={value} className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-gray-50 cursor-pointer">
                       <input
                         type="checkbox"
@@ -592,7 +600,7 @@ export default function EmployeeManagement() {
               <p className="text-sm text-gray-500">{roleTarget.name}</p>
             </div>
             <div className="space-y-0.5 max-h-[60vh] overflow-y-auto">
-              {ROLE_OPTIONS.map(({ value, label }) => (
+              {roleOptions.map(({ value, label }) => (
                 <label key={value} className="flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-gray-50 cursor-pointer">
                   <input
                     type="checkbox"
@@ -635,7 +643,7 @@ export default function EmployeeManagement() {
             </div>
 
             <div className="space-y-0.5 max-h-[45vh] overflow-y-auto">
-              {ROLE_OPTIONS.map(({ value, label }) => (
+              {roleOptions.map(({ value, label }) => (
                 <label key={value} className="flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-gray-50 cursor-pointer">
                   <input
                     type="checkbox"

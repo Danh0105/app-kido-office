@@ -23,6 +23,7 @@ export type RecruitmentSummary = {
 };
 
 export type RecruitmentCandidate = {
+  employeeId?: number | null;
   id: number;
   fullName: string | null;
   phone: string | null;
@@ -49,6 +50,7 @@ export type RecruitmentScreeningCriteria = {
 };
 
 export type RecruitmentJob = {
+  positionRole?: string | null;
   id: number;
   code: string;
   title: string;
@@ -76,6 +78,7 @@ export type RecruitmentJob = {
  * trạng thái không sửa qua PATCH mà qua publish/pause/close.
  */
 export type UpdateRecruitmentJobPayload = Partial<{
+  positionRole: string | null;
   code: string;
   title: string;
   description: string | null;
@@ -91,6 +94,7 @@ export type UpdateRecruitmentJobPayload = Partial<{
 }>;
 
 export type RecruitmentApplication = {
+  employeeId?: number | null;
   id: number;
   candidateId: number;
   candidate?: RecruitmentCandidate;
@@ -617,7 +621,14 @@ export const recruitmentApi = {
 
   changeApplicationStatus: async (
     id: number,
-    payload: { status: string; rejectedReason?: string; note?: string }
+    payload: {
+      status: string;
+      rejectedReason?: string;
+      note?: string;
+      password?: string;
+      confirmAccountRole?: boolean;
+      accountPositionRole?: string;
+    }
   ) =>
     (
       await api.patch<RecruitmentApplication>(

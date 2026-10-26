@@ -58,7 +58,10 @@ await page.route("**/__recruitment_test_api/**", async route => {
     data = { id };
   }
   else if (path.endsWith("/deletion-request")) { candidate.deletionRequestedAt = "2026-10-24T00:00:00Z"; data = { aiStopped: true }; }
-  else if (path === "/recruitment/jobs") data = paged([job], url);
+  else if (path === "/recruitment/jobs/positions") data = [{ value: "sales", label: "Nhân viên KD" }, { value: "giaovien_ctv", label: "Giáo viên CTV" }];
+  else if (path === "/departments") data = [];
+  else if (path === "/recruitment/jobs") data = method === "POST" ? { ...job, ...body, id: 4, status: "DRAFT" } : paged([job], url);
+  else if (path === "/recruitment/applications/12/status") { Object.assign(app, { status: body.status, employeeId: 91, allowedNextStatuses: [] }); data = app; }
   else if (path === "/recruitment/jobs/3") { if (method === "PATCH") Object.assign(job, body); data = job; }
   else if (/\/jobs\/3\/(pause|close|publish)$/.test(path)) { job.status = path.endsWith("pause") ? "PAUSED" : path.endsWith("close") ? "CLOSED" : "ACTIVE"; data = job; }
   else if (path === "/recruitment/applications" && method === "POST") { candidate.applications = [{ id: 12, status: "NEW", job }]; data = app; }
@@ -170,7 +173,21 @@ try {
   await closeModal();
 
   await page.getByRole("button", { name: /^Vị trí tuyển\s*1$/ }).click();
+  await page.getByRole("button", { name: "Tạo vị trí", exact: true }).click();
+  await page.getByRole("dialog").getByLabel("Mã vị trí", { exact: true }).fill("NEW-SYNTHETIC");
+  assert.equal(await page.getByRole("dialog").locator('input[name="title"]').count(), 0);
+  await page.getByLabel("Chức danh hệ thống", { exact: true }).selectOption("giaovien_ctv");
+  await page.getByRole("button", { name: "Tạo bản nháp", exact: true }).click();
+  await until(() => !!write("/recruitment/jobs", "POST"));
+  assert.equal(write("/recruitment/jobs", "POST").body.positionRole, "giaovien_ctv");
+  assert.equal(write("/recruitment/jobs", "POST").body.title, "Giáo viên CTV");
+  check("new job selects an existing system position, not a free-form role");
   await page.getByRole("button", { name: /TEST-ONLY/ }).click();
+  await page.getByRole("button", { name: "Chỉnh sửa", exact: true }).click();
+  await page.getByLabel("Chức danh hệ thống", { exact: true }).selectOption("sales");
+  await page.getByRole("button", { name: "Lưu thay đổi", exact: true }).click();
+  await until(() => write("/recruitment/jobs/3", "PATCH")?.body.positionRole === "sales");
+  check("legacy job can be explicitly mapped to a system position");
   await page.getByRole("button", { name: "Sửa tiêu chí sàng lọc", exact: true }).click();
   await page.getByLabel("Kinh nghiệm tối thiểu (tháng)", { exact: true }).fill("6");
   await page.getByRole("button", { name: "Lưu tiêu chí", exact: true }).click();
@@ -223,6 +240,31 @@ try {
   check("HR can terminate UNKNOWN tracking without resending");
   await page.getByRole("button", { name: "Đóng", exact: true }).last().click();
 
+  app.status = "OFFER"; app.allowedNextStatuses = ["HIRED", "REJECTED", "WITHDRAWN"];
+  job.positionRole = null;
+  await page.getByRole("button", { name: /^Pipeline/ }).click();
+  await page.getByRole("button", { name: /Ứng viên giả lập/ }).click();
+  await page.getByLabel("Trạng thái hồ sơ mới").selectOption("HIRED");
+  assert.equal(await page.getByRole("button", { name: "Cập nhật trạng thái", exact: true }).isDisabled(), true);
+  await page.getByText("Vị trí cũ chưa gắn chức danh.", { exact: false }).waitFor();
+  check("unmapped legacy job cannot grant an account");
+  await page.getByRole("button", { name: "Đóng", exact: true }).last().click();
+  job.positionRole = "sales";
+  await page.getByRole("button", { name: /Ứng viên giả lập/ }).click();
+  await page.getByLabel("Trạng thái hồ sơ mới").selectOption("HIRED");
+  assert.equal(await page.getByRole("button", { name: "Cập nhật trạng thái", exact: true }).isDisabled(), true);
+  await page.getByLabel("Mật khẩu ban đầu", { exact: true }).fill("Synthetic-only-2026");
+  assert.equal(await page.getByRole("button", { name: "Cập nhật trạng thái", exact: true }).isDisabled(), true);
+  await page.getByRole("checkbox", { name: /Tôi xác nhận tuyển thành công/ }).check();
+  await page.getByRole("button", { name: "Cập nhật trạng thái", exact: true }).click();
+  await until(() => !!write("/recruitment/applications/12/status", "PATCH"));
+  assert.deepEqual(write("/recruitment/applications/12/status", "PATCH").body, { status: "HIRED", password: "Synthetic-only-2026", confirmAccountRole: true, accountPositionRole: "sales" });
+  check("hiring requires credential and explicit role consent and submits the backend transition");
+  await page.getByRole("button", { name: /Ứng viên giả lập/ }).click();
+  await page.getByText("Đã tạo tài khoản nhân viên #91.", { exact: false }).waitFor();
+  assert.equal(await page.locator('input[type="password"]').count(), 0);
+  check("hired application shows account reference but never exposes its password");
+  await page.getByRole("button", { name: "Đóng", exact: true }).last().click();
   await page.getByRole("button", { name: /^Ứng viên\s*1$/ }).click();
   await page.getByRole("button", { name: /Ứng viên giả lập/ }).click();
   await page.getByRole("button", { name: "Ghi nhận yêu cầu xoá", exact: true }).click();

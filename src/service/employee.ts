@@ -18,6 +18,8 @@ export async function getSalesEmployees(): Promise<Employee[]> {
 }
 
 export const employeeApi = {
+  getPositions: async (): Promise<{ value: string; label: string }[]> =>
+    (await api.get("/employees/positions")).data,
     getAll: async () => {
         const res = await api.get(`/employees`);
         return res.data;

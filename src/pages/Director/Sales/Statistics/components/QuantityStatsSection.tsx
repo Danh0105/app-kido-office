@@ -111,8 +111,8 @@ export default function QuantityStatsSection({
           )}
 
           {rows.length > 0 ? (
-            <div className="overflow-x-auto border-t border-slate-100">
-              <table className="w-full min-w-[920px] text-base">
+            <div className="overflow-x-auto border-t border-slate-100 [&_table]:text-xl [&_table]:leading-8 [&_th]:!px-5 [&_th]:!py-4 [&_th]:!text-xl [&_td]:!px-5 [&_td]:!py-4 [&_td]:!text-xl">
+              <table className="w-full min-w-[1120px]">
                 <thead className="bg-slate-900 text-white">
                   <tr>
                     <th rowSpan={2} className="px-4 py-3 text-left">
@@ -137,7 +137,7 @@ export default function QuantityStatsSection({
                       Chênh lệch
                     </th>
                   </tr>
-                  <tr className="text-sm text-slate-200">
+                  <tr className="text-xl text-slate-200">
                     <th className="border-l border-slate-700 px-4 py-2 text-right">
                       Học sinh
                     </th>

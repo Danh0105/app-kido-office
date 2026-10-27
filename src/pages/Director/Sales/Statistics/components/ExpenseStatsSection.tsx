@@ -670,8 +670,8 @@ export default function ExpenseStatsSection({
           </div>
 
           {schoolRows.length > 0 ? (
-            <div className="overflow-x-auto border-t border-slate-100">
-              <table className="min-w-[1180px] w-full text-base">
+            <div className="overflow-x-auto border-t border-slate-100 [&_table]:text-xl [&_table]:leading-8 [&_th]:!px-5 [&_th]:!py-4 [&_th]:!text-xl [&_td]:!px-5 [&_td]:!py-4 [&_td]:!text-xl">
+              <table className="min-w-[1480px] w-full">
                 <thead className="bg-slate-900 text-white">
                   <tr>
                     <th className="px-4 py-3 text-left">Trường</th>
@@ -696,11 +696,11 @@ export default function ExpenseStatsSection({
                                 <UserRound size={18} />
                               </span>
                               <span>{group.employeeName}</span>
-                              <span className="rounded-full bg-white px-3 py-1.5 text-sm font-bold text-emerald-700">
+                              <span className="rounded-full bg-white px-3 py-1.5 text-base font-bold text-emerald-700">
                                 {group.schools.length} trường
                               </span>
                             </div>
-                            <div className="flex flex-wrap gap-2 text-sm font-semibold">
+                            <div className="flex flex-wrap gap-2 text-base font-semibold">
                               <span className="rounded-full bg-white px-3 py-1.5 text-emerald-700">
                                 Doanh thu: {formatMoney(group.revenue)}đ
                               </span>

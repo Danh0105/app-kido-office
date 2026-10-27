@@ -956,7 +956,7 @@ export default function PolicyStatsPage({
         {(isLoading || isFetching) && <LoadingOverlay />}
 
         {activeStatsTab === "policies" && viewMode === "table" && (
-          <div className="mt-4 space-y-6 text-base [&_table]:text-base [&_th]:text-base [&_td]:text-base">
+          <div className="mt-4 space-y-6 text-xl leading-8 [&_table]:text-xl [&_table]:leading-8 [&_th]:!px-4 [&_th]:!py-3 [&_th]:!text-xl [&_td]:!px-4 [&_td]:!py-3 [&_td]:!text-xl">
             {treeData.map((school: any) => (
               <div
                 key={school.schoolId}
@@ -966,7 +966,7 @@ export default function PolicyStatsPage({
                 <SchoolHeader school={school} />
 
                 <div className="overflow-x-auto">
-                  <table className="min-w-[1200px] w-full text-base">
+                  <table className="min-w-[1680px] w-full">
                     <thead className="bg-blue-600 text-white">
                       <tr>
                         <th className="px-3 py-2 text-left sticky left-0 bg-blue-600 z-20">
@@ -1075,7 +1075,7 @@ export default function PolicyStatsPage({
                             ...devices.map((d: any, i: number) => (
                               <tr
                                 key={`device-${p.policyId}-${i}`}
-                                className="bg-gray-100 text-sm"
+                                className="bg-gray-100 text-xl"
                               >
                                 <td className="bg-gray-200">Thiết bị</td>
                                 <td className="px-3 py-2 sticky left-0 bg-gray-100 pl-6">
@@ -1094,7 +1094,7 @@ export default function PolicyStatsPage({
                             ...cash.map((m: any, i: number) => (
                               <tr
                                 key={`cash-${p.policyId}-${i}`}
-                                className="bg-blue-100 text-sm"
+                                className="bg-blue-100 text-xl"
                               >
                                 <td className="bg-blue-200">Tiền mặt</td>
                                 <td className="px-3 py-2 sticky left-0 bg-blue-100 pl-6">
@@ -1114,7 +1114,7 @@ export default function PolicyStatsPage({
                               (sg: any, i: number) => (
                                 <tr
                                   key={`suggest-${p.policyId}-${i}`}
-                                  className="bg-orange-50 text-sm"
+                                  className="bg-orange-50 text-xl"
                                 >
                                   <td className="bg-orange-200 px-3 py-2 font-medium sticky left-0">
                                     📝 Đề xuất #{sg.id}
@@ -1293,7 +1293,7 @@ export default function PolicyStatsPage({
                           <p className="mb-1 text-base font-bold text-emerald-700">
                             Doanh thu chi tiết
                           </p>
-                          <table className="w-full border-collapse text-base">
+                          <table className="min-w-[1120px] w-full border-collapse">
                             <thead className="bg-emerald-700 text-white">
                               <tr>
                                 <th className="px-2 py-1 text-left">
@@ -1361,7 +1361,7 @@ export default function PolicyStatsPage({
                           <p className="mb-1 text-base font-bold text-violet-700">
                             Chi trường chi tiết
                           </p>
-                          <table className="w-full border-collapse text-base">
+                          <table className="min-w-[1120px] w-full border-collapse">
                             <thead className="bg-violet-700 text-white">
                               <tr>
                                 <th className="px-2 py-1">HS</th>
@@ -1437,7 +1437,7 @@ export default function PolicyStatsPage({
                           <p className="mb-1 text-base font-bold text-cyan-700">
                             Chi ngoài chi tiết
                           </p>
-                          <table className="w-full border-collapse text-base">
+                          <table className="min-w-[1000px] w-full border-collapse">
                             <thead className="bg-cyan-700 text-white">
                               <tr>
                                 <th className="px-2 py-1">HS</th>

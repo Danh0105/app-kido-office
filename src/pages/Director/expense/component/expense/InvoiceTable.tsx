@@ -218,15 +218,12 @@ export default function InvoiceTable({
   );
 
   /**
-   * Các dòng "Xuất HĐ Cty" lên chung 1 hóa đơn → nhập Số HĐ / Ngày xuất ở dòng
-   * trên thì điền luôn các dòng dưới đang trống hoặc đang giống dòng trên
-   * (dòng đã nhập số khác, hoặc thuộc hóa đơn nháp khác, thì giữ nguyên).
+   * Các dòng "Xuất HĐ Cty" lên chung 1 hóa đơn → nhập Số HĐ ở dòng trên thì
+   * điền luôn các dòng dưới đang trống hoặc đang giống dòng trên (dòng đã nhập
+   * số khác, hoặc thuộc hóa đơn nháp khác, thì giữ nguyên).
    */
-  const updateSharedInvoiceField = (
-    idx: number,
-    field: "invoiceNumber" | "invoiceDate",
-    value: string,
-  ) => {
+  const updateSharedInvoiceNumber = (idx: number, value: string) => {
+    const field = "invoiceNumber";
     const previous = inputRows[idx][field] || "";
     updateInputRow(idx, field, value);
     if (invoiceTypeOf(inputRows[idx]) !== "company") return;
@@ -247,6 +244,16 @@ export default function InvoiceTable({
       if (current === "" || current === previous) {
         updateInputRow(i, field, value);
       }
+    });
+  };
+
+  /**
+   * Ngày xuất đồng bộ cho mọi dòng: nhập ở dòng nào cũng ghi cho tất cả dòng
+   * (mọi loại HĐ, cả trên lẫn dưới), trừ dòng đã khoá do bấm "Xuất hóa đơn".
+   */
+  const updateInvoiceDate = (value: string) => {
+    inputRows.forEach((row, i) => {
+      if (!row.invoiceLocked) updateInputRow(i, "invoiceDate", value);
     });
   };
 
@@ -447,11 +454,7 @@ export default function InvoiceTable({
                         maxLength={100}
                         disabled={locked}
                         onChange={(e) =>
-                          updateSharedInvoiceField(
-                            idx,
-                            "invoiceNumber",
-                            e.target.value,
-                          )
+                          updateSharedInvoiceNumber(idx, e.target.value)
                         }
                         placeholder="Nhập số hóa đơn"
                         className="w-full h-14 border rounded-lg px-3 text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-400"
@@ -468,13 +471,7 @@ export default function InvoiceTable({
                       type="date"
                       value={row.invoiceDate}
                       disabled={locked}
-                      onChange={(e) =>
-                        updateSharedInvoiceField(
-                          idx,
-                          "invoiceDate",
-                          e.target.value,
-                        )
-                      }
+                      onChange={(e) => updateInvoiceDate(e.target.value)}
                       className="w-full h-14 border rounded-lg px-2 text-sm disabled:bg-slate-100 disabled:text-slate-400"
                     />
                   </td>

@@ -23,6 +23,7 @@ import { schoolApi } from "@/service/school.api";
 import { employeeApi } from "@/service/employee";
 import { expensePeriodApi } from "@/service/expensePeriod";
 import { schoolExpenseApi } from "@/service/schoolExpense";
+import { subjectApi } from "@/service/subject.api";
 import { StatCard } from "./component/StatCard";
 import RealExpenseDetail from "./RealExpenseDetail/index";
 import GlobalExpenseReport from "./components/GlobalExpenseReport";
@@ -298,6 +299,10 @@ export default function RealExpense() {
   // trường, đổi tháng, đổi năm học) có thể cùng lúc đòi cùng 1 kỳ, chỉ gọi
   // API 1 lần.
   const pendingPeriodRef = useRef(new Map<string, Promise<any>>());
+  // Tương tự cho bảng chi phí theo key trường-kỳ: mở trường có thể chạy chồng
+  // nhiều lượt (effect theo kỳ / năm học) — gọi tạo song song sẽ sinh 2 bảng
+  // cho cùng 1 kỳ (backend chỉ kiểm tra trước khi insert).
+  const pendingExpenseRef = useRef(new Map<string, Promise<number | null>>());
 
   const addPeriodToList = (period: any) => {
     setPeriods((prev: any[]) =>
@@ -334,6 +339,72 @@ export default function RealExpense() {
       });
 
     pendingPeriodRef.current.set(key, promise);
+    return promise;
+  };
+
+  // Năm học của trường lấy từ môn học — cùng nguồn và cách chọn với màn chi
+  // tiết (schoolYears + handleSchoolYearsChange). Năm đang chọn không có trong
+  // danh sách thì đổi sang năm của trường; trường chưa có môn thì giữ nguyên.
+  const resolveSchoolYear = async (schoolId: number) => {
+    try {
+      const res = await subjectApi.getFinanceBySchool(schoolId);
+      const subjects = Array.isArray(res)
+        ? res
+        : Array.isArray(res?.data)
+          ? res.data
+          : [];
+      const years = [
+        ...new Set<string>(
+          subjects.map((s: any) => s.schoolYear).filter(Boolean),
+        ),
+      ].sort(
+        (a, b) =>
+          Number(b.match(/\d{4}/)?.[0] || 0) -
+          Number(a.match(/\d{4}/)?.[0] || 0),
+      );
+
+      return !years.length || years.includes(selectedSchoolYear)
+        ? selectedSchoolYear
+        : getPreferredSchoolYear(years);
+    } catch (error) {
+      console.log(error);
+      return selectedSchoolYear;
+    }
+  };
+
+  // Id bảng chi phí của trường trong kỳ, chưa có thì tạo (nếu có quyền).
+  // null = chưa có và không tạo được (đã báo người dùng).
+  const ensureSchoolExpense = (schoolId: number, periodId: number) => {
+    const key = `${schoolId}-${periodId}`;
+    const pending = pendingExpenseRef.current.get(key);
+    if (pending) return pending;
+
+    const promise = (async (): Promise<number | null> => {
+      const existedRes = await schoolExpenseApi.checkExisted(schoolId, periodId);
+      const existed = existedRes?.data || existedRes;
+      if (existed?.id) return existed.id;
+
+      // Backend chỉ cho Kế toán / Kế toán công nợ / Kế toán trưởng / Thủ quỹ /
+      // Trợ lý GĐ / GĐ tạo bảng chi phí — role khác gọi create là 403.
+      if (!canWriteSchoolExpense()) {
+        toast.error(
+          "Trường này chưa có bảng chi phí. Chỉ Kế toán, Kế toán trưởng, Thủ quỹ, Trợ lý GĐ hoặc Giám đốc mới tạo được.",
+        );
+        return null;
+      }
+
+      const createdRes = await schoolExpenseApi.create({ schoolId, periodId });
+      const created = createdRes?.data || createdRes;
+      if (!created?.id) {
+        alert("Không tạo được phiếu thu chi");
+        return null;
+      }
+      return created.id;
+    })().finally(() => {
+      pendingExpenseRef.current.delete(key);
+    });
+
+    pendingExpenseRef.current.set(key, promise);
     return promise;
   };
 
@@ -644,6 +715,12 @@ export default function RealExpense() {
         const month = isCustom ? currentMonth : Number(targetPeriod.month);
         const year = isCustom ? currentYear : Number(targetPeriod.year);
 
+        // Chọn đúng năm học của trường TRƯỚC khi tìm / tạo kỳ: tạo theo năm
+        // đang chọn rồi màn chi tiết mới đổi sang năm của trường thì sinh thêm
+        // một kỳ + bảng chi phí trống ở năm kia.
+        const schoolYear = await resolveSchoolYear(school.id);
+        const periodYear = getExpensePeriodYear(schoolYear, month, year);
+
         // Không bắt buộc đủ 12 tháng: ưu tiên kỳ có sẵn của trường, chỉ tự
         // tạo khi năm học này của trường chưa có kỳ nào (mở lần đầu) — tháng
         // đã xoá không bị tạo lại.
@@ -658,51 +735,20 @@ export default function RealExpense() {
         const period =
           pickSchoolYearPeriod(
             schoolPeriods,
-            selectedSchoolYear,
+            schoolYear,
             month,
-            year,
-          ) || (await ensurePeriod(school.id, month, year));
+            periodYear,
+          ) || (await ensurePeriod(school.id, month, periodYear));
 
         periodId = period.id;
 
+        // Đổi năm + kỳ trong cùng một lượt render để effect đồng bộ năm học
+        // không thấy kỳ lệch năm rồi tự mở (và tạo) kỳ khác.
+        if (schoolYear !== selectedSchoolYear) setSelectedSchoolYear(schoolYear);
         if (period.id !== selectedPeriod?.id) setSelectedPeriod(period);
       }
-      // CHECK EXISTED
-      const existedRes = await schoolExpenseApi.checkExisted(
-        school.id,
-        periodId,
-      );
-
-      const existed = existedRes?.data || existedRes;
-
-      // ĐÃ TỒN TẠI
-      if (existed?.id) {
-        expenseId = existed.id;
-      } else {
-        // Backend chỉ cho Kế toán / Kế toán công nợ / Kế toán trưởng / Thủ quỹ /
-        // Trợ lý GĐ / GĐ tạo bảng chi phí — role khác gọi create là 403.
-        if (!canWriteSchoolExpense()) {
-          toast.error(
-            "Trường này chưa có bảng chi phí. Chỉ Kế toán, Kế toán trưởng, Thủ quỹ, Trợ lý GĐ hoặc Giám đốc mới tạo được.",
-          );
-          return;
-        }
-        // CREATE
-        const createdRes = await schoolExpenseApi.create({
-          schoolId: school.id,
-          periodId,
-        });
-
-        const created = createdRes?.data || createdRes;
-
-        if (!created?.id) {
-          alert("Không tạo được phiếu thu chi");
-
-          return;
-        }
-
-        expenseId = created.id;
-      }
+      expenseId = await ensureSchoolExpense(school.id, periodId);
+      if (!expenseId) return;
 
       setSelectedSchoolId(school.id);
       setActiveSchool(school);

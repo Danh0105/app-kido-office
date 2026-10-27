@@ -33,6 +33,14 @@ import { hasRole } from "@/utils/auth";
 /** Khớp `WRITE_ROLES` của `POST /school-expenses` ở backend. */
 const canWriteSchoolExpense = () =>
   hasRole("accountant", "ketoan_congno", "ketoan_truong", "troly_gd", "director");
+/**
+ * Thủ quỹ chỉ được XEM (khớp VIEWER_ROLES của backend): không tạo/sửa/xoá kỳ.
+ * Người kiêm thêm role được ghi vẫn giữ quyền của role đó.
+ */
+const isExpenseViewOnly = () =>
+  hasRole("thuquy") &&
+  !canWriteSchoolExpense() &&
+  !hasRole("saleadmin", "salesadmin", "salesadmin_la");
 const getSchoolYearRange = (schoolYear: string) => {
   const years = schoolYear.match(/\d{4}/g)?.map(Number) || [];
 
@@ -652,7 +660,15 @@ export default function RealExpense() {
             selectedSchoolYear,
             month,
             year,
-          ) || (await ensurePeriod(school.id, month, year));
+          ) ||
+          (isExpenseViewOnly()
+            ? null
+            : await ensurePeriod(school.id, month, year));
+
+        if (!period) {
+          toast.error("Trường này chưa có bảng thu chi trong năm học đang chọn.");
+          return;
+        }
 
         periodId = period.id;
 
@@ -1231,6 +1247,7 @@ export default function RealExpense() {
                             {label}
                           </button>
 
+                          {!isExpenseViewOnly() && (
                           <div className="flex items-center justify-end gap-1 mt-1">
                             <button
                               onClick={() => {
@@ -1275,12 +1292,13 @@ export default function RealExpense() {
                               <Trash2 size={14} />
                             </button>
                           </div>
+                          )}
                         </div>
                       );
                     })}
                   </div>
 
-                  {addingCustomPeriod ? (
+                  {isExpenseViewOnly() ? null : addingCustomPeriod ? (
                     <div className="flex flex-col gap-1.5 mt-1.5">
                       <select
                         value={customPeriodMonth}

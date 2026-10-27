@@ -134,6 +134,12 @@ export default function RealExpenseDetail({
   const isChief = hasRole("ketoan_truong");
   // Sales admin chỉnh sửa DUY NHẤT bảng "Chi Ngoài" — xem ManagementExpenseTable.
   const isSalesAdmin = hasRole("saleadmin", "salesadmin", "salesadmin_la");
+  // Thủ quỹ chỉ được XEM (khớp VIEWER_ROLES của backend) — người kiêm thêm role
+  // được ghi vẫn giữ quyền của role đó.
+  const isViewOnly =
+    hasRole("thuquy") &&
+    !isSalesAdmin &&
+    !hasRole("accountant", "ketoan_congno", "ketoan_truong", "troly_gd", "director");
   const [managementConfirmed, setManagementConfirmed] = useState(false);
   const [managementConfirmedByName, setManagementConfirmedByName] =
     useState<string | null>(null);
@@ -1677,8 +1683,11 @@ export default function RealExpenseDetail({
 
             <div className="space-y-5">
               {!isSalesAdmin && (
-                // Đã "Kết thúc" → fieldset disabled khoá mọi ô nhập/nút bên trong.
-                <fieldset disabled={finalized} className="m-0 min-w-0 border-0 p-0">
+                // Đã "Kết thúc" / chỉ xem → fieldset disabled khoá mọi ô nhập/nút bên trong.
+                <fieldset
+                  disabled={finalized || isViewOnly}
+                  className="m-0 min-w-0 border-0 p-0"
+                >
                   <InputExpenseTable
                     rows={inputRows}
                     defaultFee={Number(
@@ -1707,6 +1716,7 @@ export default function RealExpenseDetail({
                 handleCancelEdit={handleCancelEdit}
                 handleViewHistory={handleViewHistory}
                 historyLoading={historyLoading}
+                readOnly={isViewOnly}
                 managementConfirmed={managementConfirmed}
                 managementReadOnly={managementConfirmed && !isChief}
                 managementPolicyLocked={managementConfirmed}
@@ -1722,7 +1732,7 @@ export default function RealExpenseDetail({
                 onUnconfirmManagement={handleUnconfirmManagementExpense}
                 onFinalize={handleFinalize}
                 onReopen={handleReopen}
-                onExportInvoices={handleExportInvoices}
+                onExportInvoices={isViewOnly ? undefined : handleExportInvoices}
                 exportingInvoices={exportingInvoices}
                 einvoices={einvoices}
                 onUnlinkEInvoice={isChief ? handleUnlinkEInvoice : undefined}

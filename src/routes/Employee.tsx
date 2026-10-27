@@ -23,8 +23,15 @@ import ExpenseNotifications from "@/pages/ExpenseRequest/ExpenseNotifications";
 import PolicySelector from "@/pages/Employee/Sales/Policy/PolicySelector";
 import SchoolTimetable from "@/pages/Employee/Sales/School/SchoolTimetable";
 import PayrollPage from "@/pages/Payroll/PayrollPage";
+import ImageLibraryPage from "@/pages/Teaching/ImageLibraryPage";
 import EmployeeBrandShell from "@/pages/Employee/components/EmployeeBrandShell";
 import { isEmployeeBrandUiEnabled } from "@/utils/directorUi";
+import { hasRole } from "@/utils/auth";
+
+function SalesGuard({ children }: { children: React.ReactNode }) {
+  if (!hasRole("sales")) return <Navigate to="/employee/home" replace />;
+  return <>{children}</>;
+}
 
 export default function EmployeeRoutes() {
   const { pathname } = useLocation();
@@ -51,6 +58,15 @@ export default function EmployeeRoutes() {
         <Route path="policy-select" element={<PolicySelector />} />
         {/* TKB các trường mình phụ trách — chỉ đọc, backend tự giới hạn phạm vi. */}
         <Route path="school-timetable" element={<SchoolTimetable />} />
+        {/* Ảnh báo giảng — backend tự giới hạn theo trường/khu vực sales phụ trách. */}
+        <Route
+          path="teacher-images"
+          element={
+            <SalesGuard>
+              <ImageLibraryPage salesView />
+            </SalesGuard>
+          }
+        />
         <Route path="payrolls" element={<PayrollPage />} />
         <Route
           path="policy-history-list/:policyId"

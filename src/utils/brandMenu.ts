@@ -5,6 +5,7 @@ import {
   CheckSquare,
   ClipboardCheck,
   GraduationCap,
+  Images,
   LayoutDashboard,
   MapPin,
   MapPinned,
@@ -157,6 +158,13 @@ const employeeMenus = (): BrandMenuDefinition[] => {
             to: "/employee/school-timetable",
             from: "school-timetable",
             lucideIcon: CalendarDays,
+          },
+          {
+            key: "employee-teacher-images",
+            title: "Hình ảnh giáo viên",
+            to: "/employee/teacher-images",
+            from: "teacher-images",
+            lucideIcon: Images,
           },
         ]
       : []),

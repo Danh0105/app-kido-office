@@ -172,6 +172,44 @@ export type LessonImage = {
   thumbnailUrl?: string | null;
 };
 
+/** Một ảnh trong thư viện báo giảng, đã kèm metadata tối thiểu để hiển thị. */
+export type LessonImageLibraryItem = LessonImage & {
+  createdAt: string;
+  type: string;
+  session: {
+    id: number;
+    date: string;
+    startTime: string;
+    endTime: string;
+    status: SessionStatus;
+    teacherId: number | null;
+    teacherName: string | null;
+    teacherCode: string | null;
+    schoolId: number;
+    schoolName: string;
+    schoolLocationId: number | null;
+    schoolLocationName: string | null;
+    className: string | null;
+    subjectName: string;
+    provinceId: number | null;
+    provinceName: string | null;
+  };
+};
+
+/** Bộ lọc riêng của endpoint phân trang theo ảnh, không phải theo buổi dạy. */
+export type LessonImageQuery = {
+  provinceId?: number;
+  schoolId?: number;
+  schoolLocationId?: number;
+  teacherId?: number;
+  fromDate?: string;
+  toDate?: string;
+  status?: SessionStatus;
+  search?: string;
+  sortBy?: "createdAt" | "sessionDate";
+  sortOrder?: "ASC" | "DESC";
+};
+
 export interface TeachingSession {
   id: number;
   scheduleId: number | null; // null = buổi lẻ / dạy bù

@@ -20,6 +20,8 @@ import type {
   NotifySchedulePayload,
   NotifyScheduleResult,
   GenerateSessionsResult,
+  LessonImageLibraryItem,
+  LessonImageQuery,
   Paged,
   SchedulePayload,
   ScheduleQuery,
@@ -353,6 +355,19 @@ export const teachingScheduleApi = {
 export const teachingSessionApi = {
   list: async (params: SessionQuery = {}): Promise<Paged<TeachingSession>> => {
     const res = await api.get(SESSIONS, { params: clean(params) });
+    return res.data;
+  },
+
+  /**
+   * Thư viện phân trang theo từng ảnh. Backend tự giới hạn role sales theo
+   * trường/khu vực gắn với tài khoản trong JWT.
+   */
+  lessonImages: async (
+    params: LessonImageQuery & { page: number; limit: number },
+  ): Promise<Paged<LessonImageLibraryItem>> => {
+    const res = await api.get(`${SESSIONS}/lesson-images`, {
+      params: clean(params),
+    });
     return res.data;
   },
 

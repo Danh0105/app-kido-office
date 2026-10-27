@@ -48,8 +48,6 @@ type Props = {
   handleViewHistory?: () => void;
   historyLoading?: boolean;
   historyCount?: number;
-  /** Chỉ xem (thủ quỹ): khoá mọi ô nhập, ẩn nút ghi — vẫn In / Xuất Excel / Xem lịch sử. */
-  readOnly?: boolean;
 
   /** Sales admin / kế toán trưởng: chỉ hiển thị bảng "Chi Ngoài", ẩn Doanh thu + Hoá đơn. */
   managementOnly?: boolean;
@@ -128,7 +126,6 @@ export default function ExpenseFormTable({
   handleViewHistory,
   historyLoading = false,
   historyCount = 0,
-  readOnly = false,
 
   managementOnly = false,
   managementConfirmed = false,
@@ -172,9 +169,9 @@ export default function ExpenseFormTable({
         <h2 className="text-lg font-bold text-slate-800">Quản lý thu chi</h2>
       </div>
 
-      {/* Đã "Kết thúc" / chỉ xem → fieldset disabled khoá mọi ô nhập/nút trong các bảng. */}
+      {/* Đã "Kết thúc" → fieldset disabled khoá mọi ô nhập/nút trong các bảng. */}
       <fieldset
-        disabled={finalized || readOnly}
+        disabled={finalized}
         className="m-0 min-w-0 border-0 p-4 space-y-8"
       >
         {!managementOnly && (
@@ -245,7 +242,7 @@ export default function ExpenseFormTable({
         )}
 
         <div className="flex flex-wrap items-center gap-3 justify-end">
-          {!managementOnly && !finalized && !readOnly && (
+          {!managementOnly && !finalized && (
             <button
               onClick={addRow}
               disabled={invoiceExported}
@@ -271,7 +268,7 @@ export default function ExpenseFormTable({
             </button>
           )}
 
-          {!managementOnly && !finalized && !readOnly && (
+          {!managementOnly && !finalized && (
             <button
               onClick={lockAllInvoices}
               disabled={exportingInvoices}
@@ -402,7 +399,7 @@ export default function ExpenseFormTable({
             </button>
           )}
 
-          {editingItem && !finalized && !readOnly && (
+          {editingItem && !finalized && (
             <button
               onClick={handleCancelEdit}
               className="
@@ -416,7 +413,7 @@ export default function ExpenseFormTable({
             </button>
           )}
 
-          {!(managementOnly && managementReadOnly) && !finalized && !readOnly && (
+          {!(managementOnly && managementReadOnly) && !finalized && (
             <button
               onClick={handleSubmit}
               disabled={loading}

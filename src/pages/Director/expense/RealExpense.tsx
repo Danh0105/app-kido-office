@@ -32,15 +32,14 @@ import { hasRole } from "@/utils/auth";
 
 /** Khớp `WRITE_ROLES` của `POST /school-expenses` ở backend. */
 const canWriteSchoolExpense = () =>
-  hasRole("accountant", "ketoan_congno", "ketoan_truong", "troly_gd", "director");
-/**
- * Thủ quỹ chỉ được XEM (khớp VIEWER_ROLES của backend): không tạo/sửa/xoá kỳ.
- * Người kiêm thêm role được ghi vẫn giữ quyền của role đó.
- */
-const isExpenseViewOnly = () =>
-  hasRole("thuquy") &&
-  !canWriteSchoolExpense() &&
-  !hasRole("saleadmin", "salesadmin", "salesadmin_la");
+  hasRole(
+    "accountant",
+    "ketoan_congno",
+    "ketoan_truong",
+    "thuquy",
+    "troly_gd",
+    "director",
+  );
 const getSchoolYearRange = (schoolYear: string) => {
   const years = schoolYear.match(/\d{4}/g)?.map(Number) || [];
 
@@ -597,8 +596,10 @@ export default function RealExpense() {
 
   const handleSchoolYearsChange = useCallback((years: string[]) => {
     setSchoolYears(years);
+    // Trường chưa có môn (chưa có năm học nào) → giữ năm học đang chọn: đổi năm
+    // ở đây sẽ kéo theo đổi kỳ và tự tạo thêm một kỳ trống của năm khác.
     setSelectedSchoolYear((currentSchoolYear) =>
-      years.includes(currentSchoolYear)
+      !years.length || years.includes(currentSchoolYear)
         ? currentSchoolYear
         : getPreferredSchoolYear(years),
     );
@@ -660,15 +661,7 @@ export default function RealExpense() {
             selectedSchoolYear,
             month,
             year,
-          ) ||
-          (isExpenseViewOnly()
-            ? null
-            : await ensurePeriod(school.id, month, year));
-
-        if (!period) {
-          toast.error("Trường này chưa có bảng thu chi trong năm học đang chọn.");
-          return;
-        }
+          ) || (await ensurePeriod(school.id, month, year));
 
         periodId = period.id;
 
@@ -686,11 +679,11 @@ export default function RealExpense() {
       if (existed?.id) {
         expenseId = existed.id;
       } else {
-        // Backend chỉ cho Kế toán / Kế toán công nợ / Kế toán trưởng / Trợ lý
-        // GĐ / GĐ tạo bảng chi phí — role khác gọi create là 403.
+        // Backend chỉ cho Kế toán / Kế toán công nợ / Kế toán trưởng / Thủ quỹ /
+        // Trợ lý GĐ / GĐ tạo bảng chi phí — role khác gọi create là 403.
         if (!canWriteSchoolExpense()) {
           toast.error(
-            "Trường này chưa có bảng chi phí. Chỉ Kế toán, Kế toán trưởng, Trợ lý GĐ hoặc Giám đốc mới tạo được.",
+            "Trường này chưa có bảng chi phí. Chỉ Kế toán, Kế toán trưởng, Thủ quỹ, Trợ lý GĐ hoặc Giám đốc mới tạo được.",
           );
           return;
         }
@@ -1247,7 +1240,6 @@ export default function RealExpense() {
                             {label}
                           </button>
 
-                          {!isExpenseViewOnly() && (
                           <div className="flex items-center justify-end gap-1 mt-1">
                             <button
                               onClick={() => {
@@ -1292,13 +1284,12 @@ export default function RealExpense() {
                               <Trash2 size={14} />
                             </button>
                           </div>
-                          )}
                         </div>
                       );
                     })}
                   </div>
 
-                  {isExpenseViewOnly() ? null : addingCustomPeriod ? (
+                  {addingCustomPeriod ? (
                     <div className="flex flex-col gap-1.5 mt-1.5">
                       <select
                         value={customPeriodMonth}

@@ -7,6 +7,7 @@ import SchoolInfoCard from "./components/SchoolInfoCard";
 import { useParams } from "react-router-dom";
 import { suggestApi } from "@/service/suggest";
 import {
+  BarChart3,
   Boxes,
   Calendar,
   GraduationCap,
@@ -135,8 +136,8 @@ export default function PolicyStatsPage({
   const [selectedYear, setSelectedYear] = useState<string | null>(null);
   const [selectedDevice, setSelectedDevice] = useState("");
   const [activeStatsTab, setActiveStatsTab] = useState<
-    "devices" | "quantities"
-  >("quantities");
+    "policies" | "devices" | "quantities"
+  >("policies");
   const { data, isLoading, isFetching } = usePolicyStats(filters);
   console.log("data", data);
   const [openPolicy, setOpenPolicy] = useState<any>(null);
@@ -553,29 +554,41 @@ export default function PolicyStatsPage({
 
       {/* ===== MAIN ===== */}
       <div className="flex-1 p-4 md:p-6 overflow-auto mt-[45px]">
-        <div className="mb-4 grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+        <div className="mb-4 flex gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setActiveStatsTab("policies")}
+            className={`flex min-h-14 min-w-[190px] flex-1 items-center justify-center gap-2 rounded-xl px-5 py-3 text-base font-black transition md:text-lg ${
+              activeStatsTab === "policies"
+                ? "bg-blue-600 text-white shadow"
+                : "text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            <BarChart3 size={22} />
+            Thống kê chính sách
+          </button>
           <button
             type="button"
             onClick={() => setActiveStatsTab("devices")}
-            className={`flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
+            className={`flex min-h-14 min-w-[190px] flex-1 items-center justify-center gap-2 rounded-xl px-5 py-3 text-base font-black transition md:text-lg ${
               activeStatsTab === "devices"
                 ? "bg-blue-600 text-white shadow"
                 : "text-slate-600 hover:bg-slate-50"
             }`}
           >
-            <Boxes size={18} />
+            <Boxes size={22} />
             Thống kê thiết bị
           </button>
           <button
             type="button"
             onClick={() => setActiveStatsTab("quantities")}
-            className={`flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
+            className={`flex min-h-14 min-w-[220px] flex-1 items-center justify-center gap-2 rounded-xl px-5 py-3 text-base font-black transition md:text-lg ${
               activeStatsTab === "quantities"
                 ? "bg-blue-600 text-white shadow"
                 : "text-slate-600 hover:bg-slate-50"
             }`}
           >
-            <GraduationCap size={18} />
+            <GraduationCap size={22} />
             Số học sinh / số tiết
           </button>
         </div>
@@ -587,7 +600,7 @@ export default function PolicyStatsPage({
             <button
               onClick={() => setOpenSidebar(true)}
               className="
-                h-11 w-11 shrink-0
+                h-12 w-12 shrink-0
                 flex items-center justify-center
                 rounded-xl border
                 bg-white shadow-sm
@@ -600,9 +613,9 @@ export default function PolicyStatsPage({
             {/* NĂM HỌC */}
             <select
               className="
-                h-11 flex-1 min-w-0
+                h-12 flex-1 min-w-0
                 rounded-xl border bg-white
-                px-2 text-sm
+                px-3 text-base font-semibold
                 shadow-sm
                 outline-none
                 focus:ring-2 focus:ring-blue-200
@@ -622,9 +635,9 @@ export default function PolicyStatsPage({
             {/* MÔN HỌC */}
             <select
               className="
-                h-11 flex-1 min-w-0
+                h-12 flex-1 min-w-0
                 rounded-xl border bg-white
-                px-2 text-sm
+                px-3 text-base font-semibold
                 shadow-sm
                 outline-none
                 focus:ring-2 focus:ring-blue-200
@@ -649,12 +662,12 @@ export default function PolicyStatsPage({
             <button
               onClick={resetFilters}
               className="
-                h-11 px-3 shrink-0
+                h-12 px-4 shrink-0
                 rounded-xl
                 bg-red-50
                 text-red-600
                 border border-red-100
-                text-sm font-medium
+                text-base font-bold
                 active:scale-95 transition
             "
             >
@@ -662,7 +675,7 @@ export default function PolicyStatsPage({
             </button>
           </div>
           <select
-            className="mt-2 h-11 w-full rounded-xl border bg-white px-2 text-sm shadow-sm outline-none focus:ring-2 focus:ring-blue-200"
+            className="mt-2 h-12 w-full rounded-xl border bg-white px-3 text-base font-semibold shadow-sm outline-none focus:ring-2 focus:ring-blue-200"
             value={selectedSchool || ""}
             onChange={(e) =>
               setSelectedSchool(e.target.value ? Number(e.target.value) : null)
@@ -676,9 +689,9 @@ export default function PolicyStatsPage({
             ))}
           </select>
           {/* KỲ THU CHI MOBILE */}
-          {activeStatsTab === "quantities" && showExpenses && (
+          {activeStatsTab !== "devices" && showExpenses && (
             <select
-              className="h-11 w-full rounded-xl border bg-white px-2 text-sm shadow-sm outline-none focus:ring-2 focus:ring-blue-200 mt-2"
+              className="mt-2 h-12 w-full rounded-xl border bg-white px-3 text-base font-semibold shadow-sm outline-none focus:ring-2 focus:ring-blue-200"
               value={selectedPeriodId || ""}
               onChange={(e) =>
                 setSelectedPeriodId(
@@ -699,7 +712,7 @@ export default function PolicyStatsPage({
         <div className="mb-4 hidden flex-wrap items-center gap-3 rounded-2xl border bg-white p-4 shadow-sm md:flex">
           {/* NĂM HỌC */}
           <select
-            className="border rounded-xl px-3 py-2 text-sm min-w-[180px]"
+            className="min-w-[180px] rounded-xl border px-4 py-3 text-base font-semibold"
             value={selectedYear || ""}
             onChange={(e) => setSelectedYear(e.target.value || null)}
           >
@@ -713,7 +726,7 @@ export default function PolicyStatsPage({
           </select>
 
           <select
-            className="min-w-[240px] rounded-xl border px-3 py-2 text-sm"
+            className="min-w-[240px] rounded-xl border px-4 py-3 text-base font-semibold"
             value={selectedSchool || ""}
             onChange={(e) =>
               setSelectedSchool(e.target.value ? Number(e.target.value) : null)
@@ -729,7 +742,7 @@ export default function PolicyStatsPage({
 
           {activeStatsTab === "devices" && (
             <select
-              className="min-w-[220px] rounded-xl border px-3 py-2 text-sm"
+              className="min-w-[220px] rounded-xl border px-4 py-3 text-base font-semibold"
               value={selectedDevice}
               onChange={(event) => setSelectedDevice(event.target.value)}
             >
@@ -743,9 +756,9 @@ export default function PolicyStatsPage({
           )}
 
           {/* KỲ THU CHI */}
-          {activeStatsTab === "quantities" && showExpenses && (
+          {activeStatsTab !== "devices" && showExpenses && (
             <select
-              className="border rounded-xl px-3 py-2 text-sm min-w-[200px]"
+              className="min-w-[200px] rounded-xl border px-4 py-3 text-base font-semibold"
               value={selectedPeriodId || ""}
               onChange={(e) =>
                 setSelectedPeriodId(
@@ -764,7 +777,7 @@ export default function PolicyStatsPage({
 
           {/* MÔN HỌC */}
           <select
-            className="border rounded-xl px-3 py-2 text-sm min-w-[220px]"
+            className="min-w-[220px] rounded-xl border px-4 py-3 text-base font-semibold"
             value={selectedSubject || ""}
             onChange={(e) =>
               setSelectedSubject(e.target.value ? Number(e.target.value) : null)
@@ -786,7 +799,7 @@ export default function PolicyStatsPage({
             px-4 py-2 rounded-xl
             bg-red-50 text-red-600
             hover:bg-red-100
-            text-sm font-medium
+            text-base font-bold
             transition
         "
           >
@@ -795,12 +808,12 @@ export default function PolicyStatsPage({
         </div>
         {activeStatsTab === "devices" && (
           <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:hidden">
-            <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <label className="mb-2 flex items-center gap-2 text-base font-bold text-slate-700">
               <PackageSearch size={18} className="text-blue-600" />
               Lọc thiết bị đã cấp
             </label>
             <select
-              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              className="h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-base font-semibold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               value={selectedDevice}
               onChange={(event) => setSelectedDevice(event.target.value)}
             >
@@ -818,10 +831,10 @@ export default function PolicyStatsPage({
           <section className="mb-6 overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-sm">
             <div className="flex flex-col gap-4 bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-4 text-white sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-100">
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-blue-100">
                   Thiết bị đã cấp
                 </p>
-                <h2 className="mt-1 flex items-center gap-2 text-xl font-bold">
+                <h2 className="mt-1 flex items-center gap-2 text-2xl font-bold">
                   <Boxes size={22} />
                   {selectedDeviceName}
                 </h2>
@@ -829,14 +842,14 @@ export default function PolicyStatsPage({
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl bg-white/15 px-4 py-2 text-center backdrop-blur">
-                  <p className="text-xs text-blue-100">Số trường</p>
-                  <p className="text-xl font-bold">
+                  <p className="text-sm text-blue-100">Số trường</p>
+                  <p className="text-2xl font-bold">
                     {deviceAllocations.length}
                   </p>
                 </div>
                 <div className="rounded-xl bg-white/15 px-4 py-2 text-center backdrop-blur">
-                  <p className="text-xs text-blue-100">Tổng số lượng</p>
-                  <p className="text-xl font-bold">
+                  <p className="text-sm text-blue-100">Tổng số lượng</p>
+                  <p className="text-2xl font-bold">
                     {totalSelectedDeviceQuantity.toLocaleString("vi-VN", {
                       maximumFractionDigits: 2,
                     })}
@@ -863,7 +876,7 @@ export default function PolicyStatsPage({
                           {allocation.schoolName}
                         </span>
                       </p>
-                      <p className="mt-1 flex items-center gap-1 text-sm text-slate-500">
+                      <p className="mt-1 flex items-center gap-1 text-base text-slate-500">
                         <MapPin size={14} className="shrink-0" />
                         {[allocation.wardName, allocation.provinceName]
                           .filter(Boolean)
@@ -873,7 +886,7 @@ export default function PolicyStatsPage({
                         {allocation.details.map((detail, detailIndex) => (
                           <span
                             key={`${detail.policyId}-${detailIndex}`}
-                            className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600"
+                            className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-600"
                           >
                             {detail.subjectName || "Chính sách"}
                             {detail.schoolYear ? ` • ${detail.schoolYear}` : ""}
@@ -891,10 +904,10 @@ export default function PolicyStatsPage({
                     </div>
 
                     <div className="rounded-xl bg-emerald-50 px-4 py-3 text-center">
-                      <p className="text-xs font-semibold uppercase text-emerald-600">
+                      <p className="text-sm font-semibold uppercase text-emerald-600">
                         Số lượng
                       </p>
-                      <p className="mt-1 text-2xl font-black text-emerald-700">
+                      <p className="mt-1 text-3xl font-black text-emerald-700">
                         {allocation.quantity.toLocaleString("vi-VN", {
                           maximumFractionDigits: 2,
                         })}
@@ -904,7 +917,7 @@ export default function PolicyStatsPage({
                 ))}
               </div>
             ) : (
-              <div className="px-5 py-10 text-center text-sm text-slate-500">
+              <div className="px-5 py-10 text-center text-base text-slate-500">
                 Không có trường nào được cấp thiết bị này trong bộ lọc hiện tại.
               </div>
             )}
@@ -916,7 +929,7 @@ export default function PolicyStatsPage({
             <p className="mt-3 font-bold text-slate-800">
               Chọn một loại thiết bị để xem thống kê
             </p>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-base text-slate-500">
               Kết quả sẽ tổng hợp số lượng thiết bị đã cấp theo từng trường.
             </p>
           </section>
@@ -931,7 +944,7 @@ export default function PolicyStatsPage({
           />
         )}
 
-        {activeStatsTab === "quantities" && showExpenses && (
+        {activeStatsTab === "policies" && showExpenses && (
           <ExpenseStatsSection
             policies={filteredPolicies}
             restrictToPolicySchools
@@ -942,8 +955,8 @@ export default function PolicyStatsPage({
         {/* ===== LOADING ===== */}
         {(isLoading || isFetching) && <LoadingOverlay />}
 
-        {activeStatsTab === "quantities" && viewMode === "table" && (
-          <div className="space-y-6 mt-4">
+        {activeStatsTab === "policies" && viewMode === "table" && (
+          <div className="mt-4 space-y-6 text-base [&_table]:text-base [&_th]:text-base [&_td]:text-base">
             {treeData.map((school: any) => (
               <div
                 key={school.schoolId}
@@ -953,7 +966,7 @@ export default function PolicyStatsPage({
                 <SchoolHeader school={school} />
 
                 <div className="overflow-x-auto">
-                  <table className="min-w-[1200px] text-sm w-full">
+                  <table className="min-w-[1200px] w-full text-base">
                     <thead className="bg-blue-600 text-white">
                       <tr>
                         <th className="px-3 py-2 text-left sticky left-0 bg-blue-600 z-20">
@@ -1062,7 +1075,7 @@ export default function PolicyStatsPage({
                             ...devices.map((d: any, i: number) => (
                               <tr
                                 key={`device-${p.policyId}-${i}`}
-                                className="bg-gray-100 text-xs"
+                                className="bg-gray-100 text-sm"
                               >
                                 <td className="bg-gray-200">Thiết bị</td>
                                 <td className="px-3 py-2 sticky left-0 bg-gray-100 pl-6">
@@ -1081,7 +1094,7 @@ export default function PolicyStatsPage({
                             ...cash.map((m: any, i: number) => (
                               <tr
                                 key={`cash-${p.policyId}-${i}`}
-                                className="bg-blue-100 text-xs"
+                                className="bg-blue-100 text-sm"
                               >
                                 <td className="bg-blue-200">Tiền mặt</td>
                                 <td className="px-3 py-2 sticky left-0 bg-blue-100 pl-6">
@@ -1101,7 +1114,7 @@ export default function PolicyStatsPage({
                               (sg: any, i: number) => (
                                 <tr
                                   key={`suggest-${p.policyId}-${i}`}
-                                  className="bg-orange-50 text-xs"
+                                  className="bg-orange-50 text-sm"
                                 >
                                   <td className="bg-orange-200 px-3 py-2 font-medium sticky left-0">
                                     📝 Đề xuất #{sg.id}
@@ -1198,7 +1211,7 @@ export default function PolicyStatsPage({
 
                   return (
                     <div className="border-t-2 border-emerald-300 bg-emerald-50 p-4">
-                      <h4 className="text-sm font-bold text-emerald-800 mb-3 flex items-center gap-2">
+                      <h4 className="mb-3 flex items-center gap-2 text-lg font-bold text-emerald-800">
                         <Calendar size={16} />
                         Thu chi{" "}
                         {selectedPeriodId
@@ -1209,18 +1222,18 @@ export default function PolicyStatsPage({
                             }`
                           : "(tất cả kỳ)"}
                       </h4>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                      <div className="grid grid-cols-2 gap-3 text-base md:grid-cols-4">
                         <div className="bg-white rounded-xl p-3 border">
                           <p className="text-slate-500 font-medium">
                             Doanh thu
                           </p>
-                          <p className="text-lg font-bold text-emerald-700">
+                          <p className="text-xl font-bold text-emerald-700">
                             {fmt(totalRevenue)}đ
                           </p>
                         </div>
                         <div className="bg-white rounded-xl p-3 border">
                           <p className="text-slate-500 font-medium">Đã thu</p>
-                          <p className="text-lg font-bold text-blue-700">
+                          <p className="text-xl font-bold text-blue-700">
                             {fmt(totalRevenuePaid)}đ
                           </p>
                         </div>
@@ -1228,7 +1241,7 @@ export default function PolicyStatsPage({
                           <p className="text-slate-500 font-medium">
                             Công nợ thu
                           </p>
-                          <p className="text-lg font-bold text-amber-700">
+                          <p className="text-xl font-bold text-amber-700">
                             {fmt(totalRevenue - totalRevenuePaid)}đ
                           </p>
                         </div>
@@ -1236,7 +1249,7 @@ export default function PolicyStatsPage({
                           <p className="text-slate-500 font-medium">
                             Chi trường
                           </p>
-                          <p className="text-lg font-bold text-violet-700">
+                          <p className="text-xl font-bold text-violet-700">
                             {fmt(totalSchoolExp)}đ
                           </p>
                         </div>
@@ -1244,7 +1257,7 @@ export default function PolicyStatsPage({
                           <p className="text-slate-500 font-medium">
                             Đã chi trường
                           </p>
-                          <p className="text-lg font-bold text-rose-700">
+                          <p className="text-xl font-bold text-rose-700">
                             {fmt(totalSchoolPaid)}đ
                           </p>
                         </div>
@@ -1252,7 +1265,7 @@ export default function PolicyStatsPage({
                           <p className="text-slate-500 font-medium">
                             Còn chi trường
                           </p>
-                          <p className="text-lg font-bold text-orange-700">
+                          <p className="text-xl font-bold text-orange-700">
                             {fmt(totalSchoolExp - totalSchoolPaid)}đ
                           </p>
                         </div>
@@ -1260,7 +1273,7 @@ export default function PolicyStatsPage({
                           <p className="text-slate-500 font-medium">
                             Chi ngoài
                           </p>
-                          <p className="text-lg font-bold text-cyan-700">
+                          <p className="text-xl font-bold text-cyan-700">
                             {fmt(totalMgmt)}đ
                           </p>
                         </div>
@@ -1268,7 +1281,7 @@ export default function PolicyStatsPage({
                           <p className="text-slate-500 font-medium">
                             Còn chi ngoài
                           </p>
-                          <p className="text-lg font-bold text-orange-700">
+                          <p className="text-xl font-bold text-orange-700">
                             {fmt(totalMgmt - totalMgmtPaid)}đ
                           </p>
                         </div>
@@ -1277,10 +1290,10 @@ export default function PolicyStatsPage({
                       {/* DETAIL TABLES */}
                       {revenueItems.length > 0 && (
                         <div className="mt-3 overflow-x-auto">
-                          <p className="text-xs font-bold text-emerald-700 mb-1">
+                          <p className="mb-1 text-base font-bold text-emerald-700">
                             Doanh thu chi tiết
                           </p>
-                          <table className="w-full text-xs border-collapse">
+                          <table className="w-full border-collapse text-base">
                             <thead className="bg-emerald-700 text-white">
                               <tr>
                                 <th className="px-2 py-1 text-left">
@@ -1345,10 +1358,10 @@ export default function PolicyStatsPage({
 
                       {schoolItems.length > 0 && (
                         <div className="mt-3 overflow-x-auto">
-                          <p className="text-xs font-bold text-violet-700 mb-1">
+                          <p className="mb-1 text-base font-bold text-violet-700">
                             Chi trường chi tiết
                           </p>
-                          <table className="w-full text-xs border-collapse">
+                          <table className="w-full border-collapse text-base">
                             <thead className="bg-violet-700 text-white">
                               <tr>
                                 <th className="px-2 py-1">HS</th>
@@ -1421,10 +1434,10 @@ export default function PolicyStatsPage({
 
                       {mgmtItems.length > 0 && (
                         <div className="mt-3 overflow-x-auto">
-                          <p className="text-xs font-bold text-cyan-700 mb-1">
+                          <p className="mb-1 text-base font-bold text-cyan-700">
                             Chi ngoài chi tiết
                           </p>
-                          <table className="w-full text-xs border-collapse">
+                          <table className="w-full border-collapse text-base">
                             <thead className="bg-cyan-700 text-white">
                               <tr>
                                 <th className="px-2 py-1">HS</th>
@@ -1484,7 +1497,7 @@ export default function PolicyStatsPage({
                 })()}
 
                 {showExpenses && expenseLoading && (
-                  <div className="border-t-2 border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500 italic flex items-center gap-2">
+                  <div className="flex items-center gap-2 border-t-2 border-slate-200 bg-slate-50 px-4 py-3 text-base italic text-slate-500">
                     <div className="w-3 h-3 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
                     Đang tải thu chi...
                   </div>
@@ -1492,7 +1505,7 @@ export default function PolicyStatsPage({
                 {showExpenses &&
                   !schoolExpenses.has(school.schoolId) &&
                   !expenseLoading && (
-                    <div className="border-t-2 border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500 italic">
+                    <div className="border-t-2 border-slate-200 bg-slate-50 px-4 py-3 text-base italic text-slate-500">
                       Chưa có dữ liệu thu chi
                     </div>
                   )}
@@ -1500,8 +1513,8 @@ export default function PolicyStatsPage({
             ))}
           </div>
         )}
-        {activeStatsTab === "quantities" && viewMode === "card" && (
-          <div className="space-y-4 mt-4">
+        {activeStatsTab === "policies" && viewMode === "card" && (
+          <div className="mt-4 space-y-4 text-base [&_p]:text-base [&_span]:text-base">
             {treeData.map((school: any) => (
               <div key={school.schoolId} className="space-y-2">
                 <SchoolInfoCard p={school} />
@@ -1675,11 +1688,11 @@ export default function PolicyStatsPage({
       {openPolicy && (
         <PolicyPopup data={openPolicy} onClose={() => setOpenPolicy(null)} />
       )}
-      {activeStatsTab === "quantities" && (
+      {activeStatsTab === "policies" && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-white shadow-lg rounded-full px-2 py-1 flex gap-1 border">
           <button
             onClick={() => setViewMode("card")}
-            className={`px-4 py-2 rounded-full text-sm ${
+            className={`rounded-full px-5 py-3 text-base font-bold ${
               viewMode === "card" ? "bg-blue-500 text-white" : "text-gray-600"
             }`}
           >
@@ -1688,7 +1701,7 @@ export default function PolicyStatsPage({
 
           <button
             onClick={() => setViewMode("table")}
-            className={`px-4 py-2 rounded-full text-sm ${
+            className={`rounded-full px-5 py-3 text-base font-bold ${
               viewMode === "table" ? "bg-blue-500 text-white" : "text-gray-600"
             }`}
           >
@@ -1707,7 +1720,7 @@ export default function PolicyStatsPage({
 function StatCard({ title, value }: any) {
   return (
     <div className="bg-white p-4 rounded-xl shadow">
-      <div className="text-gray-500 text-sm">{title}</div>
+      <div className="text-base text-gray-500">{title}</div>
       <div className="text-2xl font-bold">{value || 0}</div>
     </div>
   );
@@ -1723,11 +1736,11 @@ function LoadingOverlay() {
 function SchoolHeader({ school }: any) {
   return (
     <div className="bg-white rounded-xl shadow border p-4 mb-4 space-y-2">
-      <div className="text-xl font-bold text-blue-700">
+      <div className="text-2xl font-bold text-blue-700">
         🏫 {school.schoolName}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm text-gray-700">
+      <div className="grid grid-cols-2 gap-3 text-base text-gray-700 md:grid-cols-3">
         <div>
           📍 <b>Địa chỉ:</b> {school.address}
         </div>

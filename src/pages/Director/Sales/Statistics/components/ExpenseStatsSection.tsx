@@ -612,36 +612,36 @@ export default function ExpenseStatsSection({
     <section className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-col gap-3 bg-gradient-to-r from-emerald-700 to-teal-700 px-5 py-4 text-white sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-100">
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-emerald-100">
             Thống kê tài chính
           </p>
-          <h2 className="mt-1 flex items-center gap-2 text-xl font-black">
+          <h2 className="mt-1 flex items-center gap-2 text-2xl font-black">
             <WalletCards size={22} />
             Thu chi
           </h2>
-          <p className="mt-1 text-sm text-emerald-100">
+          <p className="mt-1 text-base text-emerald-100">
             Tổng hợp theo các kỳ thu chi của từng trường
           </p>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-xl bg-white/15 px-4 py-2 text-center backdrop-blur">
-            <p className="text-xs text-emerald-100">Nhân viên</p>
-            <p className="text-2xl font-black">{employeeGroups.length}</p>
+            <p className="text-sm text-emerald-100">Nhân viên</p>
+            <p className="text-3xl font-black">{employeeGroups.length}</p>
           </div>
           <div className="rounded-xl bg-white/15 px-4 py-2 text-center backdrop-blur">
-            <p className="text-xs text-emerald-100">Trường</p>
-            <p className="text-2xl font-black">{schoolRows.length}</p>
+            <p className="text-sm text-emerald-100">Trường</p>
+            <p className="text-3xl font-black">{schoolRows.length}</p>
           </div>
         </div>
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center gap-2 px-5 py-12 text-sm font-semibold text-slate-500">
+        <div className="flex items-center justify-center gap-2 px-5 py-12 text-base font-semibold text-slate-500">
           <Loader2 size={20} className="animate-spin text-emerald-600" />
           Đang tải thống kê thu chi...
         </div>
       ) : error ? (
-        <div className="m-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="m-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-base text-amber-800">
           <AlertCircle size={19} className="mt-0.5 shrink-0" />
           <span>{error}</span>
         </div>
@@ -657,11 +657,11 @@ export default function ExpenseStatsSection({
                 >
                   <div className="flex items-center gap-2">
                     <Icon size={17} />
-                    <p className="text-xs font-bold uppercase">
+                    <p className="text-sm font-bold uppercase">
                       {card.label}
                     </p>
                   </div>
-                  <p className="mt-2 break-words text-lg font-black">
+                  <p className="mt-2 break-words text-2xl font-black">
                     {formatMoney(totals[card.key])}đ
                   </p>
                 </div>
@@ -671,7 +671,7 @@ export default function ExpenseStatsSection({
 
           {schoolRows.length > 0 ? (
             <div className="overflow-x-auto border-t border-slate-100">
-              <table className="min-w-[1180px] w-full text-sm">
+              <table className="min-w-[1180px] w-full text-base">
                 <thead className="bg-slate-900 text-white">
                   <tr>
                     <th className="px-4 py-3 text-left">Trường</th>
@@ -696,11 +696,11 @@ export default function ExpenseStatsSection({
                                 <UserRound size={18} />
                               </span>
                               <span>{group.employeeName}</span>
-                              <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-emerald-700">
+                              <span className="rounded-full bg-white px-3 py-1.5 text-sm font-bold text-emerald-700">
                                 {group.schools.length} trường
                               </span>
                             </div>
-                            <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                            <div className="flex flex-wrap gap-2 text-sm font-semibold">
                               <span className="rounded-full bg-white px-3 py-1.5 text-emerald-700">
                                 Doanh thu: {formatMoney(group.revenue)}đ
                               </span>
@@ -757,7 +757,7 @@ export default function ExpenseStatsSection({
               </table>
             </div>
           ) : (
-            <div className="border-t border-slate-100 px-5 py-10 text-center text-sm text-slate-500">
+            <div className="border-t border-slate-100 px-5 py-10 text-center text-base text-slate-500">
               Chưa có dữ liệu thu chi phù hợp với bộ lọc hiện tại.
             </div>
           )}

@@ -38,26 +38,26 @@ export default function QuantityStatsSection({
     <section className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-col gap-3 bg-gradient-to-r from-blue-700 to-indigo-700 px-5 py-4 text-white sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-100">
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-blue-100">
             Tổng hợp theo trường
           </p>
-          <h2 className="mt-1 flex items-center gap-2 text-xl font-black">
+          <h2 className="mt-1 flex items-center gap-2 text-2xl font-black">
             <GraduationCap size={23} />
             Số học sinh / số tiết
           </h2>
-          <p className="mt-1 text-sm text-blue-100">
+          <p className="mt-1 text-base text-blue-100">
             Đối chiếu số liệu kinh doanh khai trong chính sách và số liệu kế
             toán nhập.
           </p>
         </div>
         <div className="rounded-xl bg-white/15 px-5 py-2 text-center backdrop-blur">
-          <p className="text-xs text-blue-100">Trường</p>
-          <p className="text-2xl font-black">{rows.length}</p>
+          <p className="text-sm text-blue-100">Trường</p>
+          <p className="text-3xl font-black">{rows.length}</p>
         </div>
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center gap-2 px-5 py-12 text-sm font-semibold text-slate-500">
+        <div className="flex items-center justify-center gap-2 px-5 py-12 text-base font-semibold text-slate-500">
           <Loader2 size={20} className="animate-spin text-blue-600" />
           Đang tải số liệu kế toán...
         </div>
@@ -99,20 +99,20 @@ export default function QuantityStatsSection({
           </div>
 
           {!accountingAvailable && (
-            <p className="mx-4 mb-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-700">
+            <p className="mx-4 mb-4 rounded-xl bg-amber-50 px-4 py-3 text-base text-amber-700">
               Tài khoản hiện tại không có quyền xem số liệu kế toán.
             </p>
           )}
 
           {error && (
-            <p className="mx-4 mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+            <p className="mx-4 mb-4 rounded-xl bg-red-50 px-4 py-3 text-base text-red-700">
               {error}
             </p>
           )}
 
           {rows.length > 0 ? (
             <div className="overflow-x-auto border-t border-slate-100">
-              <table className="w-full min-w-[820px] text-sm">
+              <table className="w-full min-w-[920px] text-base">
                 <thead className="bg-slate-900 text-white">
                   <tr>
                     <th rowSpan={2} className="px-4 py-3 text-left">
@@ -137,7 +137,7 @@ export default function QuantityStatsSection({
                       Chênh lệch
                     </th>
                   </tr>
-                  <tr className="text-xs text-slate-200">
+                  <tr className="text-sm text-slate-200">
                     <th className="border-l border-slate-700 px-4 py-2 text-right">
                       Học sinh
                     </th>
@@ -232,7 +232,7 @@ export default function QuantityStatsSection({
               </table>
             </div>
           ) : (
-            <div className="border-t border-slate-100 px-5 py-10 text-center text-sm text-slate-500">
+            <div className="border-t border-slate-100 px-5 py-10 text-center text-base text-slate-500">
               Không có dữ liệu phù hợp với bộ lọc hiện tại.
             </div>
           )}
@@ -257,9 +257,9 @@ function SummaryCard({
     <div className={`rounded-2xl p-4 ${className}`}>
       <div className="flex items-center gap-2">
         {icon}
-        <p className="text-xs font-bold uppercase">{label}</p>
+        <p className="text-sm font-bold uppercase">{label}</p>
       </div>
-      <p className="mt-2 text-2xl font-black">{value}</p>
+      <p className="mt-2 text-3xl font-black">{value}</p>
     </div>
   );
 }

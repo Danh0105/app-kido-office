@@ -27,12 +27,14 @@ type Props = {
   showActions?: boolean;
   /** Đã được sales admin xác nhận (khoá) chưa. */
   isConfirmed?: boolean;
-  /** true khi bảng bị khoá với người xem hiện tại (đã confirm và không phải kế toán trưởng). */
+  /** true khi bảng bị khoá hẳn với người xem hiện tại (đã confirm, không phải KTT / kế toán / thủ quỹ). */
   readOnly?: boolean;
   /** Có quyền bấm nút "Xác nhận" (sales admin) không. */
   canConfirm?: boolean;
   /** Đã "Xác nhận đúng BBCS" → khoá phần chính sách, kể cả với KTT. */
   policyLocked?: boolean;
+  /** Cột chi chỉ sửa được trên dòng đã lưu (đã khoá, người xem không phải KTT). */
+  savedRowsOnly?: boolean;
   confirming?: boolean;
   onConfirm?: () => void;
   /** Tên sales admin đã xác nhận. */
@@ -53,6 +55,7 @@ export default function ManagementExpenseTable({
   readOnly = false,
   canConfirm = false,
   policyLocked = false,
+  savedRowsOnly = false,
   confirming = false,
   onConfirm,
   confirmedByName,
@@ -309,6 +312,7 @@ export default function ManagementExpenseTable({
                 updateRow={updateRow}
                 readOnly={readOnly}
                 policyLocked={policyLocked}
+                savedRowsOnly={savedRowsOnly}
               />
             ))}
           </div>
@@ -425,8 +429,9 @@ export default function ManagementExpenseTable({
                     minute: "2-digit",
                   })} — `
                 : ""}
-              Bảng đã khoá. Kế toán trưởng chỉ còn sửa được Ngày chi, Nguồn
-              chi, Đã chi, Người chi, Ghi chú.
+              Bảng đã khoá. Kế toán trưởng, Kế toán, Kế toán công nợ và Thủ
+              quỹ chỉ còn sửa được Ngày chi, Nguồn chi, Đã chi, Người chi, Ghi
+              chú.
             </span>
           </div>
         ) : (

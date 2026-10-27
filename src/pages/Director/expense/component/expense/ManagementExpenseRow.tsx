@@ -31,10 +31,12 @@ type Props = {
   removeRow: (index: number) => void;
   /** false → ẩn cột thao tác (xoá dòng), dùng cho sales admin. */
   showActions?: boolean;
-  /** Bảng đã bị khoá (đã xác nhận) và người xem không phải kế toán trưởng. */
+  /** Bảng đã bị khoá (đã xác nhận) và người xem không phải KTT / kế toán / thủ quỹ. */
   readOnly?: boolean;
   /** Đã "Xác nhận đúng BBCS" → khoá phần chính sách (Nội dung → Chi ngoài), cột chi vẫn sửa được. */
   policyLocked?: boolean;
+  /** Cột chi chỉ sửa được khi dòng đã lưu (server bỏ qua dòng mới của kế toán khi đã khoá). */
+  savedRowsOnly?: boolean;
 };
 
 export default function ManagementExpenseRow({
@@ -50,6 +52,7 @@ export default function ManagementExpenseRow({
   showActions = true,
   readOnly = false,
   policyLocked = false,
+  savedRowsOnly = false,
 }: Props) {
   // Có Số HS thì tính theo HS, không thì theo Số tiết (× Số tháng) — khớp backend.
   const quantity = calculateRevenueQuantity(inputData);
@@ -57,6 +60,8 @@ export default function ManagementExpenseRow({
   // Hóa Đơn — đã xuất hóa đơn thì khoá để các bảng trên không bị đổi số.
   const sharedLocked = readOnly || policyLocked || !!inputData.invoiceLocked;
   const policyReadOnly = readOnly || policyLocked;
+  // Ngày chi, Nguồn chi, Đã chi, Người chi, Ghi chú.
+  const paymentReadOnly = readOnly || (savedRowsOnly && !row?.id);
   const policyQl1 = Number(
     subjects?.policies?.[0]?.data?.ttcs?.[0]?.ql1Percent || 0
   );
@@ -335,7 +340,7 @@ export default function ManagementExpenseRow({
         <input
           type="date"
           value={row.paymentDate || ""}
-          disabled={readOnly}
+          disabled={paymentReadOnly}
           onChange={(e) => updateRow(index, "paymentDate", e.target.value)}
           className="
             w-full h-11 rounded-lg
@@ -351,7 +356,7 @@ export default function ManagementExpenseRow({
       <div className="p-2 border-r border-slate-100">
         <CashAccountSelect
           value={row.cashAccount}
-          disabled={readOnly}
+          disabled={paymentReadOnly}
           onChange={(value) => updateRow(index, "cashAccount", value)}
           className="
             w-full h-11 rounded-lg
@@ -366,7 +371,7 @@ export default function ManagementExpenseRow({
       <div className="p-2 border-r border-slate-100">
         <DecimalInput
           value={paidAmount}
-          disabled={readOnly}
+          disabled={paymentReadOnly}
           onValueChange={(value) => {
             updateRow(index, "paidAmount", value);
           }}
@@ -403,7 +408,7 @@ export default function ManagementExpenseRow({
       <div className="p-2 border-r border-slate-100">
         <input
           value={row.payer || ""}
-          disabled={readOnly}
+          disabled={paymentReadOnly}
           onChange={(e) => updateRow(index, "payer", e.target.value)}
           placeholder="Người chi"
           className="
@@ -419,7 +424,7 @@ export default function ManagementExpenseRow({
       <div className="p-2 border-r border-slate-100">
         <input
           value={row.note || ""}
-          disabled={readOnly}
+          disabled={paymentReadOnly}
           onChange={(e) => updateRow(index, "note", e.target.value)}
           placeholder="Ghi chú..."
           className="

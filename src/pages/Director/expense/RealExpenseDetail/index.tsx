@@ -132,6 +132,9 @@ export default function RealExpenseDetail({
   // Dùng hasRole trực tiếp để tài khoản kiêm nhiệm vẫn giữ quyền KTT đối với
   // bảng "Chi Ngoài" đã được Sales Admin xác nhận.
   const isChief = hasRole("ketoan_truong");
+  // Kế toán / KT công nợ / thủ quỹ: bảng "Chi Ngoài" đã khoá vẫn nhập được cột
+  // chi như KTT, nhưng chỉ trên dòng đã lưu (server không thêm dòng cho họ).
+  const isLockedPaymentEditor = hasRole("accountant", "ketoan_congno", "thuquy");
   // Sales admin chỉnh sửa DUY NHẤT bảng "Chi Ngoài" — xem ManagementExpenseTable.
   const isSalesAdmin = hasRole("saleadmin", "salesadmin", "salesadmin_la");
   const [managementConfirmed, setManagementConfirmed] = useState(false);
@@ -1027,6 +1030,7 @@ export default function RealExpenseDetail({
               );
 
               return {
+                id: r.id,
                 ql1UnitPrice: r.ql1UnitPrice,
                 ql1Tax: r.ql1Tax,
                 ql2UnitPrice: r.ql2UnitPrice,
@@ -1144,6 +1148,8 @@ export default function RealExpenseDetail({
         const inputRow = rows[index] || rows[0] || initialInputData;
 
         return {
+          // Bảng đã khoá: server khớp cột chi của kế toán theo id dòng.
+          id: row.id,
           rowIndex: index,
           subjectId,
           totalPeriods: Number(inputRow.totalPeriods || 0),
@@ -1712,8 +1718,11 @@ export default function RealExpenseDetail({
                 handleViewHistory={handleViewHistory}
                 historyLoading={historyLoading}
                 managementConfirmed={managementConfirmed}
-                managementReadOnly={managementConfirmed && !isChief}
+                managementReadOnly={
+                  managementConfirmed && !isChief && !isLockedPaymentEditor
+                }
                 managementPolicyLocked={managementConfirmed}
+                managementSavedRowsOnly={managementConfirmed && !isChief}
                 managementConfirmedByName={managementConfirmedByName}
                 managementConfirmedAt={managementConfirmedAt}
                 historyCount={historyList.length}

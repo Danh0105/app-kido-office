@@ -67,6 +67,8 @@ type Props = {
   isChief?: boolean;
   /** Đã "Xác nhận đúng BBCS" → khoá phần chính sách Chi Ngoài, kể cả với KTT. */
   managementPolicyLocked?: boolean;
+  /** Bảng Chi Ngoài đã khoá, người xem không phải KTT → cột chi chỉ sửa trên dòng đã lưu. */
+  managementSavedRowsOnly?: boolean;
   /** KTT mở khoá "Xác nhận đúng BBCS". */
   onUnconfirmManagement?: () => void;
   /** Kỳ thu chi đã "Kết thúc" → khoá toàn bộ, chỉ KTT mở lại. */
@@ -137,6 +139,7 @@ export default function ExpenseFormTable({
   managementConfirmedAt,
   isChief = false,
   managementPolicyLocked = false,
+  managementSavedRowsOnly = false,
   onUnconfirmManagement,
   finalized = false,
   finalizedByName,
@@ -224,6 +227,7 @@ export default function ExpenseFormTable({
             confirmedByName={managementConfirmedByName}
             confirmedAt={managementConfirmedAt}
             policyLocked={managementPolicyLocked}
+            savedRowsOnly={managementSavedRowsOnly}
           />
         </div>
       </fieldset>

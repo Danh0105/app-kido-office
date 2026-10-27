@@ -1,4 +1,6 @@
 export type ManagementRow = {
+  /** id dòng đã lưu — dòng mới thêm chưa có */
+  id?: number;
   ql1UnitPrice?: number | string;
   ql1Tax?: number | string;
   ql2UnitPrice?: number | string;

@@ -6,10 +6,19 @@ import PolicyPopup from "./components/PolicyPopup";
 import SchoolInfoCard from "./components/SchoolInfoCard";
 import { useParams } from "react-router-dom";
 import { suggestApi } from "@/service/suggest";
-import { Boxes, Calendar, MapPin, PackageSearch, School } from "lucide-react";
+import {
+  Boxes,
+  Calendar,
+  GraduationCap,
+  MapPin,
+  PackageSearch,
+  School,
+} from "lucide-react";
 import ExpenseStatsSection from "./components/ExpenseStatsSection";
+import QuantityStatsSection from "./components/QuantityStatsSection";
 import { expensePeriodApi } from "@/service/expensePeriod";
 import { schoolExpenseApi } from "@/service/schoolExpense";
+import { buildSchoolQuantitySummary } from "./quantityStats";
 
 const groupByProvince = (rows: any[]) => {
   const map = new Map();
@@ -71,7 +80,9 @@ type DeviceAllocation = {
 };
 
 const normalizeDeviceName = (value: unknown) =>
-  String(value || "").trim().toLocaleLowerCase("vi-VN");
+  String(value || "")
+    .trim()
+    .toLocaleLowerCase("vi-VN");
 
 const getPolicyDevices = (policy: any) => {
   const devices = policy?.policyData?.htthietbi;
@@ -123,6 +134,9 @@ export default function PolicyStatsPage({
   const [selectedSubject, setSelectedSubject] = useState<number | null>(null);
   const [selectedYear, setSelectedYear] = useState<string | null>(null);
   const [selectedDevice, setSelectedDevice] = useState("");
+  const [activeStatsTab, setActiveStatsTab] = useState<
+    "devices" | "quantities"
+  >("quantities");
   const { data, isLoading, isFetching } = usePolicyStats(filters);
   console.log("data", data);
   const [openPolicy, setOpenPolicy] = useState<any>(null);
@@ -131,8 +145,11 @@ export default function PolicyStatsPage({
   const [suggestStats, setSuggestStats] = useState<Record<number, any>>({});
   const [expensePeriods, setExpensePeriods] = useState<any[]>([]);
   const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null);
-  const [schoolExpenses, setSchoolExpenses] = useState<Map<number, any>>(new Map());
+  const [schoolExpenses, setSchoolExpenses] = useState<Map<number, any>>(
+    new Map(),
+  );
   const [expenseLoading, setExpenseLoading] = useState(false);
+  const [expenseError, setExpenseError] = useState("");
   const byProvince = useMemo(() => {
     if (!data) return [];
     return groupByProvince(data);
@@ -184,16 +201,19 @@ export default function PolicyStatsPage({
 
   useEffect(() => {
     if (!showExpenses) return;
-    expensePeriodApi.getAll().then((res) => {
-      const list = Array.isArray(res) ? res : res?.data || [];
-      setExpensePeriods(list);
-    }).catch(() => {});
+    expensePeriodApi
+      .getAll()
+      .then((res) => {
+        setExpensePeriods(res);
+      })
+      .catch(() => {});
   }, [showExpenses]);
 
   useEffect(() => {
     if (!showExpenses) {
       setSchoolExpenses(new Map());
       setExpenseLoading(false);
+      setExpenseError("");
       return;
     }
 
@@ -201,6 +221,7 @@ export default function PolicyStatsPage({
 
     const fetchExpenses = async () => {
       setExpenseLoading(true);
+      setExpenseError("");
       try {
         const params: any = { limit: 500 };
         if (selectedPeriodId) params.periodId = selectedPeriodId;
@@ -217,7 +238,7 @@ export default function PolicyStatsPage({
               );
               return { ...record, summary };
             } catch {
-              return record;
+              return { ...record, summaryLoadFailed: true };
             }
           }),
         );
@@ -231,13 +252,22 @@ export default function PolicyStatsPage({
             if (existing) {
               const s1 = existing.summary?.summary || existing.summary || {};
               const s2 = record.summary?.summary || record.summary || {};
-              const mergeArrays = (a: any[], b: any[]) => [...(a || []), ...(b || [])];
+              const mergeArrays = (a: any[], b: any[]) => [
+                ...(a || []),
+                ...(b || []),
+              ];
               existing.summary = {
                 ...existing.summary,
                 summary: {
                   revenueItems: mergeArrays(s1.revenueItems, s2.revenueItems),
-                  schoolExpenseItems: mergeArrays(s1.schoolExpenseItems, s2.schoolExpenseItems),
-                  managementExpenseItems: mergeArrays(s1.managementExpenseItems, s2.managementExpenseItems),
+                  schoolExpenseItems: mergeArrays(
+                    s1.schoolExpenseItems,
+                    s2.schoolExpenseItems,
+                  ),
+                  managementExpenseItems: mergeArrays(
+                    s1.managementExpenseItems,
+                    s2.managementExpenseItems,
+                  ),
                 },
               };
             } else {
@@ -245,16 +275,26 @@ export default function PolicyStatsPage({
             }
           });
           setSchoolExpenses(map);
+          if (enriched.some((record: any) => record.summaryLoadFailed)) {
+            setExpenseError(
+              "Một phần số liệu kế toán chưa tải được. Vui lòng thử lại.",
+            );
+          }
         }
       } catch {
-        if (active) setSchoolExpenses(new Map());
+        if (active) {
+          setSchoolExpenses(new Map());
+          setExpenseError("Không thể tải số học sinh / số tiết do kế toán nhập.");
+        }
       } finally {
         if (active) setExpenseLoading(false);
       }
     };
 
     fetchExpenses();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [selectedPeriodId, selectedSubject, showExpenses]);
 
   const resetFilters = () => {
@@ -295,6 +335,25 @@ export default function PolicyStatsPage({
       ),
     ];
   }, [filteredPolicies]);
+
+  const schoolOptions = useMemo(() => {
+    const schools = new Map<number, string>();
+
+    allPolicies.forEach((policy: any) => {
+      if (selectedProvince && policy.provinceId !== selectedProvince) return;
+      if (selectedYear && policy.schoolYear !== selectedYear) return;
+      if (selectedSubject && policy.subjectId !== selectedSubject) return;
+
+      const schoolId = Number(policy.schoolId);
+      if (schoolId && !schools.has(schoolId)) {
+        schools.set(schoolId, policy.schoolName || `Trường #${schoolId}`);
+      }
+    });
+
+    return Array.from(schools, ([id, name]) => ({ id, name })).sort((a, b) =>
+      a.name.localeCompare(b.name, "vi"),
+    );
+  }, [allPolicies, selectedProvince, selectedSubject, selectedYear]);
 
   const deviceOptions = useMemo<DeviceOption[]>(() => {
     const devices = new Map<string, DeviceOption>();
@@ -365,16 +424,14 @@ export default function PolicyStatsPage({
     (total, school) => total + school.quantity,
     0,
   );
-  const expenseScopedPolicies = useMemo(() => {
-    if (!selectedDevice) return filteredPolicies;
-
-    const deviceSchoolIds = new Set(
-      deviceAllocations.map((allocation) => allocation.schoolId),
-    );
-    return filteredPolicies.filter((policy: any) =>
-      deviceSchoolIds.has(Number(policy.schoolId)),
-    );
-  }, [deviceAllocations, filteredPolicies, selectedDevice]);
+  const quantityRows = useMemo(
+    () =>
+      buildSchoolQuantitySummary(
+        filteredPolicies,
+        Array.from(schoolExpenses.values()),
+      ),
+    [filteredPolicies, schoolExpenses],
+  );
   const getProfit = (p: any) => {
     const d = p.policyData || {};
 
@@ -496,6 +553,33 @@ export default function PolicyStatsPage({
 
       {/* ===== MAIN ===== */}
       <div className="flex-1 p-4 md:p-6 overflow-auto mt-[45px]">
+        <div className="mb-4 grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setActiveStatsTab("devices")}
+            className={`flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
+              activeStatsTab === "devices"
+                ? "bg-blue-600 text-white shadow"
+                : "text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            <Boxes size={18} />
+            Thống kê thiết bị
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveStatsTab("quantities")}
+            className={`flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
+              activeStatsTab === "quantities"
+                ? "bg-blue-600 text-white shadow"
+                : "text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            <GraduationCap size={18} />
+            Số học sinh / số tiết
+          </button>
+        </div>
+
         {/* ===== MOBILE HEADER ===== */}
         <div className="md:hidden mb-4">
           <div className="flex items-center gap-2">
@@ -577,12 +661,30 @@ export default function PolicyStatsPage({
               ✕
             </button>
           </div>
+          <select
+            className="mt-2 h-11 w-full rounded-xl border bg-white px-2 text-sm shadow-sm outline-none focus:ring-2 focus:ring-blue-200"
+            value={selectedSchool || ""}
+            onChange={(e) =>
+              setSelectedSchool(e.target.value ? Number(e.target.value) : null)
+            }
+          >
+            <option value="">🏫 Tất cả trường</option>
+            {schoolOptions.map((school) => (
+              <option key={school.id} value={school.id}>
+                {school.name}
+              </option>
+            ))}
+          </select>
           {/* KỲ THU CHI MOBILE */}
-          {showExpenses && (
+          {activeStatsTab === "quantities" && showExpenses && (
             <select
               className="h-11 w-full rounded-xl border bg-white px-2 text-sm shadow-sm outline-none focus:ring-2 focus:ring-blue-200 mt-2"
               value={selectedPeriodId || ""}
-              onChange={(e) => setSelectedPeriodId(e.target.value ? Number(e.target.value) : null)}
+              onChange={(e) =>
+                setSelectedPeriodId(
+                  e.target.value ? Number(e.target.value) : null,
+                )
+              }
             >
               <option value="">📅 Kỳ thu chi</option>
               {expensePeriods.map((p: any) => (
@@ -594,7 +696,7 @@ export default function PolicyStatsPage({
           )}
         </div>
         {/* ===== DESKTOP FILTER ===== */}
-        <div className="hidden md:flex items-center gap-3 mb-4 bg-white p-4 rounded-2xl shadow-sm border">
+        <div className="mb-4 hidden flex-wrap items-center gap-3 rounded-2xl border bg-white p-4 shadow-sm md:flex">
           {/* NĂM HỌC */}
           <select
             className="border rounded-xl px-3 py-2 text-sm min-w-[180px]"
@@ -611,24 +713,45 @@ export default function PolicyStatsPage({
           </select>
 
           <select
-            className="border rounded-xl px-3 py-2 text-sm min-w-[220px]"
-            value={selectedDevice}
-            onChange={(event) => setSelectedDevice(event.target.value)}
+            className="min-w-[240px] rounded-xl border px-3 py-2 text-sm"
+            value={selectedSchool || ""}
+            onChange={(e) =>
+              setSelectedSchool(e.target.value ? Number(e.target.value) : null)
+            }
           >
-            <option value="">📦 Chọn thiết bị</option>
-            {deviceOptions.map((device) => (
-              <option key={device.key} value={device.key}>
-                {device.name}
+            <option value="">🏫 Tất cả trường</option>
+            {schoolOptions.map((school) => (
+              <option key={school.id} value={school.id}>
+                {school.name}
               </option>
             ))}
           </select>
 
+          {activeStatsTab === "devices" && (
+            <select
+              className="min-w-[220px] rounded-xl border px-3 py-2 text-sm"
+              value={selectedDevice}
+              onChange={(event) => setSelectedDevice(event.target.value)}
+            >
+              <option value="">📦 Chọn thiết bị</option>
+              {deviceOptions.map((device) => (
+                <option key={device.key} value={device.key}>
+                  {device.name}
+                </option>
+              ))}
+            </select>
+          )}
+
           {/* KỲ THU CHI */}
-          {showExpenses && (
+          {activeStatsTab === "quantities" && showExpenses && (
             <select
               className="border rounded-xl px-3 py-2 text-sm min-w-[200px]"
               value={selectedPeriodId || ""}
-              onChange={(e) => setSelectedPeriodId(e.target.value ? Number(e.target.value) : null)}
+              onChange={(e) =>
+                setSelectedPeriodId(
+                  e.target.value ? Number(e.target.value) : null,
+                )
+              }
             >
               <option value="">📅 Kỳ thu chi</option>
               {expensePeriods.map((p: any) => (
@@ -670,26 +793,28 @@ export default function PolicyStatsPage({
             Reset filter
           </button>
         </div>
-        <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:hidden">
-          <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
-            <PackageSearch size={18} className="text-blue-600" />
-            Lọc thiết bị đã cấp
-          </label>
-          <select
-            className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            value={selectedDevice}
-            onChange={(event) => setSelectedDevice(event.target.value)}
-          >
-            <option value="">Chọn loại thiết bị</option>
-            {deviceOptions.map((device) => (
-              <option key={device.key} value={device.key}>
-                {device.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        {activeStatsTab === "devices" && (
+          <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:hidden">
+            <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
+              <PackageSearch size={18} className="text-blue-600" />
+              Lọc thiết bị đã cấp
+            </label>
+            <select
+              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              value={selectedDevice}
+              onChange={(event) => setSelectedDevice(event.target.value)}
+            >
+              <option value="">Chọn loại thiết bị</option>
+              {deviceOptions.map((device) => (
+                <option key={device.key} value={device.key}>
+                  {device.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
-        {selectedDevice && (
+        {activeStatsTab === "devices" && selectedDevice && (
           <section className="mb-6 overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-sm">
             <div className="flex flex-col gap-4 bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-4 text-white sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -705,7 +830,9 @@ export default function PolicyStatsPage({
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl bg-white/15 px-4 py-2 text-center backdrop-blur">
                   <p className="text-xs text-blue-100">Số trường</p>
-                  <p className="text-xl font-bold">{deviceAllocations.length}</p>
+                  <p className="text-xl font-bold">
+                    {deviceAllocations.length}
+                  </p>
                 </div>
                 <div className="rounded-xl bg-white/15 px-4 py-2 text-center backdrop-blur">
                   <p className="text-xs text-blue-100">Tổng số lượng</p>
@@ -732,7 +859,9 @@ export default function PolicyStatsPage({
                     <div className="min-w-0">
                       <p className="flex items-center gap-2 font-bold text-slate-800">
                         <School size={17} className="shrink-0 text-blue-600" />
-                        <span className="truncate">{allocation.schoolName}</span>
+                        <span className="truncate">
+                          {allocation.schoolName}
+                        </span>
                       </p>
                       <p className="mt-1 flex items-center gap-1 text-sm text-slate-500">
                         <MapPin size={14} className="shrink-0" />
@@ -749,9 +878,12 @@ export default function PolicyStatsPage({
                             {detail.subjectName || "Chính sách"}
                             {detail.schoolYear ? ` • ${detail.schoolYear}` : ""}
                             {allocation.details.length > 1
-                              ? ` • SL ${detail.quantity.toLocaleString("vi-VN", {
-                                  maximumFractionDigits: 2,
-                                })}`
+                              ? ` • SL ${detail.quantity.toLocaleString(
+                                  "vi-VN",
+                                  {
+                                    maximumFractionDigits: 2,
+                                  },
+                                )}`
                               : ""}
                           </span>
                         ))}
@@ -778,9 +910,30 @@ export default function PolicyStatsPage({
             )}
           </section>
         )}
-        {showExpenses && (
+        {activeStatsTab === "devices" && !selectedDevice && (
+          <section className="mb-6 rounded-2xl border border-dashed border-blue-200 bg-blue-50/50 px-5 py-12 text-center">
+            <PackageSearch size={34} className="mx-auto text-blue-500" />
+            <p className="mt-3 font-bold text-slate-800">
+              Chọn một loại thiết bị để xem thống kê
+            </p>
+            <p className="mt-1 text-sm text-slate-500">
+              Kết quả sẽ tổng hợp số lượng thiết bị đã cấp theo từng trường.
+            </p>
+          </section>
+        )}
+
+        {activeStatsTab === "quantities" && (
+          <QuantityStatsSection
+            rows={quantityRows}
+            loading={showExpenses && expenseLoading}
+            accountingAvailable={showExpenses}
+            error={expenseError}
+          />
+        )}
+
+        {activeStatsTab === "quantities" && showExpenses && (
           <ExpenseStatsSection
-            policies={expenseScopedPolicies}
+            policies={filteredPolicies}
             restrictToPolicySchools
             subjectId={selectedSubject}
             employeeId={Number(employeeId) || undefined}
@@ -789,7 +942,7 @@ export default function PolicyStatsPage({
         {/* ===== LOADING ===== */}
         {(isLoading || isFetching) && <LoadingOverlay />}
 
-        {viewMode === "table" && (
+        {activeStatsTab === "quantities" && viewMode === "table" && (
           <div className="space-y-6 mt-4">
             {treeData.map((school: any) => (
               <div
@@ -994,24 +1147,52 @@ export default function PolicyStatsPage({
                   const schoolItems = s.schoolExpenseItems || [];
                   const mgmtItems = s.managementExpenseItems || [];
 
-                  const totalRevenue = revenueItems.reduce((sum: number, r: any) =>
-                    sum + Number(r.unitPrice || 0) * Number(r.studentCount || 0) * Number(r.monthsCount || 0), 0);
-                  const totalRevenuePaid = revenueItems.reduce((sum: number, r: any) =>
-                    sum + Number(r.paidAmount || 0), 0);
-                  const totalSchoolExp = schoolItems.reduce((sum: number, r: any) => {
-                    const st = Number(r.studentCount || 0);
-                    const mo = Number(r.monthsCount || 0);
-                    return sum + (Number(r.teacherUnitPrice || r.giaovien || 0) + Number(r.taxUnitPrice || r.thue || 0) + Number(r.csvcUnitPrice || r.csvc || 0)) * st * mo;
-                  }, 0);
-                  const totalSchoolPaid = schoolItems.reduce((sum: number, r: any) =>
-                    sum + Number(r.paidAmount || 0), 0);
+                  const totalRevenue = revenueItems.reduce(
+                    (sum: number, r: any) =>
+                      sum +
+                      Number(r.unitPrice || 0) *
+                        Number(r.studentCount || 0) *
+                        Number(r.monthsCount || 0),
+                    0,
+                  );
+                  const totalRevenuePaid = revenueItems.reduce(
+                    (sum: number, r: any) => sum + Number(r.paidAmount || 0),
+                    0,
+                  );
+                  const totalSchoolExp = schoolItems.reduce(
+                    (sum: number, r: any) => {
+                      const st = Number(r.studentCount || 0);
+                      const mo = Number(r.monthsCount || 0);
+                      return (
+                        sum +
+                        (Number(r.teacherUnitPrice || r.giaovien || 0) +
+                          Number(r.taxUnitPrice || r.thue || 0) +
+                          Number(r.csvcUnitPrice || r.csvc || 0)) *
+                          st *
+                          mo
+                      );
+                    },
+                    0,
+                  );
+                  const totalSchoolPaid = schoolItems.reduce(
+                    (sum: number, r: any) => sum + Number(r.paidAmount || 0),
+                    0,
+                  );
                   const totalMgmt = mgmtItems.reduce((sum: number, r: any) => {
                     const st = Number(r.studentCount || 0);
                     const mo = Number(r.monthsCount || 0);
-                    return sum + (Number(r.ql1UnitPrice || 0) + Number(r.ql2UnitPrice || 0)) * st * mo;
+                    return (
+                      sum +
+                      (Number(r.ql1UnitPrice || 0) +
+                        Number(r.ql2UnitPrice || 0)) *
+                        st *
+                        mo
+                    );
                   }, 0);
-                  const totalMgmtPaid = mgmtItems.reduce((sum: number, r: any) =>
-                    sum + Number(r.paidAmount || 0), 0);
+                  const totalMgmtPaid = mgmtItems.reduce(
+                    (sum: number, r: any) => sum + Number(r.paidAmount || 0),
+                    0,
+                  );
 
                   const fmt = (v: number) => v.toLocaleString("vi-VN");
 
@@ -1019,53 +1200,92 @@ export default function PolicyStatsPage({
                     <div className="border-t-2 border-emerald-300 bg-emerald-50 p-4">
                       <h4 className="text-sm font-bold text-emerald-800 mb-3 flex items-center gap-2">
                         <Calendar size={16} />
-                        Thu chi {selectedPeriodId
-                          ? `kỳ: ${expensePeriods.find((p: any) => p.id === selectedPeriodId)?.name || ""}`
+                        Thu chi{" "}
+                        {selectedPeriodId
+                          ? `kỳ: ${
+                              expensePeriods.find(
+                                (p: any) => p.id === selectedPeriodId,
+                              )?.name || ""
+                            }`
                           : "(tất cả kỳ)"}
                       </h4>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                         <div className="bg-white rounded-xl p-3 border">
-                          <p className="text-slate-500 font-medium">Doanh thu</p>
-                          <p className="text-lg font-bold text-emerald-700">{fmt(totalRevenue)}đ</p>
+                          <p className="text-slate-500 font-medium">
+                            Doanh thu
+                          </p>
+                          <p className="text-lg font-bold text-emerald-700">
+                            {fmt(totalRevenue)}đ
+                          </p>
                         </div>
                         <div className="bg-white rounded-xl p-3 border">
                           <p className="text-slate-500 font-medium">Đã thu</p>
-                          <p className="text-lg font-bold text-blue-700">{fmt(totalRevenuePaid)}đ</p>
+                          <p className="text-lg font-bold text-blue-700">
+                            {fmt(totalRevenuePaid)}đ
+                          </p>
                         </div>
                         <div className="bg-white rounded-xl p-3 border">
-                          <p className="text-slate-500 font-medium">Công nợ thu</p>
-                          <p className="text-lg font-bold text-amber-700">{fmt(totalRevenue - totalRevenuePaid)}đ</p>
+                          <p className="text-slate-500 font-medium">
+                            Công nợ thu
+                          </p>
+                          <p className="text-lg font-bold text-amber-700">
+                            {fmt(totalRevenue - totalRevenuePaid)}đ
+                          </p>
                         </div>
                         <div className="bg-white rounded-xl p-3 border">
-                          <p className="text-slate-500 font-medium">Chi trường</p>
-                          <p className="text-lg font-bold text-violet-700">{fmt(totalSchoolExp)}đ</p>
+                          <p className="text-slate-500 font-medium">
+                            Chi trường
+                          </p>
+                          <p className="text-lg font-bold text-violet-700">
+                            {fmt(totalSchoolExp)}đ
+                          </p>
                         </div>
                         <div className="bg-white rounded-xl p-3 border">
-                          <p className="text-slate-500 font-medium">Đã chi trường</p>
-                          <p className="text-lg font-bold text-rose-700">{fmt(totalSchoolPaid)}đ</p>
+                          <p className="text-slate-500 font-medium">
+                            Đã chi trường
+                          </p>
+                          <p className="text-lg font-bold text-rose-700">
+                            {fmt(totalSchoolPaid)}đ
+                          </p>
                         </div>
                         <div className="bg-white rounded-xl p-3 border">
-                          <p className="text-slate-500 font-medium">Còn chi trường</p>
-                          <p className="text-lg font-bold text-orange-700">{fmt(totalSchoolExp - totalSchoolPaid)}đ</p>
+                          <p className="text-slate-500 font-medium">
+                            Còn chi trường
+                          </p>
+                          <p className="text-lg font-bold text-orange-700">
+                            {fmt(totalSchoolExp - totalSchoolPaid)}đ
+                          </p>
                         </div>
                         <div className="bg-white rounded-xl p-3 border">
-                          <p className="text-slate-500 font-medium">Chi ngoài</p>
-                          <p className="text-lg font-bold text-cyan-700">{fmt(totalMgmt)}đ</p>
+                          <p className="text-slate-500 font-medium">
+                            Chi ngoài
+                          </p>
+                          <p className="text-lg font-bold text-cyan-700">
+                            {fmt(totalMgmt)}đ
+                          </p>
                         </div>
                         <div className="bg-white rounded-xl p-3 border">
-                          <p className="text-slate-500 font-medium">Còn chi ngoài</p>
-                          <p className="text-lg font-bold text-orange-700">{fmt(totalMgmt - totalMgmtPaid)}đ</p>
+                          <p className="text-slate-500 font-medium">
+                            Còn chi ngoài
+                          </p>
+                          <p className="text-lg font-bold text-orange-700">
+                            {fmt(totalMgmt - totalMgmtPaid)}đ
+                          </p>
                         </div>
                       </div>
 
                       {/* DETAIL TABLES */}
                       {revenueItems.length > 0 && (
                         <div className="mt-3 overflow-x-auto">
-                          <p className="text-xs font-bold text-emerald-700 mb-1">Doanh thu chi tiết</p>
+                          <p className="text-xs font-bold text-emerald-700 mb-1">
+                            Doanh thu chi tiết
+                          </p>
                           <table className="w-full text-xs border-collapse">
                             <thead className="bg-emerald-700 text-white">
                               <tr>
-                                <th className="px-2 py-1 text-left">Nội dung</th>
+                                <th className="px-2 py-1 text-left">
+                                  Nội dung
+                                </th>
                                 <th className="px-2 py-1">Số tiết</th>
                                 <th className="px-2 py-1">Học sinh</th>
                                 <th className="px-2 py-1">Tháng</th>
@@ -1077,20 +1297,44 @@ export default function PolicyStatsPage({
                             </thead>
                             <tbody>
                               {revenueItems.map((r: any, i: number) => {
-                                const amount = Number(r.unitPrice || 0) * Number(r.studentCount || 0) * Number(r.monthsCount || 0);
+                                const amount =
+                                  Number(r.unitPrice || 0) *
+                                  Number(r.studentCount || 0) *
+                                  Number(r.monthsCount || 0);
                                 const paid = Number(r.paidAmount || 0);
                                 return (
-                                  <tr key={i} className="border-b hover:bg-emerald-100">
-                                    <td className="px-2 py-1">{r.content || "-"}</td>
-                                    <td className="px-2 py-1 text-center">{r.totalPeriods}</td>
-                                    <td className="px-2 py-1 text-center">{r.studentCount}</td>
-                                    <td className="px-2 py-1 text-center">
-                                      {Number(r.monthsCount || 0).toLocaleString("vi-VN", { maximumFractionDigits: 4 })}
+                                  <tr
+                                    key={i}
+                                    className="border-b hover:bg-emerald-100"
+                                  >
+                                    <td className="px-2 py-1">
+                                      {r.content || "-"}
                                     </td>
-                                    <td className="px-2 py-1 text-right">{fmt(Number(r.unitPrice || 0))}</td>
-                                    <td className="px-2 py-1 text-right font-semibold">{fmt(amount)}</td>
-                                    <td className="px-2 py-1 text-right text-blue-600">{fmt(paid)}</td>
-                                    <td className="px-2 py-1 text-right text-amber-600 font-semibold">{fmt(amount - paid)}</td>
+                                    <td className="px-2 py-1 text-center">
+                                      {r.totalPeriods}
+                                    </td>
+                                    <td className="px-2 py-1 text-center">
+                                      {r.studentCount}
+                                    </td>
+                                    <td className="px-2 py-1 text-center">
+                                      {Number(
+                                        r.monthsCount || 0,
+                                      ).toLocaleString("vi-VN", {
+                                        maximumFractionDigits: 4,
+                                      })}
+                                    </td>
+                                    <td className="px-2 py-1 text-right">
+                                      {fmt(Number(r.unitPrice || 0))}
+                                    </td>
+                                    <td className="px-2 py-1 text-right font-semibold">
+                                      {fmt(amount)}
+                                    </td>
+                                    <td className="px-2 py-1 text-right text-blue-600">
+                                      {fmt(paid)}
+                                    </td>
+                                    <td className="px-2 py-1 text-right text-amber-600 font-semibold">
+                                      {fmt(amount - paid)}
+                                    </td>
                                   </tr>
                                 );
                               })}
@@ -1101,7 +1345,9 @@ export default function PolicyStatsPage({
 
                       {schoolItems.length > 0 && (
                         <div className="mt-3 overflow-x-auto">
-                          <p className="text-xs font-bold text-violet-700 mb-1">Chi trường chi tiết</p>
+                          <p className="text-xs font-bold text-violet-700 mb-1">
+                            Chi trường chi tiết
+                          </p>
                           <table className="w-full text-xs border-collapse">
                             <thead className="bg-violet-700 text-white">
                               <tr>
@@ -1119,18 +1365,52 @@ export default function PolicyStatsPage({
                               {schoolItems.map((r: any, i: number) => {
                                 const st = Number(r.studentCount || 0);
                                 const mo = Number(r.monthsCount || 0);
-                                const total = (Number(r.teacherUnitPrice || r.giaovien || 0) + Number(r.taxUnitPrice || r.thue || 0) + Number(r.csvcUnitPrice || r.csvc || 0)) * st * mo;
+                                const total =
+                                  (Number(
+                                    r.teacherUnitPrice || r.giaovien || 0,
+                                  ) +
+                                    Number(r.taxUnitPrice || r.thue || 0) +
+                                    Number(r.csvcUnitPrice || r.csvc || 0)) *
+                                  st *
+                                  mo;
                                 const paid = Number(r.paidAmount || 0);
                                 return (
-                                  <tr key={i} className="border-b hover:bg-violet-100">
-                                    <td className="px-2 py-1 text-center">{st}</td>
-                                    <td className="px-2 py-1 text-center">{mo}</td>
-                                    <td className="px-2 py-1 text-right">{fmt(Number(r.teacherUnitPrice || r.giaovien || 0))}</td>
-                                    <td className="px-2 py-1 text-right">{fmt(Number(r.taxUnitPrice || r.thue || 0))}</td>
-                                    <td className="px-2 py-1 text-right">{fmt(Number(r.csvcUnitPrice || r.csvc || 0))}</td>
-                                    <td className="px-2 py-1 text-right font-semibold">{fmt(total)}</td>
-                                    <td className="px-2 py-1 text-right text-rose-600">{fmt(paid)}</td>
-                                    <td className="px-2 py-1 text-right text-orange-600 font-semibold">{fmt(total - paid)}</td>
+                                  <tr
+                                    key={i}
+                                    className="border-b hover:bg-violet-100"
+                                  >
+                                    <td className="px-2 py-1 text-center">
+                                      {st}
+                                    </td>
+                                    <td className="px-2 py-1 text-center">
+                                      {mo}
+                                    </td>
+                                    <td className="px-2 py-1 text-right">
+                                      {fmt(
+                                        Number(
+                                          r.teacherUnitPrice || r.giaovien || 0,
+                                        ),
+                                      )}
+                                    </td>
+                                    <td className="px-2 py-1 text-right">
+                                      {fmt(
+                                        Number(r.taxUnitPrice || r.thue || 0),
+                                      )}
+                                    </td>
+                                    <td className="px-2 py-1 text-right">
+                                      {fmt(
+                                        Number(r.csvcUnitPrice || r.csvc || 0),
+                                      )}
+                                    </td>
+                                    <td className="px-2 py-1 text-right font-semibold">
+                                      {fmt(total)}
+                                    </td>
+                                    <td className="px-2 py-1 text-right text-rose-600">
+                                      {fmt(paid)}
+                                    </td>
+                                    <td className="px-2 py-1 text-right text-orange-600 font-semibold">
+                                      {fmt(total - paid)}
+                                    </td>
                                   </tr>
                                 );
                               })}
@@ -1141,7 +1421,9 @@ export default function PolicyStatsPage({
 
                       {mgmtItems.length > 0 && (
                         <div className="mt-3 overflow-x-auto">
-                          <p className="text-xs font-bold text-cyan-700 mb-1">Chi ngoài chi tiết</p>
+                          <p className="text-xs font-bold text-cyan-700 mb-1">
+                            Chi ngoài chi tiết
+                          </p>
                           <table className="w-full text-xs border-collapse">
                             <thead className="bg-cyan-700 text-white">
                               <tr>
@@ -1158,17 +1440,38 @@ export default function PolicyStatsPage({
                               {mgmtItems.map((r: any, i: number) => {
                                 const st = Number(r.studentCount || 0);
                                 const mo = Number(r.monthsCount || 0);
-                                const total = (Number(r.ql1UnitPrice || 0) + Number(r.ql2UnitPrice || 0)) * st * mo;
+                                const total =
+                                  (Number(r.ql1UnitPrice || 0) +
+                                    Number(r.ql2UnitPrice || 0)) *
+                                  st *
+                                  mo;
                                 const paid = Number(r.paidAmount || 0);
                                 return (
-                                  <tr key={i} className="border-b hover:bg-cyan-100">
-                                    <td className="px-2 py-1 text-center">{st}</td>
-                                    <td className="px-2 py-1 text-center">{mo}</td>
-                                    <td className="px-2 py-1 text-right">{fmt(Number(r.ql1UnitPrice || 0))}</td>
-                                    <td className="px-2 py-1 text-right">{fmt(Number(r.ql2UnitPrice || 0))}</td>
-                                    <td className="px-2 py-1 text-right font-semibold">{fmt(total)}</td>
-                                    <td className="px-2 py-1 text-right text-rose-600">{fmt(paid)}</td>
-                                    <td className="px-2 py-1 text-right text-orange-600 font-semibold">{fmt(total - paid)}</td>
+                                  <tr
+                                    key={i}
+                                    className="border-b hover:bg-cyan-100"
+                                  >
+                                    <td className="px-2 py-1 text-center">
+                                      {st}
+                                    </td>
+                                    <td className="px-2 py-1 text-center">
+                                      {mo}
+                                    </td>
+                                    <td className="px-2 py-1 text-right">
+                                      {fmt(Number(r.ql1UnitPrice || 0))}
+                                    </td>
+                                    <td className="px-2 py-1 text-right">
+                                      {fmt(Number(r.ql2UnitPrice || 0))}
+                                    </td>
+                                    <td className="px-2 py-1 text-right font-semibold">
+                                      {fmt(total)}
+                                    </td>
+                                    <td className="px-2 py-1 text-right text-rose-600">
+                                      {fmt(paid)}
+                                    </td>
+                                    <td className="px-2 py-1 text-right text-orange-600 font-semibold">
+                                      {fmt(total - paid)}
+                                    </td>
                                   </tr>
                                 );
                               })}
@@ -1186,16 +1489,18 @@ export default function PolicyStatsPage({
                     Đang tải thu chi...
                   </div>
                 )}
-                {showExpenses && !schoolExpenses.has(school.schoolId) && !expenseLoading && (
-                  <div className="border-t-2 border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500 italic">
-                    Chưa có dữ liệu thu chi
-                  </div>
-                )}
+                {showExpenses &&
+                  !schoolExpenses.has(school.schoolId) &&
+                  !expenseLoading && (
+                    <div className="border-t-2 border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500 italic">
+                      Chưa có dữ liệu thu chi
+                    </div>
+                  )}
               </div>
             ))}
           </div>
         )}
-        {viewMode === "card" && (
+        {activeStatsTab === "quantities" && viewMode === "card" && (
           <div className="space-y-4 mt-4">
             {treeData.map((school: any) => (
               <div key={school.schoolId} className="space-y-2">
@@ -1370,25 +1675,27 @@ export default function PolicyStatsPage({
       {openPolicy && (
         <PolicyPopup data={openPolicy} onClose={() => setOpenPolicy(null)} />
       )}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-white shadow-lg rounded-full px-2 py-1 flex gap-1 border">
-        <button
-          onClick={() => setViewMode("card")}
-          className={`px-4 py-2 rounded-full text-sm ${
-            viewMode === "card" ? "bg-blue-500 text-white" : "text-gray-600"
-          }`}
-        >
-          Card
-        </button>
+      {activeStatsTab === "quantities" && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-white shadow-lg rounded-full px-2 py-1 flex gap-1 border">
+          <button
+            onClick={() => setViewMode("card")}
+            className={`px-4 py-2 rounded-full text-sm ${
+              viewMode === "card" ? "bg-blue-500 text-white" : "text-gray-600"
+            }`}
+          >
+            Card
+          </button>
 
-        <button
-          onClick={() => setViewMode("table")}
-          className={`px-4 py-2 rounded-full text-sm ${
-            viewMode === "table" ? "bg-blue-500 text-white" : "text-gray-600"
-          }`}
-        >
-          Excel
-        </button>
-      </div>
+          <button
+            onClick={() => setViewMode("table")}
+            className={`px-4 py-2 rounded-full text-sm ${
+              viewMode === "table" ? "bg-blue-500 text-white" : "text-gray-600"
+            }`}
+          >
+            Excel
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -27,6 +27,7 @@ import { isDirectorBrandUiEnabled } from "@/utils/directorUi";
 import DirectorBrandShell from "@/pages/Director/components/DirectorBrandShell";
 import PayrollPage from "@/pages/Payroll/PayrollPage";
 import RecruitmentPage from "@/pages/Recruitment/RecruitmentPage";
+import FinanceRoutes from "@/pages/Finance/FinanceRoutes";
 
 const EXPENSE_HOME = "/director/expense-management";
 const DIRECTOR_HOME = "/director";
@@ -266,6 +267,8 @@ export default function DirectorRoutes() {
         <Route path="warehouse" element={expenseAccess(<WarehousePage />)} />
         {/* Backend tự giới hạn phạm vi: BGĐ/Nhân sự/KTT xem tất cả, role khác chỉ xem chính mình. */}
         <Route path="payrolls" element={<PayrollPage />} />
+        {/* Đề nghị tài chính: mọi tài khoản dùng được; backend tự giới hạn quyền xem/duyệt/chi. */}
+        <Route path="finance/*" element={<FinanceRoutes />} />
         <Route
           path="recruitment"
           element={

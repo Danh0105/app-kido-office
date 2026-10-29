@@ -7,6 +7,7 @@ import statistics from "@/pages/Director/static/statistics.png";
 import suggest from "@/pages/Director/static/suggest.png";
 import team from "@/pages/Director/static/team.png";
 import {
+  HandCoins,
   Landmark,
   ReceiptText,
   UserRoundSearch,
@@ -27,6 +28,13 @@ const PAYROLL_MENU: DirectorMenu = {
   lucideIcon: ReceiptText,
   path: "payrolls",
   from: "payroll",
+};
+
+const FINANCE_MENU: DirectorMenu = {
+  title: "Quản lý tài chính",
+  lucideIcon: HandCoins,
+  path: "finance",
+  from: "finance",
 };
 
 const RECRUITMENT_MENU: DirectorMenu = {
@@ -200,5 +208,7 @@ export const directorBaseMenus = (): DirectorMenu[] => {
     ...(hasRole(...CASHFLOW_REPORT_ROLES) ? [CASHFLOW_REPORT_MENU] : []),
     ...(canViewRecruitment ? [RECRUITMENT_MENU] : []),
     PAYROLL_MENU,
+    // Đề nghị tạm ứng/thanh toán: ai cũng lập được; quyền duyệt/chi do backend quyết định.
+    FINANCE_MENU,
   ];
 };

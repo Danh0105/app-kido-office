@@ -35,6 +35,8 @@ type Props = {
   policyLocked?: boolean;
   /** Cột chi chỉ sửa được trên dòng đã lưu (đã khoá, người xem không phải KTT). */
   savedRowsOnly?: boolean;
+  /** Chỉ còn sửa Ngày chi + Nguồn chi (Đã chi, Người chi, Ghi chú khoá). */
+  dateSourceOnly?: boolean;
   confirming?: boolean;
   onConfirm?: () => void;
   /** Tên sales admin đã xác nhận. */
@@ -56,6 +58,7 @@ export default function ManagementExpenseTable({
   canConfirm = false,
   policyLocked = false,
   savedRowsOnly = false,
+  dateSourceOnly = false,
   confirming = false,
   onConfirm,
   confirmedByName,
@@ -313,6 +316,7 @@ export default function ManagementExpenseTable({
                 readOnly={readOnly}
                 policyLocked={policyLocked}
                 savedRowsOnly={savedRowsOnly}
+                dateSourceOnly={dateSourceOnly}
               />
             ))}
           </div>
@@ -431,7 +435,7 @@ export default function ManagementExpenseTable({
                 : ""}
               Bảng đã khoá. Kế toán trưởng, Kế toán, Kế toán công nợ và Thủ
               quỹ chỉ còn sửa được Ngày chi, Nguồn chi, Đã chi, Người chi, Ghi
-              chú.
+              chú; Trợ lý GĐ và Giám đốc chỉ sửa được Ngày chi, Nguồn chi.
             </span>
           </div>
         ) : (

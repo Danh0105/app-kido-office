@@ -1,4 +1,6 @@
 export type RevenueRow = {
+    /** id dòng Chi Trường đã lưu — dòng mới thêm chưa có */
+    id?: number;
     subjectId: number;
     invoiceAmount: number;
     teacherUnitPrice?: number | string;

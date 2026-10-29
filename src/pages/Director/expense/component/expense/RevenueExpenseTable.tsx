@@ -16,6 +16,8 @@ type Props = {
   ) => void;
   updateRow: (index: number, field: any, value: string | number) => void;
   removeRow: (index: number) => void;
+  /** Kỳ đã "Kết thúc" → chỉ còn Ngày chi + Nguồn chi sửa được. */
+  finalized?: boolean;
 };
 
 export default function RevenueExpenseTable({
@@ -25,6 +27,7 @@ export default function RevenueExpenseTable({
   updateInputRow,
   updateRow,
   removeRow,
+  finalized = false,
 }: Props) {
   const policyData = subjects?.policies?.[0]?.data || {};
   const fallbackInputData = inputRows[0] || ({} as InputExpenseRow);
@@ -219,6 +222,7 @@ export default function RevenueExpenseTable({
                 updateInputRow={updateInputRow}
                 updateRow={updateRow}
                 removeRow={removeRow}
+                finalized={finalized}
               />
             ))}
           </div>

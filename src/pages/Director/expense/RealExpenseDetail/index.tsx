@@ -134,6 +134,7 @@ export default function RealExpenseDetail({
   const isChief = hasRole("ketoan_truong");
   // Kế toán / KT công nợ / thủ quỹ: bảng "Chi Ngoài" đã khoá vẫn nhập được cột
   // chi như KTT, nhưng chỉ trên dòng đã lưu (server không thêm dòng cho họ).
+  // Trợ lý GĐ / giám đốc chỉ còn Ngày chi + Nguồn chi.
   const isLockedPaymentEditor = hasRole("accountant", "ketoan_congno", "thuquy");
   // Sales admin chỉnh sửa DUY NHẤT bảng "Chi Ngoài" — xem ManagementExpenseTable.
   const isSalesAdmin = hasRole("saleadmin", "salesadmin", "salesadmin_la");
@@ -967,6 +968,7 @@ export default function RealExpenseDetail({
         setRevenueRows(
           padRows(
             schoolItems.map((r: any) => ({
+              id: r.id,
               subjectId: r.subjectId || subId,
               invoiceAmount: r.schoolExpenseAmount || 0,
               teacherUnitPrice:
@@ -1124,6 +1126,8 @@ export default function RealExpenseDetail({
         const inputRow = rows[index] || rows[0] || initialInputData;
 
         return {
+          // Kỳ đã kết thúc: server khớp Ngày chi + Nguồn chi theo id dòng.
+          id: row.id,
           rowIndex: index,
           subjectId,
           totalPeriods: Number(inputRow.totalPeriods || 0),
@@ -1718,11 +1722,15 @@ export default function RealExpenseDetail({
                 handleViewHistory={handleViewHistory}
                 historyLoading={historyLoading}
                 managementConfirmed={managementConfirmed}
-                managementReadOnly={
-                  managementConfirmed && !isChief && !isLockedPaymentEditor
+                managementPolicyLocked={managementConfirmed || finalized}
+                managementSavedRowsOnly={
+                  (managementConfirmed && !isChief) || finalized
                 }
-                managementPolicyLocked={managementConfirmed}
-                managementSavedRowsOnly={managementConfirmed && !isChief}
+                // Kỳ đã kết thúc: mọi người chỉ còn Ngày chi + Nguồn chi.
+                managementDateSourceOnly={
+                  finalized ||
+                  (managementConfirmed && !isChief && !isLockedPaymentEditor)
+                }
                 managementConfirmedByName={managementConfirmedByName}
                 managementConfirmedAt={managementConfirmedAt}
                 historyCount={historyList.length}

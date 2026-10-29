@@ -20,6 +20,8 @@ type Props = {
   ) => void;
   updateRow: (index: number, field: string, value: string | number) => void;
   removeRow: (index: number) => void;
+  /** Kỳ đã "Kết thúc" → chỉ còn Ngày chi + Nguồn chi sửa được. */
+  finalized?: boolean;
 };
 
 export default function RevenueExpenseRow({
@@ -30,6 +32,7 @@ export default function RevenueExpenseRow({
   updateInputRow,
   updateRow,
   removeRow,
+  finalized = false,
 }: Props) {
   const students = Number(inputData.studentCount || 0);
   const months = Number(inputData.monthsCount || 0);
@@ -77,7 +80,10 @@ export default function RevenueExpenseRow({
   ]);
   const paidAmount = Number(row.paidAmount || 0);
   const remainingSchoolExpense = calculations.totalSchoolExpense - paidAmount;
-  const locked = !!inputData.invoiceLocked;
+  const invoiceLocked = !!inputData.invoiceLocked;
+  const locked = invoiceLocked || finalized;
+  // Kỳ đã kết thúc: server chỉ ghi Ngày chi + Nguồn chi lên dòng đã lưu.
+  const dateSourceLocked = finalized && !row?.id;
 
   const inputClass = `
     w-full
@@ -309,12 +315,12 @@ export default function RevenueExpenseRow({
         </select>
       </div>
 
-      {/* NGÀY CHI */}
+      {/* NGÀY CHI — kỳ đã kết thúc vẫn sửa được (cùng Nguồn chi) */}
       <div className="p-2 border-r border-slate-200">
         <input
           type="date"
           value={row.paymentDate || ""}
-          disabled={locked}
+          disabled={invoiceLocked || dateSourceLocked}
           onChange={(e) => updateRow(index, "paymentDate", e.target.value)}
           className={inputClass}
         />
@@ -324,6 +330,7 @@ export default function RevenueExpenseRow({
       <div className="p-2 border-r border-slate-200">
         <CashAccountSelect
           value={row.cashAccount}
+          disabled={dateSourceLocked}
           onChange={(value) => updateRow(index, "cashAccount", value)}
           className={inputClass}
         />
@@ -333,6 +340,7 @@ export default function RevenueExpenseRow({
       <div className="p-2 border-r border-slate-200">
         <DecimalInput
           value={paidAmount}
+          disabled={finalized}
           onValueChange={(value) => {
             updateRow(index, "paidAmount", value);
           }}
@@ -393,6 +401,7 @@ export default function RevenueExpenseRow({
       <div className="flex items-center justify-center">
         <button
           onClick={() => removeRow(index)}
+          disabled={finalized}
           className="
             flex items-center justify-center
             w-10 h-10

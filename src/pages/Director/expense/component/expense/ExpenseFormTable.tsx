@@ -69,9 +69,14 @@ type Props = {
   managementPolicyLocked?: boolean;
   /** Bảng Chi Ngoài đã khoá, người xem không phải KTT → cột chi chỉ sửa trên dòng đã lưu. */
   managementSavedRowsOnly?: boolean;
+  /** Chi Ngoài chỉ còn sửa Ngày chi + Nguồn chi (trợ lý GĐ / giám đốc khi đã khoá, hoặc kỳ đã kết thúc). */
+  managementDateSourceOnly?: boolean;
   /** KTT mở khoá "Xác nhận đúng BBCS". */
   onUnconfirmManagement?: () => void;
-  /** Kỳ thu chi đã "Kết thúc" → khoá toàn bộ, chỉ KTT mở lại. */
+  /**
+   * Kỳ thu chi đã "Kết thúc" → khoá toàn bộ, trừ Ngày chi + Nguồn chi của Chi
+   * Trường / Chi Ngoài (sales admin khoá hẳn); chỉ KTT mở lại.
+   */
   finalized?: boolean;
   finalizedByName?: string | null;
   finalizedAt?: string | Date | null;
@@ -140,6 +145,7 @@ export default function ExpenseFormTable({
   isChief = false,
   managementPolicyLocked = false,
   managementSavedRowsOnly = false,
+  managementDateSourceOnly = false,
   onUnconfirmManagement,
   finalized = false,
   finalizedByName,
@@ -172,9 +178,12 @@ export default function ExpenseFormTable({
         <h2 className="text-lg font-bold text-slate-800">Quản lý thu chi</h2>
       </div>
 
-      {/* Đã "Kết thúc" → fieldset disabled khoá mọi ô nhập/nút trong các bảng. */}
+      {/*
+        Đã "Kết thúc" → khoá mọi ô nhập/nút, trừ Ngày chi + Nguồn chi của Chi
+        Trường / Chi Ngoài (các bảng tự khoá từng ô); sales admin khoá hẳn.
+      */}
       <fieldset
-        disabled={finalized}
+        disabled={finalized && managementOnly}
         className="m-0 min-w-0 border-0 p-4 space-y-8"
       >
         {!managementOnly && (
@@ -188,11 +197,15 @@ export default function ExpenseFormTable({
                 updateInputRow={updateInputRow}
                 updateRow={updateRevenueRow}
                 removeRow={removeRevenueRow}
+                finalized={finalized}
               />
             </div>
 
             {/* HÓA ĐƠN — nằm giữa Chi Trường và Chi Ngoài */}
-            <div className="space-y-3">
+            <fieldset
+              disabled={finalized}
+              className="m-0 min-w-0 border-0 p-0 space-y-3"
+            >
               <InvoiceTable
                 inputRows={inputRows}
                 revenueRows={revenueRows}
@@ -205,7 +218,7 @@ export default function ExpenseFormTable({
                 onUnlinkEInvoice={onUnlinkEInvoice}
                 unlinkingEInvoiceId={unlinkingEInvoiceId}
               />
-            </div>
+            </fieldset>
           </>
         )}
 
@@ -228,6 +241,7 @@ export default function ExpenseFormTable({
             confirmedAt={managementConfirmedAt}
             policyLocked={managementPolicyLocked}
             savedRowsOnly={managementSavedRowsOnly}
+            dateSourceOnly={managementDateSourceOnly}
           />
         </div>
       </fieldset>
@@ -239,8 +253,11 @@ export default function ExpenseFormTable({
             <span className="font-bold">Đã kết thúc</span>
             <span>
               {finalizedByName ? `— ${finalizedByName}` : ""}
-              {finalizedAt ? ` lúc ${formatDateTime(finalizedAt)}` : ""}. Toàn
-              bộ dữ liệu đã khoá, chỉ kế toán trưởng mở lại được.
+              {finalizedAt ? ` lúc ${formatDateTime(finalizedAt)}` : ""}.{" "}
+              {managementOnly
+                ? "Toàn bộ dữ liệu đã khoá"
+                : "Đã khoá toàn bộ, trừ Ngày chi và Nguồn chi của Chi Trường, Chi Ngoài"}
+              ; chỉ kế toán trưởng mở lại được.
             </span>
           </div>
         )}
@@ -417,7 +434,8 @@ export default function ExpenseFormTable({
             </button>
           )}
 
-          {!(managementOnly && managementReadOnly) && !finalized && (
+          {/* Kỳ đã kết thúc vẫn lưu được Ngày chi + Nguồn chi (trừ sales admin). */}
+          {!(managementOnly && (managementReadOnly || finalized)) && (
             <button
               onClick={handleSubmit}
               disabled={loading}

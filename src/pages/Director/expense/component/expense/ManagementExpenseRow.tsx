@@ -9,6 +9,7 @@ import {
   getOtherCostTax,
   type PolicyOtherCost,
 } from "../../utils/policyOtherCosts";
+import type { ManagementRowInput } from "../../utils/managementRows";
 import { formatDecimal, roundDecimal } from "@/utils/decimal";
 import { calculateRevenueQuantity } from "@/utils/revenueAmount";
 import DecimalInput from "@/components/DecimalInput";
@@ -18,7 +19,9 @@ type Props = {
   subjects: any;
   index: number;
 
-  inputData: InputExpenseRow;
+  inputData: ManagementRowInput;
+  /** Dòng thêm riêng cho Chi Ngoài — số lượng lưu trên chính dòng, không dùng chung Doanh Thu. */
+  standalone?: boolean;
   otherCosts: PolicyOtherCost[];
   gridTemplateColumns: string;
 
@@ -46,6 +49,7 @@ export default function ManagementExpenseRow({
   subjects,
   index,
   inputData,
+  standalone = false,
   otherCosts,
   gridTemplateColumns,
   updateInputRow,
@@ -62,6 +66,11 @@ export default function ManagementExpenseRow({
   // Nội dung / Số tiết / Số HS / Số tháng dùng chung với Doanh Thu, Chi Trường,
   // Hóa Đơn — đã xuất hóa đơn thì khoá để các bảng trên không bị đổi số.
   const sharedLocked = readOnly || policyLocked || !!inputData.invoiceLocked;
+  const updateShared = (
+    field: "totalPeriods" | "studentCount" | "monthsCount",
+    value: number
+  ) =>
+    standalone ? updateRow(index, field, value) : updateInputRow(index, field, value);
   const policyReadOnly = readOnly || policyLocked;
   // Ngày chi, Nguồn chi.
   const paymentReadOnly = readOnly || (savedRowsOnly && !row?.id);
@@ -143,7 +152,12 @@ export default function ManagementExpenseRow({
         <input
           value={inputData.content || ""}
           maxLength={500}
-          disabled={sharedLocked}
+          disabled={sharedLocked || standalone}
+          title={
+            standalone
+              ? "Dòng thêm riêng cho Chi Ngoài — ghi diễn giải ở cột Ghi chú"
+              : undefined
+          }
           onChange={(e) =>
             updateInputRow(index, "content", e.target.value.slice(0, 500))
           }
@@ -161,7 +175,7 @@ export default function ManagementExpenseRow({
           value={Number(inputData.totalPeriods) || ""}
           disabled={sharedLocked}
           onChange={(e) =>
-            updateInputRow(index, "totalPeriods", Number(e.target.value || 0))
+            updateShared("totalPeriods", Number(e.target.value || 0))
           }
           className={`${metricInputClass} text-slate-700 disabled:bg-slate-100 disabled:text-slate-400`}
         />
@@ -176,7 +190,7 @@ export default function ManagementExpenseRow({
           value={Number(inputData.studentCount) || ""}
           disabled={sharedLocked}
           onChange={(e) =>
-            updateInputRow(index, "studentCount", Number(e.target.value || 0))
+            updateShared("studentCount", Number(e.target.value || 0))
           }
           className={`${metricInputClass} text-sky-700 disabled:bg-slate-100 disabled:text-slate-400`}
         />
@@ -191,8 +205,7 @@ export default function ManagementExpenseRow({
           value={Number(inputData.monthsCount) || ""}
           disabled={sharedLocked}
           onChange={(e) =>
-            updateInputRow(
-              index,
+            updateShared(
               "monthsCount",
               roundDecimal(Number(e.target.value || 0), 4),
             )

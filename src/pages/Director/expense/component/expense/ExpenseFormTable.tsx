@@ -29,6 +29,8 @@ type Props = {
 
   /** Thêm 1 dòng cho cả 4 bảng: Doanh Thu, Chi Trường, Hóa Đơn, Chi Ngoài. */
   addRow: () => void;
+  /** Thêm 1 dòng chỉ cho bảng Chi Ngoài. Không truyền thì ẩn nút. */
+  addManagementRow?: () => void;
 
   removeRevenueRow: (index: number) => void;
   removeManagementRow: (index: number) => void;
@@ -120,6 +122,7 @@ export default function ExpenseFormTable({
   loading,
 
   addRow,
+  addManagementRow,
 
   removeRevenueRow,
   removeManagementRow,
@@ -231,6 +234,7 @@ export default function ExpenseFormTable({
             updateInputRow={updateInputRow}
             updateRow={updateManagementRow}
             removeRow={removeManagementRow}
+            addRow={addManagementRow}
             showActions={!managementOnly}
             isConfirmed={managementConfirmed}
             readOnly={managementReadOnly}

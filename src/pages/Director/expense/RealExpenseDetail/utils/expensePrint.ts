@@ -7,6 +7,10 @@ import {
   getPolicyOtherCosts,
 } from "../../utils/policyOtherCosts";
 import {
+  getManagementRowInput,
+  type ManagementRowInput,
+} from "../../utils/managementRows";
+import {
   calculateRevenueAmount,
   calculateRevenueQuantity,
 } from "@/utils/revenueAmount";
@@ -198,7 +202,7 @@ function renderTable({ columns, rows, dense }: ExpenseTable) {
   return `<table class="${dense ? "dense" : ""}"><thead><tr>${head}</tr></thead><tbody>${body}</tbody>${foot}</table>`;
 }
 
-const sharedColumns = <T extends { input: InputExpenseRow }>(
+const sharedColumns = <T extends { input: ManagementRowInput }>(
   studentHeader: string,
   monthHeader: string,
 ): PrintColumn<T>[] => [
@@ -398,10 +402,9 @@ function managementSection(
 ) {
   const ttcs = subject?.policies?.[0]?.data?.ttcs?.[0] || {};
   const otherCosts = getPolicyOtherCosts(subject);
-  const fallbackInput = inputRows[0] || ({} as InputExpenseRow);
 
   const rows = managementRows.map((row, index) => {
-    const input = inputRows[index] || fallbackInput;
+    const input = getManagementRowInput(row, index, inputRows);
     const qty = calculateRevenueQuantity(input);
     const ql1UnitPrice = Number(row.ql1UnitPrice ?? Number(ttcs.ql1Percent || 0));
     const ql1Tax = Number(row.ql1Tax ?? Number(ttcs.ql1Tax || 0));

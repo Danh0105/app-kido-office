@@ -39,6 +39,7 @@ import {
   getOtherCostTax,
   getPolicyOtherCosts,
 } from "../utils/policyOtherCosts";
+import { getManagementRowInput } from "../utils/managementRows";
 import { revenueQuantityDefaultsFromPolicy } from "@/utils/revenueAmount";
 
 type CashPolicyRowType = {
@@ -833,7 +834,28 @@ export default function RealExpenseDetail({
       },
     ]);
     setRevenueRows((prev) => [...prev, { ...initialRevenueRow }]);
-    setManagementRows((prev) => [...prev, { ...initialManagementRow }]);
+    // Dòng Chi Ngoài đi kèm nằm cùng vị trí dòng Doanh Thu mới — trước các
+    // dòng thêm riêng cho Chi Ngoài.
+    setManagementRows((prev) => {
+      const nextRows = padRows(prev, inputRows.length, initialManagementRow);
+      nextRows.splice(inputRows.length, 0, { ...initialManagementRow });
+      return nextRows;
+    });
+  };
+
+  /**
+   * Thêm 1 dòng chỉ cho bảng Chi Ngoài: nằm sau dòng Doanh Thu cuối nên tự giữ
+   * Số tiết / Số HS / Số tháng (xem utils/managementRows).
+   */
+  const addManagementRow = () => {
+    setManagementRows((prev) => [
+      ...padRows(prev, inputRows.length, initialManagementRow),
+      {
+        ...initialManagementRow,
+        ...revenueQuantityDefaultsFromPolicy(activeSubject),
+        monthsCount: 0,
+      },
+    ]);
   };
 
   const removeInputRow = (index: number) => {
@@ -873,7 +895,15 @@ export default function RealExpenseDetail({
   };
 
   const removeManagementRow = (index: number) => {
-    setManagementRows((prev) => prev.filter((_, i) => i !== index));
+    setManagementRows((prev) => {
+      const nextRows = prev.filter((_, i) => i !== index);
+      // Xoá dòng đi kèm Doanh Thu khi phía sau còn dòng thêm riêng: chèn dòng
+      // trống vào cuối nhóm đi kèm để dòng thêm riêng không bị ghép vào Doanh Thu.
+      if (index < inputRows.length && prev.length > inputRows.length) {
+        nextRows.splice(inputRows.length - 1, 0, { ...initialManagementRow });
+      }
+      return nextRows;
+    });
   };
 
   // LOAD SAVED EXPENSE DATA
@@ -1033,6 +1063,10 @@ export default function RealExpenseDetail({
 
               return {
                 id: r.id,
+                // Chỉ dòng thêm riêng (sau dòng Doanh Thu cuối) dùng số lượng này.
+                totalPeriods: Number(r.totalPeriods || 0),
+                studentCount: Number(r.studentCount || 0),
+                monthsCount: Number(r.monthsCount ?? 0),
                 ql1UnitPrice: r.ql1UnitPrice,
                 ql1Tax: r.ql1Tax,
                 ql2UnitPrice: r.ql2UnitPrice,
@@ -1149,7 +1183,7 @@ export default function RealExpenseDetail({
         };
       }),
       managementExpenseItems: managementRows.map((row, index) => {
-        const inputRow = rows[index] || rows[0] || initialInputData;
+        const inputRow = getManagementRowInput(row, index, rows);
 
         return {
           // Bảng đã khoá: server khớp cột chi của kế toán theo id dòng.
@@ -1712,6 +1746,7 @@ export default function RealExpenseDetail({
                 editingItem={editingItem}
                 loading={loading}
                 addRow={addInputRow}
+                addManagementRow={addManagementRow}
                 removeRevenueRow={removeRevenueRow}
                 removeManagementRow={removeManagementRow}
                 updateInputRow={updateInputRow}

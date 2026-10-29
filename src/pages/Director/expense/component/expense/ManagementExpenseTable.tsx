@@ -1,6 +1,6 @@
 // components/expense/ManagementExpenseTable.tsx
 
-import { Building2, CalendarDays, Lock, ShieldCheck, Wallet, Receipt, Users } from "lucide-react";
+import { Building2, CalendarDays, Lock, Plus, ShieldCheck, Wallet, Receipt, Users } from "lucide-react";
 
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
 import {
@@ -9,6 +9,10 @@ import {
   getOtherCostTax,
   getPolicyOtherCosts,
 } from "../../utils/policyOtherCosts";
+import {
+  getManagementRowInput,
+  isStandaloneManagementRow,
+} from "../../utils/managementRows";
 import { calculateRevenueQuantity } from "@/utils/revenueAmount";
 import ManagementExpenseRow from "./ManagementExpenseRow";
 
@@ -23,6 +27,8 @@ type Props = {
   ) => void;
   updateRow: (index: number, field: any, value: any) => void;
   removeRow: (index: number) => void;
+  /** Thêm 1 dòng chỉ cho bảng Chi Ngoài (không thêm vào Doanh Thu, Chi Trường, Hóa Đơn). */
+  addRow?: () => void;
   /** false → ẩn cột thao tác (xoá dòng), dùng cho sales admin. */
   showActions?: boolean;
   /** Đã được sales admin xác nhận (khoá) chưa. */
@@ -52,6 +58,7 @@ export default function ManagementExpenseTable({
   updateInputRow,
   updateRow,
   removeRow,
+  addRow,
   showActions = true,
   isConfirmed = false,
   readOnly = false,
@@ -71,8 +78,9 @@ export default function ManagementExpenseTable({
   const ql1Tax = Number(subjects?.policies?.[0]?.data?.ttcs?.[0]?.ql1Tax || 0);
 
   const ql2Tax = Number(subjects?.policies?.[0]?.data?.ttcs?.[0]?.ql2Tax || 0);
-  const fallbackInputData = inputRows[0] || ({} as InputExpenseRow);
   const otherCosts = getPolicyOtherCosts(subjects);
+  // Cùng điều kiện với nút xoá dòng.
+  const canAddRow = showActions && !!addRow && !readOnly && !policyLocked;
   const gridTemplateColumns = [
     "200px",
     "120px",
@@ -92,14 +100,14 @@ export default function ManagementExpenseTable({
     "140px",
     "160px",
     "200px",
-    ...(showActions ? ["100px"] : []),
+    ...(showActions ? ["120px"] : []),
   ].join(" ");
   const tableMinWidth =
-    (showActions ? 2730 : 2630) + otherCosts.length * 450;
+    (showActions ? 2770 : 2650) + otherCosts.length * 450;
 
   const totals = rows.reduce(
     (sum, row, index) => {
-      const inputData = inputRows[index] || fallbackInputData;
+      const inputData = getManagementRowInput(row, index, inputRows);
       const quantity = calculateRevenueQuantity(inputData);
       const ql1UnitPrice = Number(row.ql1UnitPrice ?? ql1);
       const ql2UnitPrice = Number(row.ql2UnitPrice ?? ql2);
@@ -306,7 +314,8 @@ export default function ManagementExpenseTable({
                 row={row}
                 subjects={subjects}
                 index={index}
-                inputData={inputRows[index] || fallbackInputData}
+                inputData={getManagementRowInput(row, index, inputRows)}
+                standalone={isStandaloneManagementRow(index, inputRows)}
                 otherCosts={otherCosts}
                 gridTemplateColumns={gridTemplateColumns}
                 updateInputRow={updateInputRow}
@@ -409,7 +418,31 @@ export default function ManagementExpenseTable({
             <div className={footerCellClass} />
 
             {/* Action */}
-            {showActions && <div className="min-h-[72px]" />}
+            {showActions && (
+              <div className="flex min-h-[72px] items-center justify-center">
+                {canAddRow && (
+                  <button
+                    type="button"
+                    onClick={addRow}
+                    title="Thêm dòng chỉ cho bảng Chi Ngoài"
+                    className="
+                      inline-flex items-center gap-1
+                      h-9 px-2
+                      whitespace-nowrap
+                      rounded-lg
+                      border border-emerald-200
+                      bg-white
+                      text-xs font-bold text-emerald-700
+                      hover:bg-emerald-50
+                      transition-colors
+                    "
+                  >
+                    <Plus size={14} />
+                    Thêm dòng
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

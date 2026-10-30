@@ -5,6 +5,7 @@ import { employeeApi } from "@/service/employee";
 import { teacherApi } from "@/service/teaching";
 import type { Teacher } from "@/types/teaching";
 import { getApiErrorMessage } from "@/utils/apiError";
+import { DEPARTMENT_HEAD_POSITIONS, DEPARTMENT_HEAD_ROLES } from "@/utils/departmentHeads";
 import { resolveApiFileUrl } from "@/utils/fileUrl";
 import TeacherDetailModal from "./components/TeacherDetailModal";
 
@@ -14,6 +15,7 @@ const ROLE_OPTIONS = [
   { value: "salesadmin_la", label: "Sale Admin LA" },
   { value: "director", label: "Giám đốc" },
   { value: "director_la", label: "Giám đốc LA" },
+  ...DEPARTMENT_HEAD_POSITIONS,
   { value: "accountant", label: "Kế toán" },
   { value: "ketoan_congno", label: "KT công nợ" },
   { value: "ketoan_truong", label: "Kế toán trưởng" },
@@ -45,6 +47,7 @@ const roleColor = (r: string) => {
   if (r === "director") return "bg-purple-100 text-purple-700";
   if (r === "director_la") return "bg-red-100 text-red-700";
   if (r === "saleadmin" || r === "salesadmin_la") return "bg-indigo-100 text-indigo-700";
+  if (DEPARTMENT_HEAD_ROLES.includes(r)) return "bg-amber-100 text-amber-700";
   if (r === "accountant") return "bg-orange-100 text-orange-700";
   if (r === "ketoan_congno" || r === "thuquy" || r === "ketoan_truong" || r === "troly_gd")
     return "bg-teal-100 text-teal-700";

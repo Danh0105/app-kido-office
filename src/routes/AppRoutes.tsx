@@ -1,4 +1,4 @@
-import { Navigate, Routes, Route } from "react-router-dom";
+import { Navigate, Routes, Route, useLocation } from "react-router-dom";
 import EmployeeRoutes from "./Employee";
 import DirectorRoutes from "./Director";
 import Login from "../pages/Auth/Login";
@@ -9,6 +9,7 @@ import Profile from "@/pages/Employee/Profile";
 import { GiaoVienRoutes, NhanSuRoutes } from "./Teaching";
 import VirtualTryOnPage from "@/pages/VirtualTryOn/VirtualTryOnPage";
 import { isAccountantOnly, isChiefAccountant } from "@/utils/auth";
+import { getHomePath } from "@/utils/nav";
 /* import TabletPage from "@/pages/Display/TabletPage";
  */ /* import Display from "@/pages/Display/Display";
  */ /* import INTRO from "@/pages/Display"; */
@@ -19,6 +20,13 @@ function BlockAccountingRolesOutsideDirector({ children }: any) {
   }
 
   return children;
+}
+
+/** Link trung lập `/finance/...` (thông báo, mã QR trên PDF) → đúng workspace của người mở. */
+function FinanceRedirect() {
+  const { pathname, search } = useLocation();
+  const workspace = getHomePath().startsWith("/employee") ? "/employee" : "/director";
+  return <Navigate to={`${workspace}${pathname}${search}`} replace />;
 }
 
 export default function AppRoutes() {
@@ -51,6 +59,14 @@ export default function AppRoutes() {
             <BlockAccountingRolesOutsideDirector>
               <EmployeeRoutes />
             </BlockAccountingRolesOutsideDirector>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/finance/*"
+        element={
+          <ProtectedRoute>
+            <FinanceRedirect />
           </ProtectedRoute>
         }
       />

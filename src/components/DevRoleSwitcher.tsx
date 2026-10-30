@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { hasRole, getEmployeeRoles, logout } from "@/utils/auth";
 import { employeeApi } from "@/service/employee";
+import { DEPARTMENT_HEAD_POSITIONS } from "@/utils/departmentHeads";
 
 /** Tên hiển thị cho từng role — khớp danh sách ALL_BUSINESS_ROLES ở backend. */
 const ROLE_LABELS: Record<string, string> = {
@@ -20,6 +21,7 @@ const ROLE_LABELS: Record<string, string> = {
   accountant: "Kế toán",
   giaovien_congty: "Giáo viên công ty",
   giaovien_ctv: "Giáo viên CTV",
+  ...Object.fromEntries(DEPARTMENT_HEAD_POSITIONS.map((p) => [p.value, p.label])),
 };
 
 const ALL_ROLES = Object.keys(ROLE_LABELS);

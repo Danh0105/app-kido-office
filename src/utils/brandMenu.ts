@@ -5,6 +5,7 @@ import {
   CheckSquare,
   ClipboardCheck,
   GraduationCap,
+  HandCoins,
   Images,
   LayoutDashboard,
   MapPin,
@@ -73,6 +74,7 @@ const DIRECTOR_ACTIVE_PATHS: Record<string, string[]> = {
   "expense-request": ["/director/expense-requests"],
   warehouse: ["/director/warehouse"],
   payroll: ["/director/payrolls"],
+  finance: ["/director/finance"],
   recruitment: ["/director/recruitment"],
 };
 
@@ -102,6 +104,14 @@ const employeeMenus = (): BrandMenuDefinition[] => {
 
   const canViewPayroll = !hasRole("giaovien_ctv");
 
+  const finance: BrandMenuDefinition = {
+    key: "employee-finance",
+    title: "Đề nghị tài chính nội bộ",
+    to: "/employee/finance",
+    from: "finance",
+    lucideIcon: HandCoins,
+  };
+
   if (hasRole("probation")) {
     return [
       {
@@ -117,6 +127,7 @@ const employeeMenus = (): BrandMenuDefinition[] => {
 
   return [
     ...(canViewPayroll ? [payroll] : []),
+    finance,
     {
       key: "employee-policy",
       title: "Chính sách",

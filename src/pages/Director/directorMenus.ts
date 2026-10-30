@@ -1,4 +1,5 @@
 import { hasRole } from "@/utils/auth";
+import { DEPARTMENT_HEAD_ROLES } from "@/utils/departmentHeads";
 import { isEquipmentOnlyUser } from "@/pages/ExpenseRequest/lib";
 import expense from "@/pages/Director/static/expense.png";
 import policy from "@/pages/Director/static/policy.png";
@@ -7,6 +8,7 @@ import statistics from "@/pages/Director/static/statistics.png";
 import suggest from "@/pages/Director/static/suggest.png";
 import team from "@/pages/Director/static/team.png";
 import {
+  HandCoins,
   Landmark,
   ReceiptText,
   UserRoundSearch,
@@ -27,6 +29,13 @@ const PAYROLL_MENU: DirectorMenu = {
   lucideIcon: ReceiptText,
   path: "payrolls",
   from: "payroll",
+};
+
+const FINANCE_MENU: DirectorMenu = {
+  title: "Đề nghị tài chính nội bộ",
+  lucideIcon: HandCoins,
+  path: "finance",
+  from: "finance",
 };
 
 const RECRUITMENT_MENU: DirectorMenu = {
@@ -181,6 +190,8 @@ export const directorBaseMenus = (): DirectorMenu[] => {
     ? LIMITED_MENUS
     : hasRole("nhansu", "giaovu", "giaovien_congty", "giaovien_ctv")
     ? [] // Nhân sự / Giáo vụ / giáo viên chỉ dùng module Giảng dạy
+    : hasRole(...DEPARTMENT_HEAD_ROLES)
+    ? [] // Chỉ mang chức danh trưởng/phó phòng: không mở thêm menu nghiệp vụ nào
     : ALL_MENUS;
   const visibleMenus = menus.filter(
     (item) => item.from !== "expense" || hasRole(...EXPENSE_ROLES)
@@ -200,5 +211,7 @@ export const directorBaseMenus = (): DirectorMenu[] => {
     ...(hasRole(...CASHFLOW_REPORT_ROLES) ? [CASHFLOW_REPORT_MENU] : []),
     ...(canViewRecruitment ? [RECRUITMENT_MENU] : []),
     PAYROLL_MENU,
+    // Đề nghị tạm ứng/thanh toán: ai cũng lập được; quyền duyệt/chi do backend quyết định.
+    FINANCE_MENU,
   ];
 };

@@ -315,6 +315,7 @@ export function useAppNotifications() {
     socket.on("teaching-lesson-report-alert:new", handleNew);
     socket.on("teacher-location-change-request:new", handleNew);
     socket.on("teaching-replacement-request:new", handleNew);
+    socket.on("financial-request-notification:new", handleNew);
 
     return () => {
       socket.off("policy-notification:new", handleNew);
@@ -328,6 +329,7 @@ export function useAppNotifications() {
       socket.off("teaching-lesson-report-alert:new", handleNew);
       socket.off("teacher-location-change-request:new", handleNew);
       socket.off("teaching-replacement-request:new", handleNew);
+      socket.off("financial-request-notification:new", handleNew);
     };
   }, [
     isSuggestOnlyRole,
@@ -535,6 +537,9 @@ export function useAppNotifications() {
         break;
       case "WEEKLY_PLAN":
         navigate(`/director/daily-report/${noti.senderId || noti.createdBy}`);
+        break;
+      case "FINANCIAL_REQUEST":
+        navigate(`${base}/finance/requests/${targetEntityId}`);
         break;
     }
   };

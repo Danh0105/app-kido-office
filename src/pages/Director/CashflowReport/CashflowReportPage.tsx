@@ -219,8 +219,8 @@ export default function CashflowReportPage() {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3">
         <h1 className="text-lg font-bold text-slate-900">Báo cáo tổng hợp thu chi</h1>
         <p className="text-xs text-gray-500 leading-relaxed">
-          Tổng hợp từ Hóa Đơn (Khoản thu/chi), Chi Trường, Chi Ngoài (Nguồn chi) và Đề xuất chi
-          (xuất tiền / hoàn quỹ). Số liệu do hệ thống tính; giao diện và file Excel dùng chung một
+          Tổng hợp từ Hóa Đơn (Khoản thu/chi), Chi Trường, Chi Ngoài (Nguồn chi), Đề xuất chi
+          (xuất tiền / hoàn quỹ) và Đề nghị tài chính nội bộ (chi tiền / thu hồi). Số liệu do hệ thống tính; giao diện và file Excel dùng chung một
           nguồn.
         </p>
       </div>

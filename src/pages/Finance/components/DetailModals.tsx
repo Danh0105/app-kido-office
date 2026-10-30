@@ -18,22 +18,37 @@ import { Modal } from "./FinanceUi";
 
 type Submit<T> = (value: T) => Promise<unknown>;
 
-/** Duyệt một cấp; cấp được phép điều chỉnh thì nhập số chấp nhận theo dòng (bắt buộc lý do khi khác). */
+const CASH_GROUP_LABELS: Record<string, string> = {
+  "111": "111 - Tiền mặt",
+  "112": "112 - Tiền gửi ngân hàng",
+};
+
+/**
+ * Duyệt một cấp; cấp được phép điều chỉnh thì nhập số chấp nhận theo dòng (bắt buộc lý do khi khác).
+ * Cấp Bộ phận kiểm soát chọn thêm tài khoản tiền và đính kèm chứng từ kiểm soát.
+ */
 export function ApproveModal({
   detail,
   canAdjust,
+  isControlStep,
   onClose,
   onSubmit,
 }: {
   detail: FinanceDetail;
   canAdjust: boolean;
+  isControlStep: boolean;
   onClose: () => void;
   onSubmit: Submit<{
     comment?: string;
     adjustments?: { itemId: number; approvedAmount: number; reason?: string }[];
+    cashAccountCode?: string;
+    files?: File[];
   }>;
 }) {
+  const meta = useFinanceMeta();
   const [comment, setComment] = useState("");
+  const [cashAccountCode, setCashAccountCode] = useState(detail.controlCashAccountCode ?? "");
+  const [files, setFiles] = useState<File[]>([]);
   const [rows, setRows] = useState(() =>
     detail.items.map((item) => ({
       itemId: item.id,
@@ -62,6 +77,8 @@ export function ApproveModal({
               })
               .map((row) => ({ itemId: row.itemId, approvedAmount: row.approved, reason: row.reason.trim() || undefined }))
           : undefined,
+        cashAccountCode: isControlStep && cashAccountCode ? cashAccountCode : undefined,
+        files: isControlStep && files.length ? files : undefined,
       });
     } finally {
       setBusy(false);
@@ -71,7 +88,7 @@ export function ApproveModal({
   return (
     <Modal
       open
-      wide={canAdjust}
+      wide={canAdjust || isControlStep}
       title={`Duyệt ${detail.code}`}
       onClose={onClose}
       footer={
@@ -122,6 +139,45 @@ export function ApproveModal({
             Tổng chấp nhận: <b className="tabular-nums text-blue-700">{formatMoney(approvedTotal)} đ</b> / kê khai{" "}
             {formatMoney(detail.totalAmount)} đ
           </p>
+        </div>
+      )}
+      {isControlStep && (
+        <div className="mb-4 grid gap-3 rounded-xl border border-blue-100 bg-blue-50/50 p-3 md:grid-cols-2">
+          <label className={labelClass}>
+            Tài khoản chi
+            <select className={inputClass} value={cashAccountCode} onChange={(e) => setCashAccountCode(e.target.value)}>
+              <option value="">Chưa chọn</option>
+              {(["111", "112"] as const).map((group) => (
+                <optgroup key={group} label={CASH_GROUP_LABELS[group]}>
+                  {meta.cashAccounts
+                    .filter((a) => a.groupCode === group)
+                    .map((a) => (
+                      <option key={a.code} value={a.code}>
+                        {a.code} - {a.name}
+                      </option>
+                    ))}
+                </optgroup>
+              ))}
+            </select>
+            <span className="mt-1 block text-[11px] font-normal text-slate-500">
+              Điền sẵn khi kế toán/thủ quỹ ghi nhận chi tiền; Tổng hợp thu chi lấy theo tài khoản thực chi.
+            </span>
+          </label>
+          <label className={labelClass}>
+            Chứng từ kiểm soát
+            <input
+              type="file"
+              multiple
+              accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx,.xls,.docx,.doc"
+              className={`${inputClass} file:mr-2 file:rounded-lg file:border-0 file:bg-blue-50 file:px-2 file:py-1 file:text-blue-700`}
+              onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+            />
+            {files.length > 0 && (
+              <span className="mt-1 block text-[11px] font-normal text-slate-600">
+                {files.map((f) => f.name).join(", ")}
+              </span>
+            )}
+          </label>
         </div>
       )}
       <label className={labelClass}>
@@ -200,20 +256,24 @@ export function ReasonModal({
 export function MoneyModal({
   kind,
   remaining,
+  defaultCashAccountCode,
   onClose,
   onSubmit,
 }: {
   kind: "payment" | "refund";
   remaining: number;
+  /** Tài khoản Bộ phận kiểm soát chọn — điền sẵn, vẫn đổi được. */
+  defaultCashAccountCode?: string | null;
   onClose: () => void;
   onSubmit: Submit<{ payload: MoneyMovementPayload; proofs: File[] }>;
 }) {
   const meta = useFinanceMeta();
   const idempotencyKey = useMemo(() => newIdempotencyKey(), []);
+  const defaultAccount = meta.cashAccounts.find((a) => a.code === defaultCashAccountCode);
   const [amount, setAmount] = useState(remaining);
   const [date, setDate] = useState(todayVN());
-  const [method, setMethod] = useState<PaymentMethod>("BANK_TRANSFER");
-  const [cashAccountCode, setCashAccountCode] = useState("");
+  const [method, setMethod] = useState<PaymentMethod>(defaultAccount?.groupCode === "111" ? "CASH" : "BANK_TRANSFER");
+  const [cashAccountCode, setCashAccountCode] = useState(defaultAccount?.code ?? "");
   const [transactionRef, setTransactionRef] = useState("");
   const [note, setNote] = useState("");
   const [proofs, setProofs] = useState<File[]>([]);

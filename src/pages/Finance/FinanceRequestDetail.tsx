@@ -29,6 +29,7 @@ import type { FinanceDetail, FinanceMovement } from "@/types/finance";
 import { getApiErrorMessage } from "@/utils/apiError";
 import AttachmentGrid from "./components/AttachmentGrid";
 import { ApproveModal, DeductionModal, MoneyModal, ReasonModal } from "./components/DetailModals";
+import { useFinanceMeta } from "./FinanceRoutes";
 import {
   Badge,
   Card,
@@ -86,6 +87,7 @@ export default function FinanceRequestDetail() {
   const requestId = Number(id);
   const navigate = useNavigate();
   const base = useFinanceBase();
+  const meta = useFinanceMeta();
   const queryClient = useQueryClient();
   const [params, setParams] = useSearchParams();
   const [detail, setDetail] = useState<FinanceDetail | null>(null);
@@ -384,6 +386,16 @@ export default function FinanceRequestDetail() {
                   {[detail.departmentName, detail.requesterPosition].filter(Boolean).join(" — ")}
                 </InfoRow>
                 <InfoRow label="Quản lý trực tiếp">{detail.directManagerName}</InfoRow>
+                {detail.controlCashAccountCode && (
+                  <InfoRow label="TK kiểm soát chọn">
+                    {[
+                      detail.controlCashAccountCode,
+                      meta.cashAccounts.find((a) => a.code === detail.controlCashAccountCode)?.name,
+                    ]
+                      .filter(Boolean)
+                      .join(" - ")}
+                  </InfoRow>
+                )}
                 <InfoRow label="Mục đích">{detail.purpose}</InfoRow>
                 <InfoRow label="Dự án / sự kiện">{detail.projectName}</InfoRow>
                 {detail.type === "ADVANCE" && (
@@ -755,8 +767,19 @@ export default function FinanceRequestDetail() {
         <ApproveModal
           detail={detail}
           canAdjust={p.canAdjust}
+          isControlStep={p.isControlStep}
           onClose={() => setDialog(null)}
-          onSubmit={(value) => safe(() => act(() => financeApi.approve(detail.id, { stepId, ...value }), "Đã duyệt"))}
+          onSubmit={({ files, ...value }) =>
+            safe(() =>
+              act(async () => {
+                // Tải chứng từ kiểm soát trước: sau khi duyệt, cấp này không còn chờ mình nữa.
+                if (files?.length) {
+                  await financeApi.uploadAttachments(detail.id, files, { kind: "CONTROL_EVIDENCE" });
+                }
+                return financeApi.approve(detail.id, { stepId, ...value });
+              }, "Đã duyệt"),
+            )
+          }
         />
       )}
       {(dialog?.kind === "reject" || dialog?.kind === "return") && stepId && (
@@ -812,6 +835,7 @@ export default function FinanceRequestDetail() {
         <MoneyModal
           kind={dialog.kind}
           remaining={dialog.kind === "payment" ? s.payableRemaining : s.receivableRemaining}
+          defaultCashAccountCode={dialog.kind === "payment" ? detail.controlCashAccountCode : null}
           onClose={() => setDialog(null)}
           onSubmit={({ payload, proofs }) =>
             safe(() =>

@@ -67,9 +67,14 @@ export const sourceHref = (source: {
   type: string;
   schoolExpenseId?: number;
   suggestId?: number;
+  financialRequestId?: number;
 }) => {
   if (source.type === "EXPENSE_REQUEST" && source.suggestId) {
     return `#/director/expense-requests/${source.suggestId}`;
+  }
+  if (source.type === "FINANCIAL_REQUEST" && source.financialRequestId) {
+    // Link trung lập: FinanceRedirect đưa về đúng workspace của người mở.
+    return `#/finance/requests/${source.financialRequestId}`;
   }
   if (source.schoolExpenseId) {
     return `#/director/real-expense-detail/${source.schoolExpenseId}`;

@@ -46,7 +46,8 @@ export type AttachmentKind =
   | "INVOICE"
   | "PAYMENT_PROOF"
   | "REFUND_PROOF"
-  | "ADJUSTMENT_EVIDENCE";
+  | "ADJUSTMENT_EVIDENCE"
+  | "CONTROL_EVIDENCE";
 export type ApproverType = "DIRECT_MANAGER" | "ROLE" | "EMPLOYEE";
 export type SignatureSlot = "MANAGER" | "CONTROLLER" | "ACCOUNTANT" | "DIRECTOR";
 export type SelfApprovalMode = "BLOCK" | "SKIP_STEP" | "ALLOW";
@@ -271,6 +272,8 @@ export type FinancePermissions = {
   actionableStepId: number | null;
   canApprove: boolean;
   canAdjust: boolean;
+  /** Bước đang chờ mình là cấp Bộ phận kiểm soát: chọn tài khoản + đính kèm chứng từ. */
+  isControlStep: boolean;
   canSkip: boolean;
   canRecordPayment: boolean;
   canRecordRefund: boolean;
@@ -297,6 +300,8 @@ export type FinanceDetail = {
   departmentName: string | null;
   directManagerId: number | null;
   directManagerName: string | null;
+  /** Tài khoản tiền Bộ phận kiểm soát chọn — mặc định khi ghi nhận chi tiền. */
+  controlCashAccountCode: string | null;
   requestDate: string;
   title: string;
   purpose: string | null;

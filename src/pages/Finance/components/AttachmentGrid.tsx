@@ -55,6 +55,7 @@ export default function AttachmentGrid({
     ...(perms.canUploadDocuments ? (["DOCUMENT", "INVOICE"] as AttachmentKind[]) : []),
     ...(perms.canUploadPaymentProof ? (["PAYMENT_PROOF", "REFUND_PROOF"] as AttachmentKind[]) : []),
     ...(perms.canCancel ? (["ADJUSTMENT_EVIDENCE"] as AttachmentKind[]) : []),
+    ...(perms.isControlStep ? (["CONTROL_EVIDENCE"] as AttachmentKind[]) : []),
   ];
 
   useEffect(() => () => {

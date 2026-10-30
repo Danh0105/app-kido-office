@@ -122,7 +122,54 @@ export type EInvoiceExportSummary = {
   skipped: Array<{ rowIndex: number; itemName: string; message: string }>;
 };
 
+export type AccountingCashflowSummaryItem = {
+  schoolExpenseId: number;
+  school: { id: number; name: string };
+  period: { id: number; name: string | null; month: number; year: number };
+  finalized: boolean;
+  revenue: { expected: number; collected: number; receivable: number };
+  expense: {
+    expected: number;
+    paid: number;
+    payable: number;
+    school: { expected: number; paid: number; payable: number };
+    management: { expected: number; paid: number; payable: number };
+  };
+  cashPolicy: number;
+  projectedBalance: number;
+  projectedBalanceAfterPolicy: number;
+  cashBalance: number;
+};
+
+export type AccountingCashflowSummary = {
+  totals: {
+    expectedRevenue: number;
+    collectedRevenue: number;
+    receivable: number;
+    expectedExpense: number;
+    paidExpense: number;
+    payable: number;
+    cashPolicy: number;
+    projectedBalance: number;
+    projectedBalanceAfterPolicy: number;
+    cashBalance: number;
+  };
+  count: number;
+  items: AccountingCashflowSummaryItem[];
+};
+
 export const schoolExpenseApi = {
+  getCashflowSummary: async (params?: {
+    year?: number;
+    month?: number;
+    schoolId?: number;
+    subjectId?: number;
+    finalized?: boolean;
+  }): Promise<AccountingCashflowSummary> => {
+    const res = await api.get(`/accounting/cashflow-summary`, { params });
+    return res.data;
+  },
+
   // GET ALL
   getAll: async (params?: any) => {
     const res = await api.get(`/school-expenses`, {

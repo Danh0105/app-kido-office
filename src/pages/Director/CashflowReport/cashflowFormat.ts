@@ -68,12 +68,16 @@ export const sourceHref = (source: {
   schoolExpenseId?: number;
   suggestId?: number;
   requestId?: number;
+  otherCashflowId?: number;
 }) => {
   if (source.type === "FINANCIAL_REQUEST" && source.requestId) {
     return `#/director/finance/requests/${source.requestId}`;
   }
   if (source.type === "EXPENSE_REQUEST" && source.suggestId) {
     return `#/director/expense-requests/${source.suggestId}`;
+  }
+  if (source.type === "OTHER_CASHFLOW" && source.otherCashflowId) {
+    return `#/director/other-cashflows?contract=${source.otherCashflowId}`;
   }
   if (source.schoolExpenseId) {
     return `#/director/real-expense-detail/${source.schoolExpenseId}`;

@@ -39,6 +39,7 @@ import {
 } from "@/utils/teachingNotification";
 import { resolveExpenseRequestId } from "@/pages/ExpenseRequest/lib";
 import { brandMenusForUser } from "@/utils/brandMenu";
+import { otherCashflowPath } from "@/pages/OtherCashflow/lib";
 import BrandSidebar from "@/pages/Director/components/BrandSidebar";
 
 // ================= MENU =================
@@ -68,6 +69,8 @@ type Notification = {
     schoolYear?: string;
     suggestType?: string;
     suggestId?: number;
+    kind?: string;
+    contractId?: number;
   };
 };
 type NotificationCategory =
@@ -452,7 +455,12 @@ export default function Home() {
   const handleClickNotification = async (noti: Notification) => {
     const targetEntityId = resolveExpenseRequestId(noti);
     const replacementPath = teachingReplacementPath(noti);
-    if (!targetEntityId && !replacementPath) return;
+    // Thu Chi ngoài: loại POLICY nhưng không có entityId — mở theo meta.contractId.
+    const otherCashflowTarget =
+      noti.meta?.kind === "other_cashflow" && noti.meta?.contractId
+        ? otherCashflowPath("/employee", Number(noti.meta.contractId))
+        : null;
+    if (!targetEntityId && !replacementPath && !otherCashflowTarget) return;
     if (!noti.isRead) {
       try {
         if (
@@ -494,6 +502,10 @@ export default function Home() {
     }
     if (replacementPath) {
       navigate(replacementPath);
+      return;
+    }
+    if (otherCashflowTarget) {
+      navigate(otherCashflowTarget);
       return;
     }
     switch (noti.type) {

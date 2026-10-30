@@ -62,12 +62,19 @@ export type CashAccountGroup = {
 };
 
 export type LedgerSource = {
-  type: "INVOICE" | "SCHOOL_EXPENSE" | "MANAGEMENT_EXPENSE" | "EXPENSE_REQUEST" | "FINANCIAL_REQUEST";
+  type:
+    | "INVOICE"
+    | "SCHOOL_EXPENSE"
+    | "MANAGEMENT_EXPENSE"
+    | "EXPENSE_REQUEST"
+    | "FINANCIAL_REQUEST"
+    | "OTHER_CASHFLOW";
   schoolExpenseId?: number;
   subjectId?: number | null;
   rowIndex?: number;
   suggestId?: number;
   requestId?: number;
+  otherCashflowId?: number;
 };
 
 export type LedgerRow = {

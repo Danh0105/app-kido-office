@@ -20,6 +20,7 @@ import {
 } from "@/service/notification";
 import { expenseNotificationApi } from "@/service/expenseRequest";
 import { policiesApi } from "@/service/policy";
+import { otherCashflowPath } from "@/pages/OtherCashflow/lib";
 
 export type NotificationCategory =
   | "POLICY"
@@ -511,6 +512,12 @@ export function useAppNotifications() {
     }
 
     const base = isEmployeeRole ? "/employee" : "/director";
+    // Thu Chi ngoài dùng loại POLICY nhưng không đặt entityId (tránh trùng id
+    // với chính sách thật) — mở hợp đồng theo meta.contractId.
+    if (noti.meta?.kind === "other_cashflow" && noti.meta?.contractId) {
+      navigate(otherCashflowPath(base, Number(noti.meta.contractId)));
+      return;
+    }
     if (!targetEntityId) return;
 
     switch (noti.type) {

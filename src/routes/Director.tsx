@@ -28,6 +28,7 @@ import DirectorBrandShell from "@/pages/Director/components/DirectorBrandShell";
 import PayrollPage from "@/pages/Payroll/PayrollPage";
 import RecruitmentPage from "@/pages/Recruitment/RecruitmentPage";
 import FinanceRoutes from "@/pages/Finance/FinanceRoutes";
+import OtherCashflowPage from "@/pages/OtherCashflow/OtherCashflowPage";
 
 const EXPENSE_HOME = "/director/expense-management";
 const DIRECTOR_HOME = "/director";
@@ -269,6 +270,15 @@ export default function DirectorRoutes() {
         <Route path="payrolls" element={<PayrollPage />} />
         {/* Đề nghị tài chính: mọi tài khoản dùng được; backend tự giới hạn quyền xem/duyệt/chi. */}
         <Route path="finance/*" element={<FinanceRoutes />} />
+        {/* Thu Chi ngoài — cùng nhóm vai trò xem-tất-cả với backend (thủ quỹ ghi nhận ở đây) */}
+        <Route
+          path="other-cashflows"
+          element={
+            <AccountantGuard>
+              <OtherCashflowPage />
+            </AccountantGuard>
+          }
+        />
         <Route
           path="recruitment"
           element={

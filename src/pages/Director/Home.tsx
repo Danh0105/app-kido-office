@@ -55,6 +55,7 @@ import {
 } from "@/utils/directorUi";
 
 import { brandMenusForUser } from "@/utils/brandMenu";
+import { otherCashflowPath } from "@/pages/OtherCashflow/lib";
 
 const menuPath = (item: any) => item.to || `/director/${item.path}`;
 
@@ -80,6 +81,8 @@ type Notification = {
     suggestType?: string;
     suggestId?: number;
     kind?: string;
+    /** Thu Chi ngoài (`kind: "other_cashflow"`). */
+    contractId?: number;
     type?: string;
     category?: string;
     module?: string;
@@ -621,6 +624,10 @@ export default function Home() {
         return;
       }
       navigate(noti.meta?.route || "/nhan-su/cham-cong");
+      return;
+    }
+    if (noti.meta?.kind === "other_cashflow" && noti.meta?.contractId) {
+      navigate(otherCashflowPath("/director", Number(noti.meta.contractId)));
       return;
     }
     if (!targetEntityId) return;

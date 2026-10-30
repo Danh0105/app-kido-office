@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
-import { BookOpen, Building2, CalendarDays, Filter, MapPin, Pencil, Plus, Power, PowerOff, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { BookOpen, Building2, CalendarDays, Filter, HandCoins, MapPin, Pencil, Plus, Power, PowerOff, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import HeaderWithBack from "@/components/HeaderWithBack";
+import OtherCashflowPanel from "@/pages/OtherCashflow/OtherCashflowPanel";
 import { policiesApi } from "@/service/policy";
 import { provinceApi } from "@/service/province";
 import { wardApi } from "@/service/ward";
@@ -27,7 +28,7 @@ import type {
 } from "@/types/policy";
 
 const PAGE_SIZE = 12;
-type Tab = "policies" | "schools" | "subjects";
+type Tab = "policies" | "schools" | "subjects" | "other-cashflow";
 type SimpleOption = { value: string; label: string };
 /** Trường trực thuộc nhân viên — đủ field cho thẻ danh sách và form chỉnh sửa. */
 type ManagedSchool = {
@@ -771,10 +772,11 @@ export default function PolicySelector() {
           <p className="mt-1 text-sm text-slate-500">Tìm kiếm và lọc theo dữ liệu chính thức từ hệ thống.</p>
         </div>
 
-        <nav className="mb-4 grid grid-cols-3 gap-1 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+        <nav className="mb-4 grid grid-cols-2 gap-1 rounded-2xl sm:grid-cols-4 border border-slate-200 bg-white p-1 shadow-sm">
           <TabButton active={tab === "policies"} onClick={() => setTab("policies")} icon={<Filter size={15} />} label="Tất cả chính sách" />
           <TabButton active={tab === "schools"} onClick={() => setTab("schools")} icon={<Building2 size={15} />} label="Quản lý trường" />
           <TabButton active={tab === "subjects"} onClick={() => setTab("subjects")} icon={<BookOpen size={15} />} label="Quản lý môn học" />
+          <TabButton active={tab === "other-cashflow"} onClick={() => setTab("other-cashflow")} icon={<HandCoins size={15} />} label="Thu Chi ngoài" />
         </nav>
 
         {tab === "schools" && (
@@ -867,6 +869,8 @@ export default function PolicySelector() {
             </div>
           </DirectManagement>
         )}
+
+        {tab === "other-cashflow" && <OtherCashflowPanel />}
 
         {tab === "subjects" && (
           <DirectManagement title="Tất cả môn học" icon={<BookOpen size={22} />} search={managementSearch} onSearch={setManagementSearch} onCreate={() => setShowSubjectForm(true)} createLabel="Tạo môn" searchPlaceholder="Tìm môn học, trường, mã môn, số HĐ...">

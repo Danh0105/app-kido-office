@@ -11,6 +11,7 @@ import HandoverRegionModal from "./component/HandoverRegionModal";
 import { hasRole, isChiefAccountant } from "@/utils/auth";
 import { CATALOG_ADMIN_ROLES } from "@/service/subjectCatalog.api";
 import AllPoliciesTab from "./component/AllPoliciesTab";
+import OtherCashflowPanel from "@/pages/OtherCashflow/OtherCashflowPanel";
 import SubjectCatalogModal from "./component/SubjectCatalogModal";
 import { isDirectorBrandUiEnabled } from "@/utils/directorUi";
 
@@ -62,9 +63,9 @@ export default function EmployeeList() {
   const [showHandover, setShowHandover] = useState(false);
   const [showCatalog, setShowCatalog] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [activeTab, setActiveTab] = useState<"employees" | "policies">(
-    "policies",
-  );
+  const [activeTab, setActiveTab] = useState<
+    "employees" | "policies" | "other-cashflow"
+  >("policies");
 
   const [showRegionModal, setShowRegionModal] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(
@@ -174,7 +175,7 @@ export default function EmployeeList() {
       />
       {from === "policy" && (
         <div className={`px-4 pt-4 mt-[60px] ${isBrand ? "lg:max-w-6xl lg:mx-auto" : ""}`}>
-          <div className={`bg-white p-1 rounded-xl shadow-sm grid grid-cols-2 gap-1 ${isBrand ? "border border-blue-900/10" : ""}`}>
+          <div className={`bg-white p-1 rounded-xl shadow-sm grid grid-cols-3 gap-1 ${isBrand ? "border border-blue-900/10" : ""}`}>
             <button
               type="button"
               onClick={() => setActiveTab("employees")}
@@ -196,6 +197,17 @@ export default function EmployeeList() {
               }`}
             >
               Tất cả chính sách
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("other-cashflow")}
+              className={`py-2.5 rounded-lg text-sm font-medium ${
+                activeTab === "other-cashflow"
+                  ? isBrand ? "bg-[#005BEA] text-white" : "bg-blue-500 text-white"
+                  : "text-gray-600"
+              }`}
+            >
+              Thu Chi ngoài
             </button>
           </div>
         </div>
@@ -253,7 +265,7 @@ export default function EmployeeList() {
             </button>
           )}
         </div>
-      ) : from === "policy" && activeTab === "policies" ? null : (
+      ) : from === "policy" && activeTab !== "employees" ? null : (
         <div className="p-4 mt-[60px] flex flex-col gap-3"></div>
       )}
 
@@ -463,6 +475,10 @@ export default function EmployeeList() {
       {from === "policy" && activeTab === "policies" ? (
         <div className={isBrand ? "lg:max-w-6xl lg:mx-auto" : ""}>
           <AllPoliciesTab employees={employees} />
+        </div>
+      ) : from === "policy" && activeTab === "other-cashflow" ? (
+        <div className={`p-4 ${isBrand ? "lg:max-w-6xl lg:mx-auto" : ""}`}>
+          <OtherCashflowPanel />
         </div>
       ) : (
       <div className={`px-3 pb-6 grid grid-cols-3 gap-2 ${isBrand ? "lg:max-w-6xl lg:mx-auto lg:grid-cols-4 lg:gap-4" : ""}`}>

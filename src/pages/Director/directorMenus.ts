@@ -8,6 +8,7 @@ import statistics from "@/pages/Director/static/statistics.png";
 import suggest from "@/pages/Director/static/suggest.png";
 import team from "@/pages/Director/static/team.png";
 import {
+  ArrowRightLeft,
   HandCoins,
   Landmark,
   ReceiptText,
@@ -36,6 +37,14 @@ const FINANCE_MENU: DirectorMenu = {
   lucideIcon: HandCoins,
   path: "finance",
   from: "finance",
+};
+
+// Thủ quỹ, kế toán công nợ không có menu Chính sách (nơi đặt tab Thu Chi ngoài) nên cần lối vào riêng.
+const OTHER_CASHFLOW_MENU: DirectorMenu = {
+  title: "Thu Chi ngoài",
+  lucideIcon: ArrowRightLeft,
+  path: "other-cashflows",
+  from: "other-cashflow",
 };
 
 const RECRUITMENT_MENU: DirectorMenu = {
@@ -209,6 +218,7 @@ export const directorBaseMenus = (): DirectorMenu[] => {
   return [
     ...visibleMenus,
     ...(hasRole(...CASHFLOW_REPORT_ROLES) ? [CASHFLOW_REPORT_MENU] : []),
+    ...(hasRole("thuquy", "ketoan_congno") ? [OTHER_CASHFLOW_MENU] : []),
     ...(canViewRecruitment ? [RECRUITMENT_MENU] : []),
     PAYROLL_MENU,
     // Đề nghị tạm ứng/thanh toán: ai cũng lập được; quyền duyệt/chi do backend quyết định.

@@ -24,6 +24,7 @@ import PolicySelector from "@/pages/Employee/Sales/Policy/PolicySelector";
 import SchoolTimetable from "@/pages/Employee/Sales/School/SchoolTimetable";
 import PayrollPage from "@/pages/Payroll/PayrollPage";
 import FinanceRoutes from "@/pages/Finance/FinanceRoutes";
+import OtherCashflowPage from "@/pages/OtherCashflow/OtherCashflowPage";
 import ImageLibraryPage from "@/pages/Teaching/ImageLibraryPage";
 import EmployeeBrandShell from "@/pages/Employee/components/EmployeeBrandShell";
 import { isEmployeeBrandUiEnabled } from "@/utils/directorUi";
@@ -70,6 +71,7 @@ export default function EmployeeRoutes() {
         />
         <Route path="payrolls" element={<PayrollPage />} />
         <Route path="finance/*" element={<FinanceRoutes />} />
+        <Route path="other-cashflows" element={<OtherCashflowPage />} />
         <Route
           path="policy-history-list/:policyId"
           element={<PolicyHistoryPage audience="employee" />}

@@ -111,7 +111,7 @@ export const ROLE_LABELS: Record<FinanceRole, string> = {
   CONTROLLER: "Bộ phận kiểm soát",
   ACCOUNTANT: "Kế toán",
   CASHIER: "Thủ quỹ",
-  DIRECTOR: "BGĐ/Trưởng phòng duyệt",
+  DIRECTOR: "Giám đốc duyệt",
   ADMIN: "Quản trị phân hệ",
   VIEWER: "Xem báo cáo",
 };
@@ -120,7 +120,7 @@ export const SLOT_LABELS: Record<SignatureSlot, string> = {
   MANAGER: "Quản lý trực tiếp",
   CONTROLLER: "Bộ phận kiểm soát",
   ACCOUNTANT: "Kế toán",
-  DIRECTOR: "BGĐ/TP duyệt",
+  DIRECTOR: "Giám đốc duyệt",
 };
 
 export const SELF_MODE_LABELS: Record<SelfApprovalMode, string> = {

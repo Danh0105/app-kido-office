@@ -111,12 +111,14 @@ export default function FinanceRequestDetail() {
     void load();
   }, [load]);
 
-  // Mở từ danh sách bằng nút "Duyệt" → bật sẵn hộp duyệt.
+  // Mở từ danh sách bằng nút "Duyệt": nếu có chứng từ thì đưa người duyệt
+  // tới chứng từ trước; nếu không có mới bật thẳng hộp duyệt.
   useEffect(() => {
     if (detail && params.get("act") === "1" && detail.permissions.canApprove) {
-      setDialog({ kind: "approve" });
       const next = new URLSearchParams(params);
       next.delete("act");
+      if (detail.attachments.length > 0) next.set("tab", "attachments");
+      else setDialog({ kind: "approve" });
       setParams(next, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -349,6 +351,26 @@ export default function FinanceRequestDetail() {
       </section>
 
       <Warnings items={detail.warnings} />
+
+      {p.canApprove && detail.attachments.length > 0 && (
+        <div className="flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+          <p className="inline-flex items-center gap-2">
+            <Paperclip size={16} className="shrink-0" />
+            <span>
+              Phiếu có <b>{detail.attachments.length} tệp đính kèm</b>. Vui lòng xem chứng từ trước khi quyết định phê duyệt.
+            </span>
+          </p>
+          {tab !== "attachments" && (
+            <button
+              type="button"
+              onClick={() => setTab("attachments")}
+              className="shrink-0 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+            >
+              Xem tệp đính kèm
+            </button>
+          )}
+        </div>
+      )}
 
       <nav className="-mx-3 overflow-x-auto px-3 md:mx-0 md:px-0">
         <div className="flex min-w-max gap-1 border-b border-slate-200">

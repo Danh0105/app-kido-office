@@ -449,6 +449,11 @@ export default function FinanceRequestDetail() {
             <Card title="Thông tin nhận tiền">
               <dl>
                 <InfoRow label="Hình thức">{detail.paymentMethod ? PAYMENT_METHOD_LABELS[detail.paymentMethod] : ""}</InfoRow>
+                <InfoRow label="Tài khoản thanh toán">
+                  {detail.paymentAccountCode
+                    ? `${detail.paymentAccountCode}${detail.paymentAccountName ? ` — ${detail.paymentAccountName}` : ""}`
+                    : "Chưa chọn"}
+                </InfoRow>
                 <InfoRow label="Người thụ hưởng">{detail.payeeName}</InfoRow>
                 {detail.paymentMethod === "BANK_TRANSFER" && (
                   <>
@@ -777,6 +782,7 @@ export default function FinanceRequestDetail() {
         <ApproveModal
           detail={detail}
           canAdjust={p.canAdjust}
+          requiresPaymentAccount={p.requiresPaymentAccount}
           onClose={() => setDialog(null)}
           onSubmit={(value) => safe(() => act(() => financeApi.approve(detail.id, { stepId, ...value }), "Đã duyệt"))}
         />
@@ -834,6 +840,8 @@ export default function FinanceRequestDetail() {
         <MoneyModal
           kind={dialog.kind}
           remaining={dialog.kind === "payment" ? s.payableRemaining : s.receivableRemaining}
+          defaultMethod={dialog.kind === "payment" ? detail.paymentMethod : undefined}
+          defaultCashAccountCode={dialog.kind === "payment" ? detail.paymentAccountCode : undefined}
           onClose={() => setDialog(null)}
           onSubmit={({ payload, proofs }) =>
             safe(() =>
@@ -887,7 +895,6 @@ export default function FinanceRequestDetail() {
     </div>
   );
 }
-
 function Amount({ label, value, tone = "text-slate-900" }: { label: string; value: number | null; tone?: string }) {
   return (
     <div className="rounded-xl bg-slate-50 px-3 py-2">

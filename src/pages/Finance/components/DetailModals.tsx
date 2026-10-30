@@ -22,18 +22,23 @@ type Submit<T> = (value: T) => Promise<unknown>;
 export function ApproveModal({
   detail,
   canAdjust,
+  requiresPaymentAccount,
   onClose,
   onSubmit,
 }: {
   detail: FinanceDetail;
   canAdjust: boolean;
+  requiresPaymentAccount: boolean;
   onClose: () => void;
   onSubmit: Submit<{
     comment?: string;
+    paymentAccountCode?: string;
     adjustments?: { itemId: number; approvedAmount: number; reason?: string }[];
   }>;
 }) {
+  const meta = useFinanceMeta();
   const [comment, setComment] = useState("");
+  const [paymentAccountCode, setPaymentAccountCode] = useState(detail.paymentAccountCode ?? "");
   const [rows, setRows] = useState(() =>
     detail.items.map((item) => ({
       itemId: item.id,
@@ -48,12 +53,16 @@ export function ApproveModal({
   const invalid = rows.find(
     (row) => row.approved > row.declared || (row.approved !== row.declared && !row.reason.trim()),
   );
+  const paymentAccounts = meta.cashAccounts.filter((account) =>
+    detail.paymentMethod === "CASH" ? account.groupCode === "111" : account.groupCode === "112",
+  );
 
   const submit = async () => {
     setBusy(true);
     try {
       await onSubmit({
         comment: comment.trim() || undefined,
+        paymentAccountCode: requiresPaymentAccount ? paymentAccountCode : undefined,
         adjustments: canAdjust
           ? rows
               .filter((row) => {
@@ -79,7 +88,12 @@ export function ApproveModal({
           <button type="button" className={secondaryButton} onClick={onClose}>
             Đóng
           </button>
-          <button type="button" className={primaryButton} disabled={busy || (canAdjust && !!invalid)} onClick={() => void submit()}>
+          <button
+            type="button"
+            className={primaryButton}
+            disabled={busy || (canAdjust && !!invalid) || (requiresPaymentAccount && !paymentAccountCode)}
+            onClick={() => void submit()}
+          >
             {busy && <Loader2 size={16} className="animate-spin" />} Duyệt
           </button>
         </>
@@ -124,6 +138,28 @@ export function ApproveModal({
           </p>
         </div>
       )}
+      {requiresPaymentAccount && (
+        <label className={`${labelClass} mb-4`}>
+          Tài khoản thanh toán *
+          <select
+            className={inputClass}
+            value={paymentAccountCode}
+            onChange={(event) => setPaymentAccountCode(event.target.value)}
+          >
+            <option value="">Chọn tài khoản thanh toán</option>
+            {paymentAccounts.map((account) => (
+              <option key={account.code} value={account.code}>
+                {account.code} — {account.name}
+              </option>
+            ))}
+          </select>
+          <span className="mt-1 block text-xs font-normal text-slate-500">
+            {detail.paymentMethod === "CASH"
+              ? "Phiếu tiền mặt: chọn tài khoản nhóm 111."
+              : "Phiếu chuyển khoản: chọn tài khoản nhóm 112."}
+          </span>
+        </label>
+      )}
       <label className={labelClass}>
         Ý kiến (không bắt buộc)
         <textarea className={inputClass} rows={3} value={comment} onChange={(e) => setComment(e.target.value)} />
@@ -131,7 +167,6 @@ export function ApproveModal({
     </Modal>
   );
 }
-
 /** Nhập lý do bắt buộc: từ chối, yêu cầu bổ sung, huỷ, bỏ qua cấp, huỷ phiếu chi/thu, thu hồi. */
 export function ReasonModal({
   title,
@@ -192,7 +227,6 @@ export function ReasonModal({
     </Modal>
   );
 }
-
 /**
  * Ghi nhận chi tiền / thu hoàn trả. Khoá chống gửi lặp sinh một lần khi mở
  * modal — bấm nhiều lần hay mạng chập chờn vẫn chỉ ghi một phiếu.
@@ -200,11 +234,15 @@ export function ReasonModal({
 export function MoneyModal({
   kind,
   remaining,
+  defaultMethod,
+  defaultCashAccountCode,
   onClose,
   onSubmit,
 }: {
   kind: "payment" | "refund";
   remaining: number;
+  defaultMethod?: PaymentMethod | null;
+  defaultCashAccountCode?: string | null;
   onClose: () => void;
   onSubmit: Submit<{ payload: MoneyMovementPayload; proofs: File[] }>;
 }) {
@@ -212,13 +250,14 @@ export function MoneyModal({
   const idempotencyKey = useMemo(() => newIdempotencyKey(), []);
   const [amount, setAmount] = useState(remaining);
   const [date, setDate] = useState(todayVN());
-  const [method, setMethod] = useState<PaymentMethod>("BANK_TRANSFER");
-  const [cashAccountCode, setCashAccountCode] = useState("");
+  const [method, setMethod] = useState<PaymentMethod>(defaultMethod ?? "BANK_TRANSFER");
+  const [cashAccountCode, setCashAccountCode] = useState(defaultCashAccountCode ?? "");
   const [transactionRef, setTransactionRef] = useState("");
   const [note, setNote] = useState("");
   const [proofs, setProofs] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const accounts = meta.cashAccounts.filter((a) => (method === "CASH" ? a.groupCode === "111" : a.groupCode === "112"));
+  const accountLocked = kind === "payment" && !!defaultCashAccountCode;
   const invalid = amount <= 0 || amount > remaining;
 
   return (
@@ -271,7 +310,12 @@ export function MoneyModal({
         </label>
         <label className={labelClass}>
           Hình thức
-          <select className={inputClass} value={method} onChange={(e) => { setMethod(e.target.value as PaymentMethod); setCashAccountCode(""); }}>
+          <select
+            className={inputClass}
+            value={method}
+            disabled={accountLocked}
+            onChange={(e) => { setMethod(e.target.value as PaymentMethod); setCashAccountCode(""); }}
+          >
             {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
@@ -281,8 +325,13 @@ export function MoneyModal({
         </label>
         <label className={labelClass}>
           Tài khoản tiền
-          <select className={inputClass} value={cashAccountCode} onChange={(e) => setCashAccountCode(e.target.value)}>
-            <option value="">Không chọn</option>
+          <select
+            className={inputClass}
+            value={cashAccountCode}
+            disabled={accountLocked}
+            onChange={(e) => setCashAccountCode(e.target.value)}
+          >
+            {!accountLocked && <option value="">Không chọn</option>}
             {accounts.map((a) => (
               <option key={a.code} value={a.code}>
                 {a.code} — {a.name}

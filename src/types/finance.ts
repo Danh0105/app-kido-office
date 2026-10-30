@@ -61,7 +61,6 @@ export type FinanceCompany = {
   hasLogo: boolean;
   formCodes: Record<string, string>;
 };
-
 export type FinanceMeta = {
   companies: FinanceCompany[];
   categories: { id: number; code: string; name: string; limitAmount: number | null }[];
@@ -271,6 +270,7 @@ export type FinancePermissions = {
   actionableStepId: number | null;
   canApprove: boolean;
   canAdjust: boolean;
+  requiresPaymentAccount: boolean;
   canSkip: boolean;
   canRecordPayment: boolean;
   canRecordRefund: boolean;
@@ -317,6 +317,8 @@ export type FinanceDetail = {
   bankName: string | null;
   bankAccountNumber: string | null;
   paymentMethod: PaymentMethod | null;
+  paymentAccountCode: string | null;
+  paymentAccountName: string | null;
   paymentNote: string | null;
   totalAmount: number;
   approvedAmount: number | null;

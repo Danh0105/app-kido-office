@@ -34,11 +34,14 @@ export function ApproveModal({
     comment?: string;
     paymentAccountCode?: string;
     adjustments?: { itemId: number; approvedAmount: number; reason?: string }[];
+    /** Chứng từ kiểm soát — tải lên trước khi duyệt (cấp kiểm soát). */
+    files?: File[];
   }>;
 }) {
   const meta = useFinanceMeta();
   const [comment, setComment] = useState("");
   const [paymentAccountCode, setPaymentAccountCode] = useState(detail.paymentAccountCode ?? "");
+  const [files, setFiles] = useState<File[]>([]);
   const [rows, setRows] = useState(() =>
     detail.items.map((item) => ({
       itemId: item.id,
@@ -63,6 +66,7 @@ export function ApproveModal({
       await onSubmit({
         comment: comment.trim() || undefined,
         paymentAccountCode: requiresPaymentAccount ? paymentAccountCode : undefined,
+        files: requiresPaymentAccount && files.length ? files : undefined,
         adjustments: canAdjust
           ? rows
               .filter((row) => {
@@ -80,7 +84,7 @@ export function ApproveModal({
   return (
     <Modal
       open
-      wide={canAdjust}
+      wide={canAdjust || requiresPaymentAccount}
       title={`Duyệt ${detail.code}`}
       onClose={onClose}
       footer={
@@ -158,6 +162,21 @@ export function ApproveModal({
               ? "Phiếu tiền mặt: chọn tài khoản nhóm 111."
               : "Phiếu chuyển khoản: chọn tài khoản nhóm 112."}
           </span>
+        </label>
+      )}
+      {requiresPaymentAccount && (
+        <label className={`${labelClass} mb-4`}>
+          Chứng từ kiểm soát (không bắt buộc)
+          <input
+            type="file"
+            multiple
+            accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx,.xls,.docx,.doc"
+            className={`${inputClass} file:mr-2 file:rounded-lg file:border-0 file:bg-blue-50 file:px-2 file:py-1 file:text-blue-700`}
+            onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+          />
+          {files.length > 0 && (
+            <span className="mt-1 block text-[11px] font-normal text-slate-600">{files.map((f) => f.name).join(", ")}</span>
+          )}
         </label>
       )}
       <label className={labelClass}>

@@ -146,6 +146,7 @@ export const ATTACHMENT_KIND_LABELS: Record<AttachmentKind, string> = {
   PAYMENT_PROOF: "Biên nhận chi tiền",
   REFUND_PROOF: "Biên nhận hoàn trả",
   ADJUSTMENT_EVIDENCE: "Bằng chứng điều chỉnh",
+  CONTROL_EVIDENCE: "Chứng từ kiểm soát",
 };
 
 export const AUDIT_LABELS: Record<string, string> = {

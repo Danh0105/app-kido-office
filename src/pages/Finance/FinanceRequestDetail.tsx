@@ -784,7 +784,17 @@ export default function FinanceRequestDetail() {
           canAdjust={p.canAdjust}
           requiresPaymentAccount={p.requiresPaymentAccount}
           onClose={() => setDialog(null)}
-          onSubmit={(value) => safe(() => act(() => financeApi.approve(detail.id, { stepId, ...value }), "Đã duyệt"))}
+          onSubmit={({ files, ...value }) =>
+            safe(() =>
+              act(async () => {
+                // Tải chứng từ kiểm soát trước: sau khi duyệt, cấp này không còn chờ mình nữa.
+                if (files?.length) {
+                  await financeApi.uploadAttachments(detail.id, files, { kind: "CONTROL_EVIDENCE" });
+                }
+                return financeApi.approve(detail.id, { stepId, ...value });
+              }, "Đã duyệt"),
+            )
+          }
         />
       )}
       {(dialog?.kind === "reject" || dialog?.kind === "return") && stepId && (

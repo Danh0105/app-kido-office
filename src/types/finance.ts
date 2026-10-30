@@ -46,7 +46,8 @@ export type AttachmentKind =
   | "INVOICE"
   | "PAYMENT_PROOF"
   | "REFUND_PROOF"
-  | "ADJUSTMENT_EVIDENCE";
+  | "ADJUSTMENT_EVIDENCE"
+  | "CONTROL_EVIDENCE";
 export type ApproverType = "DIRECT_MANAGER" | "ROLE" | "EMPLOYEE";
 export type SignatureSlot = "MANAGER" | "CONTROLLER" | "ACCOUNTANT" | "DIRECTOR";
 export type SelfApprovalMode = "BLOCK" | "SKIP_STEP" | "ALLOW";

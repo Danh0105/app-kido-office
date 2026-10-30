@@ -466,13 +466,13 @@ export default function FinanceRequestForm() {
               <option value="">{managersQuery.isLoading ? "Đang tải…" : "Chọn quản lý"}</option>
               {(managersQuery.data ?? []).map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.name}
+                  {m.position ? `${m.name} — ${m.position}` : m.name}
                 </option>
               ))}
             </select>
             {companyId && managersQuery.data?.length === 0 && (
               <span className="mt-1 block text-[11px] font-normal text-amber-600">
-                Chưa phân quyền quản lý trực tiếp cho phòng ban của bạn.
+                Chưa có giám đốc hoặc trưởng/phó phòng nào để chọn.
               </span>
             )}
           </label>

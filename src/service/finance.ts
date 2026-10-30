@@ -45,7 +45,7 @@ export const financeApi = {
   meta: async () => (await api.get<FinanceMeta>(`${BASE}/meta`)).data,
 
   managers: async (companyId: number) =>
-    (await api.get<{ id: number; name: string }[]>(`${BASE}/managers`, { params: { companyId } })).data,
+    (await api.get<{ id: number; name: string; position: string | null }[]>(`${BASE}/managers`, { params: { companyId } })).data,
 
   list: async (query: FinanceListQuery) =>
     (await api.get<FinanceListResponse>(BASE, { params: clean(query) })).data,

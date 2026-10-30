@@ -46,7 +46,7 @@ function Shell({ meta, children }: { meta: FinanceMeta; children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-slate-100 pb-24 pt-[72px] text-slate-900">
-      <HeaderWithBack title="Quản lý tài chính" />
+      <HeaderWithBack title="Đề nghị tài chính nội bộ" />
       <main className="mx-auto w-full max-w-7xl space-y-4 px-3 md:px-6">
         <section className="overflow-hidden rounded-2xl bg-gradient-to-r from-blue-700 to-blue-500 p-5 text-white shadow-sm md:p-6">
           <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
@@ -132,7 +132,7 @@ function FinanceModule() {
   if (metaQuery.isLoading) {
     return (
       <div className="min-h-screen bg-slate-100 pt-[72px]">
-        <HeaderWithBack title="Quản lý tài chính" />
+        <HeaderWithBack title="Đề nghị tài chính nội bộ" />
         <main className="mx-auto max-w-7xl px-3 md:px-6">
           <LoadingState text="Đang tải phân hệ tài chính…" />
         </main>
@@ -142,7 +142,7 @@ function FinanceModule() {
   if (metaQuery.isError || !metaQuery.data) {
     return (
       <div className="min-h-screen bg-slate-100 pt-[72px]">
-        <HeaderWithBack title="Quản lý tài chính" />
+        <HeaderWithBack title="Đề nghị tài chính nội bộ" />
         <main className="mx-auto max-w-7xl px-3 md:px-6">
           <ErrorState
             message={getApiErrorMessage(metaQuery.error, "Không tải được phân hệ tài chính.")}

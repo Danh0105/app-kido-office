@@ -1,4 +1,5 @@
 import { hasRole, hasBroadRole } from "./auth";
+import { DEPARTMENT_HEAD_ROLES } from "./departmentHeads";
 
 /**
  * Trang chủ tương ứng với role đang đăng nhập.
@@ -34,6 +35,7 @@ export const getHomePath = () => {
     "giaovu",
     "giaovien_congty",
     "giaovien_ctv",
+    ...DEPARTMENT_HEAD_ROLES,
   );
   if (isDirectorType) return "/director";
 

@@ -1,4 +1,5 @@
 import { hasRole } from "@/utils/auth";
+import { DEPARTMENT_HEAD_ROLES } from "@/utils/departmentHeads";
 import { isEquipmentOnlyUser } from "@/pages/ExpenseRequest/lib";
 import expense from "@/pages/Director/static/expense.png";
 import policy from "@/pages/Director/static/policy.png";
@@ -31,7 +32,7 @@ const PAYROLL_MENU: DirectorMenu = {
 };
 
 const FINANCE_MENU: DirectorMenu = {
-  title: "Quản lý tài chính",
+  title: "Đề nghị tài chính nội bộ",
   lucideIcon: HandCoins,
   path: "finance",
   from: "finance",
@@ -189,6 +190,8 @@ export const directorBaseMenus = (): DirectorMenu[] => {
     ? LIMITED_MENUS
     : hasRole("nhansu", "giaovu", "giaovien_congty", "giaovien_ctv")
     ? [] // Nhân sự / Giáo vụ / giáo viên chỉ dùng module Giảng dạy
+    : hasRole(...DEPARTMENT_HEAD_ROLES)
+    ? [] // Chỉ mang chức danh trưởng/phó phòng: không mở thêm menu nghiệp vụ nào
     : ALL_MENUS;
   const visibleMenus = menus.filter(
     (item) => item.from !== "expense" || hasRole(...EXPENSE_ROLES)

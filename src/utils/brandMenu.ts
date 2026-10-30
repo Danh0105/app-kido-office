@@ -106,7 +106,7 @@ const employeeMenus = (): BrandMenuDefinition[] => {
 
   const finance: BrandMenuDefinition = {
     key: "employee-finance",
-    title: "Quản lý tài chính",
+    title: "Đề nghị tài chính nội bộ",
     to: "/employee/finance",
     from: "finance",
     lucideIcon: HandCoins,

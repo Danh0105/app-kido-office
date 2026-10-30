@@ -1,6 +1,11 @@
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, ShieldAlert } from "lucide-react";
 import type { CashflowIssue } from "@/service/cashflowReport";
 import { formatDate, formatMoney, ISSUE_KIND_LABELS, sourceHref } from "./cashflowFormat";
+import CashflowTableShell, {
+  appleCell,
+  appleHeaderCell,
+  appleTableHead,
+} from "./CashflowTableShell";
 
 type Props = { issues: CashflowIssue[] };
 
@@ -12,25 +17,32 @@ export default function IssuesTable({ issues }: Props) {
   const errors = issues.filter((item) => !item.warningOnly).length;
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
-      <div className="px-4 pt-4 pb-2">
-        <h2 className="text-base font-bold text-slate-900">Chứng từ chưa phân loại / cần kiểm tra</h2>
-        <p className="text-xs text-slate-500">
+    <CashflowTableShell
+      title="Chứng từ cần kiểm tra"
+      icon={<ShieldAlert size={21} />}
+      description={
+        <>
           <span className="font-semibold text-rose-700">{errors} lỗi</span> (chưa tính vào sổ) ·{" "}
           <span className="font-semibold text-amber-700">{issues.length - errors} cảnh báo</span>{" "}
           (đã tính hoặc chỉ để đối chiếu). Bổ sung thông tin ở chứng từ gốc rồi bấm Làm mới.
-        </p>
-      </div>
+        </>
+      }
+    >
       {issues.length === 0 ? (
-        <p className="px-4 pb-6 text-sm text-emerald-700">Không có chứng từ nào cần xử lý.</p>
+        <div className="px-5 py-10 text-center">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100">
+            <ShieldAlert size={22} />
+          </div>
+          <p className="text-[14px] font-medium text-emerald-700">Không có chứng từ nào cần xử lý.</p>
+        </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] border-collapse text-sm">
-            <thead className="bg-slate-900 text-xs text-white">
+        <div className="max-h-[70vh] overflow-auto overscroll-contain">
+          <table className="w-full min-w-[1080px] border-separate border-spacing-0">
+            <thead className={`${appleTableHead} sticky top-0 z-20`}>
               <tr>
-                {["Mức", "Loại", "Ngày", "Số chứng từ", "Diễn giải", "TK", "Số tiền", "Chi tiết", ""].map(
+                {["Mức", "Loại", "Ngày", "Số chứng từ", "Diễn giải", "Tài khoản", "Số tiền", "Chi tiết", ""].map(
                   (label) => (
-                    <th key={label} className="border border-slate-700 px-2 py-2 font-semibold">
+                    <th key={label} className={`${appleHeaderCell} text-center`}>
                       {label}
                     </th>
                   ),
@@ -41,42 +53,48 @@ export default function IssuesTable({ issues }: Props) {
               {issues.map((item) => {
                 const href = sourceHref(item.source);
                 return (
-                  <tr key={`${item.kind}:${item.key}`} className="hover:bg-slate-50">
-                    <td className="border border-slate-200 px-2 py-1.5 text-center">
+                  <tr key={`${item.kind}:${item.key}`} className="group bg-white transition-colors hover:bg-blue-50/45">
+                    <td className={`${appleCell} text-center`}>
                       <span
-                        className={`px-2 py-[2px] rounded-full text-xs font-medium ${
+                        className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${
                           item.warningOnly
-                            ? "bg-amber-100 text-amber-700"
-                            : "bg-rose-100 text-rose-700"
+                            ? "bg-amber-50 text-amber-700 ring-amber-200"
+                            : "bg-rose-50 text-rose-700 ring-rose-200"
                         }`}
                       >
                         {item.warningOnly ? "Cảnh báo" : "Lỗi"}
                       </span>
                     </td>
-                    <td className="border border-slate-200 px-2 py-1.5 whitespace-nowrap">
+                    <td className={`${appleCell} whitespace-nowrap font-medium text-slate-900`}>
                       {ISSUE_KIND_LABELS[item.kind] ?? item.kind}
                     </td>
-                    <td className="border border-slate-200 px-2 py-1.5 text-center whitespace-nowrap">
+                    <td className={`${appleCell} whitespace-nowrap text-center`}>
                       {formatDate(item.date)}
                     </td>
-                    <td className="border border-slate-200 px-2 py-1.5 whitespace-nowrap">{item.documentNo}</td>
-                    <td className="border border-slate-200 px-2 py-1.5">
+                    <td
+                      className={`${appleCell} whitespace-nowrap font-mono text-[13px] font-semibold text-blue-700`}
+                    >
+                      {item.documentNo}
+                    </td>
+                    <td className={appleCell}>
                       <span className="line-clamp-2" title={item.description}>
                         {item.description}
                       </span>
                     </td>
-                    <td className="border border-slate-200 px-2 py-1.5 text-center">{item.accountCode ?? ""}</td>
-                    <td className="border border-slate-200 px-2 py-1.5 text-right tabular-nums whitespace-nowrap">
+                    <td className={`${appleCell} text-center font-mono`}>{item.accountCode ?? ""}</td>
+                    <td
+                      className={`${appleCell} whitespace-nowrap text-right font-semibold tabular-nums text-slate-950`}
+                    >
                       {item.amount === null ? "" : formatMoney(item.amount)}
                     </td>
-                    <td className="border border-slate-200 px-2 py-1.5 text-xs text-slate-600">{item.message}</td>
-                    <td className="border border-slate-200 px-2 py-1.5 text-center">
+                    <td className={`${appleCell} text-[13px] text-slate-600`}>{item.message}</td>
+                    <td className={`${appleCell} text-center`}>
                       {href && (
                         <a
                           href={href}
                           target="_blank"
                           rel="noopener"
-                          className="inline-flex items-center gap-1 text-xs text-indigo-700 hover:underline"
+                          className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1.5 text-[12px] font-semibold text-blue-700 ring-1 ring-blue-100 transition hover:bg-blue-100"
                         >
                           Mở <ExternalLink size={12} />
                         </a>
@@ -89,6 +107,6 @@ export default function IssuesTable({ issues }: Props) {
           </table>
         </div>
       )}
-    </div>
+    </CashflowTableShell>
   );
 }

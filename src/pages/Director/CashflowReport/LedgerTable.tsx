@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
+import { BookOpenText, ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 import type { LedgerResponse } from "@/service/cashflowReport";
 import { formatCell, formatDate, formatMoney, sourceHref } from "./cashflowFormat";
+import CashflowTableShell from "./CashflowTableShell";
 
 type Props = {
   data: LedgerResponse;
@@ -56,19 +57,19 @@ export default function LedgerTable({ data, onPageChange }: Props) {
   });
   const totalPages = Math.max(1, Math.ceil(data.totalRows / data.limit));
   const groupTitle =
-    data.group === "111" ? "TK 111: Tiền mặt tại quỹ" : "TK 112: Tiền gửi ngân hàng";
+    data.group === "111" ? "Tài khoản 111 · Tiền mặt tại quỹ" : "Tài khoản 112 · Tiền gửi ngân hàng";
 
   const balanceRow = (
     label: string,
     pick: (account: LedgerResponse["accounts"][number]) => string | null,
     tone: string,
   ) => (
-    <tr className={`${tone} font-semibold`}>
+    <tr className={`${tone} font-semibold text-slate-900`}>
       {LEFT.map((column, index) => (
         <td
           key={column.label}
           style={stickyLeft(index)}
-          className={`${tone} z-10 border border-slate-200 px-2 py-2 text-sm ${index === 4 ? "text-left" : ""}`}
+          className={`${tone} z-10 border-b border-slate-200/80 px-3 py-3 text-[13px] ${index === 4 ? "text-left" : ""}`}
         >
           {index === 4 ? label : ""}
         </td>
@@ -79,7 +80,7 @@ export default function LedgerTable({ data, onPageChange }: Props) {
           <td
             key={account.code}
             colSpan={2}
-            className="border border-slate-200 px-2 py-2 text-right text-sm tabular-nums"
+            className="border-b border-slate-200/80 px-3 py-3 text-right text-[13px] font-semibold tabular-nums"
           >
             {value === null ? (
               <span className="text-xs italic font-normal text-amber-700">Chưa xác minh</span>
@@ -93,45 +94,45 @@ export default function LedgerTable({ data, onPageChange }: Props) {
         <td
           key={column.label}
           style={rightStyle(index)}
-          className={`${tone} z-10 border border-slate-200`}
+          className={`${tone} z-10 border-b border-slate-200/80`}
         />
       ))}
     </tr>
   );
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
-      <div className="px-4 pt-4 pb-3 text-center">
-        <h2 className="text-lg font-bold uppercase tracking-wide text-slate-900">
-          Sổ chi tiết thu chi
-        </h2>
-        <p className="text-sm font-semibold text-slate-600">{groupTitle}</p>
-        <p className="text-xs text-slate-500">
+    <CashflowTableShell
+      title="Sổ chi tiết thu chi"
+      icon={<BookOpenText size={21} />}
+      description={
+        <>
+          <span className="font-semibold text-slate-800">{groupTitle}</span>
+          <span className="mx-2 text-slate-300">•</span>
           Từ {formatDate(data.range.from)} đến {formatDate(data.range.to)}
-        </p>
-        {data.searchActive && (
-          <p className="mt-1 text-xs text-amber-700">
-            Đang lọc theo từ khoá: dòng "Cộng" chỉ tính các chứng từ khớp; số dư đầu/cuối
-            kỳ vẫn là số dư thật của tài khoản.
-          </p>
-        )}
-      </div>
+          {data.searchActive && (
+            <span className="mt-1 block font-medium text-amber-700">
+              Đang lọc từ khoá: dòng “Cộng” tính các chứng từ khớp; số dư đầu/cuối kỳ vẫn là số dư thật.
+            </span>
+          )}
+        </>
+      }
+    >
 
       {accounts.length === 0 ? (
-        <p className="px-4 pb-6 text-center text-sm text-slate-500">
+        <p className="px-5 py-10 text-center text-[14px] text-slate-500">
           Không có tài khoản nào trong nhóm này theo bộ lọc hiện tại.
         </p>
       ) : (
-        <div className="overflow-x-auto border-t border-slate-200">
-          <table className="border-collapse text-sm" style={{ minWidth: "100%" }}>
-            <thead className="text-xs text-white">
-              <tr className="bg-slate-900">
+        <div className="max-h-[72vh] overflow-auto overscroll-contain">
+          <table className="border-separate border-spacing-0 text-[14px]" style={{ minWidth: "100%" }}>
+            <thead className="text-[11px] font-semibold uppercase tracking-[0.045em] text-slate-600">
+              <tr className="bg-[#f5f5f7]/95 backdrop-blur-xl">
                 {LEFT.map((column, index) => (
                   <th
                     key={column.label}
                     rowSpan={2}
                     style={stickyLeft(index)}
-                    className="z-20 bg-slate-900 border border-slate-700 px-2 py-2 font-semibold"
+                    className="top-0 z-30 border-b border-r border-slate-200 bg-[#f5f5f7]/95 px-3 py-3 font-semibold backdrop-blur-xl"
                   >
                     {column.label}
                   </th>
@@ -141,14 +142,14 @@ export default function LedgerTable({ data, onPageChange }: Props) {
                     key={account.code}
                     colSpan={2}
                     title={`${account.code} - ${account.name}${account.isActive ? "" : " (ngừng sử dụng)"}`}
-                    className="border border-slate-700 px-2 py-2 font-semibold"
+                    className="sticky top-0 z-20 border-b border-r border-slate-200 bg-[#f5f5f7]/95 px-3 py-3 font-semibold backdrop-blur-xl"
                     style={{ minWidth: AMOUNT_WIDTH * 2 }}
                   >
                     <div className="truncate" style={{ maxWidth: AMOUNT_WIDTH * 2 - 16 }}>
                       {account.code} - {account.name}
                     </div>
                     {!account.isActive && (
-                      <div className="text-[10px] font-normal text-amber-300">Ngừng sử dụng</div>
+                      <div className="mt-0.5 text-[10px] font-medium normal-case tracking-normal text-amber-700">Ngừng sử dụng</div>
                     )}
                   </th>
                 ))}
@@ -157,24 +158,24 @@ export default function LedgerTable({ data, onPageChange }: Props) {
                     key={column.label}
                     rowSpan={2}
                     style={rightStyle(index)}
-                    className="z-20 bg-slate-900 border border-slate-700 px-2 py-2 font-semibold"
+                    className="sticky top-0 z-20 border-b border-slate-200 bg-[#f5f5f7]/95 px-3 py-3 font-semibold backdrop-blur-xl"
                   >
                     {column.label}
                   </th>
                 ))}
               </tr>
-              <tr className="bg-slate-800">
+              <tr className="bg-blue-50/95 text-blue-800 backdrop-blur-xl">
                 {accounts.flatMap((account) => [
                   <th
                     key={`${account.code}-thu`}
-                    className="border border-slate-700 px-2 py-1 font-medium"
+                    className="sticky top-[61px] z-20 border-b border-r border-blue-100 bg-blue-50/95 px-3 py-2 font-semibold backdrop-blur-xl"
                     style={{ minWidth: AMOUNT_WIDTH }}
                   >
                     Thu
                   </th>,
                   <th
                     key={`${account.code}-chi`}
-                    className="border border-slate-700 px-2 py-1 font-medium"
+                    className="sticky top-[61px] z-20 border-b border-r border-blue-100 bg-blue-50/95 px-3 py-2 font-semibold backdrop-blur-xl"
                     style={{ minWidth: AMOUNT_WIDTH }}
                   >
                     Chi
@@ -183,13 +184,13 @@ export default function LedgerTable({ data, onPageChange }: Props) {
               </tr>
             </thead>
             <tbody>
-              {balanceRow("Số dư đầu kỳ", (account) => account.opening, "bg-sky-50")}
+              {balanceRow("Số dư đầu kỳ", (account) => account.opening, "bg-sky-50/90")}
 
               {rows.length === 0 && (
                 <tr>
                   <td
                     colSpan={LEFT.length + accounts.length * 2 + RIGHT.length}
-                    className="border border-slate-200 px-4 py-6 text-center text-sm text-slate-500"
+                    className="border-b border-slate-200 px-5 py-10 text-center text-[14px] text-slate-500"
                   >
                     Không có chứng từ phát sinh trong kỳ.
                   </td>
@@ -201,7 +202,7 @@ export default function LedgerTable({ data, onPageChange }: Props) {
                 return (
                   <tr
                     key={row.key}
-                    className={`group ${href ? "cursor-pointer" : ""} hover:bg-indigo-50`}
+                    className={`group bg-white transition-colors ${href ? "cursor-pointer" : ""} hover:bg-blue-50/50`}
                     onClick={() => href && window.open(href, "_blank", "noopener")}
                     title={href ? "Mở chứng từ gốc (tab mới)" : undefined}
                   >
@@ -215,10 +216,10 @@ export default function LedgerTable({ data, onPageChange }: Props) {
                       <td
                         key={LEFT[index].label}
                         style={stickyLeft(index)}
-                        className={`z-10 bg-white group-hover:bg-indigo-50 border border-slate-200 px-2 py-1.5 ${index === 4 ? "text-left" : "text-center whitespace-nowrap"}`}
+                        className={`z-10 border-b border-slate-200/70 bg-white px-3 py-3 text-[13px] text-slate-700 transition-colors group-hover:bg-blue-50 ${index === 4 ? "text-left" : "whitespace-nowrap text-center"}`}
                       >
                         {index === 2 && href ? (
-                          <span className="inline-flex items-center gap-1 text-indigo-700">
+                          <span className="inline-flex items-center gap-1 font-mono font-semibold text-blue-700">
                             {value}
                             <ExternalLink size={12} />
                           </span>
@@ -236,13 +237,13 @@ export default function LedgerTable({ data, onPageChange }: Props) {
                       return [
                         <td
                           key={`${account.code}-thu`}
-                          className="border border-slate-200 px-2 py-1.5 text-right tabular-nums text-emerald-700"
+                          className="border-b border-r border-slate-200/70 px-3 py-3 text-right font-medium tabular-nums text-emerald-700"
                         >
                           {own ? formatCell(row.receipt) : ""}
                         </td>,
                         <td
                           key={`${account.code}-chi`}
-                          className="border border-slate-200 px-2 py-1.5 text-right tabular-nums text-rose-700"
+                          className="border-b border-r border-slate-200/70 px-3 py-3 text-right font-medium tabular-nums text-rose-700"
                         >
                           {own ? formatCell(row.payment) : ""}
                         </td>,
@@ -252,7 +253,7 @@ export default function LedgerTable({ data, onPageChange }: Props) {
                       <td
                         key={RIGHT[index].label}
                         style={rightStyle(index)}
-                        className="z-10 bg-white group-hover:bg-indigo-50 border border-slate-200 px-2 py-1.5"
+                        className="z-10 border-b border-slate-200/70 bg-white px-3 py-3 text-[13px] transition-colors group-hover:bg-blue-50"
                       >
                         <span className="line-clamp-1" title={value}>
                           {value}
@@ -263,12 +264,12 @@ export default function LedgerTable({ data, onPageChange }: Props) {
                 );
               })}
 
-              <tr className="bg-amber-50 font-semibold">
+              <tr className="bg-amber-50/90 font-semibold text-slate-900">
                 {LEFT.map((column, index) => (
                   <td
                     key={column.label}
                     style={stickyLeft(index)}
-                    className="z-10 bg-amber-50 border border-slate-200 px-2 py-2 text-left"
+                    className="z-10 border-b border-slate-200 bg-amber-50 px-3 py-3 text-left text-[13px]"
                   >
                     {index === 4 ? (totalPages > 1 ? "Cộng (toàn kỳ)" : "Cộng") : ""}
                   </td>
@@ -276,13 +277,13 @@ export default function LedgerTable({ data, onPageChange }: Props) {
                 {accounts.flatMap((account) => [
                   <td
                     key={`${account.code}-thu`}
-                    className="border border-slate-200 px-2 py-2 text-right tabular-nums text-emerald-800"
+                    className="border-b border-r border-slate-200 px-3 py-3 text-right tabular-nums text-emerald-800"
                   >
                     {formatMoney(account.receipts)}
                   </td>,
                   <td
                     key={`${account.code}-chi`}
-                    className="border border-slate-200 px-2 py-2 text-right tabular-nums text-rose-800"
+                    className="border-b border-r border-slate-200 px-3 py-3 text-right tabular-nums text-rose-800"
                   >
                     {formatMoney(account.payments)}
                   </td>,
@@ -291,19 +292,19 @@ export default function LedgerTable({ data, onPageChange }: Props) {
                   <td
                     key={column.label}
                     style={rightStyle(index)}
-                    className="z-10 bg-amber-50 border border-slate-200"
+                    className="z-10 border-b border-slate-200 bg-amber-50"
                   />
                 ))}
               </tr>
 
-              {balanceRow("Số dư cuối kỳ", (account) => account.closing, "bg-indigo-50")}
+              {balanceRow("Số dư cuối kỳ", (account) => account.closing, "bg-indigo-50/90")}
             </tbody>
           </table>
         </div>
       )}
 
       {data.totalRows > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-xs text-slate-600">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200/70 bg-slate-50/70 px-5 py-3 text-[12px] text-slate-600">
           <span>
             {data.totalRows.toLocaleString("vi-VN")} chứng từ · trang {data.page}/{totalPages}
           </span>
@@ -313,7 +314,7 @@ export default function LedgerTable({ data, onPageChange }: Props) {
                 type="button"
                 disabled={data.page <= 1}
                 onClick={() => onPageChange(data.page - 1)}
-                className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 disabled:opacity-40"
+                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 font-semibold shadow-sm transition hover:bg-slate-50 disabled:opacity-40"
               >
                 <ChevronLeft size={14} /> Trước
               </button>
@@ -321,7 +322,7 @@ export default function LedgerTable({ data, onPageChange }: Props) {
                 type="button"
                 disabled={data.page >= totalPages}
                 onClick={() => onPageChange(data.page + 1)}
-                className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 disabled:opacity-40"
+                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 font-semibold shadow-sm transition hover:bg-slate-50 disabled:opacity-40"
               >
                 Sau <ChevronRight size={14} />
               </button>
@@ -329,6 +330,6 @@ export default function LedgerTable({ data, onPageChange }: Props) {
           )}
         </div>
       )}
-    </div>
+    </CashflowTableShell>
   );
 }

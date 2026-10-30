@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "react-hot-toast";
-import { Pencil, X } from "lucide-react";
+import { Landmark, Pencil, X } from "lucide-react";
 import {
   cashflowReportApi,
   type CashAccountGroup,
@@ -8,6 +8,11 @@ import {
 } from "@/service/cashflowReport";
 import { getApiErrorMessage } from "@/utils/apiError";
 import { formatDate, formatMoney } from "./cashflowFormat";
+import CashflowTableShell, {
+  appleCell,
+  appleHeaderCell,
+  appleTableHead,
+} from "./CashflowTableShell";
 
 type Props = {
   groups: CashAccountGroup[];
@@ -26,22 +31,24 @@ export default function AccountsTable({ groups, canManage, onSaved }: Props) {
   const [editing, setEditing] = useState<CashAccountRow | null>(null);
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
-      <div className="px-4 pt-4 pb-2">
-        <h2 className="text-base font-bold text-slate-900">Danh mục các tài khoản</h2>
-        <p className="text-xs text-slate-500">
+    <CashflowTableShell
+      title="Danh mục tài khoản"
+      icon={<Landmark size={21} />}
+      description={
+        <>
           Số dư đầu kỳ = số dư gốc đã đối chiếu ± phát sinh từ ngày đối chiếu tới đầu kỳ.
           Tài khoản chưa có số dư gốc hiển thị "Chưa xác minh" (không coi là 0).
-        </p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[1040px] border-collapse text-sm">
-          <thead className="bg-slate-900 text-xs text-white">
+        </>
+      }
+    >
+      <div className="overflow-x-auto overscroll-x-contain">
+        <table className="w-full min-w-[1160px] border-separate border-spacing-0">
+          <thead className={appleTableHead}>
             <tr>
               {[
-                "Mã TK",
+                "Mã tài khoản",
                 "Tên tài khoản",
-                "Nhóm",
+                "Nhóm tài khoản",
                 "Số dư đầu kỳ",
                 "Thu trong kỳ",
                 "Chi trong kỳ",
@@ -49,11 +56,11 @@ export default function AccountsTable({ groups, canManage, onSaved }: Props) {
                 "Số dư gốc (ngày đối chiếu)",
                 "Trạng thái",
               ].map((label) => (
-                <th key={label} className="border border-slate-700 px-2 py-2 font-semibold">
+                <th key={label} className={`${appleHeaderCell} text-center`}>
                   {label}
                 </th>
               ))}
-              {canManage && <th className="border border-slate-700 px-2 py-2" />}
+              {canManage && <th className={`${appleHeaderCell} w-20`} />}
             </tr>
           </thead>
           <tbody>
@@ -78,7 +85,7 @@ export default function AccountsTable({ groups, canManage, onSaved }: Props) {
           }}
         />
       )}
-    </div>
+    </CashflowTableShell>
   );
 }
 
@@ -93,46 +100,46 @@ function GroupRows({
 }) {
   return (
     <>
-      <tr className="bg-slate-100 font-semibold">
-        <td className="border border-slate-200 px-2 py-2">{group.groupCode}</td>
-        <td className="border border-slate-200 px-2 py-2" colSpan={2}>
+      <tr className="bg-gradient-to-r from-blue-50/90 via-indigo-50/60 to-white font-semibold text-slate-900">
+        <td className={`${appleCell} font-mono text-[15px] font-bold text-blue-700`}>{group.groupCode}</td>
+        <td className={`${appleCell} text-[15px]`} colSpan={2}>
           {group.name}
         </td>
-        <td className="border border-slate-200 px-2 py-2 text-right tabular-nums">
+        <td className={`${appleCell} text-right font-semibold tabular-nums text-slate-900`}>
           {moneyCell(group.subtotal.opening)}
         </td>
-        <td className="border border-slate-200 px-2 py-2 text-right tabular-nums text-emerald-800">
+        <td className={`${appleCell} text-right font-semibold tabular-nums text-emerald-700`}>
           {formatMoney(group.subtotal.receipts)}
         </td>
-        <td className="border border-slate-200 px-2 py-2 text-right tabular-nums text-rose-800">
+        <td className={`${appleCell} text-right font-semibold tabular-nums text-rose-700`}>
           {formatMoney(group.subtotal.payments)}
         </td>
-        <td className="border border-slate-200 px-2 py-2 text-right tabular-nums">
+        <td className={`${appleCell} text-right font-bold tabular-nums text-indigo-700`}>
           {moneyCell(group.subtotal.closing)}
         </td>
-        <td className="border border-slate-200 px-2 py-2 text-xs font-normal text-slate-500" colSpan={canManage ? 3 : 2}>
+        <td className={`${appleCell} text-[12px] font-normal text-slate-500`} colSpan={canManage ? 3 : 2}>
           {group.subtotal.unverifiedAccounts.length > 0 &&
             `${group.subtotal.unverifiedAccounts.length} TK chưa có số dư gốc`}
         </td>
       </tr>
       {group.accounts.map((account) => (
-        <tr key={account.code} className="hover:bg-slate-50">
-          <td className="border border-slate-200 px-2 py-2 font-medium">{account.code}</td>
-          <td className="border border-slate-200 px-2 py-2">{account.name}</td>
-          <td className="border border-slate-200 px-2 py-2 text-center">{account.groupCode}</td>
-          <td className="border border-slate-200 px-2 py-2 text-right tabular-nums">
+        <tr key={account.code} className="group bg-white transition-colors hover:bg-blue-50/45">
+          <td className={`${appleCell} font-mono font-semibold text-slate-950`}>{account.code}</td>
+          <td className={`${appleCell} font-medium text-slate-900`}>{account.name}</td>
+          <td className={`${appleCell} text-center font-mono text-slate-500`}>{account.groupCode}</td>
+          <td className={`${appleCell} text-right tabular-nums`}>
             {moneyCell(account.opening)}
           </td>
-          <td className="border border-slate-200 px-2 py-2 text-right tabular-nums text-emerald-700">
+          <td className={`${appleCell} text-right font-medium tabular-nums text-emerald-700`}>
             {formatMoney(account.receipts)}
           </td>
-          <td className="border border-slate-200 px-2 py-2 text-right tabular-nums text-rose-700">
+          <td className={`${appleCell} text-right font-medium tabular-nums text-rose-700`}>
             {formatMoney(account.payments)}
           </td>
-          <td className="border border-slate-200 px-2 py-2 text-right tabular-nums font-semibold">
+          <td className={`${appleCell} text-right font-semibold tabular-nums text-slate-950`}>
             {moneyCell(account.closing)}
           </td>
-          <td className="border border-slate-200 px-2 py-2 text-right tabular-nums text-xs">
+          <td className={`${appleCell} text-right text-[12px] tabular-nums`}>
             {account.anchorBalance === null ? (
               <span className="italic text-amber-700">Chưa nhập</span>
             ) : (
@@ -142,23 +149,23 @@ function GroupRows({
               </>
             )}
           </td>
-          <td className="border border-slate-200 px-2 py-2 text-center">
+          <td className={`${appleCell} text-center`}>
             <span
-              className={`px-2 py-[2px] rounded-full text-xs font-medium ${
+              className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${
                 account.isActive
-                  ? "bg-emerald-100 text-emerald-700"
-                  : "bg-slate-200 text-slate-600"
+                  ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+                  : "bg-slate-100 text-slate-600 ring-1 ring-slate-200"
               }`}
             >
               {account.isActive ? "Đang dùng" : "Ngừng dùng"}
             </span>
           </td>
           {canManage && (
-            <td className="border border-slate-200 px-2 py-2 text-center">
+            <td className={`${appleCell} text-center`}>
               <button
                 type="button"
                 onClick={() => onEdit(account)}
-                className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs text-indigo-700 hover:bg-indigo-50"
+                className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-blue-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50"
               >
                 <Pencil size={12} /> Sửa
               </button>
@@ -218,8 +225,8 @@ function OpeningBalanceModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-[28px] border border-white/80 bg-white/95 p-6 shadow-[0_30px_90px_-30px_rgba(15,23,42,0.55)] ring-1 ring-slate-200/70 backdrop-blur-2xl">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <h3 className="text-base font-bold text-slate-900">
@@ -229,7 +236,7 @@ function OpeningBalanceModal({
               Số dư gốc là số dư đã đối chiếu (sổ quỹ / sao kê) tại ĐẦU ngày đối chiếu.
             </p>
           </div>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-700">
+          <button type="button" onClick={onClose} className="rounded-full bg-slate-100 p-2 text-slate-500 transition hover:bg-slate-200 hover:text-slate-800">
             <X size={18} />
           </button>
         </div>
@@ -239,7 +246,7 @@ function OpeningBalanceModal({
           value={balanceText}
           onChange={(e) => setBalanceText(e.target.value)}
           placeholder="Chưa nhập"
-          className="h-10 w-full rounded-lg border px-3 text-right"
+          className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 text-right text-[15px] outline-none transition focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-100"
         />
         <p className={`mb-3 mt-1 text-xs ${balanceValid ? "text-slate-500" : "text-rose-600"}`}>
           {!balanceValid
@@ -253,7 +260,7 @@ function OpeningBalanceModal({
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
-          className="mb-3 h-10 w-full rounded-lg border px-3"
+          className="mb-3 h-11 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 text-[15px] outline-none transition focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-100"
         />
         <label className="mb-4 flex items-center gap-2 text-sm text-slate-700">
           <input
@@ -269,7 +276,7 @@ function OpeningBalanceModal({
               type="button"
               disabled={saving}
               onClick={() => save(true)}
-              className="rounded-lg border border-rose-200 px-3 py-2 text-sm text-rose-700 hover:bg-rose-50"
+              className="rounded-full border border-rose-200 bg-white px-4 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-50"
             >
               Xoá số dư gốc
             </button>
@@ -277,7 +284,7 @@ function OpeningBalanceModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border px-3 py-2 text-sm text-slate-700"
+            className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
           >
             Huỷ
           </button>
@@ -285,7 +292,7 @@ function OpeningBalanceModal({
             type="button"
             disabled={saving}
             onClick={() => save(false)}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            className="rounded-full bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-[0_8px_20px_-10px_rgba(37,99,235,0.9)] transition hover:bg-blue-700 disabled:opacity-50"
           >
             {saving ? "Đang lưu…" : "Lưu"}
           </button>

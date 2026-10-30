@@ -67,7 +67,11 @@ export const sourceHref = (source: {
   type: string;
   schoolExpenseId?: number;
   suggestId?: number;
+  requestId?: number;
 }) => {
+  if (source.type === "FINANCIAL_REQUEST" && source.requestId) {
+    return `#/director/finance/requests/${source.requestId}`;
+  }
   if (source.type === "EXPENSE_REQUEST" && source.suggestId) {
     return `#/director/expense-requests/${source.suggestId}`;
   }

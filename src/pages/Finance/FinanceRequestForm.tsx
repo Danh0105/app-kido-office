@@ -12,6 +12,7 @@ import {
   Send,
   Trash2,
   Wallet,
+  X,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 
@@ -48,6 +49,9 @@ import {
 
 type ItemRow = FinanceItemInput & { key: string; attachmentCount?: number };
 
+const ATTACHMENT_MAX_FILES = 10;
+const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+
 const newRow = (): ItemRow => ({
   key: Math.random().toString(36).slice(2),
   description: "",
@@ -78,13 +82,16 @@ export default function FinanceRequestForm() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const fileInput = useRef<HTMLInputElement>(null);
-  const uploadTarget = useRef<number | null>(null);
+  const uploadTarget = useRef<string | null>(null);
 
   const [loaded, setLoaded] = useState<FinanceDetail | null>(null);
+  const [createdDraftId, setCreatedDraftId] = useState<number | null>(null);
   const [loadError, setLoadError] = useState("");
   const [loading, setLoading] = useState(!!editingId);
   const [saving, setSaving] = useState<"" | "draft" | "submit">("");
-  const [uploadingItem, setUploadingItem] = useState<number | null>(null);
+  const [uploadingItem, setUploadingItem] = useState<string | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<Record<string, File[]>>({});
+  const requestId = editingId ?? createdDraftId;
 
   const [type, setType] = useState<FinanceRequestType | null>(
     (params.get("type") as FinanceRequestType) || null,
@@ -181,19 +188,19 @@ export default function FinanceRequestForm() {
   });
 
   const advancesQuery = useQuery({
-    queryKey: ["finance-available-advances", companyId, editingId],
-    queryFn: () => financeApi.availableAdvances(Number(companyId), editingId ?? undefined),
+    queryKey: ["finance-available-advances", companyId, requestId],
+    queryFn: () => financeApi.availableAdvances(Number(companyId), requestId ?? undefined),
     enabled: !!companyId && (type === "SETTLEMENT" || type === "EXPENSE_PAYMENT"),
   });
 
   const salaryCheck = useQuery({
-    queryKey: ["finance-salary-check", companyId, form.salaryYear, form.salaryMonth, editingId],
+    queryKey: ["finance-salary-check", companyId, form.salaryYear, form.salaryMonth, requestId],
     queryFn: () =>
       financeApi.salaryAdvanceCheck({
         companyId: Number(companyId),
         year: Number(form.salaryYear),
         month: Number(form.salaryMonth),
-        excludeRequestId: editingId ?? undefined,
+        excludeRequestId: requestId ?? undefined,
       }),
     enabled: type === "SALARY_ADVANCE" && !!companyId && !!form.salaryYear && !!form.salaryMonth,
   });
@@ -201,7 +208,7 @@ export default function FinanceRequestForm() {
   // Mở form hoàn ứng từ một phiếu tạm ứng: chọn sẵn phiếu đó.
   useEffect(() => {
     const advanceId = Number(params.get("advanceId"));
-    if (!advanceId || editingId || !advancesQuery.data) return;
+    if (!advanceId || requestId || !advancesQuery.data) return;
     const advance = advancesQuery.data.find((a) => a.id === advanceId);
     if (advance && allocations[advanceId] === undefined) {
       setAllocations((prev) => ({ ...prev, [advanceId]: advance.available }));
@@ -233,7 +240,9 @@ export default function FinanceRequestForm() {
   const updateItem = (key: string, patch: Partial<ItemRow>) =>
     setItems((prev) => prev.map((item) => (item.key === key ? { ...item, ...patch } : item)));
 
-  const payload = (): FinanceRequestInput => {
+  const rowsToSave = () => items.filter((item) => item.description.trim() || item.unitPrice);
+
+  const payload = (rows: ItemRow[]): FinanceRequestInput => {
     const body: FinanceRequestInput = {
       ...form,
       companyId: Number(companyId),
@@ -242,9 +251,7 @@ export default function FinanceRequestForm() {
     if (type === "SALARY_ADVANCE") {
       delete body.items;
     } else {
-      body.items = items
-        .filter((item) => item.description.trim() || item.unitPrice)
-        .map(({ key: _key, attachmentCount: _count, ...item }) => ({
+      body.items = rows.map(({ key: _key, attachmentCount: _count, ...item }) => ({
           ...item,
           description: item.description.trim(),
           quantity: item.quantity || "0",
@@ -258,7 +265,7 @@ export default function FinanceRequestForm() {
         .filter(([, amount]) => amount > 0)
         .map(([advanceId, amount]) => ({ advanceId: Number(advanceId), amount }));
     }
-    if (!editingId) body.type = type!;
+    if (!requestId) body.type = type!;
     return body;
   };
 
@@ -267,9 +274,11 @@ export default function FinanceRequestForm() {
     if (!form.title?.trim()) return "Nhập nội dung đề nghị";
     if (type === "SALARY_ADVANCE" && !(Number(form.requestedAmount) > 0)) return "Nhập số tiền đề nghị ứng";
     if (type !== "SALARY_ADVANCE") {
-      const rows = items.filter((item) => item.description.trim() || item.unitPrice);
+      const rows = rowsToSave();
       if (!rows.length) return "Thêm ít nhất một khoản tiền";
       if (rows.some((item) => !item.description.trim())) return "Mỗi dòng phải có nội dung";
+      if (items.some((item) => pendingFiles[item.key]?.length && !item.description.trim()))
+        return "Dòng có tệp đính kèm phải có nội dung";
     }
     if (type === "SETTLEMENT" && offset <= 0) return "Chọn phiếu tạm ứng cần đối trừ";
     return "";
@@ -282,18 +291,67 @@ export default function FinanceRequestForm() {
       return;
     }
     setSaving(submit ? "submit" : "draft");
+    const rows = rowsToSave();
+    let persisted: FinanceDetail | null = null;
+    let phase: "save" | "upload" | "submit" = "save";
     try {
-      const saved = editingId
-        ? await financeApi.update(editingId, payload())
-        : await financeApi.create(payload());
+      let saved = requestId
+        ? await financeApi.update(requestId, payload(rows))
+        : await financeApi.create(payload(rows));
+      persisted = saved;
+      if (!requestId) setCreatedDraftId(saved.id);
+      setLoaded(saved);
+      setForm((prev) => ({ ...prev, version: saved.version }));
+
+      // Gắn id backend cho các dòng nhưng giữ nguyên key tạm để hàng đợi tệp
+      // không bị mất nếu một lần tải lên gặp lỗi.
+      setItems((prev) =>
+        prev.map((item) => {
+          const index = rows.findIndex((row) => row.key === item.key);
+          const savedItem = index >= 0 ? saved.items[index] : undefined;
+          return savedItem
+            ? { ...item, id: savedItem.id, attachmentCount: savedItem.attachmentCount }
+            : item;
+        }),
+      );
+
+      phase = "upload";
+      for (const [index, row] of rows.entries()) {
+        const files = pendingFiles[row.key] ?? [];
+        if (!files.length) continue;
+        const target = (row.id && saved.items.find((item) => item.id === row.id)) || saved.items[index];
+        if (!target) throw new Error(`Không xác định được dòng ${index + 1} để đính kèm tệp`);
+        setUploadingItem(row.key);
+        saved = await financeApi.uploadAttachments(saved.id, files, {
+          kind: "INVOICE",
+          itemId: target.id,
+        });
+        persisted = saved;
+        const uploaded = saved.items.find((item) => item.id === target.id);
+        setItems((prev) =>
+          prev.map((item) =>
+            item.key === row.key
+              ? { ...item, id: target.id, attachmentCount: uploaded?.attachmentCount ?? item.attachmentCount }
+              : item,
+          ),
+        );
+        setPendingFiles((prev) => {
+          const next = { ...prev };
+          delete next[row.key];
+          return next;
+        });
+      }
+      setUploadingItem(null);
+
       if (submit) {
+        phase = "submit";
         await financeApi.submit(saved.id);
         toast.success(`Đã gửi duyệt ${saved.code}`);
         await queryClient.invalidateQueries({ queryKey: ["finance-list"] });
         navigate(`${base}/requests/${saved.id}`, { replace: true });
         return;
       }
-      toast.success(editingId ? "Đã lưu thay đổi" : `Đã lưu nháp ${saved.code} — có thể đính kèm hoá đơn cho từng dòng`);
+      toast.success(requestId ? "Đã lưu thay đổi và tệp đính kèm" : `Đã lưu nháp ${saved.code} cùng tệp đính kèm`);
       await queryClient.invalidateQueries({ queryKey: ["finance-list"] });
       if (!editingId) {
         navigate(`${base}/requests/${saved.id}/edit`, { replace: true });
@@ -319,35 +377,96 @@ export default function FinanceRequestForm() {
         );
       }
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Không lưu được đề nghị."));
+      if (persisted && phase === "upload") {
+        toast.error(getApiErrorMessage(error, `Đã lưu nháp ${persisted.code}, nhưng chưa tải hết tệp. Bấm lưu để thử lại.`));
+      } else if (persisted && phase === "submit") {
+        toast.error(getApiErrorMessage(error, `Đã lưu ${persisted.code} và tệp, nhưng chưa gửi duyệt. Bấm gửi duyệt để thử lại.`));
+      } else {
+        toast.error(getApiErrorMessage(error, "Không lưu được đề nghị."));
+      }
     } finally {
+      setUploadingItem(null);
       setSaving("");
     }
   };
 
-  const pickFiles = (itemId: number) => {
-    uploadTarget.current = itemId;
+  const pickFiles = (itemKey: string) => {
+    uploadTarget.current = itemKey;
     fileInput.current?.click();
   };
 
   const uploadForItem = async (files: FileList | null) => {
-    const itemId = uploadTarget.current;
-    if (!files?.length || !editingId || !itemId) return;
-    setUploadingItem(itemId);
+    const itemKey = uploadTarget.current;
+    const item = items.find((row) => row.key === itemKey);
+    if (!files?.length || !itemKey || !item) return;
+    const selected = Array.from(files);
+    const tooLarge = selected.find((file) => file.size > ATTACHMENT_MAX_BYTES);
+    if (tooLarge) {
+      toast.error(`Tệp "${tooLarge.name}" vượt quá 10MB`);
+      if (fileInput.current) fileInput.current.value = "";
+      return;
+    }
+
+    // Dòng đã tồn tại tiếp tục tải ngay. Dòng mới giữ tệp cục bộ và tự tải
+    // sau khi thao tác Lưu/Gửi duyệt tạo được itemId.
+    if (!requestId || !item.id) {
+      const current = pendingFiles[itemKey] ?? [];
+      const unique = [...current];
+      for (const file of selected) {
+        if (!unique.some((existing) =>
+          existing.name === file.name && existing.size === file.size && existing.lastModified === file.lastModified
+        )) unique.push(file);
+      }
+      if (unique.length > ATTACHMENT_MAX_FILES) {
+        toast.error(`Mỗi dòng chọn tối đa ${ATTACHMENT_MAX_FILES} tệp trước khi lưu`);
+      } else {
+        setPendingFiles((prev) => ({ ...prev, [itemKey]: unique }));
+        toast.success(`Đã chọn ${unique.length} tệp cho dòng — tệp sẽ tải lên cùng đề nghị`);
+      }
+      uploadTarget.current = null;
+      if (fileInput.current) fileInput.current.value = "";
+      return;
+    }
+
+    if (selected.length > ATTACHMENT_MAX_FILES) {
+      toast.error(`Mỗi lần tải lên tối đa ${ATTACHMENT_MAX_FILES} tệp`);
+      if (fileInput.current) fileInput.current.value = "";
+      return;
+    }
+    setUploadingItem(itemKey);
     try {
-      const detail = await financeApi.uploadAttachments(editingId, Array.from(files), {
+      const detail = await financeApi.uploadAttachments(requestId, selected, {
         kind: "INVOICE",
-        itemId,
+        itemId: item.id,
       });
-      const count = detail.items.find((item) => item.id === itemId)?.attachmentCount ?? 0;
-      setItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, attachmentCount: count } : item)));
+      const count = detail.items.find((row) => row.id === item.id)?.attachmentCount ?? 0;
+      setItems((prev) => prev.map((row) => (row.key === itemKey ? { ...row, attachmentCount: count } : row)));
       toast.success("Đã đính kèm chứng từ cho dòng");
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Không tải lên được tệp."));
     } finally {
       setUploadingItem(null);
+      uploadTarget.current = null;
       if (fileInput.current) fileInput.current.value = "";
     }
+  };
+
+  const removePendingFile = (itemKey: string, fileIndex: number) =>
+    setPendingFiles((prev) => {
+      const files = (prev[itemKey] ?? []).filter((_, index) => index !== fileIndex);
+      const next = { ...prev };
+      if (files.length) next[itemKey] = files;
+      else delete next[itemKey];
+      return next;
+    });
+
+  const removeItem = (itemKey: string) => {
+    setItems((prev) => prev.filter((row) => row.key !== itemKey));
+    setPendingFiles((prev) => {
+      const next = { ...prev };
+      delete next[itemKey];
+      return next;
+    });
   };
 
   if (loading) return <LoadingState text="Đang tải phiếu…" />;
@@ -401,9 +520,9 @@ export default function FinanceRequestForm() {
             <ArrowLeft size={15} /> Quay lại
           </button>
           <h2 className="text-lg font-bold text-slate-900">
-            {editingId ? `Sửa ${loaded?.code ?? ""}` : TYPE_TITLES[type]}
+            {requestId ? `Sửa ${loaded?.code ?? ""}` : TYPE_TITLES[type]}
           </h2>
-          {!editingId && (
+          {!requestId && (
             <button type="button" onClick={() => setType(null)} className="text-xs font-semibold text-blue-700 hover:underline">
               Đổi loại đề nghị
             </button>
@@ -687,6 +806,8 @@ export default function FinanceRequestForm() {
               const category = categories.find((c) => c.id === item.categoryId);
               const amount = lineAmounts[index];
               const overLimit = !!category?.limitAmount && amount > category.limitAmount;
+              const queuedFiles = pendingFiles[item.key] ?? [];
+              const attachmentCount = (item.attachmentCount ?? 0) + queuedFiles.length;
               return (
                 <div key={item.key} className="rounded-xl border border-slate-200 p-3">
                   <div className="grid gap-2 md:grid-cols-12">
@@ -786,32 +907,56 @@ export default function FinanceRequestForm() {
                       <span className="min-w-[110px] text-right font-bold tabular-nums text-slate-900">{formatMoney(amount)} đ</span>
                       <button
                         type="button"
-                        title={item.id ? "Đính kèm hoá đơn cho dòng này" : "Lưu nháp trước để đính kèm"}
-                        disabled={!item.id || !editingId || uploadingItem === item.id}
-                        onClick={() => item.id && pickFiles(item.id)}
+                        title="Đính kèm hoá đơn, hình ảnh cho dòng này"
+                        disabled={!!saving || uploadingItem === item.key}
+                        onClick={() => pickFiles(item.key)}
                         className="inline-flex h-9 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-slate-500 hover:bg-slate-100 disabled:opacity-40"
                       >
-                        {uploadingItem === item.id ? <Loader2 size={15} className="animate-spin" /> : <Paperclip size={15} />}
-                        {item.attachmentCount ? item.attachmentCount : ""}
+                        {uploadingItem === item.key ? <Loader2 size={15} className="animate-spin" /> : <Paperclip size={15} />}
+                        {attachmentCount || ""}
                       </button>
                       <button
                         type="button"
                         aria-label="Xoá dòng"
                         disabled={items.length === 1}
-                        onClick={() => setItems((prev) => prev.filter((row) => row.key !== item.key))}
+                        onClick={() => removeItem(item.key)}
                         className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-rose-500 hover:bg-rose-50 disabled:opacity-30"
                       >
                         <Trash2 size={15} />
                       </button>
                     </div>
                   </div>
+                  {queuedFiles.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5 border-t border-dashed border-slate-200 pt-2">
+                      {queuedFiles.map((file, fileIndex) => (
+                        <span
+                          key={`${file.name}-${file.size}-${file.lastModified}`}
+                          className="inline-flex max-w-full items-center gap-1 rounded-lg bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-700"
+                          title={file.name}
+                        >
+                          <Paperclip size={11} className="shrink-0" />
+                          <span className="max-w-[220px] truncate">{file.name}</span>
+                          <button
+                            type="button"
+                            aria-label={`Bỏ tệp ${file.name}`}
+                            disabled={!!saving}
+                            onClick={() => removePendingFile(item.key, fileIndex)}
+                            className="rounded p-0.5 hover:bg-blue-100 disabled:opacity-40"
+                          >
+                            <X size={11} />
+                          </button>
+                        </span>
+                      ))}
+                      <span className="self-center text-[11px] text-slate-400">Sẽ tải lên cùng đề nghị</span>
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
-          {!editingId && (
-            <p className="mt-3 text-xs text-slate-400">Lưu nháp để đính kèm hoá đơn, hình ảnh cho từng dòng.</p>
-          )}
+          <p className="mt-3 text-xs text-slate-400">
+            Có thể chọn hoá đơn, hình ảnh ngay trên từng dòng; tệp của dòng mới sẽ tự tải lên khi lưu hoặc gửi duyệt.
+          </p>
         </Card>
       )}
 
@@ -893,10 +1038,10 @@ export default function FinanceRequestForm() {
             <p className="text-xs italic text-slate-500">Bằng chữ: {vndToWords(total)}</p>
           </div>
           <div className="flex gap-2">
-            <button type="button" className={secondaryButton} disabled={!!saving} onClick={() => void save(false)}>
+            <button type="button" className={secondaryButton} disabled={!!saving || !!uploadingItem} onClick={() => void save(false)}>
               {saving === "draft" ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Lưu nháp
             </button>
-            <button type="button" className={primaryButton} disabled={!!saving} onClick={() => void save(true)}>
+            <button type="button" className={primaryButton} disabled={!!saving || !!uploadingItem} onClick={() => void save(true)}>
               {saving === "submit" ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} Lưu & gửi duyệt
             </button>
           </div>

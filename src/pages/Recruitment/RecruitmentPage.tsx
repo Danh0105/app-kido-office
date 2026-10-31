@@ -34,12 +34,11 @@ import {
   type RecruitmentJob,
   type RecruitmentOverview,
   type RecruitmentSummary,
-  type UpdateRecruitmentJobPayload,
 } from "@/service/recruitment";
-import { departmentApi } from "@/service/department";
 import ApprovalQueue from "./ApprovalQueue";
 import CandidatesPanel from "./CandidatesPanel";
 import ConversationsPanel from "./ConversationsPanel";
+import JobFormModal from "./JobFormModal";
 import OperationsPanel from "./OperationsPanel";
 import {
   AiUsagePanel,
@@ -51,12 +50,10 @@ import {
   ModalShell,
   STATUS_LABEL,
   StatusBadge,
-  errorCode,
   errorMessage,
   formatDate,
   formatNumber,
   inputClass,
-  invalidRing,
 } from "./shared";
 
 import { getEmployeeName, hasRole } from "@/utils/auth";
@@ -105,6 +102,9 @@ const EMPLOYMENT_LABEL: Record<string, string> = {
   CONTRACT: "Hợp đồng",
   INTERNSHIP: "Thực tập",
   COLLABORATOR: "Cộng tác viên",
+  SEASONAL: "Thời vụ",
+  REMOTE: "Làm việc từ xa",
+  HYBRID: "Hybrid",
 };
 
 /**
@@ -571,9 +571,9 @@ export default function RecruitmentPage() {
         />
       )}
       {showCreateJob && (
-        <CreateJobModal
+        <JobFormModal
           onClose={() => setShowCreateJob(false)}
-          onCreated={async () => {
+          onSaved={async () => {
             setShowCreateJob(false);
             await load(true);
           }}
@@ -582,7 +582,6 @@ export default function RecruitmentPage() {
     </div>
   );
 }
-
 function MetricCard({
   icon: Icon,
   label,
@@ -946,121 +945,6 @@ function JobsGrid({
   );
 }
 
-type JobForm = {
-  code: string;
-  title: string;
-  departmentId: string;
-  location: string;
-  employmentType: string;
-  numberOfPositions: string;
-  salaryMin: string;
-  salaryMax: string;
-  description: string;
-  responsibilities: string;
-  requirements: string;
-};
-
-type JobFormErrors = Partial<Record<keyof JobForm, string>>;
-
-const JOB_CODE_PATTERN = /^[A-Z0-9][A-Z0-9_-]{1,49}$/;
-const MONEY_PATTERN = /^\d+(\.\d{1,2})?$/;
-const MAX_MONEY = 1_000_000_000_000;
-const MAX_LONG_TEXT = 20_000;
-
-const jobDepartmentId = (job: RecruitmentJob) =>
-  job.departmentId ?? job.department?.id ?? null;
-
-const toJobForm = (job: RecruitmentJob): JobForm => {
-  const departmentId = jobDepartmentId(job);
-  return {
-    code: job.code,
-    title: job.title,
-    departmentId: departmentId == null ? "" : String(departmentId),
-    location: job.location ?? "",
-    employmentType: job.employmentType,
-    numberOfPositions: String(job.numberOfPositions),
-    salaryMin: job.salaryMin == null ? "" : String(job.salaryMin),
-    salaryMax: job.salaryMax == null ? "" : String(job.salaryMax),
-    description: job.description ?? "",
-    responsibilities: job.responsibilities ?? "",
-    requirements: job.requirements ?? "",
-  };
-};
-
-/** Cùng ràng buộc với CreateJobDto/UpdateJobDto để báo lỗi trước khi gửi. */
-function validateJobForm(form: JobForm): JobFormErrors {
-  const errors: JobFormErrors = {};
-  if (!JOB_CODE_PATTERN.test(form.code.trim().toUpperCase()))
-    errors.code = 'Chỉ gồm chữ, số, "-" hoặc "_" (2–50 ký tự)';
-  if (!form.title.trim()) errors.title = "Vui lòng nhập tên vị trí";
-  else if (form.title.trim().length > 255) errors.title = "Tối đa 255 ký tự";
-  if (form.location.trim().length > 255) errors.location = "Tối đa 255 ký tự";
-  const positions = Number(form.numberOfPositions);
-  if (!Number.isInteger(positions) || positions < 1 || positions > 1000)
-    errors.numberOfPositions = "Số nguyên từ 1 đến 1000";
-  const money = (key: "salaryMin" | "salaryMax") => {
-    const value = form[key].trim();
-    if (!value) return null;
-    if (!MONEY_PATTERN.test(value) || Number(value) > MAX_MONEY) {
-      errors[key] = "Số tiền không hợp lệ";
-      return null;
-    }
-    return Number(value);
-  };
-  const salaryMin = money("salaryMin");
-  const salaryMax = money("salaryMax");
-  if (salaryMin != null && salaryMax != null && salaryMin > salaryMax)
-    errors.salaryMax = "Không được thấp hơn lương tối thiểu";
-  for (const key of [
-    "description",
-    "responsibilities",
-    "requirements",
-  ] as const)
-    if (form[key].trim().length > MAX_LONG_TEXT)
-      errors[key] = "Tối đa 20.000 ký tự";
-  return errors;
-}
-
-/** Chỉ gửi field đã đổi; chuỗi rỗng → `null` để xoá field tuỳ chọn. */
-function jobChanges(
-  job: RecruitmentJob,
-  form: JobForm
-): UpdateRecruitmentJobPayload {
-  const text = (value: string) => value.trim() || null;
-  const money = (value: string) => (value.trim() ? Number(value) : null);
-  const next: Required<UpdateRecruitmentJobPayload> = {
-    code: form.code.trim().toUpperCase(),
-    title: form.title.trim(),
-    departmentId: form.departmentId ? Number(form.departmentId) : null,
-    location: text(form.location),
-    employmentType: form.employmentType,
-    numberOfPositions: Number(form.numberOfPositions),
-    salaryMin: money(form.salaryMin),
-    salaryMax: money(form.salaryMax),
-    description: text(form.description),
-    responsibilities: text(form.responsibilities),
-    requirements: text(form.requirements),
-  };
-  const current: Required<UpdateRecruitmentJobPayload> = {
-    code: job.code,
-    title: job.title,
-    departmentId: jobDepartmentId(job),
-    location: job.location ?? null,
-    employmentType: job.employmentType,
-    numberOfPositions: job.numberOfPositions,
-    salaryMin: job.salaryMin ?? null,
-    salaryMax: job.salaryMax ?? null,
-    description: job.description ?? null,
-    responsibilities: job.responsibilities ?? null,
-    requirements: job.requirements ?? null,
-  };
-  return Object.fromEntries(
-    Object.entries(next).filter(
-      ([key, value]) => value !== current[key as keyof typeof current]
-    )
-  ) as UpdateRecruitmentJobPayload;
-}
-
 const formatSalaryRange = (job: RecruitmentJob) => {
   const money = (value: number) =>
     new Intl.NumberFormat("vi-VN", {
@@ -1073,6 +957,42 @@ const formatSalaryRange = (job: RecruitmentJob) => {
   if (job.salaryMin == null) return `Đến ${money(job.salaryMax)}`;
   return `${money(job.salaryMin)} – ${money(job.salaryMax)}`;
 };
+
+const safeJobHtml = (value: string) =>
+  value
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(
+      /<(script|style|iframe|object|embed|svg|math)[^>]*>[\s\S]*?<\/\1\s*>/gi,
+      ""
+    )
+    .replace(/<\/?([a-z0-9]+)(?:\s[^>]*)?>/gi, (tag, rawName) => {
+      const name = String(rawName).toLowerCase();
+      const allowed = [
+        "p",
+        "br",
+        "strong",
+        "b",
+        "em",
+        "i",
+        "u",
+        "ul",
+        "ol",
+        "li",
+        "blockquote",
+        "h2",
+        "h3",
+        "div",
+      ];
+      if (!allowed.includes(name)) return "";
+      if (tag.startsWith("</")) return `</${name}>`;
+      if (name === "br") return "<br>";
+      const align = tag.match(
+        /text-align\s*:\s*(left|center|right|justify)/i
+      )?.[1];
+      return align && ["p", "div"].includes(name)
+        ? `<${name} style="text-align:${align.toLowerCase()}">`
+        : `<${name}>`;
+    });
 
 function JobDrawer({
   initial,
@@ -1088,19 +1008,11 @@ function JobDrawer({
   const [job, setJob] = useState(initial);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState(() => toJobForm(initial));
-  const [errors, setErrors] = useState<JobFormErrors>({});
-  const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
-  const [departments, setDepartments] = useState<
-    { id: number; name: string }[] | null
-  >(null);
   const panelRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const titleId = `job-drawer-title-${initial.id}`;
-  const formId = `job-drawer-form-${initial.id}`;
-  const busy = saving || publishing;
-  const dirty = editing && Object.keys(jobChanges(job, form)).length > 0;
+  const busy = publishing;
 
   // Danh sách có thể cũ — luôn lấy bản mới nhất từ API khi mở.
   useEffect(() => {
@@ -1124,9 +1036,8 @@ function JobDrawer({
 
   const requestClose = useCallback(() => {
     if (busy) return;
-    if (dirty && !window.confirm("Bỏ các thay đổi chưa lưu?")) return;
     onClose();
-  }, [busy, dirty, onClose]);
+  }, [busy, onClose]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1153,74 +1064,7 @@ function JobDrawer({
     }
   };
 
-  const startEdit = () => {
-    setForm(toJobForm(job));
-    setErrors({});
-    setEditing(true);
-    if (!departments)
-      departmentApi
-        .findAll()
-        .then((list: { id: number; name: string }[]) =>
-          setDepartments(list.map(({ id, name }) => ({ id, name })))
-        )
-        .catch(() => {
-          setDepartments([]);
-          toast.error("Không tải được danh sách phòng ban");
-        });
-  };
-
-  const cancelEdit = () => {
-    if (dirty && !window.confirm("Bỏ các thay đổi chưa lưu?")) return;
-    setEditing(false);
-    setErrors({});
-  };
-
-  const update =
-    (key: keyof JobForm) =>
-    (
-      event: React.ChangeEvent<
-        HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-      >
-    ) => {
-      const value = event.target.value;
-      setForm((current) => ({ ...current, [key]: value }));
-      setErrors((current) => ({ ...current, [key]: undefined }));
-    };
-
-  const save = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const found = validateJobForm(form);
-    setErrors(found);
-    if (Object.values(found).some(Boolean)) {
-      toast.error("Vui lòng kiểm tra lại các trường được đánh dấu");
-      return;
-    }
-    const changes = jobChanges(job, form);
-    if (!Object.keys(changes).length) {
-      toast("Không có thay đổi nào để lưu");
-      setEditing(false);
-      return;
-    }
-    setSaving(true);
-    try {
-      setJob(await recruitmentApi.updateJob(job.id, changes));
-      setEditing(false);
-      toast.success("Đã lưu vị trí tuyển dụng");
-      onChanged();
-    } catch (error) {
-      const code = errorCode(error);
-      if (code === "JOB_CODE_EXISTS") setErrors({ code: errorMessage(error) });
-      if (code === "INVALID_SALARY_RANGE")
-        setErrors({ salaryMax: errorMessage(error) });
-      if (code === "JOB_CLOSED") {
-        setEditing(false);
-        recruitmentApi.job(job.id).then(setJob, () => undefined);
-      }
-      toast.error(errorMessage(error));
-    } finally {
-      setSaving(false);
-    }
-  };
+  const startEdit = () => setEditing(true);
 
   const publish = async () => {
     const reopen = job.status === "PAUSED";
@@ -1246,15 +1090,6 @@ function JobDrawer({
     }
   };
 
-  const departmentOptions = [...(departments ?? [])];
-  if (
-    form.departmentId &&
-    !departmentOptions.some((item) => String(item.id) === form.departmentId)
-  )
-    departmentOptions.unshift({
-      id: Number(form.departmentId),
-      name: job.department?.name || `Phòng ban #${form.departmentId}`,
-    });
   const criteria = job.screeningCriteria ?? {};
   const criteriaRows = [
     criteria.minimumExperienceMonths != null &&
@@ -1268,24 +1103,6 @@ function JobDrawer({
     criteria.maxStartDelayDays != null &&
       `Bắt đầu chậm nhất sau ${criteria.maxStartDelayDays} ngày`,
   ].filter(Boolean) as string[];
-  const fieldProps = (key: keyof JobForm) => ({
-    value: form[key],
-    onChange: update(key),
-    "aria-invalid": Boolean(errors[key]),
-    "aria-describedby": errors[key] ? `${formId}-${key}-error` : undefined,
-  });
-  const fieldError = (key: keyof JobForm) =>
-    errors[key] ? (
-      <span
-        id={`${formId}-${key}-error`}
-        className="mt-1 block text-[10px] font-semibold text-rose-600"
-      >
-        {errors[key]}
-      </span>
-    ) : null;
-  const textareaClass =
-    "min-h-24 w-full rounded-xl border border-slate-200 bg-white p-3 text-xs leading-5 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100";
-
   return (
     <>
       <button
@@ -1337,133 +1154,6 @@ function JobDrawer({
         </header>
 
         <div className="flex-1 overflow-y-auto">
-          {editing ? (
-            <form id={formId} noValidate onSubmit={(event) => void save(event)}>
-              <fieldset
-                disabled={saving}
-                className="grid gap-4 p-6 sm:grid-cols-2"
-              >
-                <div>
-                  <Field label="Mã vị trí *">
-                    <input
-                      {...fieldProps("code")}
-                      className={`${inputClass} uppercase${invalidRing}`}
-                    />
-                  </Field>
-                  {fieldError("code")}
-                </div>
-                <div>
-                  <Field label="Tên vị trí *">
-                    <input
-                      {...fieldProps("title")}
-                      className={inputClass + invalidRing}
-                    />
-                  </Field>
-                  {fieldError("title")}
-                </div>
-                <Field label="Phòng ban">
-                  <select
-                    {...fieldProps("departmentId")}
-                    className={inputClass}
-                  >
-                    <option value="">
-                      {departments ? "Không thuộc phòng ban" : "Đang tải…"}
-                    </option>
-                    {departmentOptions.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <div>
-                  <Field label="Địa điểm">
-                    <input
-                      {...fieldProps("location")}
-                      className={inputClass + invalidRing}
-                    />
-                  </Field>
-                  {fieldError("location")}
-                </div>
-                <Field label="Hình thức">
-                  <select
-                    {...fieldProps("employmentType")}
-                    className={inputClass}
-                  >
-                    {Object.entries(EMPLOYMENT_LABEL).map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <div>
-                  <Field label="Số lượng *">
-                    <input
-                      {...fieldProps("numberOfPositions")}
-                      type="number"
-                      min="1"
-                      max="1000"
-                      step="1"
-                      className={inputClass + invalidRing}
-                    />
-                  </Field>
-                  {fieldError("numberOfPositions")}
-                </div>
-                <div>
-                  <Field label={`Lương tối thiểu (${job.currency || "VND"})`}>
-                    <input
-                      {...fieldProps("salaryMin")}
-                      type="number"
-                      min="0"
-                      inputMode="numeric"
-                      className={inputClass + invalidRing}
-                    />
-                  </Field>
-                  {fieldError("salaryMin")}
-                </div>
-                <div>
-                  <Field label={`Lương tối đa (${job.currency || "VND"})`}>
-                    <input
-                      {...fieldProps("salaryMax")}
-                      type="number"
-                      min="0"
-                      inputMode="numeric"
-                      className={inputClass + invalidRing}
-                    />
-                  </Field>
-                  {fieldError("salaryMax")}
-                </div>
-                <div className="sm:col-span-2">
-                  <Field label="Mô tả công việc">
-                    <textarea
-                      {...fieldProps("description")}
-                      className={textareaClass + invalidRing}
-                    />
-                  </Field>
-                  {fieldError("description")}
-                </div>
-                <div className="sm:col-span-2">
-                  <Field label="Trách nhiệm">
-                    <textarea
-                      {...fieldProps("responsibilities")}
-                      className={textareaClass + invalidRing}
-                    />
-                  </Field>
-                  {fieldError("responsibilities")}
-                </div>
-                <div className="sm:col-span-2">
-                  <Field label="Yêu cầu">
-                    <textarea
-                      {...fieldProps("requirements")}
-                      className={textareaClass + invalidRing}
-                    />
-                  </Field>
-                  {fieldError("requirements")}
-                </div>
-              </fieldset>
-            </form>
-          ) : (
             <div className="space-y-5 p-6">
               <section className="grid grid-cols-2 overflow-hidden rounded-2xl border border-slate-200 bg-white">
                 <Info label="Mã vị trí" value={job.code} />
@@ -1493,6 +1183,10 @@ function JobDrawer({
                 />
                 <Info label="Mức lương" value={formatSalaryRange(job)} />
                 <Info
+                  label="Hạn nộp hồ sơ"
+                  value={formatDate(job.applicationDeadline)}
+                />
+                <Info
                   label="Công bố"
                   value={
                     job.publishedAt
@@ -1504,21 +1198,22 @@ function JobDrawer({
               {(
                 [
                   ["Mô tả công việc", job.description],
-                  ["Trách nhiệm", job.responsibilities],
                   ["Yêu cầu", job.requirements],
+                  ["Quyền lợi", job.benefits],
                 ] as const
               ).map(([label, value]) => (
                 <section key={label}>
                   <h3 className="mb-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
                     {label}
                   </h3>
-                  <p
+                  <div
                     className={`whitespace-pre-line rounded-2xl border border-slate-200 bg-white p-4 text-xs leading-6 ${
                       value ? "text-slate-600" : "text-slate-400"
                     }`}
-                  >
-                    {value || "Chưa cập nhật"}
-                  </p>
+                    {...(value
+                      ? { dangerouslySetInnerHTML: { __html: safeJobHtml(value) } }
+                      : { children: "Chưa cập nhật" })}
+                  />
                 </section>
               ))}
               <section>
@@ -1548,7 +1243,6 @@ function JobDrawer({
                 {job.closedAt && ` · Đóng ${formatDate(job.closedAt, true)}`}
               </p>
             </div>
-          )}
         </div>
 
         <footer className="border-t border-slate-200 bg-white px-6 py-4">
@@ -1557,26 +1251,6 @@ function JobDrawer({
               <AlertCircle size={15} /> Chế độ chỉ xem. Chỉnh sửa vị trí thuộc
               quyền của Nhân sự.
             </p>
-          ) : editing ? (
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={cancelEdit}
-                disabled={saving}
-                className="h-10 rounded-xl border border-slate-200 px-4 text-xs font-bold text-slate-600 disabled:opacity-50"
-              >
-                Huỷ
-              </button>
-              <button
-                type="submit"
-                form={formId}
-                disabled={saving}
-                className="flex h-10 items-center gap-2 rounded-xl bg-[#005BEA] px-4 text-xs font-bold text-white disabled:opacity-50"
-              >
-                {saving && <Loader2 size={14} className="animate-spin" />}
-                Lưu thay đổi
-              </button>
-            </div>
           ) : job.status === "CLOSED" ? (
             <p className="flex items-center gap-2 text-xs font-semibold text-slate-500">
               <AlertCircle size={15} /> Vị trí đã đóng, không chỉnh sửa được
@@ -1611,6 +1285,17 @@ function JobDrawer({
           )}
         </footer>
       </aside>
+      {editing && (
+        <JobFormModal
+          job={job}
+          onClose={() => setEditing(false)}
+          onSaved={(saved) => {
+            setJob(saved);
+            setEditing(false);
+            onChanged();
+          }}
+        />
+      )}
     </>
   );
 }
@@ -1915,134 +1600,6 @@ function CreateCandidateModal({
           >
             {saving && <Loader2 size={14} className="animate-spin" />}Tạo ứng
             viên
-          </button>
-        </div>
-      </form>
-    </ModalShell>
-  );
-}
-
-function CreateJobModal({
-  onClose,
-  onCreated,
-}: {
-  onClose: () => void;
-  onCreated: () => void;
-}) {
-  const [saving, setSaving] = useState(false);
-  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const raw = Object.fromEntries(
-      [...form.entries()].filter(([, value]) => String(value).trim() !== "")
-    );
-    const payload: Record<string, unknown> = {
-      ...raw,
-      numberOfPositions: Number(raw.numberOfPositions || 1),
-      salaryMin: raw.salaryMin ? Number(raw.salaryMin) : undefined,
-      salaryMax: raw.salaryMax ? Number(raw.salaryMax) : undefined,
-    };
-    setSaving(true);
-    try {
-      await recruitmentApi.createJob(payload);
-      toast.success("Đã tạo bản nháp vị trí");
-      onCreated();
-    } catch (error) {
-      toast.error(errorMessage(error));
-    } finally {
-      setSaving(false);
-    }
-  };
-  return (
-    <ModalShell
-      title="Tạo vị trí tuyển"
-      subtitle="Vị trí mới được lưu dưới dạng bản nháp."
-      onClose={onClose}
-    >
-      <form onSubmit={(event) => void submit(event)}>
-        <div className="grid gap-4 p-6 sm:grid-cols-2">
-          <Field label="Mã vị trí">
-            <input
-              name="code"
-              required
-              className={inputClass}
-              placeholder="SALES-HCM-01"
-            />
-          </Field>
-          <Field label="Tên vị trí">
-            <input
-              name="title"
-              required
-              className={inputClass}
-              placeholder="Nhân viên kinh doanh"
-            />
-          </Field>
-          <Field label="Địa điểm">
-            <input
-              name="location"
-              className={inputClass}
-              placeholder="TP. Hồ Chí Minh"
-            />
-          </Field>
-          <Field label="Hình thức">
-            <select name="employmentType" className={inputClass}>
-              <option value="FULL_TIME">Toàn thời gian</option>
-              <option value="PART_TIME">Bán thời gian</option>
-              <option value="CONTRACT">Hợp đồng</option>
-              <option value="INTERNSHIP">Thực tập</option>
-              <option value="COLLABORATOR">Cộng tác viên</option>
-            </select>
-          </Field>
-          <Field label="Số lượng">
-            <input
-              name="numberOfPositions"
-              type="number"
-              min="1"
-              defaultValue="1"
-              className={inputClass}
-            />
-          </Field>
-          <div />
-          <Field label="Lương tối thiểu">
-            <input
-              name="salaryMin"
-              type="number"
-              min="0"
-              className={inputClass}
-            />
-          </Field>
-          <Field label="Lương tối đa">
-            <input
-              name="salaryMax"
-              type="number"
-              min="0"
-              className={inputClass}
-            />
-          </Field>
-          <div className="sm:col-span-2">
-            <Field label="Mô tả công việc">
-              <textarea
-                name="description"
-                className="min-h-24 w-full rounded-xl border border-slate-200 p-3 text-xs outline-none focus:border-blue-300"
-              />
-            </Field>
-          </div>
-        </div>
-        <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="h-10 rounded-xl border border-slate-200 px-4 text-xs font-bold text-slate-600"
-          >
-            Huỷ
-          </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="flex h-10 items-center gap-2 rounded-xl bg-[#005BEA] px-4 text-xs font-bold text-white disabled:opacity-50"
-          >
-            {saving && <Loader2 size={14} className="animate-spin" />}Tạo bản
-            nháp
           </button>
         </div>
       </form>

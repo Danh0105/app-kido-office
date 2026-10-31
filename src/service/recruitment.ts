@@ -48,21 +48,44 @@ export type RecruitmentScreeningCriteria = {
   maxStartDelayDays?: number;
 };
 
+export type RecruitmentWorkLocation = {
+  provinceId: number;
+  provinceName: string;
+  wardId: number;
+  wardName: string;
+  address: string;
+};
+
 export type RecruitmentJob = {
   id: number;
   code: string;
   title: string;
   departmentId?: number | null;
   department?: { id: number; name: string } | null;
+  industryIds?: number[];
+  seniority?: string | null;
+  experienceLevel?: string | null;
+  applicationDeadline?: string | null;
   location: string | null;
+  workLocations?: RecruitmentWorkLocation[];
   employmentType: string;
   numberOfPositions: number;
   salaryMin: number | null;
   salaryMax: number | null;
+  salaryNegotiable?: boolean;
+  salaryStructure?: string | null;
   currency: string;
   description?: string | null;
   requirements?: string | null;
   responsibilities?: string | null;
+  benefits?: string | null;
+  educationLevel?: string | null;
+  probationPeriod?: string | null;
+  allowApplicationsWithoutCv?: boolean;
+  contactName?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  additionalPhones?: string[];
   screeningCriteria?: RecruitmentScreeningCriteria;
   status: string;
   publishedAt?: string | null;
@@ -80,14 +103,40 @@ export type UpdateRecruitmentJobPayload = Partial<{
   title: string;
   description: string | null;
   departmentId: number | null;
+  industryIds: number[];
+  seniority: string | null;
+  experienceLevel: string | null;
+  applicationDeadline: string | null;
   location: string | null;
+  workLocations: Array<{
+    provinceId: number;
+    wardId: number;
+    address: string;
+  }>;
   employmentType: string;
   numberOfPositions: number;
   salaryMin: number | null;
   salaryMax: number | null;
+  salaryNegotiable: boolean;
+  salaryStructure: string | null;
+  currency: string;
   requirements: string | null;
   responsibilities: string | null;
+  benefits: string | null;
+  educationLevel: string | null;
+  probationPeriod: string | null;
+  allowApplicationsWithoutCv: boolean;
+  contactName: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  additionalPhones: string[];
+  screeningCriteria: RecruitmentScreeningCriteria;
 }>;
+
+export type CreateRecruitmentJobPayload = {
+  code: string;
+  title: string;
+} & UpdateRecruitmentJobPayload;
 
 export type RecruitmentApplication = {
   id: number;
@@ -427,7 +476,7 @@ export const recruitmentApi = {
     (await api.post<RecruitmentCandidate>("/recruitment/candidates", payload))
       .data,
 
-  createJob: async (payload: Record<string, unknown>) =>
+  createJob: async (payload: CreateRecruitmentJobPayload) =>
     (await api.post<RecruitmentJob>("/recruitment/jobs", payload)).data,
 
   job: async (id: number) =>

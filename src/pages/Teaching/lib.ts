@@ -480,6 +480,17 @@ export const endOfMonth = (value: string) => {
   return toISODate(new Date(d.getFullYear(), d.getMonth() + 1, 0));
 };
 
+/**
+ * "Hiệu lực đến" mặc định của lịch mới: 31/05 — hết năm học chứa `from`
+ * (chuyển năm học ở tháng 8, như `currentSchoolYear`). Tháng 6–7 năm học đã
+ * hết nên quay về cuối tháng như trước.
+ */
+export const defaultScheduleEffectiveTo = (from = todayISO()) => {
+  const [y, m] = from.split("-").map(Number);
+  const end = `${m >= 8 ? y + 1 : y}-05-31`;
+  return end >= from ? end : endOfMonth(from);
+};
+
 export const addMonths = (value: string, months: number) => {
   const d = fromISODate(value);
   return toISODate(new Date(d.getFullYear(), d.getMonth() + months, 1));

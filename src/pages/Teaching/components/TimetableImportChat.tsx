@@ -19,6 +19,7 @@ import {
   type DraftMessage,
   type PreviewNeed,
 } from "@/types/teaching";
+import { defaultScheduleEffectiveTo, formatDate } from "../lib";
 
 const ACCEPT = TIMETABLE_IMAGE_MIME_TYPES.join(",");
 
@@ -77,7 +78,7 @@ const NEED_LABELS: Record<PreviewNeed["field"], string> = {
  * vào ô nhập — vẫn đi qua đúng đường chat, không phải luật riêng của FE.
  */
 const QUICK_REPLIES: Partial<Record<PreviewNeed["field"], string[]>> = {
-  effectiveTo: ["Không giới hạn"],
+  effectiveTo: [formatDate(defaultScheduleEffectiveTo()), "Không giới hạn"],
 };
 
 /** Mẫu câu gợi ý ở màn hình bắt đầu — bấm để điền thẳng vào ô nhập, không tự gửi. */

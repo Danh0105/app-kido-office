@@ -56,6 +56,7 @@ import {
   daysBetween,
   DEFAULT_TIMETABLE_DAYS,
   DEFAULT_TIMETABLE_ROWS,
+  defaultScheduleEffectiveTo,
   endOfMonth,
   formatDate,
   formatTeacherLabel,
@@ -218,7 +219,7 @@ export default function TimetableTab({
   // Lịch đột xuất phải áp dụng ngay hôm nay: mặc định "Hiệu lực từ" là hôm
   // nay, không lùi về đầu tháng (đầu tháng chỉ sinh buổi quá khứ vô nghĩa).
   const [effectiveFrom, setEffectiveFrom] = useState(todayISO());
-  const [effectiveTo, setEffectiveTo] = useState(endOfMonth(todayISO()));
+  const [effectiveTo, setEffectiveTo] = useState(defaultScheduleEffectiveTo());
   // Mặc định chỉ lưu mẫu lịch — sinh buổi là bước riêng qua nút "Sinh buổi dạy",
   // tránh sinh nhầm hàng loạt buổi khi chỉ đang lưu một ô mới xếp.
   const [generate, setGenerate] = useState(false);

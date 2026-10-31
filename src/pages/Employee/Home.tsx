@@ -23,6 +23,7 @@ import {
 
 import { getSocket } from "@/utils/socket";
 import {
+  financialNotificationApi,
   notificationApi,
   policyNotificationApi,
   reportNotificationApi,
@@ -53,7 +54,7 @@ type NotificationStats = Record<
 // ================= TYPES =================
 type Notification = {
   id: number;
-  type: "POLICY" | "SUGGEST" | "REPORT" | "WEEKLY_PLAN";
+  type: "POLICY" | "SUGGEST" | "REPORT" | "WEEKLY_PLAN" | "FINANCIAL_REQUEST";
   entityId?: number;
   message: string;
   createdAt: string;
@@ -71,6 +72,8 @@ type Notification = {
     suggestId?: number;
     kind?: string;
     contractId?: number;
+    /** Đề nghị tài chính (`type: "FINANCIAL_REQUEST"`). */
+    requestId?: number;
   };
 };
 type NotificationCategory =
@@ -78,7 +81,8 @@ type NotificationCategory =
   | "SUGGEST"
   | "REPORT"
   | "WEEKLY_PLAN"
-  | "TEACHING";
+  | "TEACHING"
+  | "FINANCIAL_REQUEST";
 
 /** `item.to` là đường dẫn tuyệt đối (dùng cho module khác, VD Giảng dạy) — ưu
  * tiên dùng nguyên văn, không ghép thêm "/employee/" phía trước. */
@@ -155,6 +159,7 @@ export default function Home() {
       REPORT: { unread: 0, read: 0 },
       WEEKLY_PLAN: { unread: 0, read: 0 },
       TEACHING: { unread: 0, read: 0 },
+      FINANCIAL_REQUEST: { unread: 0, read: 0 },
     }
   );
   const menus = brandMenusForUser("employee");
@@ -164,6 +169,7 @@ export default function Home() {
     REPORT: { unread: 1, read: 1 },
     WEEKLY_PLAN: { unread: 1, read: 1 },
     TEACHING: { unread: 1, read: 1 },
+    FINANCIAL_REQUEST: { unread: 1, read: 1 },
   });
 
   const [hasMore, setHasMore] = useState({
@@ -187,6 +193,10 @@ export default function Home() {
       read: true,
     },
     TEACHING: {
+      unread: true,
+      read: true,
+    },
+    FINANCIAL_REQUEST: {
       unread: true,
       read: true,
     },
@@ -240,6 +250,7 @@ export default function Home() {
         policyNotificationApi.getAll(1, LIMIT, tab),
         expenseNotificationApi.getAll(1, LIMIT, tab, { scope: "all" }),
         reportNotificationApi.getAll(1, LIMIT, tab),
+        financialNotificationApi.getAll(1, LIMIT, tab),
       ];
       if (!hasRole("employee", "sales")) {
         requests.push(weeklyPlanNotificationApi.getAll(1, LIMIT, tab));
@@ -260,6 +271,7 @@ export default function Home() {
         REPORT: { unread: 1, read: 1 },
         WEEKLY_PLAN: { unread: 1, read: 1 },
         TEACHING: { unread: 1, read: 1 },
+        FINANCIAL_REQUEST: { unread: 1, read: 1 },
       });
     };
     loadNotifications();
@@ -355,6 +367,9 @@ export default function Home() {
 
     socket.on("teacher-location-change-request:new", handleNew);
 
+    // Đề nghị tài chính nội bộ: chờ duyệt, đã duyệt/từ chối, chờ chi, nhắc hạn.
+    socket.on("financial-request-notification:new", handleNew);
+
     return () => {
       socket.off("policy-notification:new", handleNew);
 
@@ -369,6 +384,8 @@ export default function Home() {
       socket.off("teaching-replacement-request:new", handleNew);
 
       socket.off("teacher-location-change-request:new", handleNew);
+
+      socket.off("financial-request-notification:new", handleNew);
     };
   }, [refreshExpenseNotifications, loadUnreadCount]);
 
@@ -419,6 +436,9 @@ export default function Home() {
           };
           break;
         }
+        case "FINANCIAL_REQUEST":
+          res = await financialNotificationApi.getAll(nextPage, LIMIT, tab);
+          break;
         default:
           return;
       }
@@ -529,6 +549,12 @@ export default function Home() {
       case "WEEKLY_PLAN":
         navigate(`/director/daily-report/${noti.senderId || noti.createdBy}`);
         break;
+
+      case "FINANCIAL_REQUEST": {
+        const requestId = noti.entityId ?? noti.meta?.requestId;
+        if (requestId) navigate(`/employee/finance/requests/${requestId}`);
+        break;
+      }
     }
   };
 

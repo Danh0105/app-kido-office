@@ -11,6 +11,7 @@ import {
   teachingReplacementPath,
 } from "@/utils/teachingNotification";
 import {
+  financialNotificationApi,
   notificationApi,
   policyNotificationApi,
   reportNotificationApi,
@@ -27,7 +28,8 @@ export type NotificationCategory =
   | "SUGGEST"
   | "REPORT"
   | "WEEKLY_PLAN"
-  | "TEACHING";
+  | "TEACHING"
+  | "FINANCIAL_REQUEST";
 export type NotificationTab = "unread" | "read";
 
 type PageState = Record<NotificationCategory, Record<NotificationTab, number>>;
@@ -48,6 +50,7 @@ const emptyPage = (): PageState => ({
   REPORT: { unread: 1, read: 1 },
   WEEKLY_PLAN: { unread: 1, read: 1 },
   TEACHING: { unread: 1, read: 1 },
+  FINANCIAL_REQUEST: { unread: 1, read: 1 },
 });
 
 const emptyHasMore = (): HasMoreState => ({
@@ -56,6 +59,7 @@ const emptyHasMore = (): HasMoreState => ({
   REPORT: { unread: true, read: true },
   WEEKLY_PLAN: { unread: true, read: true },
   TEACHING: { unread: true, read: true },
+  FINANCIAL_REQUEST: { unread: true, read: true },
 });
 
 const emptyStats = (): StatsState => ({
@@ -64,6 +68,7 @@ const emptyStats = (): StatsState => ({
   REPORT: { unread: 0, read: 0 },
   WEEKLY_PLAN: { unread: 0, read: 0 },
   TEACHING: { unread: 0, read: 0 },
+  FINANCIAL_REQUEST: { unread: 0, read: 0 },
 });
 
 /**
@@ -127,7 +132,11 @@ export function useAppNotifications() {
 
   const statsKeyOf = useCallback(
     (type: string): NotificationCategory | null => {
-      if (["POLICY", "SUGGEST", "REPORT", "WEEKLY_PLAN"].includes(type)) {
+      if (
+        ["POLICY", "SUGGEST", "REPORT", "WEEKLY_PLAN", "FINANCIAL_REQUEST"].includes(
+          type
+        )
+      ) {
         return type as NotificationCategory;
       }
       if (isTeachingAlertType(type)) return "TEACHING";
@@ -138,7 +147,19 @@ export function useAppNotifications() {
 
   // ================= STATS =================
   const loadNotificationStats = useCallback(async () => {
-    if (teachingNotificationsOnly) return;
+    if (teachingNotificationsOnly) {
+      // Lịch dạy của giáo viên đếm trên danh sách đã tải; riêng đề nghị tài
+      // chính (giáo viên cũng lập được) lấy đúng số chưa đọc từ server.
+      const statsRes = await notificationApi.getStats();
+      const financial = (statsRes.types || statsRes).FINANCIAL_REQUEST;
+      if (financial) {
+        setNotificationStats((prev) => ({
+          ...prev,
+          FINANCIAL_REQUEST: financial,
+        }));
+      }
+      return;
+    }
     const [statsRes, expenseSummary] = await Promise.all([
       notificationApi.getStats(),
       expenseNotificationApi.getSummary().catch(() => null),
@@ -191,16 +212,17 @@ export function useAppNotifications() {
       if (teachingNotificationsOnly) {
         // Endpoint riêng đã trả đúng thông báo lịch dạy (kể cả bản cũ lưu kiểu
         // SYSTEM); lọc thêm ở FE chỉ để chắc chắn với dữ liệu quá cũ.
-        const response = await teachingScheduleNotificationApi.getAll(
-          1,
-          100,
-          tab
-        );
+        const [response, financial] = await Promise.all([
+          teachingScheduleNotificationApi.getAll(1, 100, tab),
+          financialNotificationApi
+            .getAll(1, LIMIT, tab)
+            .catch(() => ({ data: [] })),
+        ]);
         if (!alive) return;
         const teachingItems = (response.data || []).filter(
           isTeachingScheduleNotification
         );
-        setNotifications(teachingItems);
+        setNotifications([...teachingItems, ...(financial.data || [])]);
         setNotificationStats((prev) => ({
           ...prev,
           POLICY: {
@@ -224,6 +246,9 @@ export function useAppNotifications() {
             policyNotificationApi.getAll(1, LIMIT, tab),
             expenseNotificationApi.getAll(1, LIMIT, tab, { scope: "all" }),
           ];
+      // Đề nghị tài chính: mọi tài khoản đều lập/duyệt/chi được nên vai trò nào
+      // cũng có tab này (kể cả kế toán chỉ xem Đề xuất, Nhân sự/Giáo vụ).
+      requests.push(financialNotificationApi.getAll(1, LIMIT, tab));
       if (!isSuggestOnlyRole && !isEmployeeRole) {
         requests.push(
           reportNotificationApi.getAll(1, LIMIT, tab),
@@ -275,9 +300,14 @@ export function useAppNotifications() {
       // là bản ghi đã tồn tại cho đúng người nhận, kể cả khi bị các bộ lọc bên
       // dưới loại khỏi danh sách hiển thị của vai trò này.
       loadUnreadCount();
-      if (teachingNotificationsOnly && !isTeachingScheduleNotification(data))
+      const isFinancial = data.type === "FINANCIAL_REQUEST";
+      if (
+        teachingNotificationsOnly &&
+        !isFinancial &&
+        !isTeachingScheduleNotification(data)
+      )
         return;
-      if (isSuggestOnlyRole && data.type !== "SUGGEST") return;
+      if (isSuggestOnlyRole && !isFinancial && data.type !== "SUGGEST") return;
       if (realtimeIdsRef.current.has(data.id)) return;
       realtimeIdsRef.current.add(data.id);
       if (realtimeIdsRef.current.size > 500) {
@@ -404,13 +434,24 @@ export function useAppNotifications() {
           exhausted = responses.every((res) => (res.data || []).length < LIMIT);
           break;
         }
+        case "FINANCIAL_REQUEST": {
+          const res = await financialNotificationApi.getAll(
+            nextPage,
+            LIMIT,
+            tab
+          );
+          newData = res.data || [];
+          exhausted = newData.length < LIMIT;
+          break;
+        }
         default:
           return;
       }
 
-      const visibleData = teachingNotificationsOnly
-        ? newData.filter(isTeachingScheduleNotification)
-        : newData;
+      const visibleData =
+        teachingNotificationsOnly && type !== "FINANCIAL_REQUEST"
+          ? newData.filter(isTeachingScheduleNotification)
+          : newData;
 
       setNotifications((prev) => {
         const ids = new Set(prev.map((n) => n.id));

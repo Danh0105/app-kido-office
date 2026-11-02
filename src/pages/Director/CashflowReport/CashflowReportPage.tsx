@@ -21,6 +21,7 @@ import {
   type CashflowFilters,
   type CashflowIssue,
   type CashflowSummary,
+  type DayClosingStatus,
   type LedgerResponse,
   type LedgerSource,
 } from "@/service/cashflowReport";
@@ -28,6 +29,7 @@ import { getApiErrorMessage } from "@/utils/apiError";
 import { hasRole } from "@/utils/auth";
 import { EXCEL_FILE_TYPE, saveBlob } from "@/utils/saveBlob";
 import AccountsTable from "./AccountsTable";
+import DayClosingBar from "./DayClosingBar";
 import IssuesTable from "./IssuesTable";
 import LedgerTable from "./LedgerTable";
 import ManualEntryModal from "./ManualEntryModal";
@@ -97,6 +99,9 @@ export default function CashflowReportPage() {
   const excludeInternal = params.get("internal") === "0";
   // Phải khớp MANAGE_ROLES của backend (cashflow-report.controller.ts).
   const canManage = hasRole("ketoan_truong", "thuquy", "director");
+  // Phải khớp REOPEN_ROLES của backend.
+  const canReopen = hasRole("ketoan_truong", "director");
+  const [closingStatus, setClosingStatus] = useState<DayClosingStatus | null>(null);
   /** Hộp bút toán nhập tay: id = null là thêm mới. */
   const [manualDialog, setManualDialog] = useState<{ id: number | null } | null>(null);
   /** Dòng đang xoá trên sổ (xem trước các khoản bị xoá rồi mới xác nhận). */
@@ -155,10 +160,13 @@ export default function CashflowReportPage() {
       // Danh mục luôn tải cả hai nhóm để chọn "Tài khoản cụ thể".
       cashflowReportApi.accounts({ ...filters, accountType: "all", accountCode: undefined }),
       tabRequest,
+      // Lỗi ở trạng thái chốt quỹ chỉ ẩn thanh chốt quỹ, không làm hỏng cả báo cáo.
+      cashflowReportApi.dayClosingStatus().catch(() => null),
     ])
-      .then(([summaryData, accountData, tabData]) => {
+      .then(([summaryData, accountData, tabData, closingData]) => {
         if (id !== requestId.current) return;
         setSummary(summaryData);
+        setClosingStatus(closingData);
         setGroups(accountData.groups);
         if (tab === "cash" || tab === "bank") setLedger(tabData as LedgerResponse);
         if (tab === "issues") {
@@ -486,6 +494,13 @@ export default function CashflowReportPage() {
         </div>
       </div>
 
+      <DayClosingBar
+        status={closingStatus}
+        canClose={canManage}
+        canReopen={canReopen}
+        onChanged={() => setReloadKey((key) => key + 1)}
+      />
+
       {summary && summary.unverifiedAccounts.length > 0 && (
         <div className="relative flex items-start gap-3 rounded-[22px] border border-amber-200/80 bg-amber-50/90 px-4 py-3 text-[13px] leading-5 text-amber-900 shadow-sm">
           <AlertTriangle size={16} className="mt-0.5 shrink-0" />
@@ -561,6 +576,7 @@ export default function CashflowReportPage() {
               onAddEntry={() => setManualDialog({ id: null })}
               onEditEntry={(id) => setManualDialog({ id })}
               onDeleteSource={setDeleteTarget}
+              lockedThrough={closingStatus?.lockedThrough ?? null}
             />
           )}
           {tab === "issues" && <IssuesTable issues={issues} />}
@@ -582,6 +598,7 @@ export default function CashflowReportPage() {
         <ManualEntryModal
           entryId={manualDialog.id}
           defaultGroup={tab === "bank" ? "112" : "111"}
+          lockedThrough={closingStatus?.lockedThrough ?? null}
           accounts={groups.flatMap((group) => group.accounts)}
           onClose={() => setManualDialog(null)}
           onSaved={() => {

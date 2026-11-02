@@ -69,7 +69,8 @@ export type LedgerSource = {
     | "EXPENSE_REQUEST"
     | "FINANCIAL_REQUEST"
     | "OTHER_CASHFLOW"
-    | "MANUAL_ENTRY";
+    | "MANUAL_ENTRY"
+    | "DAY_CLOSING";
   schoolExpenseId?: number;
   subjectId?: number | null;
   rowIndex?: number;
@@ -184,6 +185,42 @@ export type SourceDeletionPlan = {
   blockers: string[];
 };
 
+/** Số dư một tài khoản trong ngày chốt quỹ (null = chưa xác minh). */
+export type DayClosingBalance = {
+  code: string;
+  name: string;
+  groupCode: string;
+  opening: string | null;
+  receipts: string;
+  payments: string;
+  closing: string | null;
+  lineCount: number;
+};
+
+export type DayClosing = {
+  id: number;
+  date: string;
+  status: "CLOSED" | "REOPENED";
+  /** MANUAL = bấm End of Day; AUTO = tự chốt sau 0h. */
+  mode: "MANUAL" | "AUTO";
+  closedByName: string | null;
+  closedAt: string;
+  reopenedByName: string | null;
+  reopenedAt: string | null;
+  reopenReason: string | null;
+  lineCount: number;
+  totals: { receipts: string | null; payments: string | null; closing: string | null };
+  balances: DayClosingBalance[];
+};
+
+export type DayClosingStatus = {
+  today: string;
+  /** Mọi ngày ≤ ngày này đã chốt quỹ (khoá trên sổ). */
+  lockedThrough: string | null;
+  todayClosed: boolean;
+  latest: DayClosing | null;
+};
+
 const BASE = "/reports/cashflow";
 
 const params = (filters: CashflowFilters, extra: Record<string, unknown> = {}) => {
@@ -243,6 +280,22 @@ export const cashflowReportApi = {
 
   deleteSource: async (type: LedgerSource["type"], id: number): Promise<SourceDeletionPlan> =>
     (await api.delete(`${BASE}/sources/${type}/${id}`)).data,
+
+  dayClosingStatus: async (): Promise<DayClosingStatus> =>
+    (await api.get(`${BASE}/day-closings/status`)).data,
+
+  /** Các ngày sẽ chốt (mặc định tới hết hôm nay) + số dư từng tài khoản. */
+  dayClosingPreview: async (
+    date?: string,
+  ): Promise<{ lockedThrough: string | null; days: { date: string; balances: DayClosingBalance[] }[] }> =>
+    (await api.get(`${BASE}/day-closings/preview`, { params: date ? { date } : {} })).data,
+
+  /** End of Day: chốt quỹ hôm nay (và các ngày chưa chốt trước đó). */
+  closeDay: async (date?: string): Promise<{ lockedThrough: string; closed: DayClosing[] }> =>
+    (await api.post(`${BASE}/day-closings`, date ? { date } : {})).data,
+
+  reopenDay: async (reason: string): Promise<{ reopened: DayClosing; lockedThrough: string | null }> =>
+    (await api.post(`${BASE}/day-closings/reopen`, { reason })).data,
 
   /** Excel bám file mẫu — cùng bộ lọc, toàn bộ kết quả (không theo trang). */
   exportExcel: async (filters: CashflowFilters): Promise<Blob> =>

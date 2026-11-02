@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BookOpenText, ChevronLeft, ChevronRight, ExternalLink, Pencil, Plus, Trash2 } from "lucide-react";
+import { BookOpenText, ChevronLeft, ChevronRight, ExternalLink, Lock, Pencil, Plus, Trash2 } from "lucide-react";
 import type { LedgerResponse, LedgerSource } from "@/service/cashflowReport";
 import { deletableSource, formatCell, formatDate, formatMoney, sourceHref } from "./cashflowFormat";
 import CashflowTableShell from "./CashflowTableShell";
@@ -13,6 +13,8 @@ type Props = {
   onEditEntry?: (id: number) => void;
   /** Xoá dòng kèm chứng từ gốc (hoặc gỡ dòng của trường khỏi sổ). */
   onDeleteSource?: (target: { type: LedgerSource["type"]; id: number }) => void;
+  /** Mọi ngày ≤ ngày này đã chốt quỹ: dòng của các ngày đó không sửa / xoá được. */
+  lockedThrough?: string | null;
 };
 
 /**
@@ -66,6 +68,7 @@ export default function LedgerTable({
   onAddEntry,
   onEditEntry,
   onDeleteSource,
+  lockedThrough = null,
 }: Props) {
   const { accounts, rows } = data;
   const sticky = useStickyColumns();
@@ -234,9 +237,14 @@ export default function LedgerTable({
               {rows.map((row) => {
                 const href = sourceHref(row.source);
                 const manualId = row.source.type === "MANUAL_ENTRY" ? row.source.manualEntryId : undefined;
-                const editable = !!manualId && canManage && !!onEditEntry;
-                const deletable = canManage && onDeleteSource ? deletableSource(row.source) : null;
-                const deleteButton = deletable && (
+                const closed = !!lockedThrough && row.postingDate <= lockedThrough;
+                const editable = !!manualId && canManage && !!onEditEntry && !closed;
+                const deletable = canManage && onDeleteSource && !closed ? deletableSource(row.source) : null;
+                const deleteButton = closed && canManage ? (
+                  <span className="ml-1 inline-flex p-1 text-slate-400" title={`Đã chốt quỹ ngày ${formatDate(row.postingDate)}`}>
+                    <Lock size={12} />
+                  </span>
+                ) : deletable && (
                   <button
                     type="button"
                     title="Xoá dòng này và dữ liệu liên quan"

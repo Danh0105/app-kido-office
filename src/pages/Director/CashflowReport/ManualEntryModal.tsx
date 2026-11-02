@@ -8,7 +8,7 @@ import {
   type ManualEntryKind,
 } from "@/service/cashflowReport";
 import { getApiErrorMessage } from "@/utils/apiError";
-import { formatDate, todayVN } from "./cashflowFormat";
+import { formatDate, nextDay, todayVN } from "./cashflowFormat";
 
 type Props = {
   /** null = thêm mới. */
@@ -16,6 +16,8 @@ type Props = {
   /** Nhóm của tab đang xem — chọn sẵn tài khoản đầu tiên của nhóm khi thêm mới. */
   defaultGroup: "111" | "112";
   accounts: CashAccountRow[];
+  /** Ngày chốt quỹ gần nhất — chỉ nhập được ngày sau đó. */
+  lockedThrough?: string | null;
   onClose: () => void;
   onSaved: () => void;
 };
@@ -31,12 +33,15 @@ const fieldClass =
 const labelClass = "mb-1 block text-sm font-medium text-slate-700";
 
 /** Thêm / sửa / xoá bút toán thu chi nhập tay (khoản không đi qua phân hệ nào khác). */
-export default function ManualEntryModal({ entryId, defaultGroup, accounts, onClose, onSaved }: Props) {
+export default function ManualEntryModal({ entryId, defaultGroup, accounts, lockedThrough = null, onClose, onSaved }: Props) {
+  const firstOpenDay = lockedThrough ? nextDay(lockedThrough) : undefined;
   const [entry, setEntry] = useState<ManualEntry | null>(null);
   const [loading, setLoading] = useState(entryId !== null);
   const [saving, setSaving] = useState(false);
   const [kind, setKind] = useState<ManualEntryKind>("IN");
-  const [entryDate, setEntryDate] = useState(todayVN());
+  const [entryDate, setEntryDate] = useState(() =>
+    firstOpenDay && todayVN() < firstOpenDay ? firstOpenDay : todayVN(),
+  );
   const [accountCode, setAccountCode] = useState(
     () => accounts.find((a) => a.isActive && a.groupCode === defaultGroup)?.code ?? "",
   );
@@ -197,7 +202,16 @@ export default function ManualEntryModal({ entryId, defaultGroup, accounts, onCl
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block">
                 <span className={labelClass}>Ngày hạch toán *</span>
-                <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} className={fieldClass} />
+                <input
+                  type="date"
+                  value={entryDate}
+                  min={firstOpenDay}
+                  onChange={(e) => setEntryDate(e.target.value)}
+                  className={fieldClass}
+                />
+                {lockedThrough && (
+                  <span className="mt-1 block text-xs text-slate-500">Đã chốt quỹ đến {formatDate(lockedThrough)} — chọn ngày sau đó.</span>
+                )}
               </label>
               <label className="block">
                 <span className={labelClass}>Số tiền (đồng) *</span>

@@ -60,9 +60,13 @@ export const ISSUE_KIND_LABELS: Record<string, string> = {
   SUPERSEDED_RELEASE: "Xuất tiền bị thay thế",
   DUPLICATE: "Bản ghi trùng",
   SUSPICIOUS_AMOUNT: "Số tiền bất thường",
+  CLOSED_DAY_CHANGED: "Ngày đã chốt bị đổi",
 };
 
-/** Đường dẫn (HashRouter) tới chứng từ gốc để mở xem. */
+/** Ngày kế tiếp (YYYY-MM-DD). */
+export const nextDay = (date: string) =>
+  new Date(Date.parse(`${date}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+
 /** Dòng nguồn xoá được từ sổ: (loại, id chứng từ / dòng gốc). */
 export const deletableSource = (source: {
   type: string;
@@ -85,6 +89,7 @@ export const deletableSource = (source: {
   return id ? { type: source.type, id } : null;
 };
 
+/** Đường dẫn (HashRouter) tới chứng từ gốc để mở xem. */
 export const sourceHref = (source: {
   type: string;
   schoolExpenseId?: number;

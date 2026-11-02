@@ -26,6 +26,12 @@ const RIGHT = [
   { label: "Tên đối tượng", width: 220 },
 ];
 const AMOUNT_WIDTH = 116;
+/**
+ * Chiều cao hàng tiêu đề tài khoản. Giá trị này phải khớp với `top` của hàng
+ * Thu/Chi; nếu hàng trên thấp hơn, sticky sẽ đẩy hàng Thu/Chi xuống và làm nó
+ * chồng lên dòng số dư đầu kỳ ngay cả khi bảng chưa cuộn.
+ */
+const ACCOUNT_HEADER_HEIGHT = 61;
 /** Màn hình hẹp hơn: không dính cột nào, cuộn ngang cả bảng. */
 const STICKY_QUERY = "(min-width: 1024px)";
 
@@ -126,7 +132,10 @@ export default function LedgerTable({ data, onPageChange }: Props) {
         <div className="max-h-[72vh] overflow-auto overscroll-contain">
           <table className="border-separate border-spacing-0 text-[14px]" style={{ minWidth: "100%" }}>
             <thead className="text-[11px] font-semibold uppercase tracking-[0.045em] text-slate-600">
-              <tr className="bg-[#f5f5f7]/95 backdrop-blur-xl">
+              <tr
+                className="bg-[#f5f5f7]/95 backdrop-blur-xl"
+                style={{ height: ACCOUNT_HEADER_HEIGHT }}
+              >
                 {LEFT.map((column, index) => (
                   <th
                     key={column.label}
@@ -168,15 +177,15 @@ export default function LedgerTable({ data, onPageChange }: Props) {
                 {accounts.flatMap((account) => [
                   <th
                     key={`${account.code}-thu`}
-                    className="sticky top-[61px] z-20 border-b border-r border-blue-100 bg-blue-50/95 px-3 py-2 font-semibold backdrop-blur-xl"
-                    style={{ minWidth: AMOUNT_WIDTH }}
+                    className="sticky z-20 border-b border-r border-blue-100 bg-blue-50/95 px-3 py-2 font-semibold backdrop-blur-xl"
+                    style={{ minWidth: AMOUNT_WIDTH, top: ACCOUNT_HEADER_HEIGHT }}
                   >
                     Thu
                   </th>,
                   <th
                     key={`${account.code}-chi`}
-                    className="sticky top-[61px] z-20 border-b border-r border-blue-100 bg-blue-50/95 px-3 py-2 font-semibold backdrop-blur-xl"
-                    style={{ minWidth: AMOUNT_WIDTH }}
+                    className="sticky z-20 border-b border-r border-blue-100 bg-blue-50/95 px-3 py-2 font-semibold backdrop-blur-xl"
+                    style={{ minWidth: AMOUNT_WIDTH, top: ACCOUNT_HEADER_HEIGHT }}
                   >
                     Chi
                   </th>,

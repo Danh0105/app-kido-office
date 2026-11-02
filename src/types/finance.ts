@@ -271,7 +271,8 @@ export type FinancePermissions = {
   actionableStepId: number | null;
   canApprove: boolean;
   canAdjust: boolean;
-  requiresPaymentAccount: boolean;
+  /** Đang chờ cấp Bộ phận kiểm soát của mình — được đính kèm chứng từ kiểm soát. */
+  isControlStep: boolean;
   canSkip: boolean;
   canRecordPayment: boolean;
   canRecordRefund: boolean;
@@ -422,7 +423,6 @@ export type FinanceRequestInput = {
   bankAccountHolder?: string | null;
   bankName?: string | null;
   bankAccountNumber?: string | null;
-  paymentMethod?: PaymentMethod | null;
   paymentNote?: string | null;
   items?: FinanceItemInput[];
   allocations?: { advanceId: number; amount: number }[];

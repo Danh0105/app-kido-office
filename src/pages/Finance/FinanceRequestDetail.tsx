@@ -448,14 +448,13 @@ export default function FinanceRequestDetail() {
             </Card>
             <Card title="Thông tin nhận tiền">
               <dl>
-                <InfoRow label="Hình thức">{detail.paymentMethod ? PAYMENT_METHOD_LABELS[detail.paymentMethod] : ""}</InfoRow>
                 <InfoRow label="Tài khoản thanh toán">
                   {detail.paymentAccountCode
                     ? `${detail.paymentAccountCode}${detail.paymentAccountName ? ` — ${detail.paymentAccountName}` : ""}`
-                    : "Chưa chọn"}
+                    : "Thủ quỹ chọn khi chi tiền"}
                 </InfoRow>
                 <InfoRow label="Người thụ hưởng">{detail.payeeName}</InfoRow>
-                {detail.paymentMethod === "BANK_TRANSFER" && (
+                {(detail.bankName || detail.bankAccountNumber) && (
                   <>
                     <InfoRow label="Chủ tài khoản">{detail.bankAccountHolder}</InfoRow>
                     <InfoRow label="Ngân hàng">{detail.bankName}</InfoRow>
@@ -782,7 +781,7 @@ export default function FinanceRequestDetail() {
         <ApproveModal
           detail={detail}
           canAdjust={p.canAdjust}
-          requiresPaymentAccount={p.requiresPaymentAccount}
+          isControlStep={p.isControlStep}
           onClose={() => setDialog(null)}
           onSubmit={({ files, ...value }) =>
             safe(() =>

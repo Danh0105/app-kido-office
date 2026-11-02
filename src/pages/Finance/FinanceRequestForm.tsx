@@ -24,14 +24,12 @@ import type {
   FinanceRequestInput,
   FinanceRequestType,
   InvoiceType,
-  PaymentMethod,
 } from "@/types/finance";
 import { getApiErrorMessage } from "@/utils/apiError";
 import { Card, DecimalTextInput, ErrorState, LoadingState, Warnings } from "./components/FinanceUi";
 import { useFinanceMeta } from "./FinanceRoutes";
 import {
   INVOICE_TYPE_LABELS,
-  PAYMENT_METHOD_LABELS,
   TYPE_DESCRIPTIONS,
   TYPE_LABELS,
   TYPE_TITLES,
@@ -102,7 +100,6 @@ export default function FinanceRequestForm() {
   const [form, setForm] = useState<FinanceRequestInput>({
     requestDate: todayVN(),
     title: "",
-    paymentMethod: "BANK_TRANSFER",
     payeeName: meta.me.name,
     bankAccountHolder: meta.me.name,
     bankName: meta.me.bankName,
@@ -153,7 +150,6 @@ export default function FinanceRequestForm() {
           bankAccountHolder: detail.bankAccountHolder,
           bankName: detail.bankName,
           bankAccountNumber: detail.bankAccountNumber,
-          paymentMethod: detail.paymentMethod,
           paymentNote: detail.paymentNote,
         });
         setItems(
@@ -981,36 +977,22 @@ export default function FinanceRequestForm() {
       >
         <div className="grid gap-3 md:grid-cols-3">
           <label className={labelClass}>
-            Phương thức nhận tiền
-            <select className={inputClass} value={form.paymentMethod ?? ""} onChange={(e) => set("paymentMethod", (e.target.value || null) as PaymentMethod | null)}>
-              {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={labelClass}>
             Người thụ hưởng
             <input className={inputClass} value={form.payeeName ?? ""} onChange={(e) => set("payeeName", e.target.value)} />
           </label>
-          {form.paymentMethod === "BANK_TRANSFER" && (
-            <>
-              <label className={labelClass}>
-                Chủ tài khoản
-                <input className={inputClass} value={form.bankAccountHolder ?? ""} onChange={(e) => set("bankAccountHolder", e.target.value)} />
-              </label>
-              <label className={labelClass}>
-                Ngân hàng
-                <input className={inputClass} value={form.bankName ?? ""} onChange={(e) => set("bankName", e.target.value)} />
-              </label>
-              <label className={labelClass}>
-                Số tài khoản
-                <input className={inputClass} inputMode="numeric" value={form.bankAccountNumber ?? ""} onChange={(e) => set("bankAccountNumber", e.target.value)} />
-              </label>
-            </>
-          )}
-          <label className={`${labelClass} md:col-span-3`}>
+          <label className={labelClass}>
+            Chủ tài khoản
+            <input className={inputClass} value={form.bankAccountHolder ?? ""} onChange={(e) => set("bankAccountHolder", e.target.value)} />
+          </label>
+          <label className={labelClass}>
+            Ngân hàng
+            <input className={inputClass} value={form.bankName ?? ""} onChange={(e) => set("bankName", e.target.value)} />
+          </label>
+          <label className={labelClass}>
+            Số tài khoản
+            <input className={inputClass} inputMode="numeric" value={form.bankAccountNumber ?? ""} onChange={(e) => set("bankAccountNumber", e.target.value)} />
+          </label>
+          <label className={`${labelClass} md:col-span-2`}>
             Ghi chú thanh toán
             <input className={inputClass} value={form.paymentNote ?? ""} onChange={(e) => set("paymentNote", e.target.value)} />
           </label>

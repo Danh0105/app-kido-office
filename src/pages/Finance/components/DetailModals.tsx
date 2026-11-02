@@ -22,25 +22,22 @@ type Submit<T> = (value: T) => Promise<unknown>;
 export function ApproveModal({
   detail,
   canAdjust,
-  requiresPaymentAccount,
+  isControlStep,
   onClose,
   onSubmit,
 }: {
   detail: FinanceDetail;
   canAdjust: boolean;
-  requiresPaymentAccount: boolean;
+  isControlStep: boolean;
   onClose: () => void;
   onSubmit: Submit<{
     comment?: string;
-    paymentAccountCode?: string;
     adjustments?: { itemId: number; approvedAmount: number; reason?: string }[];
     /** Chứng từ kiểm soát — tải lên trước khi duyệt (cấp kiểm soát). */
     files?: File[];
   }>;
 }) {
-  const meta = useFinanceMeta();
   const [comment, setComment] = useState("");
-  const [paymentAccountCode, setPaymentAccountCode] = useState(detail.paymentAccountCode ?? "");
   const [files, setFiles] = useState<File[]>([]);
   const [rows, setRows] = useState(() =>
     detail.items.map((item) => ({
@@ -56,17 +53,13 @@ export function ApproveModal({
   const invalid = rows.find(
     (row) => row.approved > row.declared || (row.approved !== row.declared && !row.reason.trim()),
   );
-  const paymentAccounts = meta.cashAccounts.filter((account) =>
-    detail.paymentMethod === "CASH" ? account.groupCode === "111" : account.groupCode === "112",
-  );
 
   const submit = async () => {
     setBusy(true);
     try {
       await onSubmit({
         comment: comment.trim() || undefined,
-        paymentAccountCode: requiresPaymentAccount ? paymentAccountCode : undefined,
-        files: requiresPaymentAccount && files.length ? files : undefined,
+        files: isControlStep && files.length ? files : undefined,
         adjustments: canAdjust
           ? rows
               .filter((row) => {
@@ -84,7 +77,7 @@ export function ApproveModal({
   return (
     <Modal
       open
-      wide={canAdjust || requiresPaymentAccount}
+      wide={canAdjust}
       title={`Duyệt ${detail.code}`}
       onClose={onClose}
       footer={
@@ -95,7 +88,7 @@ export function ApproveModal({
           <button
             type="button"
             className={primaryButton}
-            disabled={busy || (canAdjust && !!invalid) || (requiresPaymentAccount && !paymentAccountCode)}
+            disabled={busy || (canAdjust && !!invalid)}
             onClick={() => void submit()}
           >
             {busy && <Loader2 size={16} className="animate-spin" />} Duyệt
@@ -142,29 +135,7 @@ export function ApproveModal({
           </p>
         </div>
       )}
-      {requiresPaymentAccount && (
-        <label className={`${labelClass} mb-4`}>
-          Tài khoản thanh toán *
-          <select
-            className={inputClass}
-            value={paymentAccountCode}
-            onChange={(event) => setPaymentAccountCode(event.target.value)}
-          >
-            <option value="">Chọn tài khoản thanh toán</option>
-            {paymentAccounts.map((account) => (
-              <option key={account.code} value={account.code}>
-                {account.code} — {account.name}
-              </option>
-            ))}
-          </select>
-          <span className="mt-1 block text-xs font-normal text-slate-500">
-            {detail.paymentMethod === "CASH"
-              ? "Phiếu tiền mặt: chọn tài khoản nhóm 111."
-              : "Phiếu chuyển khoản: chọn tài khoản nhóm 112."}
-          </span>
-        </label>
-      )}
-      {requiresPaymentAccount && (
+      {isControlStep && (
         <label className={`${labelClass} mb-4`}>
           Chứng từ kiểm soát (không bắt buộc)
           <input
@@ -267,17 +238,22 @@ export function MoneyModal({
 }) {
   const meta = useFinanceMeta();
   const idempotencyKey = useMemo(() => newIdempotencyKey(), []);
+  // Gợi ý tài khoản lần chi trước (hoặc kiểm soát đã chọn ở phiếu cũ); thủ quỹ được đổi.
+  const defaultAccount = meta.cashAccounts.find((a) => a.code === defaultCashAccountCode);
   const [amount, setAmount] = useState(remaining);
   const [date, setDate] = useState(todayVN());
-  const [method, setMethod] = useState<PaymentMethod>(defaultMethod ?? "BANK_TRANSFER");
-  const [cashAccountCode, setCashAccountCode] = useState(defaultCashAccountCode ?? "");
+  const [method, setMethod] = useState<PaymentMethod>(
+    defaultAccount ? (defaultAccount.groupCode === "111" ? "CASH" : "BANK_TRANSFER") : (defaultMethod ?? "BANK_TRANSFER"),
+  );
+  const [cashAccountCode, setCashAccountCode] = useState(defaultAccount?.code ?? "");
   const [transactionRef, setTransactionRef] = useState("");
   const [note, setNote] = useState("");
   const [proofs, setProofs] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const accounts = meta.cashAccounts.filter((a) => (method === "CASH" ? a.groupCode === "111" : a.groupCode === "112"));
-  const accountLocked = kind === "payment" && !!defaultCashAccountCode;
-  const invalid = amount <= 0 || amount > remaining;
+  // Chi tiền là bước cuối: thủ quỹ bắt buộc chọn tài khoản thanh toán.
+  const accountRequired = kind === "payment";
+  const invalid = amount <= 0 || amount > remaining || (accountRequired && !cashAccountCode);
 
   return (
     <Modal
@@ -332,7 +308,6 @@ export function MoneyModal({
           <select
             className={inputClass}
             value={method}
-            disabled={accountLocked}
             onChange={(e) => { setMethod(e.target.value as PaymentMethod); setCashAccountCode(""); }}
           >
             {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
@@ -343,14 +318,13 @@ export function MoneyModal({
           </select>
         </label>
         <label className={labelClass}>
-          Tài khoản tiền
+          {accountRequired ? "Tài khoản thanh toán *" : "Tài khoản tiền"}
           <select
             className={inputClass}
             value={cashAccountCode}
-            disabled={accountLocked}
             onChange={(e) => setCashAccountCode(e.target.value)}
           >
-            {!accountLocked && <option value="">Không chọn</option>}
+            <option value="">{accountRequired ? "Chọn tài khoản" : "Không chọn"}</option>
             {accounts.map((a) => (
               <option key={a.code} value={a.code}>
                 {a.code} — {a.name}

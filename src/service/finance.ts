@@ -71,7 +71,6 @@ export const financeApi = {
     payload: {
       stepId: number;
       comment?: string;
-      paymentAccountCode?: string;
       adjustments?: { itemId: number; approvedAmount: number; reason?: string }[];
     },
   ) => (await api.post<FinanceDetail>(`${BASE}/${id}/approve`, payload)).data,

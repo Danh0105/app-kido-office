@@ -63,6 +63,28 @@ export const ISSUE_KIND_LABELS: Record<string, string> = {
 };
 
 /** Đường dẫn (HashRouter) tới chứng từ gốc để mở xem. */
+/** Dòng nguồn xoá được từ sổ: (loại, id chứng từ / dòng gốc). */
+export const deletableSource = (source: {
+  type: string;
+  requestId?: number;
+  suggestId?: number;
+  otherCashflowId?: number;
+  manualEntryId?: number;
+  itemId?: number;
+}) => {
+  const id =
+    source.type === "FINANCIAL_REQUEST"
+      ? source.requestId
+      : source.type === "EXPENSE_REQUEST"
+        ? source.suggestId
+        : source.type === "OTHER_CASHFLOW"
+          ? source.otherCashflowId
+          : source.type === "MANUAL_ENTRY"
+            ? source.manualEntryId
+            : source.itemId;
+  return id ? { type: source.type, id } : null;
+};
+
 export const sourceHref = (source: {
   type: string;
   schoolExpenseId?: number;

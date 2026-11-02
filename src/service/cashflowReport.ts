@@ -73,6 +73,8 @@ export type LedgerSource = {
   schoolExpenseId?: number;
   subjectId?: number | null;
   rowIndex?: number;
+  /** Dòng Hóa Đơn / Chi Trường / Chi Ngoài (id trong bảng nguồn). */
+  itemId?: number;
   suggestId?: number;
   requestId?: number;
   otherCashflowId?: number;
@@ -170,6 +172,18 @@ export type ManualEntry = Required<ManualEntryPayload> & {
   updatedAt: string;
 };
 
+/** Xem trước khi xoá một dòng trên sổ: các khoản sẽ bị xoá (DELETE) hoặc gỡ khỏi sổ (UNPOST). */
+export type SourceDeletionPlan = {
+  type: LedgerSource["type"];
+  id: number;
+  mode: "DELETE" | "UNPOST";
+  title: string;
+  items: string[];
+  warnings: string[];
+  /** Không rỗng = không xoá được. */
+  blockers: string[];
+};
+
 const BASE = "/reports/cashflow";
 
 const params = (filters: CashflowFilters, extra: Record<string, unknown> = {}) => {
@@ -223,6 +237,12 @@ export const cashflowReportApi = {
 
   deleteManualEntry: async (id: number) =>
     (await api.delete(`${BASE}/manual-entries/${id}`)).data,
+
+  sourceDeletionPlan: async (type: LedgerSource["type"], id: number): Promise<SourceDeletionPlan> =>
+    (await api.get(`${BASE}/sources/${type}/${id}/deletion`)).data,
+
+  deleteSource: async (type: LedgerSource["type"], id: number): Promise<SourceDeletionPlan> =>
+    (await api.delete(`${BASE}/sources/${type}/${id}`)).data,
 
   /** Excel bám file mẫu — cùng bộ lọc, toàn bộ kết quả (không theo trang). */
   exportExcel: async (filters: CashflowFilters): Promise<Blob> =>

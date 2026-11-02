@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { BookOpenText, ChevronLeft, ChevronRight, ExternalLink, Pencil, Plus } from "lucide-react";
-import type { LedgerResponse } from "@/service/cashflowReport";
-import { formatCell, formatDate, formatMoney, sourceHref } from "./cashflowFormat";
+import { BookOpenText, ChevronLeft, ChevronRight, ExternalLink, Pencil, Plus, Trash2 } from "lucide-react";
+import type { LedgerResponse, LedgerSource } from "@/service/cashflowReport";
+import { deletableSource, formatCell, formatDate, formatMoney, sourceHref } from "./cashflowFormat";
 import CashflowTableShell from "./CashflowTableShell";
 
 type Props = {
@@ -11,6 +11,8 @@ type Props = {
   canManage?: boolean;
   onAddEntry?: () => void;
   onEditEntry?: (id: number) => void;
+  /** Xoá dòng kèm chứng từ gốc (hoặc gỡ dòng của trường khỏi sổ). */
+  onDeleteSource?: (target: { type: LedgerSource["type"]; id: number }) => void;
 };
 
 /**
@@ -57,7 +59,14 @@ const rightStyle = (index: number) => ({
   minWidth: RIGHT[index].width,
 });
 
-export default function LedgerTable({ data, onPageChange, canManage = false, onAddEntry, onEditEntry }: Props) {
+export default function LedgerTable({
+  data,
+  onPageChange,
+  canManage = false,
+  onAddEntry,
+  onEditEntry,
+  onDeleteSource,
+}: Props) {
   const { accounts, rows } = data;
   const sticky = useStickyColumns();
   const stickyLeft = (index: number) => ({
@@ -226,6 +235,21 @@ export default function LedgerTable({ data, onPageChange, canManage = false, onA
                 const href = sourceHref(row.source);
                 const manualId = row.source.type === "MANUAL_ENTRY" ? row.source.manualEntryId : undefined;
                 const editable = !!manualId && canManage && !!onEditEntry;
+                const deletable = canManage && onDeleteSource ? deletableSource(row.source) : null;
+                const deleteButton = deletable && (
+                  <button
+                    type="button"
+                    title="Xoá dòng này và dữ liệu liên quan"
+                    aria-label={`Xoá ${row.documentNo}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onDeleteSource!({ type: deletable.type as LedgerSource["type"], id: deletable.id });
+                    }}
+                    className="ml-1 inline-flex rounded-md p-1 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                );
                 return (
                   <tr
                     key={row.key}
@@ -252,12 +276,14 @@ export default function LedgerTable({ data, onPageChange, canManage = false, onA
                           <span className="inline-flex items-center gap-1 font-mono font-semibold text-blue-700">
                             {value}
                             <ExternalLink size={12} />
+                            {deleteButton}
                           </span>
                         ) : index === 2 && manualId ? (
                           <span className={`inline-flex flex-col items-center font-mono font-semibold ${editable ? "text-blue-700" : "text-slate-700"}`}>
                             <span className="inline-flex items-center gap-1">
                               {value}
                               {editable && <Pencil size={11} />}
+                              {deleteButton}
                             </span>
                             <span className="font-sans text-[10px] font-medium text-slate-500">
                               {row.isInternalTransfer ? "Chuyển nội bộ" : "Nhập tay"}
@@ -266,6 +292,11 @@ export default function LedgerTable({ data, onPageChange, canManage = false, onA
                         ) : index === 4 ? (
                           <span className="line-clamp-2" title={value}>
                             {value}
+                          </span>
+                        ) : index === 2 ? (
+                          <span className="inline-flex items-center">
+                            {value}
+                            {deleteButton}
                           </span>
                         ) : (
                           value

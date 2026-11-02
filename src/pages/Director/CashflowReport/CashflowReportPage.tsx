@@ -22,6 +22,7 @@ import {
   type CashflowIssue,
   type CashflowSummary,
   type LedgerResponse,
+  type LedgerSource,
 } from "@/service/cashflowReport";
 import { getApiErrorMessage } from "@/utils/apiError";
 import { hasRole } from "@/utils/auth";
@@ -30,6 +31,7 @@ import AccountsTable from "./AccountsTable";
 import IssuesTable from "./IssuesTable";
 import LedgerTable from "./LedgerTable";
 import ManualEntryModal from "./ManualEntryModal";
+import SourceDeleteModal from "./SourceDeleteModal";
 import {
   formatDate,
   formatMoney,
@@ -97,6 +99,8 @@ export default function CashflowReportPage() {
   const canManage = hasRole("ketoan_truong", "thuquy", "director");
   /** Hộp bút toán nhập tay: id = null là thêm mới. */
   const [manualDialog, setManualDialog] = useState<{ id: number | null } | null>(null);
+  /** Dòng đang xoá trên sổ (xem trước các khoản bị xoá rồi mới xác nhận). */
+  const [deleteTarget, setDeleteTarget] = useState<{ type: LedgerSource["type"]; id: number } | null>(null);
 
   const filters: CashflowFilters = useMemo(
     () => ({
@@ -556,10 +560,22 @@ export default function CashflowReportPage() {
               canManage={canManage}
               onAddEntry={() => setManualDialog({ id: null })}
               onEditEntry={(id) => setManualDialog({ id })}
+              onDeleteSource={setDeleteTarget}
             />
           )}
           {tab === "issues" && <IssuesTable issues={issues} />}
         </div>
+      )}
+
+      {deleteTarget && (
+        <SourceDeleteModal
+          target={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onDeleted={() => {
+            setDeleteTarget(null);
+            setReloadKey((key) => key + 1);
+          }}
+        />
       )}
 
       {manualDialog && (

@@ -207,6 +207,14 @@ export default function FinanceRequestForm() {
     enabled: !!companyId,
   });
 
+  // Phiếu mới: chọn sẵn quản lý trực tiếp của phòng ban người lập (vẫn đổi được).
+  useEffect(() => {
+    if (editingId || form.directManagerId) return;
+    const preferred = managersQuery.data?.find((m) => m.isDefault);
+    if (preferred) set("directManagerId", preferred.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [managersQuery.data]);
+
   const advancesQuery = useQuery({
     queryKey: ["finance-available-advances", companyId, requestId],
     queryFn: () => financeApi.availableAdvances(Number(companyId), requestId ?? undefined),
@@ -644,6 +652,7 @@ export default function FinanceRequestForm() {
               {(managersQuery.data ?? []).map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.position ? `${m.name} — ${m.position}` : m.name}
+                  {m.isDefault ? " (quản lý phòng ban)" : ""}
                 </option>
               ))}
             </select>

@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Building2, GitBranch, ImageUp, Plus, Shield, SlidersHorizontal, Tags, Trash2, UserRoundCog } from "lucide-react";
+import { ArrowDown, ArrowUp, Building2, GitBranch, ImageUp, Plus, Shield, SlidersHorizontal, Tags, Trash2, UserPlus, UserRoundCog } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import DecimalInput from "@/components/DecimalInput";
@@ -595,8 +595,14 @@ function Workflows({ data, run }: SectionProps) {
 
 // ---------------------------------------------------------------------------
 
+/** "Nhân viên" không phải vai trò tài chính: chọn nó là xếp nhân viên vào phòng ban. */
+const STAFF = "STAFF";
+type AssignRole = FinanceRole | typeof STAFF;
+
+const EMPTY_ACCOUNT = { name: "", phone: "", email: "", password: "", departmentId: "" };
+
 function Assignments({ data, run }: SectionProps) {
-  const [form, setForm] = useState<{ employeeId: string; role: FinanceRole; companyId: string; departmentId: string; approvalLimit: number; note: string }>({
+  const [form, setForm] = useState<{ employeeId: string; role: AssignRole; companyId: string; departmentId: string; approvalLimit: number; note: string }>({
     employeeId: "",
     role: "MANAGER",
     companyId: "",
@@ -604,9 +610,26 @@ function Assignments({ data, run }: SectionProps) {
     approvalLimit: 0,
     note: "",
   });
+  const [account, setAccount] = useState<typeof EMPTY_ACCOUNT | null>(null);
+  const isStaff = form.role === STAFF;
+  const department = data.departments.find((d) => String(d.id) === form.departmentId);
+  const selected = data.employees.find((e) => String(e.id) === form.employeeId);
+
   const add = async () => {
     if (!form.employeeId) {
       toast.error("Chọn nhân viên");
+      return;
+    }
+    if (isStaff) {
+      if (!department) {
+        toast.error("Chọn phòng ban cho nhân viên");
+        return;
+      }
+      const ok = await run(
+        () => financeConfigApi.setEmployeeDepartment(Number(form.employeeId), department.id),
+        `Đã xếp ${selected?.name ?? "nhân viên"} vào phòng ${department.name}`,
+      );
+      if (ok) setForm({ ...form, employeeId: "" });
       return;
     }
     const ok = await run(
@@ -623,10 +646,43 @@ function Assignments({ data, run }: SectionProps) {
     );
     if (ok) setForm({ ...form, employeeId: "", note: "", approvalLimit: 0 });
   };
+
+  const createAccount = async () => {
+    if (!account) return;
+    if (!account.name.trim() || !account.phone.trim() || !account.password || !account.departmentId) {
+      toast.error("Nhập họ tên, số điện thoại, mật khẩu và chọn phòng ban");
+      return;
+    }
+    const created: { id?: number } = {};
+    const ok = await run(async () => {
+      const result = await financeConfigApi.createAccount({
+        name: account.name.trim(),
+        phone: account.phone.trim(),
+        email: account.email.trim() || null,
+        password: account.password,
+        departmentId: Number(account.departmentId),
+      });
+      created.id = result.id;
+    }, `Đã tạo tài khoản ${account.name.trim()}`);
+    if (!ok) return;
+    setAccount(null);
+    // Chọn sẵn tài khoản vừa tạo để gán tiếp vai trò nếu cần.
+    if (created.id) setForm((prev) => ({ ...prev, employeeId: String(created.id) }));
+  };
+
   const active = data.assignments.filter((a) => a.isActive);
   return (
     <div className="space-y-4">
-      <Card title="Gán vai trò tài chính theo phạm vi">
+      <Card
+        title="Gán vai trò tài chính theo phạm vi"
+        action={
+          data.canCreateAccount && (
+            <button type="button" className={secondaryButton} onClick={() => setAccount({ ...EMPTY_ACCOUNT, departmentId: form.departmentId })}>
+              <UserPlus size={16} /> Tạo tài khoản
+            </button>
+          )
+        }
+      >
         <div className="grid gap-3 md:grid-cols-6">
           <label className={`${labelClass} md:col-span-2`}>
             Nhân viên
@@ -641,41 +697,68 @@ function Assignments({ data, run }: SectionProps) {
           </label>
           <label className={labelClass}>
             Vai trò
-            <select className={inputClass} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as FinanceRole })}>
+            <select className={inputClass} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as AssignRole })}>
+              <option value={STAFF}>Nhân viên</option>
               {ROLES.map((role) => (
                 <option key={role} value={role}>{ROLE_LABELS[role]}</option>
               ))}
             </select>
           </label>
-          <label className={labelClass}>
-            Công ty
-            <select className={inputClass} value={form.companyId} onChange={(e) => setForm({ ...form, companyId: e.target.value })}>
-              <option value="">Mọi công ty</option>
-              {data.companies.map((c) => (
-                <option key={c.id} value={c.id}>{c.shortName || c.name}</option>
-              ))}
-            </select>
-          </label>
-          <label className={labelClass}>
-            Phòng ban
+          {!isStaff && (
+            <label className={labelClass}>
+              Công ty
+              <select className={inputClass} value={form.companyId} onChange={(e) => setForm({ ...form, companyId: e.target.value })}>
+                <option value="">Mọi công ty</option>
+                {data.companies.map((c) => (
+                  <option key={c.id} value={c.id}>{c.shortName || c.name}</option>
+                ))}
+              </select>
+            </label>
+          )}
+          <label className={`${labelClass} ${isStaff ? "md:col-span-3" : ""}`}>
+            {isStaff ? "Phòng ban *" : "Phòng ban"}
             <select className={inputClass} value={form.departmentId} onChange={(e) => setForm({ ...form, departmentId: e.target.value })}>
-              <option value="">Mọi phòng ban</option>
+              <option value="">{isStaff ? "Chọn phòng ban" : "Mọi phòng ban"}</option>
               {data.departments.map((d) => (
                 <option key={d.id} value={d.id}>{d.name}</option>
               ))}
             </select>
           </label>
-          <label className={labelClass}>
-            Hạn mức duyệt (đ)
-            <DecimalInput allowDecimal={false} value={form.approvalLimit} placeholder="Không giới hạn" onValueChange={(v) => setForm({ ...form, approvalLimit: v })} className={inputClass} />
-          </label>
-          <label className={`${labelClass} md:col-span-5`}>
-            Ghi chú
-            <input className={inputClass} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
-          </label>
+          {!isStaff && (
+            <label className={labelClass}>
+              Hạn mức duyệt (đ)
+              <DecimalInput allowDecimal={false} value={form.approvalLimit} placeholder="Không giới hạn" onValueChange={(v) => setForm({ ...form, approvalLimit: v })} className={inputClass} />
+            </label>
+          )}
+          {isStaff ? (
+            <div className="rounded-xl bg-blue-50 px-3 py-2 text-xs leading-5 text-slate-700 md:col-span-5">
+              {selected && (
+                <p>
+                  {selected.name} đang ở: <b>{selected.departmentName ?? "chưa có phòng ban"}</b>
+                </p>
+              )}
+              {!department ? (
+                <p>Chọn phòng ban — nhân viên sẽ thuộc phòng ban đó, đề nghị tài chính tự chọn quản lý trực tiếp của phòng.</p>
+              ) : department.managers?.length ? (
+                <p>
+                  Quản lý trực tiếp chọn sẵn khi lập đề nghị: <b>{department.managers[0].name}</b>
+                  {department.managers.length > 1 && <> (kế tiếp: {department.managers.slice(1).map((m) => m.name).join(", ")})</>}
+                </p>
+              ) : (
+                <p className="text-amber-700">
+                  Phòng {department.name} chưa có quản lý trực tiếp — gán vai trò "Quản lý trực tiếp" cho phòng này (hoặc chức danh trưởng/phó phòng) để đề nghị tự chọn người duyệt.
+                </p>
+              )}
+            </div>
+          ) : (
+            <label className={`${labelClass} md:col-span-5`}>
+              Ghi chú
+              <input className={inputClass} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+            </label>
+          )}
           <div className="flex items-end">
             <button type="button" className={`${primaryButton} w-full`} onClick={() => void add()}>
-              <Plus size={16} /> Gán quyền
+              <Plus size={16} /> {isStaff ? "Xếp vào phòng" : "Gán quyền"}
             </button>
           </div>
         </div>
@@ -684,8 +767,53 @@ function Assignments({ data, run }: SectionProps) {
           {Object.entries(data.implicitRoles)
             .map(([role, roles]) => `${role} → ${roles.map((r) => ROLE_LABELS[r]).join(", ")}`)
             .join(" · ")}
-          . Quản lý trực tiếp, kiểm soát, kế toán viên… phải gán ở đây.
+          . Quản lý trực tiếp, kiểm soát, kế toán viên… phải gán ở đây. Quản lý trực tiếp gán riêng cho một phòng ban được chọn sẵn
+          khi nhân viên phòng đó lập đề nghị (không có thì trưởng/phó phòng thuộc phòng ban).
         </div>
+        {account && (
+          <Modal
+            open
+            title="Tạo tài khoản nhân viên"
+            onClose={() => setAccount(null)}
+            footer={
+              <>
+                <button type="button" className={secondaryButton} onClick={() => setAccount(null)}>Đóng</button>
+                <button type="button" className={primaryButton} onClick={() => void createAccount()}>Tạo tài khoản</button>
+              </>
+            }
+          >
+            <div className="grid gap-3">
+              <label className={labelClass}>
+                Họ tên *
+                <input className={inputClass} value={account.name} onChange={(e) => setAccount({ ...account, name: e.target.value })} />
+              </label>
+              <label className={labelClass}>
+                Số điện thoại (dùng để đăng nhập) *
+                <input className={inputClass} inputMode="tel" autoComplete="off" value={account.phone} onChange={(e) => setAccount({ ...account, phone: e.target.value })} />
+              </label>
+              <label className={labelClass}>
+                Mật khẩu * (tối thiểu 6 ký tự)
+                <input className={inputClass} autoComplete="new-password" value={account.password} onChange={(e) => setAccount({ ...account, password: e.target.value })} />
+              </label>
+              <label className={labelClass}>
+                Email
+                <input type="email" className={inputClass} autoComplete="off" value={account.email} onChange={(e) => setAccount({ ...account, email: e.target.value })} />
+              </label>
+              <label className={labelClass}>
+                Phòng ban *
+                <select className={inputClass} value={account.departmentId} onChange={(e) => setAccount({ ...account, departmentId: e.target.value })}>
+                  <option value="">Chọn phòng ban</option>
+                  {data.departments.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              </label>
+              <p className="text-xs text-slate-500">
+                Tài khoản mang vai trò hệ thống <b>Nhân viên</b>, đăng nhập bằng số điện thoại + mật khẩu và lập được đề nghị tài chính. Quyền khác cấp ở màn Nhân viên.
+              </p>
+            </div>
+          </Modal>
+        )}
       </Card>
       <Card title={`Phân quyền đang hiệu lực (${active.length})`}>
         <div className="overflow-x-auto">

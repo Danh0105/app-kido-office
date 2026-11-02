@@ -600,5 +600,16 @@ export type FinanceConfigOverview = {
   policies: FinancePolicy[];
   delegations: FinanceDelegation[];
   employees: { id: number; name: string; departmentId: number | null; departmentName: string | null }[];
-  departments: { id: number; name: string }[];
+  /** `managers`: quản lý trực tiếp của riêng phòng ban, theo thứ tự ưu tiên chọn sẵn. */
+  departments: { id: number; name: string; managers?: { id: number; name: string }[] }[];
+  /** Giám đốc / nhân sự — được tạo tài khoản đăng nhập. */
+  canCreateAccount?: boolean;
+};
+
+export type FinanceAccountInput = {
+  name: string;
+  phone: string;
+  email?: string | null;
+  password: string;
+  departmentId: number;
 };

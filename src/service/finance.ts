@@ -1,6 +1,7 @@
 import api from "./api";
 import type {
   AvailableAdvance,
+  FinanceAccountInput,
   FinanceBalanceRow,
   FinanceConfigOverview,
   FinanceDeductionRow,
@@ -48,8 +49,13 @@ export const financeApi = {
   savePayeeProfile: async (payload: Omit<FinancePayeeProfile, "updatedAt">) =>
     (await api.put<FinancePayeeProfile>(`${BASE}/payee-profile`, payload)).data,
 
+  /** `isDefault`: quản lý trực tiếp của phòng ban người lập — form chọn sẵn. */
   managers: async (companyId: number) =>
-    (await api.get<{ id: number; name: string; position: string | null }[]>(`${BASE}/managers`, { params: { companyId } })).data,
+    (
+      await api.get<{ id: number; name: string; position: string | null; isDefault?: boolean }[]>(`${BASE}/managers`, {
+        params: { companyId },
+      })
+    ).data,
 
   list: async (query: FinanceListQuery) =>
     (await api.get<FinanceListResponse>(BASE, { params: clean(query) })).data,
@@ -253,6 +259,14 @@ export const financeConfigApi = {
 
   removeAssignment: async (id: number) =>
     (await api.delete(`${BASE}/config/assignments/${id}`)).data,
+
+  /** Vai trò "Nhân viên": chuyển nhân viên vào phòng ban. */
+  setEmployeeDepartment: async (employeeId: number, departmentId: number) =>
+    (await api.put(`${BASE}/config/employees/${employeeId}/department`, { departmentId })).data,
+
+  createAccount: async (payload: FinanceAccountInput) =>
+    (await api.post<{ id: number; name: string; departmentId: number; departmentName: string }>(`${BASE}/config/accounts`, payload))
+      .data,
 
   savePolicy: async (payload: Record<string, unknown>) =>
     (await api.put(`${BASE}/config/policies`, payload)).data,

@@ -1,7 +1,8 @@
 import { useEffect, useState, type ComponentType } from "react";
-import { ChevronsLeft, ChevronsRight, LayoutDashboard } from "lucide-react";
+import { ChevronsLeft, ChevronsRight, LayoutDashboard, UserCog } from "lucide-react";
 
 import logo from "@/static/Logo.png";
+import { useHrMenuEntry } from "@/pages/Hr/hooks/useHrMenuEntry";
 import {
   BRAND_SIDEBAR_COLLAPSED_WIDTH,
   BRAND_SIDEBAR_WIDTH,
@@ -39,6 +40,12 @@ export default function BrandSidebar({
       `${collapsed ? BRAND_SIDEBAR_COLLAPSED_WIDTH : BRAND_SIDEBAR_WIDTH}px`,
     );
   }, [collapsed]);
+
+  // Mục HRM chỉ hiện khi backend trả về quyền HR (xem useHrMenuEntry).
+  const hr = useHrMenuEntry();
+  const menuItems: BrandSidebarItem[] = hr.visible
+    ? [...items, { key: "hrm", title: "HRM", lucideIcon: UserCog, active: hr.active, onClick: hr.go }]
+    : items;
 
   // Rời giao diện brand thì trả header về mép trái.
   useEffect(
@@ -103,7 +110,7 @@ export default function BrandSidebar({
           </div>
 
           <div className="mt-3 space-y-2">
-            {items.map((item) => (
+            {menuItems.map((item) => (
               <button
                 key={item.key}
                 type="button"

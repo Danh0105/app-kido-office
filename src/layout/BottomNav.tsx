@@ -1,6 +1,7 @@
-import { Home, User } from "lucide-react";
+import { Home, User, UserCog } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { getHomePath, PROFILE_PATH } from "@/utils/nav";
+import { useHrMenuEntry } from "@/pages/Hr/hooks/useHrMenuEntry";
 
 export default function BottomNav() {
   const navigate = useNavigate();
@@ -10,6 +11,8 @@ export default function BottomNav() {
   const profilePath = PROFILE_PATH;
 
   const pathname = location.pathname;
+  // Chỉ hiện khi backend trả về quyền HR.
+  const hr = useHrMenuEntry();
   const homeActive =
     pathname === homePath ||
     pathname === "/director" ||
@@ -37,6 +40,16 @@ export default function BottomNav() {
           <Home size={20} />
           <span className="text-xs">Trang chủ</span>
         </button>
+
+        {hr.visible && (
+          <button
+            onClick={hr.go}
+            className={`flex flex-col items-center ${hr.active ? "text-orange-500" : "text-gray-400"}`}
+          >
+            <UserCog size={20} />
+            <span className="text-xs">HRM</span>
+          </button>
+        )}
 
         {/* PROFILE */}
         <button

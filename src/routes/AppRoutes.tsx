@@ -8,6 +8,7 @@ import RegisterFace from "@/pages/FaceId/RegisterFace";
 import Profile from "@/pages/Employee/Profile";
 import { GiaoVienRoutes, NhanSuRoutes } from "./Teaching";
 import VirtualTryOnPage from "@/pages/VirtualTryOn/VirtualTryOnPage";
+import HrRoutes from "./Hr";
 import { isAccountantOnly, isChiefAccountant } from "@/utils/auth";
 /* import TabletPage from "@/pages/Display/TabletPage";
  */ /* import Display from "@/pages/Display/Display";
@@ -68,6 +69,15 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute>
             <NhanSuRoutes />
+          </ProtectedRoute>
+        }
+      />
+      {/* HRM — quyền lấy từ backend (/api/hr/v1/access/me), không theo role cũ. */}
+      <Route
+        path="/hr/*"
+        element={
+          <ProtectedRoute>
+            <HrRoutes />
           </ProtectedRoute>
         }
       />

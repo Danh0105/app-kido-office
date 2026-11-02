@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BookOpenText, ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
+import { BookOpenText, ChevronLeft, ChevronRight, ExternalLink, Pencil, Plus } from "lucide-react";
 import type { LedgerResponse } from "@/service/cashflowReport";
 import { formatCell, formatDate, formatMoney, sourceHref } from "./cashflowFormat";
 import CashflowTableShell from "./CashflowTableShell";
@@ -7,6 +7,10 @@ import CashflowTableShell from "./CashflowTableShell";
 type Props = {
   data: LedgerResponse;
   onPageChange: (page: number) => void;
+  /** Kế toán trưởng / thủ quỹ / giám đốc: thêm, sửa, xoá bút toán nhập tay. */
+  canManage?: boolean;
+  onAddEntry?: () => void;
+  onEditEntry?: (id: number) => void;
 };
 
 /**
@@ -53,7 +57,7 @@ const rightStyle = (index: number) => ({
   minWidth: RIGHT[index].width,
 });
 
-export default function LedgerTable({ data, onPageChange }: Props) {
+export default function LedgerTable({ data, onPageChange, canManage = false, onAddEntry, onEditEntry }: Props) {
   const { accounts, rows } = data;
   const sticky = useStickyColumns();
   const stickyLeft = (index: number) => ({
@@ -121,6 +125,18 @@ export default function LedgerTable({ data, onPageChange }: Props) {
             </span>
           )}
         </>
+      }
+      headerAside={
+        canManage &&
+        onAddEntry && (
+          <button
+            type="button"
+            onClick={onAddEntry}
+            className="inline-flex items-center gap-1.5 rounded-full bg-blue-600 px-4 py-2 text-[13px] font-semibold text-white shadow-[0_8px_20px_-10px_rgba(37,99,235,0.9)] transition hover:bg-blue-700"
+          >
+            <Plus size={14} /> Thêm bút toán
+          </button>
+        )
       }
     >
 
@@ -208,12 +224,17 @@ export default function LedgerTable({ data, onPageChange }: Props) {
 
               {rows.map((row) => {
                 const href = sourceHref(row.source);
+                const manualId = row.source.type === "MANUAL_ENTRY" ? row.source.manualEntryId : undefined;
+                const editable = !!manualId && canManage && !!onEditEntry;
                 return (
                   <tr
                     key={row.key}
-                    className={`group bg-white transition-colors ${href ? "cursor-pointer" : ""} hover:bg-blue-50/50`}
-                    onClick={() => href && window.open(href, "_blank", "noopener")}
-                    title={href ? "Mở chứng từ gốc (tab mới)" : undefined}
+                    className={`group bg-white transition-colors ${href || editable ? "cursor-pointer" : ""} hover:bg-blue-50/50`}
+                    onClick={() => {
+                      if (editable) onEditEntry!(manualId!);
+                      else if (href) window.open(href, "_blank", "noopener");
+                    }}
+                    title={editable ? "Sửa bút toán nhập tay" : href ? "Mở chứng từ gốc (tab mới)" : undefined}
                   >
                     {[
                       formatDate(row.postingDate),
@@ -231,6 +252,16 @@ export default function LedgerTable({ data, onPageChange }: Props) {
                           <span className="inline-flex items-center gap-1 font-mono font-semibold text-blue-700">
                             {value}
                             <ExternalLink size={12} />
+                          </span>
+                        ) : index === 2 && manualId ? (
+                          <span className={`inline-flex flex-col items-center font-mono font-semibold ${editable ? "text-blue-700" : "text-slate-700"}`}>
+                            <span className="inline-flex items-center gap-1">
+                              {value}
+                              {editable && <Pencil size={11} />}
+                            </span>
+                            <span className="font-sans text-[10px] font-medium text-slate-500">
+                              {row.isInternalTransfer ? "Chuyển nội bộ" : "Nhập tay"}
+                            </span>
                           </span>
                         ) : index === 4 ? (
                           <span className="line-clamp-2" title={value}>

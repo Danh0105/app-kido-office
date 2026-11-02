@@ -68,13 +68,16 @@ export type LedgerSource = {
     | "MANAGEMENT_EXPENSE"
     | "EXPENSE_REQUEST"
     | "FINANCIAL_REQUEST"
-    | "OTHER_CASHFLOW";
+    | "OTHER_CASHFLOW"
+    | "MANUAL_ENTRY";
   schoolExpenseId?: number;
   subjectId?: number | null;
   rowIndex?: number;
   suggestId?: number;
   requestId?: number;
   otherCashflowId?: number;
+  /** Bút toán nhập tay — sửa/xoá ngay trên báo cáo. */
+  manualEntryId?: number;
 };
 
 export type LedgerRow = {
@@ -129,10 +132,42 @@ export type CashflowIssue = {
 };
 
 export type UpdateCashAccountPayload = {
+  name?: string;
+  sortOrder?: number;
   openingBalance?: string | null;
   openingBalanceDate?: string | null;
   isActive?: boolean;
   note?: string | null;
+};
+
+export type CreateCashAccountPayload = Omit<UpdateCashAccountPayload, "name"> & {
+  /** 111… (tiền mặt) hoặc 112… (ngân hàng) — nhóm suy từ đầu mã. */
+  code: string;
+  name: string;
+};
+
+/** IN = thu, OUT = chi, TRANSFER = chuyển nội bộ giữa hai tài khoản. */
+export type ManualEntryKind = "IN" | "OUT" | "TRANSFER";
+
+export type ManualEntryPayload = {
+  kind: ManualEntryKind;
+  entryDate: string;
+  accountCode: string;
+  counterAccountCode?: string | null;
+  amount: string;
+  documentNo?: string | null;
+  description: string;
+  partnerName?: string | null;
+  note?: string | null;
+};
+
+export type ManualEntry = Required<ManualEntryPayload> & {
+  id: number;
+  displayDocumentNo: string;
+  createdByName: string | null;
+  createdAt: string;
+  updatedByName: string | null;
+  updatedAt: string;
 };
 
 const BASE = "/reports/cashflow";
@@ -168,8 +203,26 @@ export const cashflowReportApi = {
   ): Promise<{ range: { from: string; to: string }; issues: CashflowIssue[] }> =>
     (await api.get(`${BASE}/issues`, { params: params(filters) })).data,
 
+  createAccount: async (payload: CreateCashAccountPayload) =>
+    (await api.post(`${BASE}/accounts`, payload)).data,
+
   updateAccount: async (code: string, payload: UpdateCashAccountPayload) =>
     (await api.patch(`${BASE}/accounts/${encodeURIComponent(code)}`, payload)).data,
+
+  deleteAccount: async (code: string) =>
+    (await api.delete(`${BASE}/accounts/${encodeURIComponent(code)}`)).data,
+
+  manualEntry: async (id: number): Promise<ManualEntry> =>
+    (await api.get(`${BASE}/manual-entries/${id}`)).data,
+
+  createManualEntry: async (payload: ManualEntryPayload): Promise<ManualEntry> =>
+    (await api.post(`${BASE}/manual-entries`, payload)).data,
+
+  updateManualEntry: async (id: number, payload: Partial<ManualEntryPayload>): Promise<ManualEntry> =>
+    (await api.patch(`${BASE}/manual-entries/${id}`, payload)).data,
+
+  deleteManualEntry: async (id: number) =>
+    (await api.delete(`${BASE}/manual-entries/${id}`)).data,
 
   /** Excel bám file mẫu — cùng bộ lọc, toàn bộ kết quả (không theo trang). */
   exportExcel: async (filters: CashflowFilters): Promise<Blob> =>

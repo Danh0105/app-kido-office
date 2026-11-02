@@ -29,6 +29,7 @@ import { EXCEL_FILE_TYPE, saveBlob } from "@/utils/saveBlob";
 import AccountsTable from "./AccountsTable";
 import IssuesTable from "./IssuesTable";
 import LedgerTable from "./LedgerTable";
+import ManualEntryModal from "./ManualEntryModal";
 import {
   formatDate,
   formatMoney,
@@ -92,7 +93,10 @@ export default function CashflowReportPage() {
   const tab = (params.get("tab") as Tab) || "cash";
   const page = Math.max(1, Number(params.get("page")) || 1);
   const excludeInternal = params.get("internal") === "0";
-  const canManage = hasRole("ketoan_truong", "director");
+  // Phải khớp MANAGE_ROLES của backend (cashflow-report.controller.ts).
+  const canManage = hasRole("ketoan_truong", "thuquy", "director");
+  /** Hộp bút toán nhập tay: id = null là thêm mới. */
+  const [manualDialog, setManualDialog] = useState<{ id: number | null } | null>(null);
 
   const filters: CashflowFilters = useMemo(
     () => ({
@@ -262,8 +266,8 @@ export default function CashflowReportPage() {
               </h1>
               <p className="mt-1 max-w-5xl text-[13px] leading-5 text-slate-600 sm:text-[14px]">
                 Tổng hợp từ Hóa Đơn (Khoản thu/chi), Chi Trường, Chi Ngoài (Nguồn chi),
-                Đề xuất chi (xuất tiền / hoàn quỹ) và Đề nghị tài chính nội bộ. Số liệu
-                và file Excel dùng chung một nguồn đã đối chiếu.
+                Đề xuất chi (xuất tiền / hoàn quỹ), Đề nghị tài chính nội bộ, Thu Chi ngoài
+                và bút toán nhập tay. Số liệu và file Excel dùng chung một nguồn đã đối chiếu.
               </p>
             </div>
           </div>
@@ -549,10 +553,26 @@ export default function CashflowReportPage() {
             <LedgerTable
               data={ledger}
               onPageChange={(next) => updateParams({ page: String(next) })}
+              canManage={canManage}
+              onAddEntry={() => setManualDialog({ id: null })}
+              onEditEntry={(id) => setManualDialog({ id })}
             />
           )}
           {tab === "issues" && <IssuesTable issues={issues} />}
         </div>
+      )}
+
+      {manualDialog && (
+        <ManualEntryModal
+          entryId={manualDialog.id}
+          defaultGroup={tab === "bank" ? "112" : "111"}
+          accounts={groups.flatMap((group) => group.accounts)}
+          onClose={() => setManualDialog(null)}
+          onSaved={() => {
+            setManualDialog(null);
+            setReloadKey((key) => key + 1);
+          }}
+        />
       )}
     </div>
   );

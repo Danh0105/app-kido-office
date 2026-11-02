@@ -62,6 +62,14 @@ export type FinanceCompany = {
   hasLogo: boolean;
   formCodes: Record<string, string>;
 };
+export type FinancePayeeProfile = {
+  payeeName: string | null;
+  bankAccountHolder: string | null;
+  bankName: string | null;
+  bankAccountNumber: string | null;
+  updatedAt: string;
+};
+
 export type FinanceMeta = {
   companies: FinanceCompany[];
   categories: { id: number; code: string; name: string; limitAmount: number | null }[];
@@ -75,6 +83,8 @@ export type FinanceMeta = {
     position: string | null;
     bankName: string | null;
     bankAccountNumber: string | null;
+    /** Thông tin nhận tiền tự lưu — điền sẵn trước tài khoản trong hồ sơ. */
+    savedPayee: FinancePayeeProfile | null;
   };
   capabilities: {
     isAdmin: boolean;

@@ -7,6 +7,7 @@ import {
   ClipboardList,
   Loader2,
   Paperclip,
+  Pencil,
   Plus,
   Save,
   Send,
@@ -21,13 +22,15 @@ import { financeApi } from "@/service/finance";
 import type {
   FinanceDetail,
   FinanceItemInput,
+  FinanceMeta,
+  FinancePayeeProfile,
   FinanceRequestInput,
   FinanceRequestType,
   InvoiceType,
 } from "@/types/finance";
 import { getApiErrorMessage } from "@/utils/apiError";
-import { Card, DecimalTextInput, ErrorState, LoadingState, Warnings } from "./components/FinanceUi";
-import { useFinanceMeta } from "./FinanceRoutes";
+import { Card, DecimalTextInput, ErrorState, InfoRow, LoadingState, Warnings } from "./components/FinanceUi";
+import { FINANCE_META_KEY, useFinanceMeta } from "./FinanceRoutes";
 import {
   INVOICE_TYPE_LABELS,
   TYPE_DESCRIPTIONS,
@@ -46,6 +49,15 @@ import {
 } from "./lib";
 
 type ItemRow = FinanceItemInput & { key: string; attachmentCount?: number };
+
+type PayeeFields = Pick<FinanceRequestInput, "payeeName" | "bankAccountHolder" | "bankName" | "bankAccountNumber">;
+
+const pickPayee = (source: PayeeFields): Omit<FinancePayeeProfile, "updatedAt"> => ({
+  payeeName: source.payeeName ?? null,
+  bankAccountHolder: source.bankAccountHolder ?? null,
+  bankName: source.bankName ?? null,
+  bankAccountNumber: source.bankAccountNumber ?? null,
+});
 
 const ATTACHMENT_MAX_FILES = 10;
 const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
@@ -97,18 +109,29 @@ export default function FinanceRequestForm() {
   const [companyId, setCompanyId] = useState<number | "">(
     meta.companies.length === 1 ? meta.companies[0].id : "",
   );
+  // Thông tin nhận tiền đã lưu được ưu tiên; chưa lưu thì lấy tài khoản trong hồ sơ.
+  const defaultPayee = pickPayee(
+    meta.me.savedPayee ?? {
+      payeeName: meta.me.name,
+      bankAccountHolder: meta.me.name,
+      bankName: meta.me.bankName,
+      bankAccountNumber: meta.me.bankAccountNumber,
+    },
+  );
   const [form, setForm] = useState<FinanceRequestInput>({
     requestDate: todayVN(),
     title: "",
-    payeeName: meta.me.name,
-    bankAccountHolder: meta.me.name,
-    bankName: meta.me.bankName,
-    bankAccountNumber: meta.me.bankAccountNumber,
+    ...defaultPayee,
     salaryYear: currentPeriod().year,
     salaryMonth: currentPeriod().month,
     deductionPeriods: 1,
   });
   const [items, setItems] = useState<ItemRow[]>([newRow()]);
+  // Có số tài khoản thì chỉ hiện để xem; bấm "Chỉnh sửa" mới mở ô nhập.
+  const [editingPayee, setEditingPayee] = useState(!defaultPayee.bankAccountNumber);
+  const [rememberPayee, setRememberPayee] = useState(true);
+  const [savingPayee, setSavingPayee] = useState(false);
+  const payeeBackup = useRef(defaultPayee);
   const [allocations, setAllocations] = useState<Record<number, number>>({});
 
   const set = <K extends keyof FinanceRequestInput>(key: K, value: FinanceRequestInput[K]) =>
@@ -152,6 +175,7 @@ export default function FinanceRequestForm() {
           bankAccountNumber: detail.bankAccountNumber,
           paymentNote: detail.paymentNote,
         });
+        setEditingPayee(!detail.bankAccountNumber);
         setItems(
           detail.items.length
             ? detail.items.map((item) => ({
@@ -280,6 +304,37 @@ export default function FinanceRequestForm() {
     return "";
   };
 
+  const startEditPayee = () => {
+    payeeBackup.current = pickPayee(form);
+    setEditingPayee(true);
+  };
+  const cancelEditPayee = () => {
+    setForm((prev) => ({ ...prev, ...payeeBackup.current }));
+    setEditingPayee(false);
+  };
+  const persistPayee = async () => {
+    const profile = await financeApi.savePayeeProfile(pickPayee(form));
+    queryClient.setQueryData<FinanceMeta>(FINANCE_META_KEY, (old) =>
+      old ? { ...old, me: { ...old.me, savedPayee: profile } } : old,
+    );
+  };
+  /** Đóng ô nhập; nếu chọn lưu thì ghi lại cho các đề nghị sau (lỗi thì giữ ô nhập để sửa). */
+  const finishEditPayee = async () => {
+    if (rememberPayee) {
+      setSavingPayee(true);
+      try {
+        await persistPayee();
+        toast.success("Đã lưu thông tin nhận tiền cho các đề nghị sau");
+      } catch (error) {
+        toast.error(getApiErrorMessage(error, "Không lưu được thông tin nhận tiền."));
+        return;
+      } finally {
+        setSavingPayee(false);
+      }
+    }
+    setEditingPayee(false);
+  };
+
   const save = async (submit: boolean) => {
     const error = validate();
     if (error) {
@@ -298,6 +353,13 @@ export default function FinanceRequestForm() {
       if (!requestId) setCreatedDraftId(saved.id);
       setLoaded(saved);
       setForm((prev) => ({ ...prev, version: saved.version }));
+      if (editingPayee && rememberPayee) {
+        // Bấm lưu/gửi khi còn đang sửa: vẫn ghi lại thông tin nhận tiền cho lần sau.
+        await persistPayee().then(
+          () => setEditingPayee(false),
+          () => toast.error("Đã lưu đề nghị, nhưng chưa lưu được thông tin nhận tiền cho lần sau."),
+        );
+      }
 
       // Gắn id backend cho các dòng nhưng giữ nguyên key tạm để hàng đợi tệp
       // không bị mất nếu một lần tải lên gặp lỗi.
@@ -958,41 +1020,78 @@ export default function FinanceRequestForm() {
 
       <Card title="Thông tin nhận tiền" icon={<Banknote size={16} />}
         action={
-          <button
-            type="button"
-            className="text-xs font-semibold text-blue-700 hover:underline"
-            onClick={() =>
-              setForm((prev) => ({
-                ...prev,
-                payeeName: meta.me.name,
-                bankAccountHolder: meta.me.name,
-                bankName: meta.me.bankName,
-                bankAccountNumber: meta.me.bankAccountNumber,
-              }))
-            }
-          >
-            Dùng tài khoản trong hồ sơ
-          </button>
+          editingPayee ? (
+            <button
+              type="button"
+              className="text-xs font-semibold text-blue-700 hover:underline"
+              onClick={() =>
+                setForm((prev) => ({
+                  ...prev,
+                  payeeName: meta.me.name,
+                  bankAccountHolder: meta.me.name,
+                  bankName: meta.me.bankName,
+                  bankAccountNumber: meta.me.bankAccountNumber,
+                }))
+              }
+            >
+              Dùng tài khoản trong hồ sơ
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:underline"
+              onClick={startEditPayee}
+            >
+              <Pencil size={13} /> Chỉnh sửa
+            </button>
+          )
         }
       >
         <div className="grid gap-3 md:grid-cols-3">
-          <label className={labelClass}>
-            Người thụ hưởng
-            <input className={inputClass} value={form.payeeName ?? ""} onChange={(e) => set("payeeName", e.target.value)} />
-          </label>
-          <label className={labelClass}>
-            Chủ tài khoản
-            <input className={inputClass} value={form.bankAccountHolder ?? ""} onChange={(e) => set("bankAccountHolder", e.target.value)} />
-          </label>
-          <label className={labelClass}>
-            Ngân hàng
-            <input className={inputClass} value={form.bankName ?? ""} onChange={(e) => set("bankName", e.target.value)} />
-          </label>
-          <label className={labelClass}>
-            Số tài khoản
-            <input className={inputClass} inputMode="numeric" value={form.bankAccountNumber ?? ""} onChange={(e) => set("bankAccountNumber", e.target.value)} />
-          </label>
-          <label className={`${labelClass} md:col-span-2`}>
+          {editingPayee ? (
+            <>
+              <label className={labelClass}>
+                Người thụ hưởng
+                <input className={inputClass} value={form.payeeName ?? ""} onChange={(e) => set("payeeName", e.target.value)} />
+              </label>
+              <label className={labelClass}>
+                Chủ tài khoản
+                <input className={inputClass} value={form.bankAccountHolder ?? ""} onChange={(e) => set("bankAccountHolder", e.target.value)} />
+              </label>
+              <label className={labelClass}>
+                Ngân hàng
+                <input className={inputClass} value={form.bankName ?? ""} onChange={(e) => set("bankName", e.target.value)} />
+              </label>
+              <label className={labelClass}>
+                Số tài khoản
+                <input className={inputClass} inputMode="numeric" value={form.bankAccountNumber ?? ""} onChange={(e) => set("bankAccountNumber", e.target.value)} />
+              </label>
+              <div className="flex flex-wrap items-center justify-between gap-3 md:col-span-2 md:self-end">
+                <label className="inline-flex items-center gap-2 text-sm text-slate-600">
+                  <input type="checkbox" checked={rememberPayee} onChange={(e) => setRememberPayee(e.target.checked)} />
+                  Lưu để tự điền cho các đề nghị sau
+                </label>
+                <div className="flex gap-2">
+                  <button type="button" className={secondaryButton} disabled={savingPayee} onClick={cancelEditPayee}>
+                    Huỷ
+                  </button>
+                  <button type="button" className={primaryButton} disabled={savingPayee} onClick={() => void finishEditPayee()}>
+                    {savingPayee && <Loader2 size={16} className="animate-spin" />} Xong
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <dl className="md:col-span-3 md:grid md:grid-cols-2 md:gap-x-6">
+              <InfoRow label="Người thụ hưởng">{form.payeeName}</InfoRow>
+              <InfoRow label="Chủ tài khoản">{form.bankAccountHolder}</InfoRow>
+              <InfoRow label="Ngân hàng">{form.bankName}</InfoRow>
+              <InfoRow label="Số tài khoản">
+                {form.bankAccountNumber && <span className="font-mono">{form.bankAccountNumber}</span>}
+              </InfoRow>
+            </dl>
+          )}
+          <label className={`${labelClass} md:col-span-3`}>
             Ghi chú thanh toán
             <input className={inputClass} value={form.paymentNote ?? ""} onChange={(e) => set("paymentNote", e.target.value)} />
           </label>

@@ -9,6 +9,7 @@ import type {
   FinanceListQuery,
   FinanceListResponse,
   FinanceMeta,
+  FinancePayeeProfile,
   FinanceRequestInput,
   FinanceSummary,
   SalaryAdvanceCheck,
@@ -42,6 +43,10 @@ export type MoneyMovementPayload = {
 };
 export const financeApi = {
   meta: async () => (await api.get<FinanceMeta>(`${BASE}/meta`)).data,
+
+  /** Lưu thông tin nhận tiền của chính mình để điền sẵn cho đề nghị sau. */
+  savePayeeProfile: async (payload: Omit<FinancePayeeProfile, "updatedAt">) =>
+    (await api.put<FinancePayeeProfile>(`${BASE}/payee-profile`, payload)).data,
 
   managers: async (companyId: number) =>
     (await api.get<{ id: number; name: string; position: string | null }[]>(`${BASE}/managers`, { params: { companyId } })).data,

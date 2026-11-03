@@ -37,7 +37,10 @@ import {
   TEACHING_ALERT_TYPES,
   teachingReplacementPath,
 } from "@/utils/teachingNotification";
-import { resolveExpenseRequestId } from "@/pages/ExpenseRequest/lib";
+import {
+  expenseBasePath,
+  resolveExpenseRequestId,
+} from "@/pages/ExpenseRequest/lib";
 import { brandMenusForUser } from "@/utils/brandMenu";
 import BrandSidebar from "@/pages/Director/components/BrandSidebar";
 
@@ -504,8 +507,8 @@ export default function Home() {
       case "SUGGEST":
         navigate(
           noti.meta?.suggestType === "EXPENSE_REQUEST"
-            ? `/employee/expense-requests/${targetEntityId}`
-            : "/employee/expense-requests"
+            ? `${expenseBasePath()}/${targetEntityId}`
+            : expenseBasePath()
         );
         break;
       case "REPORT":

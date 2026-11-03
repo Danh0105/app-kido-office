@@ -18,9 +18,9 @@ import reportIcon from "@/pages/Director/static/report.png";
 import statisticsIcon from "@/pages/Director/static/statistics.png";
 import suggestIcon from "@/pages/Director/static/suggest.png";
 import {
-  TEACHER_MENUS,
   canViewTeaching,
   isTeacher,
+  teacherMenusForUser,
   teachingMenusForUser,
 } from "@/pages/Teaching/lib";
 import { hasRole } from "./auth";
@@ -39,6 +39,7 @@ export type BrandMenuDefinition = {
 };
 
 export const iconForTeachingMenu = (title: string) => {
+  if (title.includes("tài chính")) return ReceiptText;
   if (title.includes("Giáo viên")) return GraduationCap;
   if (title.includes("Điểm trường")) return MapPinned;
   if (title.includes("Lớp")) return Users;
@@ -162,7 +163,7 @@ const teachingMenus = (): BrandMenuDefinition[] => {
   const source = canViewTeaching()
     ? teachingMenusForUser()
     : isTeacher()
-      ? TEACHER_MENUS
+      ? teacherMenusForUser()
       : [];
 
   return source.map((item) => ({

@@ -27,6 +27,7 @@ import {
   expenseCreatePath,
   expenseEditPath,
   expenseTasksPath,
+  canCreateExpenseRequest,
   isApproverSide,
   isEquipmentOnlyUser,
   isTechnical,
@@ -103,7 +104,7 @@ export default function ExpenseRequestList() {
   const navigate = useNavigate();
   const base = expenseBasePath();
   const approverSide = isApproverSide();
-  const canCreate = hasRole("sales");
+  const canCreate = canCreateExpenseRequest();
   const isMultiRoleSales = canCreate && approverSide;
 
   // Tài khoản chỉ thuộc phòng kỹ thuật: backend giới hạn về thiết bị/sửa chữa.
@@ -115,7 +116,9 @@ export default function ExpenseRequestList() {
       ? hasRole("saleadmin", "salesadmin_la")
         ? "Tất cả đề xuất chi"
         : "Đề xuất chi"
-      : "Đề xuất chi của tôi";
+      : hasRole("giaovien_congty") && !hasRole("sales")
+        ? "Đề nghị tài chính"
+        : "Đề xuất chi của tôi";
 
   const [items, setItems] = useState<ExpenseRequest[]>([]);
   const [groups, setGroups] = useState<ExpenseEmployeeGroup[]>([]);

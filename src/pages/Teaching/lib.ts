@@ -151,12 +151,6 @@ export const teachingMenusForUser = () =>
       (!item.moneyFeature || TEACHING_MONEY_FEATURES_ENABLED || canSetTeachingRates()),
   );
 
-export const TEACHER_MENUS = [
-  { title: "Lịch của tôi", path: "/giao-vien/lich-day" },
-  { title: "Chấm công", path: "/giao-vien/cham-cong" },
-  { title: "Tiết đang mở", path: "/giao-vien/dang-ky-tiet-day" },
-];
-
 // ================= TÀI KHOẢN GIÁO VIÊN =================
 
 /** Mật khẩu cấp sẵn khi tạo tài khoản cho giáo viên. */
@@ -168,6 +162,23 @@ export const DEFAULT_TEACHER_PASSWORD = "123456";
  */
 export const TEACHER_STAFF_ROLE = "giaovien_congty";
 export const TEACHER_COLLABORATOR_ROLE = "giaovien_ctv";
+
+export const isStaffTeacher = () => hasRole(TEACHER_STAFF_ROLE);
+
+/** Giáo viên công ty có thêm không gian đề nghị tài chính nội bộ. */
+export const teacherMenusForUser = () => [
+  { title: "Lịch của tôi", path: "/giao-vien/lich-day" },
+  { title: "Chấm công", path: "/giao-vien/cham-cong" },
+  { title: "Tiết đang mở", path: "/giao-vien/dang-ky-tiet-day" },
+  ...(isStaffTeacher()
+    ? [
+        {
+          title: "Đề nghị tài chính",
+          path: "/giao-vien/de-nghi-tai-chinh",
+        },
+      ]
+    : []),
+];
 
 /** Đăng nhập bằng SĐT nên số phải đúng định dạng, không chỉ "có nhập". */
 export const isValidPhone = (value: string) =>

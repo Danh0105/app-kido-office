@@ -4,7 +4,7 @@ import { toast } from "react-hot-toast";
 
 import HeaderWithBack from "@/components/HeaderWithBack";
 import MobileSelect from "@/pages/Employee/Sales/Suggest/MobileSelect";
-import { getEmployeeId } from "@/utils/auth";
+import { getEmployeeId, hasRole } from "@/utils/auth";
 import { provinceApi } from "@/service/province";
 import { wardApi } from "@/service/ward";
 import { schoolApi } from "@/service/school.api";
@@ -32,6 +32,8 @@ export default function ExpenseRequestForm() {
   const editId = Number(id);
   const isEdit = Number.isInteger(editId) && editId > 0;
   const base = expenseBasePath();
+  const internalTeacher =
+    hasRole("giaovien_congty") && !hasRole("sales");
 
   const [editing, setEditing] = useState<ExpenseRequest | null>(null);
   const [loadingEdit, setLoadingEdit] = useState(isEdit);
@@ -158,6 +160,7 @@ export default function ExpenseRequestForm() {
 
   // Khu vực (province) theo nhân viên
   useEffect(() => {
+    if (internalTeacher) return;
     provinceApi
       .getProvincesByEmployee(getEmployeeId())
       .then((res: any[]) => {
@@ -175,7 +178,7 @@ export default function ExpenseRequestForm() {
         ]);
       })
       .catch((e) => console.error(e));
-  }, []);
+  }, [internalTeacher]);
 
   // Tab phường/xã: chọn khu vực → tải danh sách phường/xã.
   useEffect(() => {
@@ -323,11 +326,11 @@ export default function ExpenseRequestForm() {
     // Sửa mà giữ nguyên ngày cũ (có thể đã qua) thì không bắt "từ hôm nay".
     if (dateChanged && expectedPaymentDate < todayISO())
       return "Ngày mong muốn phải từ hôm nay trở đi";
-    if (proposalTarget === "WARD" && !selectedWard)
+    if (!internalTeacher && proposalTarget === "WARD" && !selectedWard)
       return "Vui lòng chọn phường/xã";
-    if (proposalTarget === "SCHOOL" && !selectedSchool)
+    if (!internalTeacher && proposalTarget === "SCHOOL" && !selectedSchool)
       return "Vui lòng chọn trường";
-    if (proposalTarget === "SCHOOL" && selectedSchool) {
+    if (!internalTeacher && proposalTarget === "SCHOOL" && selectedSchool) {
       if (schoolYearsLoading) return "Đang tải danh sách năm học";
       if (schoolYears.length === 0)
         return "Trường chưa có dữ liệu năm học";
@@ -358,20 +361,21 @@ export default function ExpenseRequestForm() {
           content: content.trim(),
           description: description.trim() || undefined,
           participants: participants.trim() || undefined,
-          deductPolicy,
+          deductPolicy: internalTeacher ? false : deductPolicy,
           expectedPaymentDate: dateChanged ? expectedPaymentDate : undefined,
           schoolId:
-            proposalTarget === "SCHOOL" && selectedSchool
+            !internalTeacher && proposalTarget === "SCHOOL" && selectedSchool
               ? Number(selectedSchool)
               : undefined,
           schoolYear:
+            !internalTeacher &&
             proposalTarget === "SCHOOL" &&
             selectedSchool &&
             selectedSchoolYear
               ? String(selectedSchoolYear)
               : undefined,
           wardId:
-            proposalTarget === "WARD" && selectedWard
+            !internalTeacher && proposalTarget === "WARD" && selectedWard
               ? Number(selectedWard)
               : undefined,
           file: file || undefined,
@@ -384,17 +388,18 @@ export default function ExpenseRequestForm() {
         content: content.trim(),
         description: description.trim() || undefined,
         participants: participants.trim() || undefined,
-        deductPolicy,
+        deductPolicy: internalTeacher ? false : deductPolicy,
         expectedPaymentDate,
         wardId:
-          proposalTarget === "WARD" && selectedWard
+          !internalTeacher && proposalTarget === "WARD" && selectedWard
             ? Number(selectedWard)
             : undefined,
         schoolId:
-          proposalTarget === "SCHOOL" && selectedSchool
+          !internalTeacher && proposalTarget === "SCHOOL" && selectedSchool
             ? Number(selectedSchool)
             : undefined,
         schoolYear:
+          !internalTeacher &&
           proposalTarget === "SCHOOL" &&
           selectedSchool &&
           selectedSchoolYear
@@ -415,7 +420,17 @@ export default function ExpenseRequestForm() {
 
   return (
     <div className="bg-gray-100 min-h-screen flex flex-col">
-      <HeaderWithBack title={isEdit ? "Sửa đề xuất chi" : "Tạo đề xuất chi"} />
+      <HeaderWithBack
+        title={
+          internalTeacher
+            ? isEdit
+              ? "Sửa đề nghị tài chính"
+              : "Tạo đề nghị tài chính"
+            : isEdit
+              ? "Sửa đề xuất chi"
+              : "Tạo đề xuất chi"
+        }
+      />
 
       {loadingEdit ? (
         <p className="mt-[80px] text-center text-sm text-gray-400">Đang tải…</p>
@@ -430,7 +445,7 @@ export default function ExpenseRequestForm() {
           </div>
         )}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
-          <div>
+          {!internalTeacher && <div>
             <label className="text-sm text-gray-600">Đối tượng đề xuất</label>
             <div className="mt-1 grid grid-cols-2 gap-1 rounded-xl border border-gray-100 bg-gray-50 p-1">
               {(
@@ -468,10 +483,12 @@ export default function ExpenseRequestForm() {
                 Đổi đối tượng sẽ chuyển đề xuất sang phường/xã hoặc trường mới đã chọn.
               </p>
             )}
-          </div>
+          </div>}
 
           <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-            Giám đốc sẽ quyết định đây là đề xuất tiền, thiết bị hay sửa chữa khi duyệt.
+            {internalTeacher
+              ? "Đề nghị sẽ được gửi trực tiếp tới bộ phận duyệt tài chính. Bạn không cần chọn địa bàn hoặc trường."
+              : "Giám đốc sẽ quyết định đây là đề xuất tiền, thiết bị hay sửa chữa khi duyệt."}
           </div>
 
           <div>
@@ -500,7 +517,7 @@ export default function ExpenseRequestForm() {
             />
           </div>
 
-          <label className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700">
+          {!internalTeacher && <label className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700">
             <input
               type="checkbox"
               checked={deductPolicy}
@@ -508,7 +525,7 @@ export default function ExpenseRequestForm() {
               className="h-4 w-4"
             />
             Trừ chính sách
-          </label>
+          </label>}
 
           <div>
             <label className="text-sm text-gray-600">Thành phần tham gia</label>
@@ -536,7 +553,7 @@ export default function ExpenseRequestForm() {
             />
           </div>
 
-          {proposalTarget === "WARD" && (
+          {!internalTeacher && proposalTarget === "WARD" && (
             <MobileSelect
               label="Khu vực"
               placeholder="Chọn khu vực"
@@ -550,7 +567,7 @@ export default function ExpenseRequestForm() {
             />
           )}
 
-          {proposalTarget === "WARD" && wards.length > 0 && (
+          {!internalTeacher && proposalTarget === "WARD" && wards.length > 0 && (
             <MobileSelect
               label="Phường/Xã *"
               placeholder="Chọn phường/xã"
@@ -562,7 +579,7 @@ export default function ExpenseRequestForm() {
             />
           )}
 
-          {proposalTarget === "SCHOOL" && (
+          {!internalTeacher && proposalTarget === "SCHOOL" && (
             <MobileSelect
               label="Trường *"
               placeholder={schoolsLoading ? "Đang tải trường..." : "Chọn trường"}
@@ -573,13 +590,13 @@ export default function ExpenseRequestForm() {
             />
           )}
 
-          {proposalTarget === "WARD" && selectedWard && (
+          {!internalTeacher && proposalTarget === "WARD" && selectedWard && (
             <p className="-mt-2 text-xs text-blue-600">
               Đề xuất này sẽ được ghi nhận cho xã/phường đã chọn.
             </p>
           )}
 
-          {proposalTarget === "SCHOOL" && selectedSchool && (
+          {!internalTeacher && proposalTarget === "SCHOOL" && selectedSchool && (
             <MobileSelect
               label="Năm học *"
               placeholder={

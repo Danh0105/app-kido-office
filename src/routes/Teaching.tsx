@@ -14,6 +14,10 @@ import SchoolBranchPage from "@/pages/Teaching/SchoolBranchPage";
 import FuelAllowanceTierPage from "@/pages/Teaching/FuelAllowanceTierPage";
 import ActivityLogPage from "@/pages/Teaching/ActivityLogPage";
 import ImageLibraryPage from "@/pages/Teaching/ImageLibraryPage";
+import ExpenseRequestList from "@/pages/ExpenseRequest/ExpenseRequestList";
+import ExpenseRequestDetail from "@/pages/ExpenseRequest/ExpenseRequestDetail";
+import ExpenseRequestForm from "@/pages/ExpenseRequest/ExpenseRequestForm";
+import ExpenseTasks from "@/pages/ExpenseRequest/ExpenseTasks";
 import {
   canSetTeachingRates,
   canViewActivityLog,
@@ -78,6 +82,13 @@ function TeacherGuard({ children }: { children: React.ReactNode }) {
     return <Navigate to={teachingHomePath()} replace />;
   }
   if (!isTeacher()) {
+    return <Navigate to={teachingHomePath()} replace />;
+  }
+  return <>{children}</>;
+}
+
+function StaffTeacherGuard({ children }: { children: React.ReactNode }) {
+  if (!isCompanyTeacher() || canViewTeaching()) {
     return <Navigate to={teachingHomePath()} replace />;
   }
   return <>{children}</>;
@@ -224,6 +235,46 @@ export function GiaoVienRoutes() {
               <Navigate to="/giao-vien/dang-ky-tiet-day" replace />
             )}
           </TeacherGuard>
+        }
+      />
+      <Route
+        path="de-nghi-tai-chinh"
+        element={
+          <StaffTeacherGuard>
+            <ExpenseRequestList />
+          </StaffTeacherGuard>
+        }
+      />
+      <Route
+        path="de-nghi-tai-chinh/new"
+        element={
+          <StaffTeacherGuard>
+            <ExpenseRequestForm />
+          </StaffTeacherGuard>
+        }
+      />
+      <Route
+        path="de-nghi-tai-chinh/viec-cua-toi"
+        element={
+          <StaffTeacherGuard>
+            <ExpenseTasks />
+          </StaffTeacherGuard>
+        }
+      />
+      <Route
+        path="de-nghi-tai-chinh/:id/edit"
+        element={
+          <StaffTeacherGuard>
+            <ExpenseRequestForm />
+          </StaffTeacherGuard>
+        }
+      />
+      <Route
+        path="de-nghi-tai-chinh/:id"
+        element={
+          <StaffTeacherGuard>
+            <ExpenseRequestDetail />
+          </StaffTeacherGuard>
         }
       />
       <Route path="*" element={<Navigate to={teachingHomePath()} replace />} />

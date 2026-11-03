@@ -43,6 +43,7 @@ export type BrandMenuDefinition = {
 
 export const iconForTeachingMenu = (title: string) => {
   if (title.includes("Tổng hợp")) return Route;
+  if (title.includes("tài chính")) return ReceiptText;
   if (title.includes("Giáo viên")) return GraduationCap;
   if (title.includes("Điểm trường")) return MapPinned;
   if (title.includes("Lớp")) return Users;

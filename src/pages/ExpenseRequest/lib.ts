@@ -65,6 +65,12 @@ export const isDebtAccountant = () => hasRole("ketoan_congno", "ketoan_truong");
 /** Phòng kỹ thuật — xử lý đề xuất thiết bị và sửa chữa. */
 export const isTechnical = () => hasRole("ky_thuat");
 
+export const isTeacherFinanceWorkspace = () =>
+  hasRole("giaovien_congty") && !hasRole("sales") && !isApproverSide();
+
+export const canCreateExpenseRequest = () =>
+  hasRole("sales", "giaovien_congty");
+
 /**
  * Tài khoản **chỉ** thuộc phòng kỹ thuật: chỉ xem nhánh thiết bị/sửa chữa,
  * không xem đề xuất tiền.
@@ -77,6 +83,7 @@ export const isEquipmentOnlyUser = () =>
   isTechnical() &&
   !hasRole(
     "sales",
+    "giaovien_congty",
     "accountant",
     "director",
     "director_la",
@@ -166,19 +173,25 @@ const ALL_EXPENSE_STATUSES: ExpenseStatus[] = [
 
 // Base route for expense pages depends on which nav tree the current user uses.
 export const expenseBasePath = () =>
-  isApproverSide()
-    ? "/director/expense-requests"
-    : "/employee/expense-requests";
+  isTeacherFinanceWorkspace()
+    ? "/giao-vien/de-nghi-tai-chinh"
+    : isApproverSide()
+      ? "/director/expense-requests"
+      : "/employee/expense-requests";
 
 export const expenseTasksPath = () =>
-  isApproverSide() ? "/director/expense-tasks" : "/employee/expense-tasks";
+  isTeacherFinanceWorkspace()
+    ? "/giao-vien/de-nghi-tai-chinh/viec-cua-toi"
+    : isApproverSide()
+      ? "/director/expense-tasks"
+      : "/employee/expense-tasks";
 
 // Creating a request is always a sales/owner action. A multi-role sales user
 // may otherwise inherit the director base path from roles such as `thuquy`,
 // causing `/director/expense-requests/new` to be parsed as the `:id` route.
-export const expenseCreatePath = () => "/employee/expense-requests/new";
+export const expenseCreatePath = () => `${expenseBasePath()}/new`;
 export const expenseEditPath = (id: number) =>
-  `/employee/expense-requests/${id}/edit`;
+  `${expenseBasePath()}/${id}/edit`;
 
 export const isOwner = (req?: ExpenseCreatorFields) => {
   const me = Number(getEmployeeId());
@@ -258,7 +271,7 @@ export const EXPENSE_STEPS: Record<ActionKey, ExpenseStepDefinition> = {
   // Chủ đơn tự rút — chỉ khi còn đang chờ duyệt, giống điều kiện BE (state
   // machine WITHDRAW). Giám đốc rút hộ được đơn của bất kỳ ai (overrideRoles).
   withdraw: {
-    roles: ["sales", "director", "director_la"],
+    roles: ["sales", "giaovien_congty", "director", "director_la"],
     from: ["PENDING_ACCOUNTING", "PENDING_APPROVAL"],
     owner: true,
     overrideRoles: ["director", "director_la"],
@@ -266,7 +279,7 @@ export const EXPENSE_STEPS: Record<ActionKey, ExpenseStepDefinition> = {
   // Chủ đơn được sửa ở mọi trạng thái. Mỗi lần lưu, backend đưa đề xuất về
   // PENDING_APPROVAL và xoá các dấu duyệt để chạy lại quy trình từ đầu.
   edit: {
-    roles: ["sales"],
+    roles: ["sales", "giaovien_congty"],
     from: ALL_EXPENSE_STATUSES,
     owner: true,
   },
@@ -334,7 +347,7 @@ export const EXPENSE_STEPS: Record<ActionKey, ExpenseStepDefinition> = {
     kinds: ["CASH"],
   },
   cashReceived: {
-    roles: ["sales"],
+    roles: ["sales", "giaovien_congty"],
     from: ["CASH_RELEASED"],
     owner: true,
     kinds: ["CASH"],
@@ -356,7 +369,7 @@ export const EXPENSE_STEPS: Record<ActionKey, ExpenseStepDefinition> = {
     kinds: ["EQUIPMENT"],
   },
   equipmentReceived: {
-    roles: ["sales"],
+    roles: ["sales", "giaovien_congty"],
     from: ["STOCK_ISSUE_ORDERED"],
     owner: true,
     kinds: ["EQUIPMENT"],
@@ -404,12 +417,12 @@ export const EXPENSE_STEPS: Record<ActionKey, ExpenseStepDefinition> = {
 
   // --- dùng chung: chủ đơn chốt đã dùng / chưa dùng cho cả hai nhánh ---
   confirmSpent: {
-    roles: ["sales"],
+    roles: ["sales", "giaovien_congty"],
     from: ["CASH_RECEIVED", "EQUIPMENT_RECEIVED"],
     owner: true,
   },
   confirmNotSpent: {
-    roles: ["sales"],
+    roles: ["sales", "giaovien_congty"],
     from: ["CASH_RECEIVED", "EQUIPMENT_RECEIVED"],
     owner: true,
   },

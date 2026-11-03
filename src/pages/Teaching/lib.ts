@@ -161,14 +161,18 @@ export const teachingMenusForUser = () =>
 
 /**
  * Giáo viên công ty được Nhân sự xếp lịch (không tự đăng ký tiết) và có phụ
- * cấp xăng → thay "Tiết đang mở" bằng bản tổng hợp chấm công + quãng đường.
+ * cấp xăng → thay "Tiết đang mở" bằng bản tổng hợp chấm công + quãng đường,
+ * và có thêm không gian đề nghị tài chính nội bộ.
  */
 export const teacherMenusForUser = () => [
   { title: "Lịch của tôi", path: "/giao-vien/lich-day" },
   { title: "Chấm công", path: "/giao-vien/cham-cong" },
-  isCompanyTeacher()
-    ? { title: "Tổng hợp công", path: "/giao-vien/tong-hop-cong" }
-    : { title: "Tiết đang mở", path: "/giao-vien/dang-ky-tiet-day" },
+  ...(isCompanyTeacher()
+    ? [
+        { title: "Tổng hợp công", path: "/giao-vien/tong-hop-cong" },
+        { title: "Đề nghị tài chính", path: "/giao-vien/de-nghi-tai-chinh" },
+      ]
+    : [{ title: "Tiết đang mở", path: "/giao-vien/dang-ky-tiet-day" }]),
 ];
 
 // ================= TÀI KHOẢN GIÁO VIÊN =================

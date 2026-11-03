@@ -4,12 +4,13 @@ import { toast } from "react-hot-toast";
 
 import HeaderWithBack from "@/components/HeaderWithBack";
 import MobileSelect from "@/pages/Employee/Sales/Suggest/MobileSelect";
-import { getEmployeeId } from "@/utils/auth";
+import { getEmployeeId, hasRole } from "@/utils/auth";
 import { provinceApi } from "@/service/province";
 import { wardApi } from "@/service/ward";
 import { schoolApi } from "@/service/school.api";
 import { subjectApi } from "@/service/subject.api";
 import { expensePeriodApi } from "@/service/expensePeriod";
+import { teacherApi } from "@/service/teaching";
 import { expenseRequestApi } from "@/service/expenseRequest";
 import { statusLabel, type ExpenseRequest } from "@/types/expenseRequest";
 import { canDoStep, expenseBasePath, todayISO } from "./lib";
@@ -30,6 +31,8 @@ export default function ExpenseRequestForm() {
   const editId = Number(id);
   const isEdit = Number.isInteger(editId) && editId > 0;
   const base = expenseBasePath();
+  const teacherFinanceWorkspace =
+    hasRole("giaovien_congty") && !hasRole("sales");
 
   const [editing, setEditing] = useState<ExpenseRequest | null>(null);
   const [loadingEdit, setLoadingEdit] = useState(isEdit);
@@ -182,6 +185,23 @@ export default function ExpenseRequestForm() {
 
   // Khu vực (province) theo nhân viên
   useEffect(() => {
+    if (teacherFinanceWorkspace) {
+      teacherApi
+        .me()
+        .then((teacher) => {
+          const teacherWards = teacher.allowedWards || [];
+          const teacherSchools = teacher.allowedSchools || [];
+          setWards(teacherWards);
+          setSchools(teacherSchools);
+          setSelectedWard((current) =>
+            current || teacherWards.length !== 1
+              ? current
+              : Number(teacherWards[0].id),
+          );
+        })
+        .catch((e) => console.error("Không tải được phạm vi giáo viên", e));
+      return;
+    }
     provinceApi
       .getProvincesByEmployee(getEmployeeId())
       .then((res: any[]) => {
@@ -197,10 +217,11 @@ export default function ExpenseRequestForm() {
         ]);
       })
       .catch((e) => console.error(e));
-  }, []);
+  }, [teacherFinanceWorkspace]);
 
   // Tab phường/xã: chọn khu vực → tải danh sách phường/xã.
   useEffect(() => {
+    if (teacherFinanceWorkspace) return;
     if (proposalTarget !== "WARD" || !selectedRegion) return;
     setWards([]);
 
@@ -221,12 +242,13 @@ export default function ExpenseRequestForm() {
         });
       })
       .catch((e) => console.error(e));
-  }, [proposalTarget, selectedRegion]);
+  }, [proposalTarget, selectedRegion, teacherFinanceWorkspace]);
 
   // Tab trường: tải thẳng toàn bộ trường thuộc phạm vi nhân viên, không bắt
   // người dùng chọn khu vực/phường-xã trung gian.
   useEffect(() => {
     if (proposalTarget !== "SCHOOL") return;
+    if (teacherFinanceWorkspace) return;
 
     let active = true;
     setSchoolsLoading(true);
@@ -264,7 +286,7 @@ export default function ExpenseRequestForm() {
     return () => {
       active = false;
     };
-  }, [proposalTarget]);
+  }, [proposalTarget, teacherFinanceWorkspace]);
 
   // Trường có thể chỉ khai môn học cho một số năm học nhất định — tải danh
   // sách năm có dữ liệu để chọn, tự chọn sẵn năm hiện tại nếu trường có.
@@ -569,7 +591,17 @@ export default function ExpenseRequestForm() {
 
   return (
     <div className="bg-gray-100 min-h-screen flex flex-col">
-      <HeaderWithBack title={isEdit ? "Sửa đề xuất chi" : "Tạo đề xuất chi"} />
+      <HeaderWithBack
+        title={
+          teacherFinanceWorkspace
+            ? isEdit
+              ? "Sửa đề nghị tài chính"
+              : "Tạo đề nghị tài chính"
+            : isEdit
+              ? "Sửa đề xuất chi"
+              : "Tạo đề xuất chi"
+        }
+      />
 
       {loadingEdit ? (
         <p className="mt-[80px] text-center text-sm text-gray-400">Đang tải…</p>
@@ -620,7 +652,7 @@ export default function ExpenseRequestForm() {
                     setProposalTarget("SCHOOL");
                     setSelectedRegion(null);
                     setSelectedWard(null);
-                    setWards([]);
+                    if (!teacherFinanceWorkspace) setWards([]);
                     setError("");
                   }}
                   className={`rounded-lg px-2 py-2 text-xs font-medium transition ${
@@ -663,8 +695,11 @@ export default function ExpenseRequestForm() {
                         setSelectedSchoolYear(null);
                         setSelectedSubject(null);
                         setSelectedExpensePeriod(null);
-                        setWards([]);
-                        setSchools([]);
+                        // Giáo viên công ty: phường/trường lấy từ hồ sơ giáo viên, giữ nguyên.
+                        if (!teacherFinanceWorkspace) {
+                          setWards([]);
+                          setSchools([]);
+                        }
                         setError("");
                       }}
                       className={`rounded-lg px-2 py-2 text-xs font-medium transition ${
@@ -741,7 +776,7 @@ export default function ExpenseRequestForm() {
               />
             </div>
 
-            {proposalTarget === "WARD" && (
+            {!teacherFinanceWorkspace && proposalTarget === "WARD" && (
               <MobileSelect
                 label="Khu vực"
                 placeholder="Chọn khu vực"

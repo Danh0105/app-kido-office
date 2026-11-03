@@ -9,6 +9,7 @@ import { provinceApi } from "@/service/province";
 import { wardApi } from "@/service/ward";
 import { schoolApi } from "@/service/school.api";
 import { subjectApi } from "@/service/subject.api";
+import { teacherApi } from "@/service/teaching";
 import { expenseRequestApi } from "@/service/expenseRequest";
 import {
   statusLabel,
@@ -32,7 +33,7 @@ export default function ExpenseRequestForm() {
   const editId = Number(id);
   const isEdit = Number.isInteger(editId) && editId > 0;
   const base = expenseBasePath();
-  const internalTeacher =
+  const teacherFinanceWorkspace =
     hasRole("giaovien_congty") && !hasRole("sales");
 
   const [editing, setEditing] = useState<ExpenseRequest | null>(null);
@@ -160,7 +161,23 @@ export default function ExpenseRequestForm() {
 
   // Khu vực (province) theo nhân viên
   useEffect(() => {
-    if (internalTeacher) return;
+    if (teacherFinanceWorkspace) {
+      teacherApi
+        .me()
+        .then((teacher) => {
+          const teacherWards = teacher.allowedWards || [];
+          const teacherSchools = teacher.allowedSchools || [];
+          setWards(teacherWards);
+          setSchools(teacherSchools);
+          setSelectedWard((current) =>
+            current || teacherWards.length !== 1
+              ? current
+              : Number(teacherWards[0].id),
+          );
+        })
+        .catch((e) => console.error("Không tải được phạm vi giáo viên", e));
+      return;
+    }
     provinceApi
       .getProvincesByEmployee(getEmployeeId())
       .then((res: any[]) => {
@@ -178,10 +195,11 @@ export default function ExpenseRequestForm() {
         ]);
       })
       .catch((e) => console.error(e));
-  }, [internalTeacher]);
+  }, [teacherFinanceWorkspace]);
 
   // Tab phường/xã: chọn khu vực → tải danh sách phường/xã.
   useEffect(() => {
+    if (teacherFinanceWorkspace) return;
     if (proposalTarget !== "WARD" || !selectedRegion) return;
     setWards([]);
 
@@ -202,12 +220,13 @@ export default function ExpenseRequestForm() {
         });
       })
       .catch((e) => console.error(e));
-  }, [proposalTarget, selectedRegion]);
+  }, [proposalTarget, selectedRegion, teacherFinanceWorkspace]);
 
   // Tab trường: tải thẳng toàn bộ trường thuộc phạm vi nhân viên, không bắt
   // người dùng chọn khu vực/phường-xã trung gian.
   useEffect(() => {
     if (proposalTarget !== "SCHOOL") return;
+    if (teacherFinanceWorkspace) return;
 
     let active = true;
     setSchoolsLoading(true);
@@ -245,7 +264,7 @@ export default function ExpenseRequestForm() {
     return () => {
       active = false;
     };
-  }, [proposalTarget]);
+  }, [proposalTarget, teacherFinanceWorkspace]);
 
   // Trường có thể chỉ khai môn học cho một số năm học nhất định — tải danh
   // sách năm có dữ liệu để chọn, tự chọn sẵn năm hiện tại nếu trường có.
@@ -326,11 +345,11 @@ export default function ExpenseRequestForm() {
     // Sửa mà giữ nguyên ngày cũ (có thể đã qua) thì không bắt "từ hôm nay".
     if (dateChanged && expectedPaymentDate < todayISO())
       return "Ngày mong muốn phải từ hôm nay trở đi";
-    if (!internalTeacher && proposalTarget === "WARD" && !selectedWard)
+    if (proposalTarget === "WARD" && !selectedWard)
       return "Vui lòng chọn phường/xã";
-    if (!internalTeacher && proposalTarget === "SCHOOL" && !selectedSchool)
+    if (proposalTarget === "SCHOOL" && !selectedSchool)
       return "Vui lòng chọn trường";
-    if (!internalTeacher && proposalTarget === "SCHOOL" && selectedSchool) {
+    if (proposalTarget === "SCHOOL" && selectedSchool) {
       if (schoolYearsLoading) return "Đang tải danh sách năm học";
       if (schoolYears.length === 0)
         return "Trường chưa có dữ liệu năm học";
@@ -361,21 +380,20 @@ export default function ExpenseRequestForm() {
           content: content.trim(),
           description: description.trim() || undefined,
           participants: participants.trim() || undefined,
-          deductPolicy: internalTeacher ? false : deductPolicy,
+          deductPolicy,
           expectedPaymentDate: dateChanged ? expectedPaymentDate : undefined,
           schoolId:
-            !internalTeacher && proposalTarget === "SCHOOL" && selectedSchool
+            proposalTarget === "SCHOOL" && selectedSchool
               ? Number(selectedSchool)
               : undefined,
           schoolYear:
-            !internalTeacher &&
             proposalTarget === "SCHOOL" &&
             selectedSchool &&
             selectedSchoolYear
               ? String(selectedSchoolYear)
               : undefined,
           wardId:
-            !internalTeacher && proposalTarget === "WARD" && selectedWard
+            proposalTarget === "WARD" && selectedWard
               ? Number(selectedWard)
               : undefined,
           file: file || undefined,
@@ -388,18 +406,17 @@ export default function ExpenseRequestForm() {
         content: content.trim(),
         description: description.trim() || undefined,
         participants: participants.trim() || undefined,
-        deductPolicy: internalTeacher ? false : deductPolicy,
+        deductPolicy,
         expectedPaymentDate,
         wardId:
-          !internalTeacher && proposalTarget === "WARD" && selectedWard
+          proposalTarget === "WARD" && selectedWard
             ? Number(selectedWard)
             : undefined,
         schoolId:
-          !internalTeacher && proposalTarget === "SCHOOL" && selectedSchool
+          proposalTarget === "SCHOOL" && selectedSchool
             ? Number(selectedSchool)
             : undefined,
         schoolYear:
-          !internalTeacher &&
           proposalTarget === "SCHOOL" &&
           selectedSchool &&
           selectedSchoolYear
@@ -422,7 +439,7 @@ export default function ExpenseRequestForm() {
     <div className="bg-gray-100 min-h-screen flex flex-col">
       <HeaderWithBack
         title={
-          internalTeacher
+          teacherFinanceWorkspace
             ? isEdit
               ? "Sửa đề nghị tài chính"
               : "Tạo đề nghị tài chính"
@@ -445,7 +462,7 @@ export default function ExpenseRequestForm() {
           </div>
         )}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
-          {!internalTeacher && <div>
+          <div>
             <label className="text-sm text-gray-600">Đối tượng đề xuất</label>
             <div className="mt-1 grid grid-cols-2 gap-1 rounded-xl border border-gray-100 bg-gray-50 p-1">
               {(
@@ -464,8 +481,10 @@ export default function ExpenseRequestForm() {
                     setSelectedWard(null);
                     setSelectedSchool(null);
                     setSelectedSchoolYear(null);
-                    setWards([]);
-                    setSchools([]);
+                    if (!teacherFinanceWorkspace) {
+                      setWards([]);
+                      setSchools([]);
+                    }
                     setError("");
                   }}
                   className={`rounded-lg px-2 py-2 text-xs font-medium transition ${
@@ -483,12 +502,11 @@ export default function ExpenseRequestForm() {
                 Đổi đối tượng sẽ chuyển đề xuất sang phường/xã hoặc trường mới đã chọn.
               </p>
             )}
-          </div>}
+          </div>
 
           <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-            {internalTeacher
-              ? "Đề nghị sẽ được gửi trực tiếp tới bộ phận duyệt tài chính. Bạn không cần chọn địa bàn hoặc trường."
-              : "Giám đốc sẽ quyết định đây là đề xuất tiền, thiết bị hay sửa chữa khi duyệt."}
+            Giám đốc sẽ quyết định đây là đề xuất tiền, thiết bị hay sửa chữa
+            khi duyệt.
           </div>
 
           <div>
@@ -517,7 +535,7 @@ export default function ExpenseRequestForm() {
             />
           </div>
 
-          {!internalTeacher && <label className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700">
+          <label className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700">
             <input
               type="checkbox"
               checked={deductPolicy}
@@ -525,7 +543,7 @@ export default function ExpenseRequestForm() {
               className="h-4 w-4"
             />
             Trừ chính sách
-          </label>}
+          </label>
 
           <div>
             <label className="text-sm text-gray-600">Thành phần tham gia</label>
@@ -553,7 +571,7 @@ export default function ExpenseRequestForm() {
             />
           </div>
 
-          {!internalTeacher && proposalTarget === "WARD" && (
+          {!teacherFinanceWorkspace && proposalTarget === "WARD" && (
             <MobileSelect
               label="Khu vực"
               placeholder="Chọn khu vực"
@@ -567,7 +585,7 @@ export default function ExpenseRequestForm() {
             />
           )}
 
-          {!internalTeacher && proposalTarget === "WARD" && wards.length > 0 && (
+          {proposalTarget === "WARD" && wards.length > 0 && (
             <MobileSelect
               label="Phường/Xã *"
               placeholder="Chọn phường/xã"
@@ -579,7 +597,7 @@ export default function ExpenseRequestForm() {
             />
           )}
 
-          {!internalTeacher && proposalTarget === "SCHOOL" && (
+          {proposalTarget === "SCHOOL" && (
             <MobileSelect
               label="Trường *"
               placeholder={schoolsLoading ? "Đang tải trường..." : "Chọn trường"}
@@ -590,13 +608,13 @@ export default function ExpenseRequestForm() {
             />
           )}
 
-          {!internalTeacher && proposalTarget === "WARD" && selectedWard && (
+          {proposalTarget === "WARD" && selectedWard && (
             <p className="-mt-2 text-xs text-blue-600">
               Đề xuất này sẽ được ghi nhận cho xã/phường đã chọn.
             </p>
           )}
 
-          {!internalTeacher && proposalTarget === "SCHOOL" && selectedSchool && (
+          {proposalTarget === "SCHOOL" && selectedSchool && (
             <MobileSelect
               label="Năm học *"
               placeholder={

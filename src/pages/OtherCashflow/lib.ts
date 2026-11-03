@@ -1,18 +1,25 @@
-import type { Tone } from "@/pages/Finance/lib";
+import { previewLineAmount, type Tone } from "@/pages/Finance/lib";
 import type {
-  CashflowDirection,
   OrderStatus,
+  OtherCashflowForm,
   OtherCashflowStatus,
 } from "@/types/otherCashflow";
 
-export const DIRECTION_LABELS: Record<CashflowDirection, string> = {
-  IN: "Thu",
-  OUT: "Chi",
+export const FORM_LABELS: Record<OtherCashflowForm, string> = {
+  STANDARD: "Thông thường",
+  COMMERCIAL: "Thương mại",
 };
 
-export const DIRECTION_TONES: Record<CashflowDirection, Tone> = {
-  IN: "emerald",
-  OUT: "rose",
+/** Thuế suất VAT chọn được; null = không thuế (cùng danh sách VAT_RATES của backend). */
+export const VAT_OPTIONS: (number | null)[] = [null, 0, 5, 8, 10];
+
+export const vatLabel = (rate: number | null) => (rate === null ? "Không thuế" : `${rate}%`);
+
+/** Xem trước tiền một khoản như backend: SL × đơn giá, thuế làm tròn nửa lên tới đồng. */
+export const previewLine = (quantity: string, unitPrice: string, vatRate: number | null) => {
+  const net = previewLineAmount(quantity, unitPrice);
+  const vat = vatRate ? Math.floor((net * vatRate * 2 + 100) / 200) : 0;
+  return { net, vat, total: net + vat };
 };
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, [string, Tone]> = {
@@ -47,7 +54,7 @@ export const EVENT_LABELS: Record<string, string> = {
   APPROVED: "Giám đốc duyệt",
   REJECTED: "Giám đốc từ chối",
   CANCELLED: "Huỷ hợp đồng",
-  ENTRY_RECORDED: "Thủ quỹ ghi nhận",
+  ENTRY_RECORDED: "Thủ quỹ thu/chi",
   ENTRY_VOIDED: "Huỷ lần thu/chi",
   ORDER_CREATED: "Kế toán công nợ lập phiếu",
   ORDER_CANCELLED: "Huỷ phiếu",
@@ -55,10 +62,6 @@ export const EVENT_LABELS: Record<string, string> = {
   ATTACHMENT_ADDED: "Đính kèm tệp",
   ATTACHMENT_REMOVED: "Xoá tệp",
 };
-
-/** Hợp đồng Thu: "thu"; hợp đồng Chi: "chi". */
-export const verbOf = (direction: CashflowDirection) =>
-  DIRECTION_LABELS[direction].toLowerCase();
 
 export const ACCEPTED_FILES = ".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/*";
 

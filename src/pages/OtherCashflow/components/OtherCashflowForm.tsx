@@ -7,56 +7,232 @@ import {
   formatMoney,
   inputClass,
   labelClass,
-  previewLineAmount,
   primaryButton,
   secondaryButton,
-  vndToWords,
 } from "@/pages/Finance/lib";
 import { schoolApi } from "@/service/school.api";
 import { otherCashflowApi } from "@/service/otherCashflow";
 import type {
-  CashflowDirection,
+  OtherCashflowCost,
   OtherCashflowDetail,
   OtherCashflowForm as Form,
   OtherCashflowInput,
+  OtherCashflowItem,
 } from "@/types/otherCashflow";
 import { getApiErrorMessage } from "@/utils/apiError";
 import { getEmployeeId } from "@/utils/auth";
-import { ACCEPTED_FILES, DIRECTION_LABELS } from "../lib";
+import { ACCEPTED_FILES, previewLine, VAT_OPTIONS, vatLabel } from "../lib";
 
 type SchoolOption = { id: number; name: string };
-type ItemRow = { itemCode: string; itemName: string; unit: string; quantity: string; unitPrice: string };
-type CostRow = { description: string; payee: string; amount: string };
+/** Một dòng khoản thu / khoản chi đang nhập; `payee` chỉ dùng cho khoản chi. */
+type LineRow = {
+  name: string;
+  itemCode: string;
+  unit: string;
+  quantity: string;
+  unitPrice: string;
+  vatRate: number | null;
+  payee: string;
+};
+type Header = Omit<OtherCashflowInput, "items" | "costs">;
 
-const EMPTY: OtherCashflowInput = {
-  direction: "IN",
+const EMPTY: Header = {
   form: "STANDARD",
   title: "",
   documentNo: "",
   partnerName: "",
   schoolId: null,
-  amount: 0,
-  items: [],
-  costs: [],
   signedDate: null,
   expectedDate: null,
   note: "",
 };
 
-const EMPTY_ITEM: ItemRow = { itemCode: "", itemName: "", unit: "", quantity: "", unitPrice: "" };
-const EMPTY_COST: CostRow = { description: "", payee: "", amount: "" };
+const EMPTY_LINE: LineRow = { name: "", itemCode: "", unit: "", quantity: "1", unitPrice: "", vatRate: null, payee: "" };
 
 /** "2.5000" → "2.5", "35000.00" → "35000" (ô nhập hiển thị kiểu vi-VN). */
 const trimDecimal = (value: string) =>
   value.includes(".") ? value.replace(/\.?0+$/, "") : value;
 
+const toRow = (line: OtherCashflowItem | OtherCashflowCost): LineRow => ({
+  name: "itemName" in line ? line.itemName : line.description,
+  itemCode: line.itemCode ?? "",
+  unit: line.unit ?? "",
+  quantity: trimDecimal(line.quantity),
+  unitPrice: trimDecimal(line.unitPrice),
+  vatRate: line.vatRate,
+  payee: "payee" in line ? line.payee ?? "" : "",
+});
+
+/** Dòng chưa nhập gì (SL mặc định 1 vẫn tính là trống) — bỏ qua khi gửi. */
+const isBlank = (row: LineRow) =>
+  !row.name.trim() &&
+  !row.itemCode.trim() &&
+  !row.unit.trim() &&
+  !row.payee.trim() &&
+  !row.unitPrice &&
+  (row.quantity === "" || row.quantity === "1");
+
+const totals = (rows: LineRow[]) =>
+  rows.reduce(
+    (sum, row) => {
+      const money = previewLine(row.quantity, row.unitPrice, row.vatRate);
+      return { net: sum.net + money.net, vat: sum.vat + money.vat, total: sum.total + money.total };
+    },
+    { net: 0, vat: 0, total: 0 },
+  );
+
 const cellInput = `${inputClass} !mt-0`;
 
 /**
- * Lập mới hoặc sửa (khi chờ duyệt / bị từ chối — lưu là gửi duyệt lại).
- * Thu có hình thức Thương mại: đơn đặt hàng/hợp đồng với dòng hàng + chi phí,
- * số tiền = tổng thành tiền (backend tính lại). Tệp hợp đồng chọn lúc lập
- * được tải lên ngay sau khi tạo; khi sửa thì quản lý tệp ở màn chi tiết.
+ * Bảng nhập khoản thu hoặc khoản chi — cùng cấu trúc: nội dung, mã hàng, ĐVT,
+ * SL × đơn giá (chưa thuế), thuế VAT → thành tiền gồm thuế. Khoản chi có thêm
+ * người nhận.
+ */
+function LinesEditor({
+  kind,
+  rows,
+  onChange,
+}: {
+  kind: "IN" | "OUT";
+  rows: LineRow[];
+  onChange: (rows: LineRow[]) => void;
+}) {
+  const cost = kind === "OUT";
+  const noun = cost ? "khoản chi" : "khoản thu";
+  // Modal rộng tối đa ~856px nội dung — cột cố định gọn để ô Nội dung còn chỗ.
+  const columns = cost
+    ? "lg:grid-cols-[minmax(0,1fr)_120px_72px_56px_64px_100px_92px_104px_24px]"
+    : "lg:grid-cols-[minmax(0,1fr)_72px_56px_64px_100px_92px_104px_24px]";
+  const update = (index: number, patch: Partial<LineRow>) =>
+    onChange(rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+
+  return (
+    <section>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <div>
+          <span className={`${labelClass} ${cost ? "!text-rose-700" : "!text-emerald-700"}`}>
+            {cost ? "Khoản chi (công ty trả tiền)" : "Khoản thu (công ty nhận tiền)"}
+          </span>
+          <span className="block text-[11px] text-slate-400">Đơn giá chưa thuế · thành tiền đã gồm thuế</span>
+        </div>
+        <button
+          type="button"
+          className={`${secondaryButton} !px-3 !py-1.5 text-xs`}
+          onClick={() => onChange([...rows, { ...EMPTY_LINE }])}
+        >
+          <Plus size={14} /> Thêm {noun}
+        </button>
+      </div>
+      <div className={`hidden gap-2 px-1 pb-1 text-[11px] font-semibold text-slate-500 lg:grid ${columns}`}>
+        <span>Nội dung</span>
+        {cost && <span>Người nhận</span>}
+        <span>Mã hàng</span>
+        <span>ĐVT</span>
+        <span className="text-right">SL</span>
+        <span className="text-right">Đơn giá</span>
+        <span>Thuế VAT</span>
+        <span className="text-right">Thành tiền</span>
+        <span />
+      </div>
+      {rows.length ? (
+        <div className="space-y-2">
+          {rows.map((row, index) => {
+            const money = previewLine(row.quantity, row.unitPrice, row.vatRate);
+            const label = `${noun} ${index + 1}`;
+            return (
+              <div
+                key={index}
+                className={`grid grid-cols-2 gap-2 rounded-xl border border-slate-200 p-2 lg:items-center lg:border-0 lg:p-0 ${columns}`}
+              >
+                <input
+                  className={`${cellInput} col-span-2 lg:col-span-1`}
+                  placeholder={cost ? "Nội dung (mua hàng, vận chuyển, hoa hồng…)" : "Nội dung (bán hàng, học phí, dịch vụ…)"}
+                  aria-label={`Nội dung ${label}`}
+                  maxLength={255}
+                  value={row.name}
+                  onChange={(e) => update(index, { name: e.target.value })}
+                />
+                {cost && (
+                  <input
+                    className={`${cellInput} col-span-2 lg:col-span-1`}
+                    placeholder="Người nhận"
+                    aria-label={`Người nhận ${label}`}
+                    maxLength={255}
+                    value={row.payee}
+                    onChange={(e) => update(index, { payee: e.target.value })}
+                  />
+                )}
+                <input
+                  className={cellInput}
+                  placeholder="Mã hàng"
+                  aria-label={`Mã hàng ${label}`}
+                  maxLength={50}
+                  value={row.itemCode}
+                  onChange={(e) => update(index, { itemCode: e.target.value })}
+                />
+                <input
+                  className={cellInput}
+                  placeholder="ĐVT"
+                  aria-label={`Đơn vị tính ${label}`}
+                  maxLength={30}
+                  value={row.unit}
+                  onChange={(e) => update(index, { unit: e.target.value })}
+                />
+                <DecimalTextInput
+                  value={row.quantity}
+                  onChange={(value) => update(index, { quantity: value })}
+                  maxFraction={4}
+                  placeholder="SL"
+                  className={`${cellInput} text-right tabular-nums`}
+                />
+                <DecimalTextInput
+                  value={row.unitPrice}
+                  onChange={(value) => update(index, { unitPrice: value })}
+                  maxFraction={2}
+                  placeholder="Đơn giá"
+                  className={`${cellInput} text-right tabular-nums`}
+                />
+                <select
+                  className={cellInput}
+                  aria-label={`Thuế VAT ${label}`}
+                  value={row.vatRate ?? ""}
+                  onChange={(e) => update(index, { vatRate: e.target.value === "" ? null : Number(e.target.value) })}
+                >
+                  {VAT_OPTIONS.map((rate) => (
+                    <option key={rate ?? "none"} value={rate ?? ""}>
+                      {vatLabel(rate)}
+                    </option>
+                  ))}
+                </select>
+                <span className="self-center text-right tabular-nums">
+                  <span className="block text-sm font-semibold text-slate-800">{formatMoney(money.total)} đ</span>
+                  {money.vat > 0 && <span className="block text-[11px] text-slate-500">VAT {formatMoney(money.vat)}</span>}
+                </span>
+                <button
+                  type="button"
+                  className="col-span-2 justify-self-end text-slate-400 hover:text-rose-600 lg:col-span-1"
+                  aria-label={`Xoá ${label}`}
+                  onClick={() => onChange(rows.filter((_, i) => i !== index))}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="text-sm text-slate-400">Không có {noun}.</p>
+      )}
+    </section>
+  );
+}
+
+/**
+ * Lập mới hoặc sửa (khi chờ duyệt / bị từ chối — lưu là gửi duyệt lại). Một
+ * hợp đồng có nhiều khoản thu và nhiều khoản chi, mỗi khoản thuế riêng; số
+ * tiền và lợi nhuận backend tính lại. Hình thức chỉ quyết định luồng tiền sau
+ * khi duyệt. Tệp hợp đồng chọn lúc lập được tải lên ngay sau khi tạo; khi sửa
+ * thì quản lý tệp ở màn chi tiết.
  */
 export default function OtherCashflowForm({
   open,
@@ -69,10 +245,9 @@ export default function OtherCashflowForm({
   onClose: () => void;
   onSaved: (detail: OtherCashflowDetail) => void;
 }) {
-  const [form, setForm] = useState<OtherCashflowInput>(EMPTY);
-  const [amountText, setAmountText] = useState("");
-  const [items, setItems] = useState<ItemRow[]>([{ ...EMPTY_ITEM }]);
-  const [costs, setCosts] = useState<CostRow[]>([]);
+  const [form, setForm] = useState<Header>(EMPTY);
+  const [items, setItems] = useState<LineRow[]>([{ ...EMPTY_LINE }]);
+  const [costs, setCosts] = useState<LineRow[]>([{ ...EMPTY_LINE }]);
   const [files, setFiles] = useState<File[]>([]);
   const [schools, setSchools] = useState<SchoolOption[]>([]);
   const [saving, setSaving] = useState(false);
@@ -81,43 +256,21 @@ export default function OtherCashflowForm({
     if (!open) return;
     if (editing) {
       setForm({
-        direction: editing.direction,
         form: editing.form,
         title: editing.title,
         documentNo: editing.documentNo ?? "",
         partnerName: editing.partnerName,
         schoolId: editing.schoolId,
-        amount: editing.amount,
-        items: [],
-        costs: [],
         signedDate: editing.signedDate,
         expectedDate: editing.expectedDate,
         note: editing.note ?? "",
       });
-      setAmountText(String(editing.amount));
-      setItems(
-        editing.items.length
-          ? editing.items.map((item) => ({
-              itemCode: item.itemCode,
-              itemName: item.itemName,
-              unit: item.unit ?? "",
-              quantity: trimDecimal(item.quantity),
-              unitPrice: trimDecimal(item.unitPrice),
-            }))
-          : [{ ...EMPTY_ITEM }],
-      );
-      setCosts(
-        editing.costs.map((cost) => ({
-          description: cost.description,
-          payee: cost.payee ?? "",
-          amount: String(cost.amount),
-        })),
-      );
+      setItems(editing.items.map(toRow));
+      setCosts(editing.costs.map(toRow));
     } else {
       setForm(EMPTY);
-      setAmountText("");
-      setItems([{ ...EMPTY_ITEM }]);
-      setCosts([]);
+      setItems([{ ...EMPTY_LINE }]);
+      setCosts([{ ...EMPTY_LINE }]);
     }
     setFiles([]);
   }, [open, editing]);
@@ -144,49 +297,39 @@ export default function OtherCashflowForm({
     };
   }, [open]);
 
-  const set = <K extends keyof OtherCashflowInput>(key: K, value: OtherCashflowInput[K]) =>
+  const set = <K extends keyof Header>(key: K, value: Header[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
-  const commercial = form.form === "COMMERCIAL";
-  const goodsTotal = items.reduce((sum, item) => sum + previewLineAmount(item.quantity, item.unitPrice), 0);
-  const costTotal = costs.reduce((sum, cost) => sum + Number(cost.amount || 0), 0);
-  const amount = commercial ? goodsTotal : Number(amountText || 0);
+  const filledItems = items.filter((row) => !isBlank(row));
+  const filledCosts = costs.filter((row) => !isBlank(row));
+  const income = totals(filledItems);
+  const expense = totals(filledCosts);
+  const profit = income.net - expense.net;
   // Trường hiện tại có thể không còn do NV này phụ trách — vẫn giữ để không mất khi sửa.
   const schoolOptions =
     editing?.school && !schools.some((s) => s.id === editing.school!.id)
       ? [editing.school, ...schools]
       : schools;
 
-  const setDirection = (direction: CashflowDirection) =>
-    setForm((prev) => ({
-      ...prev,
-      direction,
-      // Thương mại chỉ cho Thu.
-      form: direction === "OUT" ? "STANDARD" : prev.form,
-    }));
-
-  const updateItem = (index: number, patch: Partial<ItemRow>) =>
-    setItems((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
-  const updateCost = (index: number, patch: Partial<CostRow>) =>
-    setCosts((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
-
   const validate = (): string | null => {
     if (!form.title.trim()) return "Vui lòng nhập tên/nội dung hợp đồng";
-    if (!form.partnerName.trim()) return commercial ? "Vui lòng nhập khách hàng" : "Vui lòng nhập đối tác";
-    if (commercial) {
-      for (const [index, item] of items.entries()) {
-        const line = `Dòng hàng ${index + 1}`;
-        if (!item.itemCode.trim()) return `${line}: thiếu mã hàng`;
-        if (!item.itemName.trim()) return `${line}: thiếu tên hàng`;
-        if (!Number(item.quantity)) return `${line}: số lượng phải lớn hơn 0`;
-        if (item.unitPrice === "") return `${line}: thiếu đơn giá`;
+    if (!form.partnerName.trim()) return "Vui lòng nhập khách hàng / đối tác";
+    if (!filledItems.length && !filledCosts.length) return "Cần ít nhất một khoản thu hoặc khoản chi";
+    const check = (rows: LineRow[], noun: string, positive: boolean) => {
+      for (const [index, row] of rows.entries()) {
+        const line = `${noun} ${index + 1}`;
+        if (!row.name.trim()) return `${line}: thiếu nội dung`;
+        if (!Number(row.quantity)) return `${line}: số lượng phải lớn hơn 0`;
+        if (row.unitPrice === "") return `${line}: thiếu đơn giá`;
+        if (positive && previewLine(row.quantity, row.unitPrice, row.vatRate).total <= 0) {
+          return `${line}: số tiền phải lớn hơn 0`;
+        }
       }
-      for (const [index, cost] of costs.entries()) {
-        if (!cost.description.trim()) return `Chi phí ${index + 1}: thiếu nội dung`;
-        if (!Number(cost.amount)) return `Chi phí ${index + 1}: số tiền phải lớn hơn 0`;
-      }
-    }
-    if (!amount || amount <= 0) return commercial ? "Tổng tiền hàng phải lớn hơn 0" : "Số tiền phải lớn hơn 0";
+      return null;
+    };
+    const problem = check(filledItems, "Khoản thu", false) ?? check(filledCosts, "Khoản chi", true);
+    if (problem) return problem;
+    if (income.total + expense.total <= 0) return "Tổng tiền hợp đồng phải lớn hơn 0";
     return null;
   };
 
@@ -196,28 +339,20 @@ export default function OtherCashflowForm({
       toast.error(problem);
       return;
     }
+    const line = (row: LineRow) => ({
+      itemCode: row.itemCode.trim(),
+      unit: row.unit.trim(),
+      quantity: row.quantity,
+      unitPrice: row.unitPrice,
+      vatRate: row.vatRate,
+    });
     const payload: OtherCashflowInput = {
       ...form,
       title: form.title.trim(),
       documentNo: form.documentNo.trim(),
       partnerName: form.partnerName.trim(),
-      amount,
-      items: commercial
-        ? items.map((item) => ({
-            itemCode: item.itemCode.trim(),
-            itemName: item.itemName.trim(),
-            unit: item.unit.trim(),
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-          }))
-        : [],
-      costs: commercial
-        ? costs.map((cost) => ({
-            description: cost.description.trim(),
-            payee: cost.payee.trim(),
-            amount: Number(cost.amount),
-          }))
-        : [],
+      items: filledItems.map((row) => ({ ...line(row), itemName: row.name.trim() })),
+      costs: filledCosts.map((row) => ({ ...line(row), description: row.name.trim(), payee: row.payee.trim() })),
       note: form.note.trim(),
     };
     setSaving(true);
@@ -246,9 +381,9 @@ export default function OtherCashflowForm({
   return (
     <Modal
       open={open}
-      wide={commercial}
+      wide
       onClose={() => !saving && onClose()}
-      title={editing ? `Sửa ${editing.code}` : commercial ? "Lập đơn đặt hàng / hợp đồng thương mại" : "Lập hợp đồng thu chi ngoài"}
+      title={editing ? `Sửa ${editing.code}` : "Lập hợp đồng thu chi ngoài"}
       footer={
         <>
           <button type="button" className={secondaryButton} onClick={onClose} disabled={saving}>
@@ -268,83 +403,57 @@ export default function OtherCashflowForm({
         )}
 
         <div>
-          <span className={labelClass}>Loại hợp đồng *</span>
+          <span className={labelClass}>Hình thức *</span>
           <div className="mt-1 grid grid-cols-2 gap-2">
-            {(["IN", "OUT"] as CashflowDirection[]).map((direction) => (
+            {(
+              [
+                ["STANDARD", "Thông thường", "Thủ quỹ thu/chi trực tiếp"],
+                ["COMMERCIAL", "Thương mại", "Đơn đặt hàng / hợp đồng bán hàng, qua kế toán công nợ"],
+              ] as [Form, string, string][]
+            ).map(([value, label, hint]) => (
               <button
-                key={direction}
+                key={value}
                 type="button"
-                onClick={() => setDirection(direction)}
-                className={`rounded-xl border px-3 py-2.5 text-sm font-semibold transition ${
-                  form.direction === direction
-                    ? direction === "IN"
-                      ? "border-emerald-500 bg-emerald-50 text-emerald-700"
-                      : "border-rose-500 bg-rose-50 text-rose-700"
+                onClick={() => set("form", value)}
+                className={`rounded-xl border px-3 py-2 text-left transition ${
+                  form.form === value
+                    ? "border-blue-500 bg-blue-50 text-blue-800"
                     : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                 }`}
               >
-                {DIRECTION_LABELS[direction]} {direction === "IN" ? "(công ty nhận tiền)" : "(công ty trả tiền)"}
+                <span className="block text-sm font-semibold">{label}</span>
+                <span className="block text-[11px] text-slate-500">{hint}</span>
               </button>
             ))}
           </div>
         </div>
 
-        {form.direction === "IN" && (
-          <div>
-            <span className={labelClass}>Hình thức thu *</span>
-            <div className="mt-1 grid grid-cols-2 gap-2">
-              {(
-                [
-                  ["STANDARD", "Thông thường", "Thủ quỹ ghi nhận thu trực tiếp"],
-                  ["COMMERCIAL", "Thương mại", "Đơn đặt hàng / hợp đồng bán hàng, qua kế toán công nợ"],
-                ] as [Form, string, string][]
-              ).map(([value, label, hint]) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => set("form", value)}
-                  className={`rounded-xl border px-3 py-2 text-left transition ${
-                    form.form === value
-                      ? "border-blue-500 bg-blue-50 text-blue-800"
-                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                  }`}
-                >
-                  <span className="block text-sm font-semibold">{label}</span>
-                  <span className="block text-[11px] text-slate-500">{hint}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className={`grid grid-cols-1 gap-3 ${commercial ? "sm:grid-cols-2" : ""}`}>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="block">
-            <span className={labelClass}>{commercial ? "Nội dung đơn hàng *" : "Tên / nội dung hợp đồng *"}</span>
+            <span className={labelClass}>Tên / nội dung hợp đồng *</span>
             <input
               className={inputClass}
               value={form.title}
               maxLength={255}
               onChange={(e) => set("title", e.target.value)}
-              placeholder={commercial ? "VD: Bán sách Tin học học kỳ I" : "VD: Cho thuê sân bóng học kỳ I"}
+              placeholder="VD: Liên kết dạy kỹ năng sống học kỳ I"
             />
           </label>
-          {commercial && (
-            <label className="block">
-              <span className={labelClass}>Số đơn đặt hàng / hợp đồng</span>
-              <input
-                className={inputClass}
-                value={form.documentNo}
-                maxLength={100}
-                onChange={(e) => set("documentNo", e.target.value)}
-                placeholder="VD: DDH-2026-015"
-              />
-            </label>
-          )}
+          <label className="block">
+            <span className={labelClass}>Số hợp đồng / đơn hàng</span>
+            <input
+              className={inputClass}
+              value={form.documentNo}
+              maxLength={100}
+              onChange={(e) => set("documentNo", e.target.value)}
+              placeholder="VD: HĐ-2026-015"
+            />
+          </label>
         </div>
 
-        <div className={`grid grid-cols-1 gap-3 ${commercial ? "sm:grid-cols-2" : ""}`}>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="block">
-            <span className={labelClass}>{commercial ? "Khách hàng *" : "Đối tác *"}</span>
+            <span className={labelClass}>Khách hàng / đối tác *</span>
             <input
               className={inputClass}
               value={form.partnerName}
@@ -371,176 +480,36 @@ export default function OtherCashflowForm({
           </label>
         </div>
 
-        {commercial ? (
-          <>
-            <section>
-              <div className="mb-1 flex items-center justify-between">
-                <span className={labelClass}>Hàng hoá *</span>
-                <button
-                  type="button"
-                  className={`${secondaryButton} !px-3 !py-1.5 text-xs`}
-                  onClick={() => setItems((prev) => [...prev, { ...EMPTY_ITEM }])}
-                >
-                  <Plus size={14} /> Thêm dòng hàng
-                </button>
-              </div>
-              <div className="hidden grid-cols-[110px_1fr_70px_90px_120px_120px_32px] gap-2 px-1 pb-1 text-[11px] font-semibold text-slate-500 md:grid">
-                <span>Mã hàng</span>
-                <span>Tên hàng</span>
-                <span>ĐVT</span>
-                <span className="text-right">Số lượng</span>
-                <span className="text-right">Đơn giá</span>
-                <span className="text-right">Thành tiền</span>
-                <span />
-              </div>
-              <div className="space-y-2">
-                {items.map((item, index) => (
-                  <div
-                    key={index}
-                    className="grid grid-cols-2 gap-2 rounded-xl border border-slate-200 p-2 md:grid-cols-[110px_1fr_70px_90px_120px_120px_32px] md:items-center md:border-0 md:p-0"
-                  >
-                    <input
-                      className={cellInput}
-                      placeholder="Mã hàng"
-                      aria-label={`Mã hàng dòng ${index + 1}`}
-                      maxLength={50}
-                      value={item.itemCode}
-                      onChange={(e) => updateItem(index, { itemCode: e.target.value })}
-                    />
-                    <input
-                      className={`${cellInput} col-span-1`}
-                      placeholder="Tên hàng"
-                      aria-label={`Tên hàng dòng ${index + 1}`}
-                      maxLength={255}
-                      value={item.itemName}
-                      onChange={(e) => updateItem(index, { itemName: e.target.value })}
-                    />
-                    <input
-                      className={cellInput}
-                      placeholder="ĐVT"
-                      aria-label={`Đơn vị tính dòng ${index + 1}`}
-                      maxLength={30}
-                      value={item.unit}
-                      onChange={(e) => updateItem(index, { unit: e.target.value })}
-                    />
-                    <DecimalTextInput
-                      value={item.quantity}
-                      onChange={(value) => updateItem(index, { quantity: value })}
-                      maxFraction={4}
-                      placeholder="SL"
-                      className={`${cellInput} text-right tabular-nums`}
-                    />
-                    <DecimalTextInput
-                      value={item.unitPrice}
-                      onChange={(value) => updateItem(index, { unitPrice: value })}
-                      maxFraction={2}
-                      placeholder="Đơn giá"
-                      className={`${cellInput} text-right tabular-nums`}
-                    />
-                    <span className="self-center text-right text-sm font-semibold tabular-nums text-slate-800">
-                      {formatMoney(previewLineAmount(item.quantity, item.unitPrice))} đ
-                    </span>
-                    <button
-                      type="button"
-                      className="col-span-2 justify-self-end text-slate-400 hover:text-rose-600 disabled:opacity-30 md:col-span-1"
-                      aria-label={`Xoá dòng hàng ${index + 1}`}
-                      disabled={items.length === 1}
-                      onClick={() => setItems((prev) => prev.filter((_, i) => i !== index))}
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </section>
+        <LinesEditor kind="IN" rows={items} onChange={setItems} />
+        <LinesEditor kind="OUT" rows={costs} onChange={setCosts} />
 
-            <section>
-              <div className="mb-1 flex items-center justify-between">
-                <span className={labelClass}>Các khoản chi phí (công ty chi qua quỹ)</span>
-                <button
-                  type="button"
-                  className={`${secondaryButton} !px-3 !py-1.5 text-xs`}
-                  onClick={() => setCosts((prev) => [...prev, { ...EMPTY_COST }])}
-                >
-                  <Plus size={14} /> Thêm chi phí
-                </button>
-              </div>
-              {costs.length ? (
-                <div className="space-y-2">
-                  {costs.map((cost, index) => (
-                    <div
-                      key={index}
-                      className="grid grid-cols-2 gap-2 rounded-xl border border-slate-200 p-2 md:grid-cols-[1fr_200px_140px_32px] md:items-center md:border-0 md:p-0"
-                    >
-                      <input
-                        className={`${cellInput} col-span-2 md:col-span-1`}
-                        placeholder="Nội dung (vận chuyển, hoa hồng…)"
-                        aria-label={`Nội dung chi phí ${index + 1}`}
-                        maxLength={255}
-                        value={cost.description}
-                        onChange={(e) => updateCost(index, { description: e.target.value })}
-                      />
-                      <input
-                        className={cellInput}
-                        placeholder="Người nhận"
-                        aria-label={`Người nhận chi phí ${index + 1}`}
-                        maxLength={255}
-                        value={cost.payee}
-                        onChange={(e) => updateCost(index, { payee: e.target.value })}
-                      />
-                      <DecimalTextInput
-                        value={cost.amount}
-                        onChange={(value) => updateCost(index, { amount: value })}
-                        maxFraction={0}
-                        placeholder="Số tiền"
-                        className={`${cellInput} text-right tabular-nums`}
-                      />
-                      <button
-                        type="button"
-                        className="col-span-2 justify-self-end text-slate-400 hover:text-rose-600 md:col-span-1"
-                        aria-label={`Xoá chi phí ${index + 1}`}
-                        onClick={() => setCosts((prev) => prev.filter((_, i) => i !== index))}
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-slate-400">Không có chi phí.</p>
-              )}
-            </section>
-
-            <dl className="grid grid-cols-1 gap-2 rounded-xl bg-slate-50 p-3 text-sm sm:grid-cols-3">
-              <div>
-                <dt className="text-xs text-slate-500">Tổng tiền hàng (phải thu)</dt>
-                <dd className="font-bold tabular-nums text-emerald-700">{formatMoney(goodsTotal)} đ</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-slate-500">Tổng chi phí</dt>
-                <dd className="font-bold tabular-nums text-rose-700">{formatMoney(costTotal)} đ</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-slate-500">Lãi gộp dự kiến</dt>
-                <dd className="font-bold tabular-nums text-slate-900">{formatMoney(goodsTotal - costTotal)} đ</dd>
-              </div>
-              {goodsTotal > 0 && (
-                <dd className="text-xs italic text-slate-500 sm:col-span-3">{vndToWords(goodsTotal)}</dd>
-              )}
-            </dl>
-          </>
-        ) : (
-          <label className="block">
-            <span className={labelClass}>Số tiền (đồng) *</span>
-            <DecimalTextInput
-              value={amountText}
-              onChange={setAmountText}
-              maxFraction={0}
-              className={`${inputClass} text-right tabular-nums`}
-            />
-            {amount > 0 && <span className="mt-1 block text-xs italic text-slate-500">{vndToWords(amount)}</span>}
-          </label>
-        )}
+        <dl className="grid grid-cols-1 gap-3 rounded-xl bg-slate-50 p-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <dt className="text-xs text-slate-500">Tổng thu (gồm thuế)</dt>
+            <dd className="font-bold tabular-nums text-emerald-700">{formatMoney(income.total)} đ</dd>
+            <dd className="text-[11px] text-slate-500">
+              chưa thuế {formatMoney(income.net)} · VAT {formatMoney(income.vat)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-slate-500">Tổng chi (gồm thuế)</dt>
+            <dd className="font-bold tabular-nums text-rose-700">{formatMoney(expense.total)} đ</dd>
+            <dd className="text-[11px] text-slate-500">
+              chưa thuế {formatMoney(expense.net)} · VAT {formatMoney(expense.vat)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-slate-500">VAT phải nộp (ra − vào)</dt>
+            <dd className="font-bold tabular-nums text-slate-700">{formatMoney(income.vat - expense.vat)} đ</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-slate-500">Lợi nhuận dự kiến</dt>
+            <dd className={`text-base font-extrabold tabular-nums ${profit < 0 ? "text-rose-700" : "text-slate-900"}`}>
+              {formatMoney(profit)} đ
+            </dd>
+            <dd className="text-[11px] text-slate-500">= thu chưa thuế − chi chưa thuế</dd>
+          </div>
+        </dl>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="block">
@@ -553,7 +522,7 @@ export default function OtherCashflowForm({
             />
           </label>
           <label className="block">
-            <span className={labelClass}>Ngày dự kiến {form.direction === "IN" ? "thu" : "chi"}</span>
+            <span className={labelClass}>Ngày dự kiến thu/chi</span>
             <input
               type="date"
               className={inputClass}
@@ -570,13 +539,13 @@ export default function OtherCashflowForm({
             value={form.note}
             maxLength={2000}
             onChange={(e) => set("note", e.target.value)}
-            placeholder={commercial ? "Điều khoản giao hàng, thanh toán…" : "Điều khoản thanh toán, số đợt…"}
+            placeholder="Điều khoản giao hàng, thanh toán, số đợt…"
           />
         </label>
 
         {!editing && (
           <div>
-            <span className={labelClass}>File {commercial ? "đơn hàng / hợp đồng" : "hợp đồng"} (PDF hoặc ảnh, tối đa 10 tệp × 10MB)</span>
+            <span className={labelClass}>File hợp đồng / đơn hàng (PDF hoặc ảnh, tối đa 10 tệp × 10MB)</span>
             <label className={`${secondaryButton} mt-1 cursor-pointer`}>
               <Paperclip size={16} /> Chọn tệp
               <input

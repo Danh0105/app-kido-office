@@ -17,12 +17,13 @@ import {
 import { newIdempotencyKey } from "@/service/finance";
 import { otherCashflowApi } from "@/service/otherCashflow";
 import type {
+  CashflowDirection,
   OrderKind,
   OtherCashflowDetail,
   OtherCashflowOrder,
 } from "@/types/otherCashflow";
 import { getApiErrorMessage } from "@/utils/apiError";
-import { ACCEPTED_FILES, verbOf } from "../lib";
+import { ACCEPTED_FILES } from "../lib";
 
 /** Hộp nhập lý do (từ chối, huỷ hợp đồng, huỷ lần ghi nhận). */
 export function ReasonModal({
@@ -97,22 +98,33 @@ export function ReasonModal({
   );
 }
 
+/** Còn phải chi của một khoản chi (gồm thuế). */
+const costRemaining = (contract: OtherCashflowDetail, costId: number | null) => {
+  const cost = contract.costs.find((c) => c.id === costId);
+  return cost ? cost.totalAmount - cost.paidAmount : 0;
+};
+
 /**
- * Thủ quỹ ghi nhận một lần thu/chi. Khoá chống trùng sinh một lần mỗi lần mở
- * hộp → bấm lặp hay mạng chập chờn không ghi hai lần.
+ * Thủ quỹ thu (trên tổng phải thu) hoặc chi một khoản chi. Khoá chống trùng
+ * sinh một lần mỗi lần mở hộp → bấm lặp hay mạng chập chờn không ghi hai lần.
  */
 export function RecordEntryModal({
   open,
+  flow,
   contract,
   onClose,
   onRecorded,
 }: {
   open: boolean;
+  flow: CashflowDirection;
   contract: OtherCashflowDetail;
   onClose: () => void;
   onRecorded: () => void;
 }) {
-  const verb = verbOf(contract.direction);
+  const receipt = flow === "IN";
+  const verb = receipt ? "thu" : "chi";
+  const payable = contract.costs.filter((cost) => cost.totalAmount > cost.paidAmount);
+  const [costId, setCostId] = useState<number | null>(null);
   const [date, setDate] = useState(todayVN());
   const [amountText, setAmountText] = useState("");
   const [account, setAccount] = useState("");
@@ -121,14 +133,19 @@ export function RecordEntryModal({
   const [busy, setBusy] = useState(false);
   const idempotencyKey = useMemo(() => (open ? newIdempotencyKey() : ""), [open]);
 
+  const remaining = receipt ? contract.remainingAmount : costRemaining(contract, costId);
+
   useEffect(() => {
     if (!open) return;
+    const firstCost = receipt ? null : payable[0]?.id ?? null;
+    setCostId(firstCost);
     setDate(todayVN());
-    setAmountText(String(contract.remainingAmount));
+    setAmountText(String(receipt ? contract.remainingAmount : costRemaining(contract, firstCost)));
     setAccount("");
     setNote("");
     setFiles([]);
-  }, [open, contract.remainingAmount]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, flow]);
 
   const amount = Number(amountText || 0);
 
@@ -141,12 +158,16 @@ export function RecordEntryModal({
       toast.error(`Ngày ${verb} không được sau hôm nay`);
       return;
     }
+    if (!receipt && !costId) {
+      toast.error("Vui lòng chọn khoản chi");
+      return;
+    }
     if (!amount || amount <= 0) {
       toast.error("Số tiền phải lớn hơn 0");
       return;
     }
-    if (amount > contract.remainingAmount) {
-      toast.error(`Vượt số còn phải ${verb} ${formatMoney(contract.remainingAmount)} đ`);
+    if (amount > remaining) {
+      toast.error(`Vượt số còn phải ${verb} ${formatMoney(remaining)} đ`);
       return;
     }
     if (!account) {
@@ -156,6 +177,8 @@ export function RecordEntryModal({
     setBusy(true);
     try {
       const entry = await otherCashflowApi.recordEntry(contract.id, {
+        flow,
+        costId: costId ?? undefined,
         date,
         amount,
         cashAccountCode: account,
@@ -195,11 +218,34 @@ export function RecordEntryModal({
       }
     >
       <div className="space-y-4">
-        <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
-          Hợp đồng {formatMoney(contract.amount)} đ · đã {verb}{" "}
-          <b>{formatMoney(contract.recordedAmount)} đ</b> · còn{" "}
-          <b className="text-blue-700">{formatMoney(contract.remainingAmount)} đ</b>
-        </p>
+        {receipt ? (
+          <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            Phải thu {formatMoney(contract.amount)} đ · đã thu{" "}
+            <b>{formatMoney(contract.recordedAmount)} đ</b> · còn{" "}
+            <b className="text-blue-700">{formatMoney(contract.remainingAmount)} đ</b>
+          </p>
+        ) : (
+          <label className="block">
+            <span className={labelClass}>Khoản chi *</span>
+            <select
+              className={inputClass}
+              value={costId ?? ""}
+              onChange={(e) => {
+                const next = e.target.value ? Number(e.target.value) : null;
+                setCostId(next);
+                setAmountText(String(costRemaining(contract, next)));
+              }}
+            >
+              {!payable.length && <option value="">— Không còn khoản nào phải chi —</option>}
+              {payable.map((cost) => (
+                <option key={cost.id} value={cost.id}>
+                  {cost.description}
+                  {cost.payee ? ` (${cost.payee})` : ""} — còn {formatMoney(cost.totalAmount - cost.paidAmount)} đ
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="block">
             <span className={labelClass}>Ngày {verb} *</span>
@@ -269,11 +315,10 @@ export function openAmount(contract: OtherCashflowDetail, kind: OrderKind, costI
   );
   const queued = pending.reduce((sum, o) => sum + o.amount, 0);
   if (kind === "RECEIPT") return contract.amount - contract.recordedAmount - queued;
-  const cost = contract.costs.find((c) => c.id === costId);
-  return cost ? cost.amount - cost.paidAmount - queued : 0;
+  return costRemaining(contract, costId ?? null) - queued;
 }
 
-/** Kế toán công nợ lập phiếu thu tiền hàng / lệnh chi một khoản chi phí. */
+/** Kế toán công nợ lập phiếu thu (tổng phải thu) / lệnh chi một khoản chi. */
 export function CreateOrderModal({
   open,
   contract,
@@ -310,7 +355,7 @@ export function CreateOrderModal({
   const submit = async () => {
     const amount = Number(amountText || 0);
     if (!receipt && !costId) {
-      toast.error("Vui lòng chọn khoản chi phí");
+      toast.error("Vui lòng chọn khoản chi");
       return;
     }
     if (!amount || amount <= 0) {
@@ -342,7 +387,7 @@ export function CreateOrderModal({
   return (
     <Modal
       open={open}
-      title={`${receipt ? "Lập phiếu thu tiền hàng" : "Lập lệnh chi chi phí"} — ${contract.code}`}
+      title={`${receipt ? "Lập phiếu thu" : "Lập lệnh chi"} — ${contract.code}`}
       onClose={() => !busy && onClose()}
       footer={
         <>
@@ -358,12 +403,12 @@ export function CreateOrderModal({
       <div className="space-y-4">
         {receipt ? (
           <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
-            Tiền hàng {formatMoney(contract.amount)} đ · đã thu <b>{formatMoney(contract.recordedAmount)} đ</b> · còn
+            Phải thu {formatMoney(contract.amount)} đ · đã thu <b>{formatMoney(contract.recordedAmount)} đ</b> · còn
             lập phiếu được <b className="text-blue-700">{formatMoney(maxAmount)} đ</b>
           </p>
         ) : (
           <label className="block">
-            <span className={labelClass}>Khoản chi phí *</span>
+            <span className={labelClass}>Khoản chi *</span>
             <select
               className={inputClass}
               value={costId ?? ""}
@@ -507,7 +552,7 @@ export function ExecuteOrderModal({
         <div className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">
           <p>
             {receipt
-              ? `Thu tiền hàng của ${contract.partnerName}`
+              ? `Thu của ${contract.partnerName}`
               : `Chi "${cost?.description ?? ""}"${cost?.payee ? ` cho ${cost.payee}` : ""}`}
           </p>
           <p className="mt-0.5 text-lg font-extrabold tabular-nums text-slate-900">{formatMoney(order.amount)} đ</p>

@@ -4,6 +4,7 @@ import type {
   OrderKind,
   OtherCashflowDetail,
   OtherCashflowEntry,
+  OtherCashflowForm,
   OtherCashflowInput,
   OtherCashflowListResponse,
   OtherCashflowStatus,
@@ -13,13 +14,16 @@ const BASE = "/other-cashflows";
 
 export type OtherCashflowListQuery = {
   status?: OtherCashflowStatus | "";
-  direction?: CashflowDirection | "";
+  form?: OtherCashflowForm | "";
   search?: string;
   page?: number;
   limit?: number;
 };
 
+/** Thu trên tổng phải thu (`IN`) hoặc chi một khoản chi (`OUT` + `costId`). */
 export type RecordEntryPayload = {
+  flow: CashflowDirection;
+  costId?: number;
   date: string;
   amount: number;
   cashAccountCode: string;

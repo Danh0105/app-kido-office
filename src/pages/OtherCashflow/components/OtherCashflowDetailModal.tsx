@@ -29,18 +29,19 @@ import {
 import { otherCashflowApi } from "@/service/otherCashflow";
 import type {
   OtherCashflowAttachment,
+  OtherCashflowCost,
   OtherCashflowDetail,
   OtherCashflowEntry,
+  OtherCashflowItem,
 } from "@/types/otherCashflow";
 import { getApiErrorMessage } from "@/utils/apiError";
 import {
   ACCEPTED_FILES,
-  DIRECTION_LABELS,
-  DIRECTION_TONES,
   EVENT_LABELS,
+  FORM_LABELS,
   ORDER_STATUS_LABELS,
   STATUS_LABELS,
-  verbOf,
+  vatLabel,
 } from "../lib";
 import OtherCashflowForm from "./OtherCashflowForm";
 import {
@@ -56,7 +57,8 @@ type Dialog =
   | "edit"
   | "reject"
   | "cancel"
-  | "record"
+  | "recordIn"
+  | "recordOut"
   | "receiptOrder"
   | "paymentOrder"
   | { voidEntryId: number }
@@ -123,6 +125,90 @@ function Progress({ label, done, total, tone }: { label: ReactNode; done: number
       <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-100">
         <div className={`h-full rounded-full ${tone === "emerald" ? "bg-emerald-500" : "bg-rose-500"}`} style={{ width: `${percent}%` }} />
       </div>
+    </div>
+  );
+}
+
+/** Bảng khoản thu / khoản chi: SL × đơn giá chưa thuế, thuế, thành tiền gồm thuế. */
+function LinesTable({
+  kind,
+  lines,
+  showPaid,
+}: {
+  kind: "IN" | "OUT";
+  lines: (OtherCashflowItem | OtherCashflowCost)[];
+  showPaid: boolean;
+}) {
+  const cost = kind === "OUT";
+  const total = lines.reduce((sum, line) => sum + line.totalAmount, 0);
+  return (
+    <section>
+      <h4 className={`mb-2 font-bold ${cost ? "text-rose-700" : "text-emerald-700"}`}>
+        {cost ? "Khoản chi" : "Khoản thu"}
+      </h4>
+      {lines.length ? (
+        <div className="-mx-1 overflow-x-auto px-1">
+          <table className="w-full min-w-[640px] text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
+                <th className="py-1.5 pr-2">Nội dung</th>
+                <th className="py-1.5 pr-2">ĐVT</th>
+                <th className="py-1.5 pr-2 text-right">SL</th>
+                <th className="py-1.5 pr-2 text-right">Đơn giá</th>
+                <th className="py-1.5 pr-2 text-right">Chưa thuế</th>
+                <th className="py-1.5 pr-2 text-right">Thuế</th>
+                <th className="py-1.5 text-right">Thành tiền</th>
+                {cost && showPaid && <th className="py-1.5 pl-2 text-right">Đã chi</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((line) => (
+                <tr key={line.id} className="border-b border-slate-100 align-top">
+                  <td className="py-1.5 pr-2">
+                    {"itemName" in line ? line.itemName : line.description}
+                    {(line.itemCode || ("payee" in line && line.payee)) && (
+                      <span className="block text-xs text-slate-500">
+                        {[line.itemCode, "payee" in line ? line.payee : null].filter(Boolean).join(" · ")}
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-1.5 pr-2 text-slate-500">{line.unit}</td>
+                  <td className="py-1.5 pr-2 text-right tabular-nums">{formatQuantity(line.quantity)}</td>
+                  <td className="py-1.5 pr-2 text-right tabular-nums">{formatQuantity(line.unitPrice)}</td>
+                  <td className="py-1.5 pr-2 text-right tabular-nums">{formatMoney(line.amount)}</td>
+                  <td className="py-1.5 pr-2 text-right tabular-nums text-slate-500">
+                    {vatLabel(line.vatRate)}
+                    {line.vatAmount > 0 && <span className="block text-xs">{formatMoney(line.vatAmount)}</span>}
+                  </td>
+                  <td className="py-1.5 text-right font-semibold tabular-nums">{formatMoney(line.totalAmount)}</td>
+                  {cost && showPaid && "paidAmount" in line && (
+                    <td className="py-1.5 pl-2 text-right tabular-nums text-slate-500">{formatMoney(line.paidAmount)}</td>
+                  )}
+                </tr>
+              ))}
+              <tr>
+                <td colSpan={6} className="py-1.5 pr-2 text-right text-xs font-semibold text-slate-500">
+                  {cost ? "Tổng phải chi" : "Tổng phải thu"}
+                </td>
+                <td className="py-1.5 text-right font-bold tabular-nums">{formatMoney(total)}</td>
+                {cost && showPaid && <td />}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="text-sm text-slate-400">Không có {cost ? "khoản chi" : "khoản thu"}.</p>
+      )}
+    </section>
+  );
+}
+
+function MoneyTile({ label, value, hint, tone }: { label: string; value: number; hint?: string; tone?: string }) {
+  return (
+    <div>
+      <dt className="text-xs text-slate-500">{label}</dt>
+      <dd className={`font-bold tabular-nums ${tone ?? "text-slate-900"}`}>{formatMoney(value)} đ</dd>
+      {hint && <dd className="text-[11px] text-slate-500">{hint}</dd>}
     </div>
   );
 }
@@ -213,15 +299,10 @@ export default function OtherCashflowDetailModal({
   const open = contractId !== null;
   const p = detail?.permissions;
   const commercial = detail?.form === "COMMERCIAL";
-  const verb = detail ? verbOf(detail.direction) : "";
   const contractFiles = detail?.attachments.filter((a) => a.kind === "CONTRACT") ?? [];
   const costOf = (costId: number | null) => detail?.costs.find((c) => c.id === costId);
   const entryLabel = (entry: OtherCashflowEntry) =>
-    !commercial
-      ? `${DIRECTION_LABELS[entry.flow]}`
-      : entry.costId
-      ? `Chi: ${costOf(entry.costId)?.description ?? "chi phí"}`
-      : "Thu tiền hàng";
+    entry.flow === "IN" ? "Thu" : `Chi: ${costOf(entry.costId)?.description ?? "khoản chi"}`;
   const canOpenReceipt = detail ? openAmount(detail, "RECEIPT") > 0 : false;
   const canOpenPayment = detail ? detail.costs.some((c) => openAmount(detail, "PAYMENT", c.id) > 0) : false;
   const executeOrder =
@@ -255,7 +336,11 @@ export default function OtherCashflowDetailModal({
               className={primaryButton}
               disabled={busy}
               onClick={() => {
-                if (window.confirm(`Duyệt ${detail.code} — ${formatMoney(detail.amount)} đ?`)) {
+                if (
+                  window.confirm(
+                    `Duyệt ${detail.code} — thu ${formatMoney(detail.amount)} đ · chi ${formatMoney(detail.costAmount)} đ · lợi nhuận ${formatMoney(detail.profit)} đ?`,
+                  )
+                ) {
                   void run(() => otherCashflowApi.review(detail.id, "APPROVED"), "Đã duyệt");
                 }
               }}
@@ -264,9 +349,14 @@ export default function OtherCashflowDetailModal({
             </button>
           </>
         )}
-        {p.canRecord && (
-          <button type="button" className={primaryButton} disabled={busy} onClick={() => setDialog("record")}>
-            <Wallet size={16} /> Ghi nhận {verb}
+        {p.canRecord && detail.remainingCostAmount > 0 && (
+          <button type="button" className={secondaryButton} disabled={busy} onClick={() => setDialog("recordOut")}>
+            <HandCoins size={16} /> Ghi nhận chi
+          </button>
+        )}
+        {p.canRecord && detail.remainingAmount > 0 && (
+          <button type="button" className={primaryButton} disabled={busy} onClick={() => setDialog("recordIn")}>
+            <Wallet size={16} /> Ghi nhận thu
           </button>
         )}
       </>
@@ -288,8 +378,7 @@ export default function OtherCashflowDetailModal({
         ) : (
           <div className="space-y-5">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge tone={DIRECTION_TONES[detail.direction]}>{DIRECTION_LABELS[detail.direction]}</Badge>
-              {commercial && <Badge tone="sky">Thương mại</Badge>}
+              <Badge tone={commercial ? "sky" : "slate"}>{FORM_LABELS[detail.form]}</Badge>
               <Badge tone={STATUS_LABELS[detail.status][1]}>{STATUS_LABELS[detail.status][0]}</Badge>
             </div>
 
@@ -305,22 +394,35 @@ export default function OtherCashflowDetailModal({
               </p>
             )}
 
+            <dl className="grid grid-cols-1 gap-3 rounded-xl bg-slate-50 p-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+              <MoneyTile
+                label="Tổng thu (gồm thuế)"
+                value={detail.amount}
+                hint={`chưa thuế ${formatMoney(detail.incomeNetAmount)} · VAT ${formatMoney(detail.incomeVatAmount)}`}
+                tone="text-emerald-700"
+              />
+              <MoneyTile
+                label="Tổng chi (gồm thuế)"
+                value={detail.costAmount}
+                hint={`chưa thuế ${formatMoney(detail.costNetAmount)} · VAT ${formatMoney(detail.costVatAmount)}`}
+                tone="text-rose-700"
+              />
+              <MoneyTile label="VAT phải nộp (ra − vào)" value={detail.vatPayable} tone="text-slate-700" />
+              <div>
+                <dt className="text-xs text-slate-500">Lợi nhuận dự kiến</dt>
+                <dd className={`text-base font-extrabold tabular-nums ${detail.profit < 0 ? "text-rose-700" : "text-slate-900"}`}>
+                  {formatMoney(detail.profit)} đ
+                </dd>
+                <dd className="text-[11px] italic text-slate-500">{vndToWords(Math.abs(detail.profit))}</dd>
+              </div>
+            </dl>
+
             <dl className="divide-y divide-slate-100">
-              {commercial && <InfoRow label="Số đơn / hợp đồng">{detail.documentNo}</InfoRow>}
-              <InfoRow label={commercial ? "Khách hàng" : "Đối tác"}>{detail.partnerName}</InfoRow>
+              <InfoRow label="Số hợp đồng / đơn hàng">{detail.documentNo}</InfoRow>
+              <InfoRow label="Khách hàng / đối tác">{detail.partnerName}</InfoRow>
               <InfoRow label="Trường liên quan">{detail.school?.name}</InfoRow>
-              <InfoRow label={commercial ? "Tổng tiền hàng" : "Số tiền hợp đồng"}>
-                <b className="tabular-nums">{formatMoney(detail.amount)} đ</b>
-                <span className="block text-xs italic text-slate-500">{vndToWords(detail.amount)}</span>
-              </InfoRow>
-              {commercial && (
-                <InfoRow label="Chi phí · lãi gộp">
-                  {formatMoney(detail.costAmount)} đ · lãi gộp dự kiến{" "}
-                  <b className="tabular-nums">{formatMoney(detail.grossProfit)} đ</b>
-                </InfoRow>
-              )}
               <InfoRow label="Ngày ký">{detail.signedDate && formatDate(detail.signedDate)}</InfoRow>
-              <InfoRow label={`Ngày dự kiến ${verb}`}>{detail.expectedDate && formatDate(detail.expectedDate)}</InfoRow>
+              <InfoRow label="Ngày dự kiến thu/chi">{detail.expectedDate && formatDate(detail.expectedDate)}</InfoRow>
               <InfoRow label="Ghi chú">{detail.note && <span className="whitespace-pre-line">{detail.note}</span>}</InfoRow>
               <InfoRow label="Người lập">
                 {detail.createdByName} · gửi duyệt {formatDateTime(detail.submittedAt)}
@@ -333,68 +435,12 @@ export default function OtherCashflowDetailModal({
               )}
             </dl>
 
-            {commercial && (
-              <section>
-                <h4 className="mb-2 font-bold text-slate-900">Hàng hoá</h4>
-                <div className="-mx-1 overflow-x-auto px-1">
-                  <table className="w-full min-w-[560px] text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
-                        <th className="py-1.5 pr-2">Mã hàng</th>
-                        <th className="py-1.5 pr-2">Tên hàng</th>
-                        <th className="py-1.5 pr-2">ĐVT</th>
-                        <th className="py-1.5 pr-2 text-right">SL</th>
-                        <th className="py-1.5 pr-2 text-right">Đơn giá</th>
-                        <th className="py-1.5 text-right">Thành tiền</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {detail.items.map((item) => (
-                        <tr key={item.id} className="border-b border-slate-100">
-                          <td className="py-1.5 pr-2 font-medium text-slate-700">{item.itemCode}</td>
-                          <td className="py-1.5 pr-2">{item.itemName}</td>
-                          <td className="py-1.5 pr-2 text-slate-500">{item.unit}</td>
-                          <td className="py-1.5 pr-2 text-right tabular-nums">{formatQuantity(item.quantity)}</td>
-                          <td className="py-1.5 pr-2 text-right tabular-nums">{formatQuantity(item.unitPrice)}</td>
-                          <td className="py-1.5 text-right font-semibold tabular-nums">{formatMoney(item.amount)}</td>
-                        </tr>
-                      ))}
-                      <tr>
-                        <td colSpan={5} className="py-1.5 pr-2 text-right text-xs font-semibold text-slate-500">
-                          Tổng tiền hàng
-                        </td>
-                        <td className="py-1.5 text-right font-bold tabular-nums">{formatMoney(detail.amount)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-                {detail.costs.length > 0 && (
-                  <>
-                    <h4 className="mb-2 mt-4 font-bold text-slate-900">Các khoản chi phí</h4>
-                    <ul className="space-y-1.5">
-                      {detail.costs.map((cost) => (
-                        <li key={cost.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm">
-                          <span>
-                            {cost.description}
-                            {cost.payee && <span className="text-slate-500"> · {cost.payee}</span>}
-                          </span>
-                          <span className="tabular-nums">
-                            <b>{formatMoney(cost.amount)} đ</b>
-                            {showMoney && (
-                              <span className="text-xs text-slate-500"> · đã chi {formatMoney(cost.paidAmount)} đ</span>
-                            )}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-              </section>
-            )}
+            <LinesTable kind="IN" lines={detail.items} showPaid={showMoney} />
+            <LinesTable kind="OUT" lines={detail.costs} showPaid={showMoney} />
 
             <section>
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <h4 className="font-bold text-slate-900">File {commercial ? "đơn hàng / hợp đồng" : "hợp đồng"}</h4>
+                <h4 className="font-bold text-slate-900">File hợp đồng / đơn hàng</h4>
                 {p?.canUploadContract && (
                   <UploadButton label="Thêm tệp" busy={uploading === "contract"} onPick={(files) => upload(files)} />
                 )}
@@ -434,9 +480,11 @@ export default function OtherCashflowDetailModal({
                     </div>
                   )}
                 </div>
-                <Progress label="Tiền hàng đã thu" done={detail.recordedAmount} total={detail.amount} tone="emerald" />
+                {detail.amount > 0 && (
+                  <Progress label="Đã thu" done={detail.recordedAmount} total={detail.amount} tone="emerald" />
+                )}
                 {detail.costAmount > 0 && (
-                  <Progress label="Chi phí đã chi" done={detail.paidCostAmount} total={detail.costAmount} tone="rose" />
+                  <Progress label="Đã chi" done={detail.paidCostAmount} total={detail.costAmount} tone="rose" />
                 )}
                 {detail.orders.length ? (
                   <ul className="space-y-2">
@@ -497,17 +545,15 @@ export default function OtherCashflowDetailModal({
 
             {showMoney && (
               <section>
-                <h4 className="mb-2 font-bold text-slate-900">
-                  {commercial ? "Thủ quỹ thu/chi thực tế" : `Thủ quỹ ghi nhận ${verb}`}
-                </h4>
+                <h4 className="mb-2 font-bold text-slate-900">Thủ quỹ thu/chi thực tế</h4>
                 {!commercial && (
-                  <div className="mb-3">
-                    <Progress
-                      label={`Đã ${verb}`}
-                      done={detail.recordedAmount}
-                      total={detail.amount}
-                      tone={detail.direction === "IN" ? "emerald" : "rose"}
-                    />
+                  <div className="mb-3 space-y-3">
+                    {detail.amount > 0 && (
+                      <Progress label="Đã thu" done={detail.recordedAmount} total={detail.amount} tone="emerald" />
+                    )}
+                    {detail.costAmount > 0 && (
+                      <Progress label="Đã chi" done={detail.paidCostAmount} total={detail.costAmount} tone="rose" />
+                    )}
                   </div>
                 )}
                 {detail.entries.length ? (
@@ -522,7 +568,9 @@ export default function OtherCashflowDetailModal({
                         >
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className={voided ? "line-through" : ""}>
-                              {commercial && <span className="mr-1 font-medium">{entryLabel(entry)} ·</span>}
+                              <span className={`mr-1 font-medium ${entry.flow === "IN" ? "text-emerald-700" : "text-rose-700"}`}>
+                                {entryLabel(entry)} ·
+                              </span>
                               <b className={`tabular-nums ${voided ? "" : "text-slate-900"}`}>{formatMoney(entry.amount)} đ</b>{" "}
                               · {formatDate(entry.entryDate)} · TK {entry.cashAccountCode}
                             </div>
@@ -578,9 +626,7 @@ export default function OtherCashflowDetailModal({
                     })}
                   </ul>
                 ) : (
-                  <p className="text-sm text-slate-400">
-                    {commercial ? "Chưa thu/chi lần nào." : "Thủ quỹ chưa ghi nhận lần nào."}
-                  </p>
+                  <p className="text-sm text-slate-400">Chưa thu/chi lần nào.</p>
                 )}
               </section>
             )}
@@ -656,7 +702,8 @@ export default function OtherCashflowDetailModal({
             }
           />
           <RecordEntryModal
-            open={dialog === "record"}
+            open={dialog === "recordIn" || dialog === "recordOut"}
+            flow={dialog === "recordOut" ? "OUT" : "IN"}
             contract={detail}
             onClose={() => setDialog(null)}
             onRecorded={reloadAfter}

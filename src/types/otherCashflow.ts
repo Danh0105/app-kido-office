@@ -1,6 +1,7 @@
+/** Chiều tiền của một lần thu/chi (và của hợp đồng lập trước khi gộp thu chi). */
 export type CashflowDirection = "IN" | "OUT";
 
-/** Thương mại chỉ cho Thu: đơn đặt hàng/hợp đồng có dòng hàng + chi phí, đi luồng công nợ. */
+/** Thông thường: thủ quỹ thu/chi trực tiếp. Thương mại: qua kế toán công nợ (phiếu thu / lệnh chi). */
 export type OtherCashflowForm = "STANDARD" | "COMMERCIAL";
 
 export type OrderKind = "RECEIPT" | "PAYMENT";
@@ -14,10 +15,16 @@ export type OtherCashflowStatus =
   | "COMPLETED"
   | "CANCELLED";
 
+/**
+ * Hợp đồng gồm nhiều khoản thu + nhiều khoản chi. `amount` = tổng phải thu gồm
+ * thuế, `costAmount` = tổng phải chi gồm thuế; `profit` = thu chưa thuế − chi
+ * chưa thuế (backend tính).
+ */
 export type OtherCashflowContract = {
   id: number;
   code: string;
-  direction: CashflowDirection;
+  /** Chỉ hợp đồng lập trước khi gộp thu chi. */
+  direction: CashflowDirection | null;
   form: OtherCashflowForm;
   title: string;
   documentNo: string | null;
@@ -25,12 +32,18 @@ export type OtherCashflowContract = {
   schoolId: number | null;
   school: { id: number; name: string } | null;
   amount: number;
+  incomeVatAmount: number;
+  incomeNetAmount: number;
   recordedAmount: number;
   remainingAmount: number;
   costAmount: number;
+  costVatAmount: number;
+  costNetAmount: number;
   paidCostAmount: number;
   remainingCostAmount: number;
-  grossProfit: number;
+  /** VAT đầu ra − đầu vào (âm = được khấu trừ). */
+  vatPayable: number;
+  profit: number;
   signedDate: string | null;
   expectedDate: string | null;
   note: string | null;
@@ -48,28 +61,32 @@ export type OtherCashflowContract = {
   updatedAt: string;
 };
 
-export type OtherCashflowItem = {
+/** Tiền của một khoản: `amount` chưa thuế, `totalAmount` gồm thuế; `vatRate` null = không thuế. */
+type LineMoney = {
   id: number;
   lineNo: number;
-  itemCode: string;
-  itemName: string;
+  itemCode: string | null;
   unit: string | null;
   /** numeric dạng chuỗi, VD "2.5000" */
   quantity: string;
   unitPrice: string;
   amount: number;
+  vatRate: number | null;
+  vatAmount: number;
+  totalAmount: number;
 };
 
-export type OtherCashflowCost = {
-  id: number;
-  lineNo: number;
+/** Khoản thu. */
+export type OtherCashflowItem = LineMoney & { itemName: string };
+
+/** Khoản chi — `paidAmount` đã chi trên `totalAmount`. */
+export type OtherCashflowCost = LineMoney & {
   description: string;
   payee: string | null;
-  amount: number;
   paidAmount: number;
 };
 
-/** Phiếu thu (tiền hàng) / lệnh chi (chi phí) do kế toán công nợ lập. */
+/** Phiếu thu (tổng phải thu) / lệnh chi (một khoản chi) do kế toán công nợ lập. */
 export type OtherCashflowOrder = {
   id: number;
   kind: OrderKind;
@@ -168,29 +185,25 @@ export type OtherCashflowListResponse = {
   };
 };
 
-export type OtherCashflowItemInput = {
+type LineInput = {
   itemCode: string;
-  itemName: string;
   unit: string;
   quantity: string;
   unitPrice: string;
+  vatRate: number | null;
 };
 
-export type OtherCashflowCostInput = {
-  description: string;
-  payee: string;
-  amount: number;
-};
+export type OtherCashflowItemInput = LineInput & { itemName: string };
 
+export type OtherCashflowCostInput = LineInput & { description: string; payee: string };
+
+/** Số tiền hợp đồng do backend tính từ các khoản. */
 export type OtherCashflowInput = {
-  direction: CashflowDirection;
   form: OtherCashflowForm;
   title: string;
   documentNo: string;
   partnerName: string;
   schoolId: number | null;
-  /** Thương mại: backend tính lại từ dòng hàng. */
-  amount: number;
   items: OtherCashflowItemInput[];
   costs: OtherCashflowCostInput[];
   signedDate: string | null;

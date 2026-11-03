@@ -1,26 +1,34 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ArrowDownLeft, ArrowUpRight, Plus, Search } from "lucide-react";
+import { ArrowLeftRight, Plus, Search } from "lucide-react";
 
 import { Badge, EmptyState, ErrorState, LoadingState } from "@/pages/Finance/components/FinanceUi";
 import { formatDate, formatMoney, inputClass, secondaryButton } from "@/pages/Finance/lib";
 import { otherCashflowApi, type OtherCashflowListQuery } from "@/service/otherCashflow";
 import type {
-  CashflowDirection,
   OtherCashflowContract,
+  OtherCashflowForm as Form,
   OtherCashflowListResponse,
   OtherCashflowStatus,
 } from "@/types/otherCashflow";
 import { getApiErrorMessage } from "@/utils/apiError";
 import OtherCashflowDetailModal from "./components/OtherCashflowDetailModal";
 import OtherCashflowForm from "./components/OtherCashflowForm";
-import { DIRECTION_LABELS, DIRECTION_TONES, STATUS_FILTERS, STATUS_LABELS, verbOf } from "./lib";
+import { FORM_LABELS, STATUS_FILTERS, STATUS_LABELS } from "./lib";
 
 const LIMIT = 20;
 
+function ProgressBar({ done, total, tone }: { done: number; total: number; tone: "emerald" | "rose" }) {
+  const percent = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+  return (
+    <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+      <div className={`h-full rounded-full ${tone === "emerald" ? "bg-emerald-500" : "bg-rose-500"}`} style={{ width: `${percent}%` }} />
+    </div>
+  );
+}
+
 function ContractCard({ item, onOpen }: { item: OtherCashflowContract; onOpen: () => void }) {
   const [statusLabel, statusTone] = STATUS_LABELS[item.status];
-  const progress = Math.min(100, Math.round((item.recordedAmount / item.amount) * 100));
   const showProgress = ["APPROVED", "IN_PROGRESS", "COMPLETED"].includes(item.status);
   return (
     <button
@@ -30,12 +38,8 @@ function ContractCard({ item, onOpen }: { item: OtherCashflowContract; onOpen: (
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <span
-            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
-              item.direction === "IN" ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
-            }`}
-          >
-            {item.direction === "IN" ? <ArrowDownLeft size={17} /> : <ArrowUpRight size={17} />}
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+            <ArrowLeftRight size={17} />
           </span>
           <span className="text-xs font-bold text-slate-400">{item.code}</span>
         </div>
@@ -47,35 +51,43 @@ function ContractCard({ item, onOpen }: { item: OtherCashflowContract; onOpen: (
         {item.school ? ` · ${item.school.name}` : ""}
       </p>
       <div className="mt-3 flex items-end justify-between gap-2">
-        <div>
-          <div className="flex flex-wrap gap-1">
-            <Badge tone={DIRECTION_TONES[item.direction]}>{DIRECTION_LABELS[item.direction]}</Badge>
-            {item.form === "COMMERCIAL" && <Badge tone="sky">Thương mại</Badge>}
-          </div>
-          <p className="mt-1 text-lg font-extrabold tabular-nums text-slate-900">{formatMoney(item.amount)} đ</p>
+        <div className="min-w-0">
+          <Badge tone={item.form === "COMMERCIAL" ? "sky" : "slate"}>{FORM_LABELS[item.form]}</Badge>
+          <p className="mt-1 text-[11px] text-slate-500">Lợi nhuận dự kiến</p>
+          <p className={`text-lg font-extrabold tabular-nums ${item.profit < 0 ? "text-rose-700" : "text-slate-900"}`}>
+            {formatMoney(item.profit)} đ
+          </p>
         </div>
         {item.expectedDate && (
           <p className="text-right text-[11px] text-slate-400">
-            Dự kiến {verbOf(item.direction)}
+            Dự kiến
             <br />
             <span className="font-semibold text-slate-600">{formatDate(item.expectedDate)}</span>
           </p>
         )}
       </div>
-      {showProgress && (
-        <div className="mt-2">
-          <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-            <div
-              className={`h-full rounded-full ${item.direction === "IN" ? "bg-emerald-500" : "bg-rose-500"}`}
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-          <p className="mt-1 text-[11px] text-slate-500">
-            Đã {verbOf(item.direction)} {formatMoney(item.recordedAmount)} đ · còn {formatMoney(item.remainingAmount)} đ
-            {item.costAmount > 0 && ` · chi phí đã chi ${formatMoney(item.paidCostAmount)}/${formatMoney(item.costAmount)} đ`}
-          </p>
+      <dl className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+        <div>
+          <dt className="text-slate-500">Thu</dt>
+          <dd className="font-semibold tabular-nums text-emerald-700">{formatMoney(item.amount)} đ</dd>
+          {showProgress && item.amount > 0 && (
+            <>
+              <ProgressBar done={item.recordedAmount} total={item.amount} tone="emerald" />
+              <dd className="mt-0.5 text-slate-500">đã thu {formatMoney(item.recordedAmount)}</dd>
+            </>
+          )}
         </div>
-      )}
+        <div>
+          <dt className="text-slate-500">Chi</dt>
+          <dd className="font-semibold tabular-nums text-rose-700">{formatMoney(item.costAmount)} đ</dd>
+          {showProgress && item.costAmount > 0 && (
+            <>
+              <ProgressBar done={item.paidCostAmount} total={item.costAmount} tone="rose" />
+              <dd className="mt-0.5 text-slate-500">đã chi {formatMoney(item.paidCostAmount)}</dd>
+            </>
+          )}
+        </div>
+      </dl>
       <p className="mt-3 border-t border-slate-100 pt-2 text-[11px] text-slate-400">
         {item.createdByName} · {formatDate(item.submittedAt)}
       </p>
@@ -93,7 +105,7 @@ export default function OtherCashflowPanel() {
   const location = useLocation();
   const navigate = useNavigate();
   const [status, setStatus] = useState<OtherCashflowStatus | "">("");
-  const [direction, setDirection] = useState<CashflowDirection | "">("");
+  const [form, setForm] = useState<Form | "">("");
   const [searchText, setSearchText] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -117,7 +129,7 @@ export default function OtherCashflowPanel() {
   }, [location.search]);
 
   const load = useCallback(async () => {
-    const query: OtherCashflowListQuery = { status, direction, search, page, limit: LIMIT };
+    const query: OtherCashflowListQuery = { status, form, search, page, limit: LIMIT };
     setError("");
     try {
       setData(await otherCashflowApi.list(query));
@@ -126,7 +138,7 @@ export default function OtherCashflowPanel() {
     } finally {
       setLoading(false);
     }
-  }, [status, direction, search, page]);
+  }, [status, form, search, page]);
 
   useEffect(() => {
     setLoading(true);
@@ -157,8 +169,8 @@ export default function OtherCashflowPanel() {
     : meta?.canApprove
     ? "Hợp đồng do nhân viên kinh doanh gửi, chờ bạn duyệt."
     : meta?.canCreate
-    ? "Lập hợp đồng thu/chi khác ngoài chính sách trường — giám đốc duyệt, thủ quỹ ghi nhận."
-    : "Hợp đồng thu/chi khác: NV kinh doanh lập, giám đốc duyệt, thủ quỹ ghi nhận.";
+    ? "Lập hợp đồng ngoài chính sách trường gồm các khoản thu và khoản chi, có thuế hoặc không — hệ thống tính lợi nhuận; giám đốc duyệt, thủ quỹ thu/chi."
+    : "Hợp đồng thu chi ngoài: NV kinh doanh lập, giám đốc duyệt, thủ quỹ thu/chi.";
 
   return (
     <div className="space-y-4">
@@ -213,15 +225,15 @@ export default function OtherCashflowPanel() {
           </label>
           <select
             className={inputClass}
-            value={direction}
+            value={form}
             onChange={(e) => {
-              setDirection(e.target.value as CashflowDirection | "");
+              setForm(e.target.value as Form | "");
               setPage(1);
             }}
           >
-            <option value="">Thu và Chi</option>
-            <option value="IN">Chỉ Thu</option>
-            <option value="OUT">Chỉ Chi</option>
+            <option value="">Mọi hình thức</option>
+            <option value="STANDARD">{FORM_LABELS.STANDARD}</option>
+            <option value="COMMERCIAL">{FORM_LABELS.COMMERCIAL}</option>
           </select>
         </div>
       </section>

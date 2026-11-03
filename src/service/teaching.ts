@@ -10,6 +10,7 @@ import type {
   BulkSessionResult,
   DraftView,
   AttendanceSummary,
+  MyAttendanceSummary,
   TravelReview,
   BulkAttendanceItem,
   BulkAttendanceResult,
@@ -556,6 +557,15 @@ export const teachingSessionApi = {
     const res = await api.get(`${SESSIONS}/attendance/travel-review`, {
       params: clean(params),
     });
+    return res.data;
+  },
+
+  /** Tổng hợp chấm công + quãng đường của chính giáo viên — BE lấy giáo viên từ JWT. */
+  mySummary: async (params: {
+    fromDate: string;
+    toDate: string;
+  }): Promise<MyAttendanceSummary> => {
+    const res = await api.get(`${SESSIONS}/me/attendance-summary`, { params });
     return res.data;
   },
 };

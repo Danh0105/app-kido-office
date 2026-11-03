@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from "react-router-dom";
 
-import { TEACHER_MENUS } from "../lib";
+import { teacherMenusForUser } from "../lib";
 
 /** Điều hướng giữa các màn của giáo viên — cùng kiểu tab với module Nhân sự. */
 export default function TeacherTabs() {
@@ -9,7 +9,7 @@ export default function TeacherTabs() {
 
   return (
     <div className="flex gap-1 bg-white rounded-xl p-1 border border-gray-100">
-      {TEACHER_MENUS.map((item) => {
+      {teacherMenusForUser().map((item) => {
         const active = pathname.startsWith(item.path);
         return (
           <button

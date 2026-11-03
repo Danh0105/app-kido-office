@@ -8,6 +8,7 @@ import AttendancePage from "@/pages/Teaching/AttendancePage";
 import MySchedulePage from "@/pages/Teaching/MySchedulePage";
 import TeacherAttendancePage from "@/pages/Teaching/TeacherAttendancePage";
 import OpenSessionsPage from "@/pages/Teaching/OpenSessionsPage";
+import MyAttendanceSummaryPage from "@/pages/Teaching/MyAttendanceSummaryPage";
 import SchoolLocationPage from "@/pages/Teaching/SchoolLocationPage";
 import SchoolBranchPage from "@/pages/Teaching/SchoolBranchPage";
 import FuelAllowanceTierPage from "@/pages/Teaching/FuelAllowanceTierPage";
@@ -18,6 +19,7 @@ import {
   canViewActivityLog,
   canViewTeaching,
   canManageTeaching,
+  isCompanyTeacher,
   isTeacher,
   teachingHomePath,
   TEACHING_MONEY_FEATURES_ENABLED,
@@ -197,12 +199,30 @@ export function GiaoVienRoutes() {
           </TeacherGuard>
         }
       />
-      {/* Tiết Nhân sự mở, giáo viên tự đăng ký nhận. */}
+      {/* Tiết Nhân sự mở, giáo viên cộng tác viên tự đăng ký nhận — giáo
+          viên công ty được xếp lịch nên chuyển sang bản tổng hợp công. */}
       <Route
         path="dang-ky-tiet-day"
         element={
           <TeacherGuard>
-            <OpenSessionsPage />
+            {isCompanyTeacher() ? (
+              <Navigate to="/giao-vien/tong-hop-cong" replace />
+            ) : (
+              <OpenSessionsPage />
+            )}
+          </TeacherGuard>
+        }
+      />
+      {/* Giáo viên công ty: tổng hợp chấm công + quãng đường, phụ cấp xăng. */}
+      <Route
+        path="tong-hop-cong"
+        element={
+          <TeacherGuard>
+            {isCompanyTeacher() ? (
+              <MyAttendanceSummaryPage />
+            ) : (
+              <Navigate to="/giao-vien/dang-ky-tiet-day" replace />
+            )}
           </TeacherGuard>
         }
       />

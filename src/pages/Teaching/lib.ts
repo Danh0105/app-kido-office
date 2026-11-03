@@ -91,6 +91,8 @@ export const canViewTeaching = () =>
 
 export const isTeacher = () => hasRole(TEACHER_STAFF_ROLE, TEACHER_COLLABORATOR_ROLE);
 
+export const isCompanyTeacher = () => hasRole(TEACHER_STAFF_ROLE);
+
 // Màn đầu tiên user được phép vào — dùng khi chặn route.
 export const teachingHomePath = () => {
   if (canViewTeaching()) return "/nhan-su/giao-vien";
@@ -157,10 +159,16 @@ export const teachingMenusForUser = () =>
       (!item.moneyFeature || TEACHING_MONEY_FEATURES_ENABLED || canSetTeachingRates()),
   );
 
-export const TEACHER_MENUS = [
+/**
+ * Giáo viên công ty được Nhân sự xếp lịch (không tự đăng ký tiết) và có phụ
+ * cấp xăng → thay "Tiết đang mở" bằng bản tổng hợp chấm công + quãng đường.
+ */
+export const teacherMenusForUser = () => [
   { title: "Lịch của tôi", path: "/giao-vien/lich-day" },
   { title: "Chấm công", path: "/giao-vien/cham-cong" },
-  { title: "Tiết đang mở", path: "/giao-vien/dang-ky-tiet-day" },
+  isCompanyTeacher()
+    ? { title: "Tổng hợp công", path: "/giao-vien/tong-hop-cong" }
+    : { title: "Tiết đang mở", path: "/giao-vien/dang-ky-tiet-day" },
 ];
 
 // ================= TÀI KHOẢN GIÁO VIÊN =================

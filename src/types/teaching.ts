@@ -579,6 +579,57 @@ export interface TravelDay {
   stops: TravelStop[];
 }
 
+/** Một lượt đến nơi dạy trong bản tổng hợp của chính giáo viên (không toạ độ). */
+export interface MyTravelStop {
+  schoolName: string | null;
+  locationName: string | null;
+  startTime: string;
+  endTime: string;
+  periods: number;
+  sessions: TravelStop["sessions"];
+  uncheckedSessions: number;
+  counted: boolean;
+  /** `null` khi lượt không được tính phụ cấp. */
+  distanceKm: number | null;
+  gasAllowance: number | null;
+  checkedIn: boolean;
+  flags: TravelFlag[];
+  missingReasons: GasAllowanceMissingReason[] | null;
+}
+
+/**
+ * Tổng hợp chấm công + quãng đường của chính giáo viên đang đăng nhập
+ * (`GET /teaching-sessions/me/attendance-summary`). Km và phụ cấp ở tổng là
+ * phần đã chấm công — khớp bảng công Nhân sự; danh sách ngày gồm cả lượt đã
+ * tới ngày mà chưa chấm.
+ */
+export interface MyAttendanceSummary {
+  fromDate: string;
+  toDate: string;
+  teacherName: string;
+  attendance: {
+    totalSessions: number;
+    present: number;
+    absent: number;
+    excused: number;
+    cancelled: number;
+    unchecked: number;
+    makeup: number;
+    totalPeriods: number;
+    presentPeriods: number;
+  };
+  totalDistanceKm: number;
+  fuelAllowanceAmount: number;
+  uncheckedSessions: number;
+  days: {
+    date: string;
+    fromOffice: boolean;
+    totalDistanceKm: number;
+    fuelAllowanceAmount: number;
+    stops: MyTravelStop[];
+  }[];
+}
+
 export interface TravelTeacher {
   teacherId: number;
   teacherName: string;

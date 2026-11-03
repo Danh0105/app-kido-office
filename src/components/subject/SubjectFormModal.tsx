@@ -173,6 +173,63 @@ export default function SubjectFormModal({
     [catalogs],
   );
 
+  // Môn đã có của trường — để cảnh báo ngay khi chọn trùng. Mỗi trường trong
+  // một năm học chỉ có 1 môn cùng tên; backend cũng chặn (409).
+  const [schoolSubjects, setSchoolSubjects] = useState<EditableSubject[]>([]);
+  useEffect(() => {
+    if (!effectiveSchoolId) {
+      setSchoolSubjects([]);
+      return;
+    }
+    let cancelled = false;
+    subjectApi
+      .getBySchool(effectiveSchoolId)
+      .then((rows) => {
+        if (!cancelled) setSchoolSubjects(Array.isArray(rows) ? rows : []);
+      })
+      .catch(() => {
+        if (!cancelled) setSchoolSubjects([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [effectiveSchoolId]);
+
+  /** Các cặp (môn × năm học) đang chọn mà trường đã có, dạng "Tên (năm)". */
+  const duplicateLabels = useMemo(() => {
+    const normalize = (name?: string) => (name || "").trim().toLowerCase();
+    const catalogName = new Map(catalogOptions.map((item) => [item.id, item.name]));
+    const combos = editing
+      ? form.catalogId
+        ? [{ catalogId: Number(form.catalogId), year: subject!.schoolYear || schoolYear || "" }]
+        : []
+      : selectedCatalogIds.flatMap((catalogId) =>
+          selectedYears.map((year) => ({ catalogId, year })),
+        );
+
+    return combos
+      .filter(({ catalogId, year }) =>
+        schoolSubjects.some(
+          (row) =>
+            row.id !== subject?.id &&
+            (row.schoolYear || "") === year &&
+            (row.catalogId === catalogId ||
+              (catalogName.has(catalogId) &&
+                normalize(row.name) === normalize(catalogName.get(catalogId)))),
+        ),
+      )
+      .map(({ catalogId, year }) => `${catalogName.get(catalogId) || "Môn này"} (${year})`);
+  }, [
+    editing,
+    form.catalogId,
+    selectedCatalogIds,
+    selectedYears,
+    schoolSubjects,
+    catalogOptions,
+    subject,
+    schoolYear,
+  ]);
+
   /**
    * Môn học cũ chưa map danh mục (hoặc môn danh mục đã bị tắt) — không preselect
    * được, phải để người dùng chọn lại nếu muốn đổi.
@@ -205,6 +262,14 @@ export default function SubjectFormModal({
         setError("Vui lòng chọn ít nhất 1 năm học");
         return;
       }
+    }
+
+    if (duplicateLabels.length > 0) {
+      setError(
+        `Trường đã có ${duplicateLabels.join(", ")}. Mỗi trường chỉ có 1 môn cùng tên ` +
+          "trong một năm học — bỏ chọn môn này hoặc sửa môn hiện có.",
+      );
+      return;
     }
 
     if (showRateField && !isValidRate(form.ratePerPeriod)) {
@@ -412,6 +477,14 @@ export default function SubjectFormModal({
                 })}
               </div>
             </Row>
+          )}
+
+          {duplicateLabels.length > 0 && (
+            <p className="text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 leading-relaxed">
+              Trường đã có <b>{duplicateLabels.join(", ")}</b>. Mỗi trường chỉ có
+              1 môn cùng tên trong một năm học — bỏ chọn môn này hoặc sửa môn
+              hiện có.
+            </p>
           )}
 
           {isLegacySubject && (

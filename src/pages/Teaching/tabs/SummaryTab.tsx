@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "react-hot-toast";
+import { FileSpreadsheet } from "lucide-react";
 
 import { getApiErrorMessage } from "@/utils/apiError";
+import { EXCEL_FILE_TYPE, saveBlob } from "@/utils/saveBlob";
 import { teachingSessionApi } from "@/service/teaching";
 import type {
   AttendanceGrandTotal,
@@ -17,6 +19,9 @@ import {
 } from "../components/Shared";
 import SearchableSelect from "@/components/SearchableSelect";
 import ClassSelect from "../components/ClassSelect";
+import MissingRateSessionsModal, {
+  type MissingRateFilter,
+} from "../components/MissingRateSessionsModal";
 import {
   useClassesOfSchool,
   type RefOption,
@@ -77,6 +82,11 @@ export default function SummaryTab({
     null,
   );
   const [loading, setLoading] = useState(false);
+  /** File đang xuất — mỗi lúc chỉ một file, khoá cả hai nút. */
+  const [exporting, setExporting] = useState<"summary" | "daily" | null>(null);
+  /** Popup chi tiết "thiếu giá N buổi" (1 giáo viên hoặc cả bảng). */
+  const [missingRateFilter, setMissingRateFilter] =
+    useState<MissingRateFilter | null>(null);
 
   const { classes, loading: loadingClasses } = useClassesOfSchool(
     schoolId,
@@ -99,19 +109,25 @@ export default function SummaryTab({
     setToDate(endOfMonth(`${value}-01`));
   };
 
+  // Bảng và file Excel dùng chung đúng một bộ lọc.
+  const query = useMemo(
+    () => ({
+      fromDate,
+      toDate,
+      teacherRole: teacherRole || undefined,
+      teacherId: teacherId ? Number(teacherId) : undefined,
+      schoolId: schoolId ? Number(schoolId) : undefined,
+      classId: classId ? Number(classId) : undefined,
+    }),
+    [fromDate, toDate, teacherRole, teacherId, schoolId, classId],
+  );
+
   const load = useCallback(async () => {
     if (!fromDate || !toDate || !rangeValid) return;
 
     setLoading(true);
     try {
-      const res = await teachingSessionApi.summary({
-        fromDate,
-        toDate,
-        teacherRole: teacherRole || undefined,
-        teacherId: teacherId ? Number(teacherId) : undefined,
-        schoolId: schoolId ? Number(schoolId) : undefined,
-        classId: classId ? Number(classId) : undefined,
-      });
+      const res = await teachingSessionApi.summary(query);
       setRows(res?.data || []);
       setGrandTotal(res?.grandTotal || null);
     } catch (error: any) {
@@ -123,11 +139,37 @@ export default function SummaryTab({
     } finally {
       setLoading(false);
     }
-  }, [fromDate, toDate, teacherRole, teacherId, schoolId, classId, rangeValid]);
+  }, [query, fromDate, toDate, rangeValid]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const exportExcel = async (kind: "summary" | "daily") => {
+    setExporting(kind);
+    try {
+      const blob =
+        kind === "daily"
+          ? await teachingSessionApi.exportDailyPeriods(query)
+          : await teachingSessionApi.exportSummary(query);
+      const prefix = kind === "daily" ? "so-tiet-day-theo-ngay" : "tong-hop-cham-cong";
+      const suffix =
+        teacherRole === TEACHER_STAFF_ROLE
+          ? "_gv-cong-ty"
+          : teacherRole === TEACHER_COLLABORATOR_ROLE
+            ? "_gv-ctv"
+            : "";
+      await saveBlob(
+        blob,
+        `${prefix}_${fromDate}_${toDate}${suffix}.xlsx`,
+        EXCEL_FILE_TYPE,
+      );
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Không xuất được file Excel"));
+    } finally {
+      setExporting(null);
+    }
+  };
 
   /**
    * Ô số bấm được để mở tab Chấm công với đúng bộ lọc.
@@ -160,6 +202,33 @@ export default function SummaryTab({
     >
       {value.toLocaleString("vi-VN")}
     </span>
+  );
+
+  /** "thiếu giá N buổi" bấm được → popup liệt kê các buổi đó, cùng bộ lọc với bảng. */
+  const missingRateLink = (
+    count: number,
+    teacher: AttendanceSummaryRow | undefined,
+    label: string,
+    className: string,
+  ) => (
+    <button
+      type="button"
+      onClick={() =>
+        setMissingRateFilter({
+          fromDate,
+          toDate,
+          teacherId:
+            teacher?.teacherId ?? (teacherId ? Number(teacherId) : undefined),
+          teacherName: teacher?.teacherName,
+          schoolId: schoolId ? Number(schoolId) : undefined,
+          classId: classId ? Number(classId) : undefined,
+        })
+      }
+      title="Xem các buổi thiếu giá"
+      className={`underline decoration-dotted underline-offset-2 hover:opacity-70 ${className}`}
+    >
+      {label.replace("{n}", count.toLocaleString("vi-VN"))}
+    </button>
   );
 
   /** Số km bấm được → xem lộ trình từng ngày (cả bảng hoặc 1 giáo viên). */
@@ -403,19 +472,47 @@ export default function SummaryTab({
             <Money label="Chi phí khác" value={grandTotal?.otherCostsAmount ?? 0} />
             <Money label="Tổng thanh toán" value={grandTotal?.totalPayableAmount ?? 0} primary />
           </div>
-          <p className="text-sm text-gray-600">
-            <b className="text-gray-800">{rows.length}</b> giáo viên ·{" "}
-            <b className="text-gray-800">
-              {(grandTotal?.payablePeriods ?? 0).toLocaleString("vi-VN")}
-            </b>{" "}
-            tiết tính công / {total.totalPeriods.toLocaleString("vi-VN")} tiết
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-sm text-gray-600">
+              <b className="text-gray-800">{rows.length}</b> giáo viên ·{" "}
+              <b className="text-gray-800">
+                {(grandTotal?.payablePeriods ?? 0).toLocaleString("vi-VN")}
+              </b>{" "}
+              tiết tính công / {total.totalPeriods.toLocaleString("vi-VN")} tiết
+            </p>
+            <button
+              type="button"
+              onClick={() => exportExcel("summary")}
+              disabled={exporting !== null}
+              title="Tải file Excel: bảng tổng hợp và số tiết dạy theo từng ngày, theo bộ lọc đang chọn"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+            >
+              <FileSpreadsheet size={16} />
+              {exporting === "summary" ? "Đang xuất…" : "Xuất tổng hợp"}
+            </button>
+            <button
+              type="button"
+              onClick={() => exportExcel("daily")}
+              disabled={exporting !== null}
+              title="Tải file Excel chỉ có số tiết dạy theo từng ngày của mỗi giáo viên (không kèm tiền), theo bộ lọc đang chọn"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-600 bg-white px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+            >
+              <FileSpreadsheet size={16} />
+              {exporting === "daily" ? "Đang xuất…" : "Xuất số tiết theo ngày"}
+            </button>
+          </div>
         </div>
       )}
 
       {!loading && missingRate > 0 && (
         <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 leading-relaxed">
-          <b>{missingRate} buổi đã dạy chưa khai đơn giá</b> — số tiền trên đang
+          {missingRateLink(
+            missingRate,
+            undefined,
+            "{n} buổi đã dạy chưa khai đơn giá",
+            "font-bold",
+          )}{" "}
+          — số tiền trên đang
           thiếu phần này. Khai đơn giá cho giáo viên hoặc sửa từng buổi trước
           khi chốt lương.
         </p>
@@ -455,7 +552,12 @@ export default function SummaryTab({
 
                 {row.missingRateSessions > 0 && (
                   <p className="mt-2 text-xs font-medium text-amber-600">
-                    {row.missingRateSessions} buổi chưa khai đơn giá
+                    {missingRateLink(
+                      row.missingRateSessions,
+                      row,
+                      "{n} buổi chưa khai đơn giá",
+                      "",
+                    )}
                   </p>
                 )}
 
@@ -587,11 +689,13 @@ export default function SummaryTab({
                           {(row.payableAmount ?? 0).toLocaleString("vi-VN")} ₫
                         </span>
                         {/* Thiếu giá thì con số bên trên chưa phải tiền thật. */}
-                        {row.missingRateSessions > 0 && (
-                          <span className="mt-0.5 block text-xs font-medium text-amber-600">
-                            thiếu giá {row.missingRateSessions} buổi
-                          </span>
-                        )}
+                        {row.missingRateSessions > 0 &&
+                          missingRateLink(
+                            row.missingRateSessions,
+                            row,
+                            "thiếu giá {n} buổi",
+                            "mt-0.5 ml-auto block text-xs font-medium text-amber-600",
+                          )}
                       </td>
                       <td className="bg-emerald-50/30 px-4 py-4 text-right font-semibold text-emerald-700">{formatMoney(row.fuelAllowanceAmount ?? 0)}</td>
                       <td className="bg-emerald-50/30 px-4 py-4 text-right">
@@ -638,11 +742,13 @@ export default function SummaryTab({
                       <span className="text-xl font-bold tabular-nums text-emerald-700">
                         {formatMoney(grandTotal?.payableAmount ?? 0)}
                       </span>
-                      {missingRate > 0 && (
-                        <span className="mt-0.5 block text-xs font-medium text-amber-600">
-                          thiếu giá {missingRate} buổi
-                        </span>
-                      )}
+                      {missingRate > 0 &&
+                        missingRateLink(
+                          missingRate,
+                          undefined,
+                          "thiếu giá {n} buổi",
+                          "mt-0.5 ml-auto block text-xs font-medium text-amber-600",
+                        )}
                     </td>
                     <td className="bg-emerald-50/60 px-4 py-4 text-right text-xl font-bold text-emerald-700">{formatMoney(grandTotal?.fuelAllowanceAmount ?? 0)}</td>
                     <td className="bg-emerald-50/60 px-4 py-4 text-right">
@@ -661,6 +767,13 @@ export default function SummaryTab({
             bấm “Xem/Sửa” tại từng buổi để xem tên khoản và ghi chú.
           </p>
         </>
+      )}
+
+      {missingRateFilter && (
+        <MissingRateSessionsModal
+          filter={missingRateFilter}
+          onClose={() => setMissingRateFilter(null)}
+        />
       )}
     </div>
   );

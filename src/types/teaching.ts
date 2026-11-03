@@ -697,6 +697,8 @@ export type SessionQuery = {
   scheduleId?: number;
   status?: SessionStatus;
   unchecked?: boolean;
+  /** Chỉ buổi đã dạy mà chưa có đơn giá tiết ("thiếu giá" ở bảng tổng hợp). */
+  missingRate?: boolean;
   fromDate?: string;
   toDate?: string;
   page?: number;

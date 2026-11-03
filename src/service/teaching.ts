@@ -63,6 +63,38 @@ const clean = (params: Record<string, any> = {}) => {
   return out;
 };
 
+/** Bộ lọc bảng tổng hợp chấm công — dùng chung cho bảng và các file Excel. */
+export type AttendanceSummaryQuery = {
+  fromDate: string;
+  toDate: string;
+  /** Role tài khoản giáo viên: giáo viên công ty hoặc cộng tác viên. */
+  teacherRole?: "giaovien_congty" | "giaovien_ctv";
+  teacherId?: number;
+  schoolId?: number;
+  classId?: number;
+};
+
+/**
+ * Tải file (responseType "blob"). Body lỗi khi đó cũng là Blob — đọc lại JSON
+ * để getApiErrorMessage hiện đúng thông báo của backend.
+ */
+const getBlob = async (url: string, params: Record<string, any>): Promise<Blob> => {
+  try {
+    const res = await api.get(url, { params: clean(params), responseType: "blob" });
+    return res.data;
+  } catch (error: any) {
+    const data = error?.response?.data;
+    if (data instanceof Blob) {
+      try {
+        error.response.data = JSON.parse(await data.text());
+      } catch {
+        // Không phải JSON thì giữ nguyên.
+      }
+    }
+    throw error;
+  }
+};
+
 /** Nguồn danh sách giáo viên duy nhất cho cả công ty và cộng tác viên. */
 export const getTeachers = async (
   params: TeacherQuery = {},
@@ -485,20 +517,20 @@ export const teachingSessionApi = {
     return res.data;
   },
 
-  summary: async (params: {
-    fromDate: string;
-    toDate: string;
-    /** Role tài khoản giáo viên: giáo viên công ty hoặc cộng tác viên. */
-    teacherRole?: "giaovien_congty" | "giaovien_ctv";
-    teacherId?: number;
-    schoolId?: number;
-    classId?: number;
-  }): Promise<AttendanceSummary> => {
+  summary: async (params: AttendanceSummaryQuery): Promise<AttendanceSummary> => {
     const res = await api.get(`${SESSIONS}/attendance/summary`, {
       params: clean(params),
     });
     return res.data;
   },
+
+  /** File Excel của bảng tổng hợp: sheet tổng hợp + sheet số tiết theo ngày. */
+  exportSummary: (params: AttendanceSummaryQuery): Promise<Blob> =>
+    getBlob(`${SESSIONS}/attendance/summary/export`, params),
+
+  /** File Excel chỉ có bảng số tiết dạy theo ngày (không kèm tiền). */
+  exportDailyPeriods: (params: AttendanceSummaryQuery): Promise<Blob> =>
+    getBlob(`${SESSIONS}/attendance/daily-periods/export`, params),
 
   /** Lộ trình di chuyển từng ngày của giáo viên công ty, kèm điểm cần kiểm tra. */
   travelReview: async (params: {

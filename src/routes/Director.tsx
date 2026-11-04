@@ -11,7 +11,7 @@ import PolicyList from "../pages/Director/Sales/Policy/PolicyList";
 import PolicyHistoryPage from "@/pages/Policy/PolicyHistoryPage";
 import Region from "@/pages/Director/Region/ListRegion";
 import DailyReportPage from "@/pages/Director/Sales/Report/DailyReportPage";
-import PolicyStatsPage from "@/pages/Director/Sales/Statistics/PolicyStatsPage";
+import StatisticsDashboardPage from "@/pages/Director/Sales/Statistics/StatisticsDashboardPage";
 import RealExpense from "@/pages/Director/expense/RealExpense";
 import RealExpenseDetail from "@/pages/Director/expense/RealExpenseDetail";
 import CashflowReportPage from "@/pages/Director/CashflowReport/CashflowReportPage";
@@ -162,9 +162,9 @@ export default function DirectorRoutes() {
           path="statistics/:employeeId"
           element={
             isChiefAccountant() ? (
-              <PolicyStatsPage />
+              <StatisticsDashboardPage />
             ) : (
-              directorOnly(<PolicyStatsPage />)
+              directorOnly(<StatisticsDashboardPage />)
             )
           }
         />

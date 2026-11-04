@@ -19,6 +19,7 @@ type Props = {
   restrictToPolicySchools: boolean;
   subjectId?: number | null;
   employeeId?: number;
+  periodId?: number | null;
 };
 
 type ExpenseRecord = {
@@ -347,6 +348,7 @@ export default function ExpenseStatsSection({
   restrictToPolicySchools,
   subjectId,
   employeeId,
+  periodId,
 }: Props) {
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -386,6 +388,7 @@ export default function ExpenseStatsSection({
         const response = await schoolExpenseApi.getAll({
           page: 1,
           limit: 500,
+          ...(periodId ? { periodId } : {}),
         });
         const list = listFromResponse(response);
         const enriched = await Promise.all(
@@ -448,7 +451,7 @@ export default function ExpenseStatsSection({
     return () => {
       active = false;
     };
-  }, [subjectId]);
+  }, [periodId, subjectId]);
 
   const policySchoolMap = useMemo(() => {
     const map = new Map<number, any>();

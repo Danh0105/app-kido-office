@@ -11,7 +11,7 @@ import PolicyList from "../pages/Director/Sales/Policy/PolicyList";
 import PolicyHistoryPage from "@/pages/Policy/PolicyHistoryPage";
 import Region from "@/pages/Director/Region/ListRegion";
 import DailyReportPage from "@/pages/Director/Sales/Report/DailyReportPage";
-import PolicyStatsPage from "@/pages/Director/Sales/Statistics/PolicyStatsPage";
+import StatisticsDashboardPage from "@/pages/Director/Sales/Statistics/StatisticsDashboardPage";
 import RealExpense from "@/pages/Director/expense/RealExpense";
 import RealExpenseDetail from "@/pages/Director/expense/RealExpenseDetail";
 import EmployeeManagement from "@/pages/Director/EmployeeManagement";
@@ -122,7 +122,7 @@ export default function DirectorRoutes() {
       />
       <Route
         path="statistics/:employeeId"
-        element={isChiefAccountant() ? <PolicyStatsPage /> : directorOnly(<PolicyStatsPage />)}
+        element={isChiefAccountant() ? <StatisticsDashboardPage /> : directorOnly(<StatisticsDashboardPage />)}
       />
       <Route path="phong-ban" element={directorOnly(<Department />)} />
       <Route path="region/:employeeId" element={directorOnly(<Region />)} />

@@ -13,6 +13,7 @@ import {
   RotateCcw,
   Search,
   SlidersHorizontal,
+  UsersRound,
   WalletCards,
 } from "lucide-react";
 import HeaderWithBack from "@/components/HeaderWithBack";
@@ -53,6 +54,7 @@ type Props = {
 const EMPTY_FILTERS: DashboardFilters = {
   keyword: "",
   provinceId: null,
+  wardId: null,
   schoolId: null,
   subjectId: null,
   schoolYear: "",
@@ -81,22 +83,35 @@ export default function StatisticsDashboardPage({
   showExpenses = true,
 }: Props = {}) {
   const { employeeId: routeEmployeeId } = useParams();
-  const employeeId = Number(employeeIdProp ?? routeEmployeeId) || 0;
+  const initialEmployeeId = Number(employeeIdProp ?? routeEmployeeId) || 0;
   const isDirectorView = showExpenses;
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState(
+    initialEmployeeId
+  );
   const [activeSection, setActiveSection] =
     useState<DashboardSection>("overview");
   const [filters, setFilters] = useState<DashboardFilters>(EMPTY_FILTERS);
   const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null);
   const [openPolicy, setOpenPolicy] = useState<StatisticsPolicy | null>(null);
   const [employeeName, setEmployeeName] = useState("");
+  const [salesEmployees, setSalesEmployees] = useState<
+    Array<{ id: number; name?: string }>
+  >([]);
   const [expensePeriods, setExpensePeriods] = useState<any[]>([]);
   const [accountingRecords, setAccountingRecords] = useState<any[]>([]);
   const [accountingLoading, setAccountingLoading] = useState(false);
   const [accountingError, setAccountingError] = useState("");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
+  const employeeId = isDirectorView
+    ? selectedEmployeeId || undefined
+    : initialEmployeeId || undefined;
   const query = usePolicyStats({ employeeId, fromDate: "", toDate: "" });
   const policies = Array.isArray(query.data) ? query.data : [];
+
+  useEffect(() => {
+    if (isDirectorView) setSelectedEmployeeId(initialEmployeeId);
+  }, [initialEmployeeId, isDirectorView]);
 
   useEffect(() => {
     if (query.data) setLastUpdated(new Date());
@@ -104,7 +119,10 @@ export default function StatisticsDashboardPage({
 
   useEffect(() => {
     let active = true;
-    if (!employeeId) return;
+    if (!employeeId) {
+      setEmployeeName(isDirectorView ? "Tất cả nhân viên" : "");
+      return;
+    }
     employeeApi
       .getById(employeeId)
       .then((employee) => {
@@ -116,7 +134,23 @@ export default function StatisticsDashboardPage({
     return () => {
       active = false;
     };
-  }, [employeeId]);
+  }, [employeeId, isDirectorView]);
+
+  useEffect(() => {
+    if (!isDirectorView) return;
+    let active = true;
+    employeeApi
+      .getSales()
+      .then((employees) => {
+        if (active) setSalesEmployees(Array.isArray(employees) ? employees : []);
+      })
+      .catch(() => {
+        if (active) setSalesEmployees([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [isDirectorView]);
 
   useEffect(() => {
     if (!showExpenses) return;
@@ -199,18 +233,27 @@ export default function StatisticsDashboardPage({
 
   const options = useMemo(() => {
     const provinces = new Map<number, string>();
+    const wards = new Map<number, string>();
     const schools = new Map<number, string>();
     const subjects = new Map<number, string>();
     const years = new Set<string>();
 
     policies.forEach((policy: any) => {
       const provinceId = numberValue(policy.provinceId);
+      const wardId = numberValue(policy.wardId);
       const schoolId = numberValue(policy.schoolId);
       const subjectId = numberValue(policy.subjectId);
       if (provinceId)
         provinces.set(provinceId, policy.provinceName || `Tỉnh #${provinceId}`);
       if (
         (!filters.provinceId || provinceId === filters.provinceId) &&
+        wardId
+      ) {
+        wards.set(wardId, policy.wardName || `Xã/Phường #${wardId}`);
+      }
+      if (
+        (!filters.provinceId || provinceId === filters.provinceId) &&
+        (!filters.wardId || wardId === filters.wardId) &&
         schoolId
       ) {
         schools.set(schoolId, policy.schoolName || `Trường #${schoolId}`);
@@ -227,17 +270,20 @@ export default function StatisticsDashboardPage({
 
     return {
       provinces: mapRows(provinces),
+      wards: mapRows(wards),
       schools: mapRows(schools),
       subjects: mapRows(subjects),
       years: Array.from(years).sort((left, right) =>
         right.localeCompare(left, "vi")
       ),
     };
-  }, [filters.provinceId, policies]);
+  }, [filters.provinceId, filters.wardId, policies]);
 
   const activeFilterCount = [
     filters.keyword,
+    isDirectorView && selectedEmployeeId,
     filters.provinceId,
+    filters.wardId,
     filters.schoolId,
     filters.subjectId,
     filters.schoolYear,
@@ -247,12 +293,15 @@ export default function StatisticsDashboardPage({
   const resetFilters = () => {
     setFilters(EMPTY_FILTERS);
     setSelectedPeriodId(null);
+    if (isDirectorView) setSelectedEmployeeId(0);
   };
 
   const exportCsv = () => {
     const headings = [
+      "Nhân viên",
       "Trường",
       "Tỉnh/Thành",
+      "Xã/Phường",
       "Môn học",
       "Năm học",
       "Số học sinh",
@@ -266,8 +315,10 @@ export default function StatisticsDashboardPage({
     const rows = filteredPolicies.map((policy: any) => {
       const data = getPolicyData(policy);
       return [
+        policy.employeeName,
         policy.schoolName,
         policy.provinceName,
+        policy.wardName,
         policy.subjectName,
         policy.schoolYear,
         numberValue(policy.studentCount),
@@ -379,6 +430,32 @@ export default function StatisticsDashboardPage({
         </section>
 
         <section className="sticky top-[56px] z-30 mt-4 rounded-3xl border border-slate-200 bg-white/95 p-3 shadow-lg shadow-slate-200/40 backdrop-blur-xl sm:p-4">
+          {isDirectorView && (
+            <div className="mb-3 flex flex-col gap-2 rounded-2xl border border-blue-100 bg-blue-50/70 p-3 sm:flex-row sm:items-center">
+              <div className="flex min-w-0 flex-1 items-center gap-2 text-sm font-bold text-blue-950">
+                <UsersRound size={18} className="shrink-0 text-blue-700" />
+                <span>Phạm vi nhân viên</span>
+              </div>
+              <div className="w-full sm:max-w-md">
+                <FilterSelect
+                  value={selectedEmployeeId || ""}
+                  onChange={(value) => {
+                    setSelectedEmployeeId(value ? Number(value) : 0);
+                    setFilters(EMPTY_FILTERS);
+                  }}
+                  placeholder="Tất cả nhân viên"
+                  options={salesEmployees
+                    .map((employee) => ({
+                      id: employee.id,
+                      name: employee.name || `Nhân viên #${employee.id}`,
+                    }))
+                    .sort((left, right) =>
+                      left.name.localeCompare(right.name, "vi")
+                    )}
+                />
+              </div>
+            </div>
+          )}
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
             <div className="relative min-w-0 flex-1 xl:max-w-[360px]">
               <Search
@@ -397,18 +474,31 @@ export default function StatisticsDashboardPage({
                 className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
               />
             </div>
-            <div className="grid flex-1 grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-5">
+            <div className="grid flex-1 grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
               <FilterSelect
                 value={filters.provinceId || ""}
                 onChange={(value) =>
                   setFilters((current) => ({
                     ...current,
                     provinceId: value ? Number(value) : null,
+                    wardId: null,
                     schoolId: null,
                   }))
                 }
                 placeholder="Tỉnh/Thành"
                 options={options.provinces}
+              />
+              <FilterSelect
+                value={filters.wardId || ""}
+                onChange={(value) =>
+                  setFilters((current) => ({
+                    ...current,
+                    wardId: value ? Number(value) : null,
+                    schoolId: null,
+                  }))
+                }
+                placeholder="Xã/Phường"
+                options={options.wards}
               />
               <FilterSelect
                 value={filters.schoolId || ""}
@@ -532,6 +622,9 @@ export default function StatisticsDashboardPage({
                 <DashboardOverview
                   model={model}
                   isDirectorView={isDirectorView}
+                  showEmployeeComparison={
+                    isDirectorView && !selectedEmployeeId
+                  }
                   onOpenPolicies={() => setActiveSection("policies")}
                 />
               )}

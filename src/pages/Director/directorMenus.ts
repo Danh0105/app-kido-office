@@ -77,7 +77,7 @@ const ALL_MENUS = [
   {
     title: "Thống kê",
     icon: statistics,
-    path: "nhan-vien",
+    path: "statistics/0",
     from: "statistics",
   },
   {
@@ -147,7 +147,7 @@ const CHIEF_ACCOUNTANT_MENUS = [
   {
     title: "Thống kê",
     icon: statistics,
-    path: "nhan-vien",
+    path: "statistics/0",
     from: "statistics",
   },
   {

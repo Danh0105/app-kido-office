@@ -132,7 +132,7 @@ export const policiesApi = {
         return res.data;
     },
     getStatsAdvanced: async (params: {
-        employeeId: number;
+        employeeId?: number;
         fromDate?: string;
         toDate?: string;
         allStatuses?: boolean;

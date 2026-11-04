@@ -10,6 +10,7 @@ import {
   MapPinned,
   School,
   TrendingUp,
+  UsersRound,
 } from "lucide-react";
 import {
   Area,
@@ -28,6 +29,7 @@ import type { StatisticsDashboardModel } from "../statisticsDashboard";
 type Props = {
   model: StatisticsDashboardModel;
   isDirectorView: boolean;
+  showEmployeeComparison?: boolean;
   onOpenPolicies: () => void;
 };
 
@@ -45,6 +47,7 @@ const formatMoney = (value: number) => `${compactNumber(value)}đ`;
 export default function DashboardOverview({
   model,
   isDirectorView,
+  showEmployeeComparison = false,
   onOpenPolicies,
 }: Props) {
   const { summary, alerts } = model;
@@ -93,14 +96,27 @@ export default function DashboardOverview({
       icon: Banknote,
       tone: "violet",
     },
-    {
-      label: "Thiết bị đã phân bổ",
-      value: formatNumber(summary.devices),
-      note: `${model.devices.length} nhóm thiết bị`,
-      icon: Building2,
-      tone: "slate",
-    },
+    showEmployeeComparison
+      ? {
+          label: "Nhân viên kinh doanh",
+          value: formatNumber(summary.employees),
+          note: "Có dữ liệu trong phạm vi lọc",
+          icon: UsersRound,
+          tone: "slate",
+        }
+      : {
+          label: "Thiết bị đã phân bổ",
+          value: formatNumber(summary.devices),
+          note: `${model.devices.length} nhóm thiết bị`,
+          icon: Building2,
+          tone: "slate",
+        },
   ];
+
+  const topEmployees = model.employees.slice(0, 10).map((row) => ({
+    ...row,
+    shortName: row.name.length > 30 ? `${row.name.slice(0, 30)}…` : row.name,
+  }));
 
   const topSchools = model.schools.slice(0, 8).map((row) => ({
     ...row,
@@ -118,6 +134,96 @@ export default function DashboardOverview({
           <KpiCard key={card.label} {...card} />
         ))}
       </section>
+
+      {showEmployeeComparison && (
+        <Panel
+          eyebrow="Hiệu quả đội ngũ"
+          title="Tổng hợp theo từng nhân viên"
+          description="So sánh quy mô học sinh, số trường và số chính sách trong phạm vi khu vực đang chọn."
+          icon={<UsersRound size={20} />}
+        >
+          {topEmployees.length ? (
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(380px,1fr)]">
+              <div className="h-[380px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={topEmployees}
+                    layout="vertical"
+                    margin={{ top: 4, right: 28, left: 18, bottom: 4 }}
+                  >
+                    <CartesianGrid
+                      stroke="#e2e8f0"
+                      strokeDasharray="4 4"
+                      horizontal={false}
+                    />
+                    <XAxis
+                      type="number"
+                      tickFormatter={compactNumber}
+                      tick={{ fill: "#64748b", fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="shortName"
+                      width={165}
+                      tick={{ fill: "#334155", fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip content={<OverviewTooltip />} />
+                    <Bar
+                      name="Học sinh"
+                      dataKey="students"
+                      fill="#2563eb"
+                      radius={[0, 7, 7, 0]}
+                      maxBarSize={25}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[430px] text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-400">
+                      <th className="pb-3 font-bold">Nhân viên</th>
+                      <th className="pb-3 text-right font-bold">Trường</th>
+                      <th className="pb-3 text-right font-bold">Chính sách</th>
+                      <th className="pb-3 text-right font-bold">Học sinh</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {topEmployees.map((employee, index) => (
+                      <tr
+                        key={employee.id}
+                        className="border-b border-slate-100 last:border-0"
+                      >
+                        <td className="py-3 font-bold text-slate-900">
+                          <span className="mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-600">
+                            {index + 1}
+                          </span>
+                          {employee.name}
+                        </td>
+                        <td className="py-3 text-right font-semibold text-slate-600">
+                          {formatNumber(employee.schools)}
+                        </td>
+                        <td className="py-3 text-right font-semibold text-slate-600">
+                          {formatNumber(employee.policies)}
+                        </td>
+                        <td className="py-3 text-right font-black text-blue-700">
+                          {formatNumber(employee.students)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <EmptyChart />
+          )}
+        </Panel>
+      )}
 
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,0.8fr)]">
         <Panel

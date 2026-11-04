@@ -3,6 +3,7 @@ export type StatisticsPolicy = Record<string, any>;
 export type DashboardFilters = {
   keyword: string;
   provinceId: number | null;
+  wardId: number | null;
   schoolId: number | null;
   subjectId: number | null;
   schoolYear: string;
@@ -40,11 +41,13 @@ export type StatisticsDashboardModel = {
     students: number;
     periods: number;
     provinces: number;
+    employees: number;
     devices: number;
     contractCoverage: number;
     averageCompanyUnit: number;
   };
   years: DashboardBreakdown[];
+  employees: DashboardBreakdown[];
   provinces: DashboardBreakdown[];
   subjects: DashboardBreakdown[];
   schools: DashboardBreakdown[];
@@ -142,6 +145,9 @@ export const filterStatisticsPolicies = (
       filters.provinceId &&
       numberValue(policy.provinceId) !== filters.provinceId
     ) {
+      return false;
+    }
+    if (filters.wardId && numberValue(policy.wardId) !== filters.wardId) {
       return false;
     }
     if (filters.schoolId && numberValue(policy.schoolId) !== filters.schoolId) {
@@ -291,6 +297,9 @@ export const buildStatisticsDashboardModel = (
   const provinceIds = new Set(
     policies.map((policy) => numberValue(policy.provinceId)).filter(Boolean)
   );
+  const employeeIds = new Set(
+    policies.map((policy) => numberValue(policy.employeeId)).filter(Boolean)
+  );
   const contractCount = policies.filter(hasContract).length;
   const companyUnits = policies
     .map(getCompanyUnit)
@@ -311,6 +320,7 @@ export const buildStatisticsDashboardModel = (
         0
       ),
       provinces: provinceIds.size,
+      employees: employeeIds.size,
       devices: devices.reduce((total, device) => total + device.quantity, 0),
       contractCoverage: policies.length
         ? Math.round((contractCount / policies.length) * 100)
@@ -325,6 +335,16 @@ export const buildStatisticsDashboardModel = (
       (policy) => policy.schoolYear || "Chưa có năm học",
       (policy) => policy.schoolYear || "Chưa có năm học"
     ).sort((left, right) => left.name.localeCompare(right.name, "vi")),
+    employees: buildBreakdown(
+      policies,
+      (policy) =>
+        numberValue(policy.employeeId) || policy.employeeName || "unknown",
+      (policy) => policy.employeeName || "Chưa xác định"
+    ).sort(
+      (left, right) =>
+        right.students - left.students ||
+        left.name.localeCompare(right.name, "vi")
+    ),
     provinces: buildBreakdown(
       policies,
       (policy) =>

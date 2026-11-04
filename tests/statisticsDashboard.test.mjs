@@ -12,8 +12,12 @@ const policies = [
     policyId: 1,
     schoolId: 10,
     schoolName: "THCS Nguyễn Du",
+    employeeId: 501,
+    employeeName: "Nguyễn Văn An",
     provinceId: 100,
     provinceName: "TP Hồ Chí Minh",
+    wardId: 10001,
+    wardName: "Phường Bến Nghé",
     subjectId: 1000,
     subjectName: "Kỹ năng sống",
     schoolYear: "2026-2027",
@@ -32,8 +36,12 @@ const policies = [
     policyId: 2,
     schoolId: 11,
     schoolName: "Tiểu học Lê Lợi",
+    employeeId: 502,
+    employeeName: "Trần Thị Bình",
     provinceId: 100,
     provinceName: "TP Hồ Chí Minh",
+    wardId: 10002,
+    wardName: "Phường Tân Định",
     subjectId: 1001,
     subjectName: "STEM",
     schoolYear: "2026-2027",
@@ -59,10 +67,13 @@ test("tổng hợp KPI, địa bàn, môn học và thiết bị", () => {
   assert.equal(model.summary.schools, 2);
   assert.equal(model.summary.students, 800);
   assert.equal(model.summary.periods, 60);
+  assert.equal(model.summary.employees, 2);
   assert.equal(model.summary.contractCoverage, 50);
   assert.equal(model.summary.devices, 13);
   assert.equal(model.provinces[0].schools, 2);
   assert.equal(model.subjects.length, 2);
+  assert.equal(model.employees[0].name, "Nguyễn Văn An");
+  assert.equal(model.employees[0].students, 500);
   assert.equal(model.devices[0].name, "Robot");
   assert.equal(model.devices.find((row) => row.name === "Tivi")?.quantity, 3);
   assert.equal(
@@ -80,6 +91,7 @@ test("lọc không dấu theo trường và lọc kết hợp theo năm học", 
   const result = filterStatisticsPolicies(policies, {
     keyword: "nguyen du",
     provinceId: 100,
+    wardId: null,
     schoolId: null,
     subjectId: null,
     schoolYear: "2026-2027",
@@ -87,6 +99,19 @@ test("lọc không dấu theo trường và lọc kết hợp theo năm học", 
 
   assert.equal(result.length, 1);
   assert.equal(result[0].policyId, 1);
+});
+
+test("lọc theo xã/phường trong khu vực đã chọn", () => {
+  const result = filterStatisticsPolicies(policies, {
+    keyword: "",
+    provinceId: 100,
+    wardId: 10002,
+    schoolId: null,
+    subjectId: null,
+    schoolYear: "",
+  });
+
+  assert.deepEqual(result.map((policy) => policy.policyId), [2]);
 });
 
 test("cảnh báo hồ sơ thiếu được phân loại độc lập", () => {

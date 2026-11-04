@@ -1,6 +1,10 @@
 import { hasRole } from "@/utils/auth";
 import { DEPARTMENT_HEAD_ROLES } from "@/utils/departmentHeads";
 import { isEquipmentOnlyUser } from "@/pages/ExpenseRequest/lib";
+import {
+  isRestrictedLongAnDirector,
+  LONG_AN_DIRECTOR_HIDDEN_DIRECTOR_MENUS,
+} from "@/utils/longAnDirector";
 import expense from "@/pages/Director/static/expense.png";
 import policy from "@/pages/Director/static/policy.png";
 import report from "@/pages/Director/static/report.png";
@@ -215,7 +219,7 @@ export const directorBaseMenus = (): DirectorMenu[] => {
     "troly_gd"
   );
 
-  return [
+  const result = [
     ...visibleMenus,
     ...(hasRole(...CASHFLOW_REPORT_ROLES) ? [CASHFLOW_REPORT_MENU] : []),
     ...(hasRole("thuquy", "ketoan_congno") ? [OTHER_CASHFLOW_MENU] : []),
@@ -224,4 +228,9 @@ export const directorBaseMenus = (): DirectorMenu[] => {
     // Đề nghị tạm ứng/thanh toán: ai cũng lập được; quyền duyệt/chi do backend quyết định.
     FINANCE_MENU,
   ];
+
+  if (!isRestrictedLongAnDirector()) return result;
+  return result.filter(
+    (item) => !LONG_AN_DIRECTOR_HIDDEN_DIRECTOR_MENUS.has(item.from)
+  );
 };

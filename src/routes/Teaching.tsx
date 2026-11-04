@@ -31,7 +31,7 @@ import {
 
 /**
  * Màn quản lý (Giáo viên / Lịch dạy / Chấm công): nhansu và giaovu được
- * thao tác; director / director_la / troly_gd / ketoan_truong chỉ xem.
+ * thao tác; director / troly_gd / ketoan_truong chỉ xem.
  * Role khác gõ URL tay → đẩy về màn đầu tiên được phép.
  */
 function ManageGuard({ children }: { children: React.ReactNode }) {

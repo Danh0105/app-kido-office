@@ -29,6 +29,7 @@ import PayrollPage from "@/pages/Payroll/PayrollPage";
 import RecruitmentPage from "@/pages/Recruitment/RecruitmentPage";
 import FinanceRoutes from "@/pages/Finance/FinanceRoutes";
 import OtherCashflowPage from "@/pages/OtherCashflow/OtherCashflowPage";
+import { isRestrictedLongAnDirector } from "@/utils/longAnDirector";
 
 const EXPENSE_HOME = "/director/expense-management";
 const DIRECTOR_HOME = "/director";
@@ -57,7 +58,6 @@ function AccountantGuard({ children }: { children: React.ReactNode }) {
     !hasRole(
       "accountant",
       "director",
-      "director_la",
       "ketoan_congno",
       "ketoan_truong",
       "troly_gd",
@@ -103,7 +103,14 @@ function ExpenseRequestGuard({ children }: { children: React.ReactNode }) {
 }
 
 function RecruitmentGuard({ children }: { children: React.ReactNode }) {
-  if (!hasRole("nhansu", "director", "director_la", "troly_gd")) {
+  if (!hasRole("nhansu", "director", "troly_gd")) {
+    return <Navigate to={DIRECTOR_HOME} replace />;
+  }
+  return <>{children}</>;
+}
+
+function HrFeatureGuard({ children }: { children: React.ReactNode }) {
+  if (isRestrictedLongAnDirector()) {
     return <Navigate to={DIRECTOR_HOME} replace />;
   }
   return <>{children}</>;
@@ -168,7 +175,10 @@ export default function DirectorRoutes() {
             )
           }
         />
-        <Route path="phong-ban" element={directorOnly(<Department />)} />
+        <Route
+          path="phong-ban"
+          element={<HrFeatureGuard>{directorOnly(<Department />)}</HrFeatureGuard>}
+        />
         <Route path="region/:employeeId" element={directorOnly(<Region />)} />
         <Route
           path="nhan-vien"
@@ -182,7 +192,11 @@ export default function DirectorRoutes() {
         />
         <Route
           path="employee-management"
-          element={directorOnly(<EmployeeManagement />)}
+          element={
+            <HrFeatureGuard>
+              {directorOnly(<EmployeeManagement />)}
+            </HrFeatureGuard>
+          }
         />
         <Route
           path="nhan-vien/profile/:userId"
@@ -267,7 +281,14 @@ export default function DirectorRoutes() {
         {/* Quản lý kho thiết bị: kỹ thuật quản nhập/xuất/tồn; giám đốc + sales admin xem/duyệt được cùng module. */}
         <Route path="warehouse" element={expenseAccess(<WarehousePage />)} />
         {/* Backend tự giới hạn phạm vi: BGĐ/Nhân sự/KTT xem tất cả, role khác chỉ xem chính mình. */}
-        <Route path="payrolls" element={<PayrollPage />} />
+        <Route
+          path="payrolls"
+          element={
+            <HrFeatureGuard>
+              <PayrollPage />
+            </HrFeatureGuard>
+          }
+        />
         {/* Đề nghị tài chính: mọi tài khoản dùng được; backend tự giới hạn quyền xem/duyệt/chi. */}
         <Route path="finance/*" element={<FinanceRoutes />} />
         {/* Thu Chi ngoài — cùng nhóm vai trò xem-tất-cả với backend (thủ quỹ ghi nhận ở đây) */}

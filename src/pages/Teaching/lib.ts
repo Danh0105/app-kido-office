@@ -23,7 +23,6 @@ export const canViewTeacherDirectory = () =>
     "nhansu",
     "giaovu",
     "director",
-    "director_la",
     "troly_gd",
     "ketoan_truong",
     "giaovien_congty",
@@ -61,7 +60,7 @@ export const canApproveTeacherAccount = () => hasRole("nhansu");
  * hiện mục menu ra rồi bấm vào nhận 403 còn khó hiểu hơn là không thấy.
  */
 export const canViewActivityLog = () =>
-  hasRole("nhansu", "director", "director_la", "troly_gd");
+  hasRole("nhansu", "director", "troly_gd");
 
 const RATE_FIELDS = [
   "defaultRatePerPeriod",
@@ -84,7 +83,6 @@ export const canViewTeaching = () =>
     "nhansu",
     "giaovu",
     "director",
-    "director_la",
     "troly_gd",
     "ketoan_truong",
   );

@@ -31,7 +31,7 @@ import SchoolInfoModal, { SchoolInfo } from "./components/SchoolInfoModal";
 import { getApiErrorMessage } from "@/utils/apiError";
 import { hasRole } from "@/utils/auth";
 
-/** Khớp `WRITE_ROLES` của `POST /school-expenses` ở backend. */
+/** Khớp `WRITE_ROLES` của `/school-expenses` ở backend. */
 const canWriteSchoolExpense = () =>
   hasRole(
     "accountant",
@@ -41,6 +41,12 @@ const canWriteSchoolExpense = () =>
     "troly_gd",
     "director",
   );
+
+/** Sales admin không sửa được bảng, chỉ tạo bảng rỗng để nhập Chi Ngoài. */
+const canCreateSchoolExpense = () =>
+  canWriteSchoolExpense() ||
+  hasRole("saleadmin", "salesadmin", "salesadmin_la");
+
 const getSchoolYearRange = (schoolYear: string) => {
   const years = schoolYear.match(/\d{4}/g)?.map(Number) || [];
 
@@ -385,10 +391,10 @@ export default function RealExpense() {
       if (existed?.id) return existed.id;
 
       // Backend chỉ cho Kế toán / Kế toán công nợ / Kế toán trưởng / Thủ quỹ /
-      // Trợ lý GĐ / GĐ tạo bảng chi phí — role khác gọi create là 403.
-      if (!canWriteSchoolExpense()) {
+      // Trợ lý GĐ / GĐ / Sales admin tạo bảng chi phí — role khác gọi create là 403.
+      if (!canCreateSchoolExpense()) {
         toast.error(
-          "Trường này chưa có bảng chi phí. Chỉ Kế toán, Kế toán trưởng, Thủ quỹ, Trợ lý GĐ hoặc Giám đốc mới tạo được.",
+          "Trường này chưa có bảng chi phí. Chỉ Kế toán, Kế toán trưởng, Thủ quỹ, Trợ lý GĐ, Sales admin hoặc Giám đốc mới tạo được.",
         );
         return null;
       }

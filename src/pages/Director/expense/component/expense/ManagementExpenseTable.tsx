@@ -80,8 +80,9 @@ export default function ManagementExpenseTable({
 
   const ql2Tax = Number(subjects?.policies?.[0]?.data?.ttcs?.[0]?.ql2Tax || 0);
   const otherCosts = getPolicyOtherCosts(subjects);
-  // Cùng điều kiện với nút xoá dòng.
-  const canAddRow = showActions && !!addRow && !readOnly && !policyLocked;
+  // Đã khoá BBCS vẫn thêm được dòng chi; ai chỉ còn Ngày chi + Nguồn chi thì không
+  // (kể cả mọi người khi kỳ đã "Kết thúc").
+  const canAddRow = showActions && !!addRow && !readOnly && !dateSourceOnly;
   const gridTemplateColumns = [
     "200px",
     "120px",
@@ -327,6 +328,10 @@ export default function ManagementExpenseTable({
                 policyLocked={policyLocked}
                 savedRowsOnly={savedRowsOnly}
                 dateSourceOnly={dateSourceOnly}
+                paidMax={
+                  Number(row.paidAmount || 0) +
+                  Math.max(0, totals.remainingOutsideExpense)
+                }
               />
             ))}
           </div>
@@ -470,11 +475,13 @@ export default function ManagementExpenseTable({
               Bảng đã khoá. Kế toán trưởng, Kế toán, Kế toán công nợ và Thủ
               quỹ chỉ còn sửa được Ngày chi, Nguồn chi, Đã chi, Người chi, Ghi
               chú; Trợ lý GĐ và Giám đốc chỉ sửa được Ngày chi, Nguồn chi.
+              Kế toán trưởng, Kế toán, Kế toán công nợ, Thủ quỹ vẫn thêm được dòng chi mới
+              và sửa Nội dung của dòng thêm riêng; tổng Đã chi không được vượt tổng Chi ngoài.
             </span>
           </div>
         ) : (
           <div className="text-sm text-slate-500">
-            Bảng đang mở, có thể chỉnh sửa. Xác nhận để khoá lại.
+            Bảng đang mở, có thể chỉnh sửa. Tổng Đã chi không được vượt tổng Chi ngoài. Xác nhận để khoá lại.
           </div>
         )}
 

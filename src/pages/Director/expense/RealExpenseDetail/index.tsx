@@ -39,7 +39,11 @@ import {
   getOtherCostTax,
   getPolicyOtherCosts,
 } from "../utils/policyOtherCosts";
-import { getManagementRowInput } from "../utils/managementRows";
+import {
+  getManagementRowInput,
+  isStandaloneManagementRow,
+  placeRowsByIndex,
+} from "../utils/managementRows";
 import { revenueQuantityDefaultsFromPolicy } from "@/utils/revenueAmount";
 
 type CashPolicyRowType = {
@@ -103,6 +107,31 @@ const initialManagementRow: ManagementRow = {
   cashAccount: "",
   payer: "",
   note: "",
+};
+
+/** Dòng thêm khi bảng đã khoá BBCS: chỉ có Nội dung + cột chi, không có số tiền chính sách. */
+const lockedManagementRow = (subject: any): ManagementRow => {
+  const zeroOtherCosts = Object.fromEntries(
+    getPolicyOtherCosts(subject).map((item, index) => [
+      getOtherCostKey(item, index),
+      0,
+    ]),
+  );
+
+  return {
+    ...initialManagementRow,
+    content: "",
+    addedWhileLocked: true,
+    totalPeriods: 0,
+    studentCount: 0,
+    monthsCount: 0,
+    ql1UnitPrice: 0,
+    ql1Tax: 0,
+    ql2UnitPrice: 0,
+    ql2Tax: 0,
+    otherCostUnitPrices: zeroOtherCosts,
+    otherCostTaxes: zeroOtherCosts,
+  };
 };
 
 const ALL_HISTORY_EMPLOYEES = "__all__";
@@ -850,11 +879,14 @@ export default function RealExpenseDetail({
   const addManagementRow = () => {
     setManagementRows((prev) => [
       ...padRows(prev, inputRows.length, initialManagementRow),
-      {
-        ...initialManagementRow,
-        ...revenueQuantityDefaultsFromPolicy(activeSubject),
-        monthsCount: 0,
-      },
+      managementConfirmed
+        ? lockedManagementRow(activeSubject)
+        : {
+            ...initialManagementRow,
+            ...revenueQuantityDefaultsFromPolicy(activeSubject),
+            monthsCount: 0,
+            content: "",
+          },
     ]);
   };
 
@@ -1030,7 +1062,9 @@ export default function RealExpenseDetail({
       if (mgmtItems?.length > 0) {
         setManagementRows(
           padRows(
-            mgmtItems.map((r: any) => {
+            placeRowsByIndex<any>(mgmtItems).map((r: any) => {
+              if (!r) return { ...initialManagementRow };
+
               const savedOtherCosts = Array.isArray(r.otherCosts)
                 ? r.otherCosts
                 : [];
@@ -1063,6 +1097,7 @@ export default function RealExpenseDetail({
 
               return {
                 id: r.id,
+                content: r.content ?? undefined,
                 // Chỉ dòng thêm riêng (sau dòng Doanh Thu cuối) dùng số lượng này.
                 totalPeriods: Number(r.totalPeriods || 0),
                 studentCount: Number(r.studentCount || 0),
@@ -1188,6 +1223,10 @@ export default function RealExpenseDetail({
         return {
           // Bảng đã khoá: server khớp cột chi của kế toán theo id dòng.
           id: row.id,
+          addedWhileLocked: row.addedWhileLocked,
+          content: isStandaloneManagementRow(index, rows)
+            ? row.content
+            : undefined,
           rowIndex: index,
           subjectId,
           totalPeriods: Number(inputRow.totalPeriods || 0),

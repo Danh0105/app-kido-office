@@ -14,6 +14,7 @@ import type { ManagementRowInput } from "../../utils/managementRows";
 import { formatDecimal, roundDecimal } from "@/utils/decimal";
 import { calculateRevenueQuantity } from "@/utils/revenueAmount";
 import DecimalInput from "@/components/DecimalInput";
+import { toast } from "react-hot-toast";
 
 type Props = {
   row: any;
@@ -43,6 +44,8 @@ type Props = {
   savedRowsOnly?: boolean;
   /** Chỉ còn sửa Ngày chi + Nguồn chi (trợ lý GĐ / giám đốc khi đã khoá, kỳ đã kết thúc). */
   dateSourceOnly?: boolean;
+  /** Đã chi tối đa của dòng này để tổng Còn chi không âm. */
+  paidMax?: number;
 };
 
 export default function ManagementExpenseRow({
@@ -61,6 +64,7 @@ export default function ManagementExpenseRow({
   policyLocked = false,
   savedRowsOnly = false,
   dateSourceOnly = false,
+  paidMax,
 }: Props) {
   // Có Số HS thì tính theo HS, không thì theo Số tiết (× Số tháng) — khớp backend.
   const quantity = calculateRevenueQuantity(inputData);
@@ -73,8 +77,14 @@ export default function ManagementExpenseRow({
   ) =>
     standalone ? updateRow(index, field, value) : updateInputRow(index, field, value);
   const policyReadOnly = readOnly || policyLocked;
+  // Dòng vừa thêm khi bảng đã khoá: nhập được cột chi, xoá được khi chưa lưu.
+  const addedWhileLocked = !!row?.addedWhileLocked;
+  // Nội dung của dòng thêm riêng lưu trên chính dòng: bảng đã khoá vẫn sửa được,
+  // trừ người chỉ còn Ngày chi + Nguồn chi (kể cả mọi người khi kỳ đã "Kết thúc").
+  const contentLocked = standalone ? readOnly || dateSourceOnly : sharedLocked;
   // Ngày chi, Nguồn chi.
-  const paymentReadOnly = readOnly || (savedRowsOnly && !row?.id);
+  const paymentReadOnly =
+    readOnly || (savedRowsOnly && !row?.id && !addedWhileLocked);
   // Đã chi, Người chi, Ghi chú.
   const paidReadOnly = paymentReadOnly || dateSourceOnly;
   const policyQl1 = Number(
@@ -153,15 +163,12 @@ export default function ManagementExpenseRow({
         <input
           value={inputData.content || ""}
           maxLength={500}
-          disabled={sharedLocked || standalone}
-          title={
-            standalone
-              ? "Dòng thêm riêng cho Chi Ngoài — ghi diễn giải ở cột Ghi chú"
-              : undefined
-          }
-          onChange={(e) =>
-            updateInputRow(index, "content", e.target.value.slice(0, 500))
-          }
+          disabled={contentLocked}
+          onChange={(e) => {
+            const content = e.target.value.slice(0, 500);
+            if (standalone) updateRow(index, "content", content);
+            else updateInputRow(index, "content", content);
+          }}
           placeholder="Nhập nội dung..."
           className="w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:bg-slate-100 disabled:text-slate-500"
         />
@@ -391,6 +398,13 @@ export default function ManagementExpenseRow({
         <DecimalInput
           value={paidAmount}
           disabled={paidReadOnly}
+          max={paidMax}
+          onOverMax={(max) =>
+            toast.error(
+              `Đã chi không được vượt tổng Còn chi (tối đa ${formatDecimal(max)})`,
+              { id: "management-paid-limit" },
+            )
+          }
           onValueChange={(value) => {
             updateRow(index, "paidAmount", value);
           }}
@@ -456,7 +470,7 @@ export default function ManagementExpenseRow({
       </div>
       {showActions && (
         <div className="flex items-center justify-center gap-1">
-          {!policyReadOnly && (
+          {(!policyReadOnly || addedWhileLocked) && (
             <button
               onClick={() => removeRow(index)}
               title="Xoá dòng"

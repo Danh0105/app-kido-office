@@ -1,6 +1,10 @@
 export type ManagementRow = {
   /** id dòng đã lưu — dòng mới thêm chưa có */
   id?: number;
+  /** Nội dung riêng — chỉ dùng cho dòng thêm riêng (sau dòng Doanh Thu cuối). */
+  content?: string;
+  /** Thêm khi bảng đã khoá BBCS, chưa lưu: chỉ nhập được Nội dung + cột chi. */
+  addedWhileLocked?: boolean;
   /** Số lượng riêng — chỉ dùng cho dòng thêm riêng (sau dòng Doanh Thu cuối). */
   totalPeriods?: number;
   studentCount?: number;

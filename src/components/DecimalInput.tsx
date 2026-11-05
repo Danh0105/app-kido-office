@@ -51,6 +51,8 @@ type DecimalInputProps = {
   placeholder?: string;
   min?: number;
   max?: number;
+  /** Gọi khi giá trị gõ vào vượt `max` (ô vẫn giữ giá trị đã chặn về `max`). */
+  onOverMax?: (max: number) => void;
   disabled?: boolean;
   /** Hiện "0" thật thay vì để trống khi giá trị bằng 0 (mặc định ẩn để trống). */
   keepZero?: boolean;
@@ -65,6 +67,7 @@ export default function DecimalInput({
   placeholder = "0",
   min = 0,
   max,
+  onOverMax,
   disabled = false,
   keepZero = false,
   allowDecimal = true,
@@ -108,6 +111,7 @@ export default function DecimalInput({
         const parsed = allowDecimal
           ? parseLocalizedDecimal(nextDraft)
           : Number(nextDraft.replace(/[^\d-]/g, "")) || 0;
+        if (max !== undefined && parsed > max) onOverMax?.(max);
         onValueChange(clampValue(parsed));
       }}
       onBlur={() => {

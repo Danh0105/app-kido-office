@@ -176,47 +176,35 @@ export default function ManagementExpenseRow({
 
       {/* Số tiết */}
       <div className="flex items-center justify-center p-3 text-center flex items-center">
-        <input
-          type="number"
-          min="0"
-          step="0.01"
+        <DecimalInput
           value={Number(inputData.totalPeriods) || ""}
           disabled={sharedLocked}
-          onChange={(e) =>
-            updateShared("totalPeriods", Number(e.target.value || 0))
-          }
+          commitOnBlur
+          onValueChange={(value) => updateShared("totalPeriods", value)}
           className={`${metricInputClass} text-slate-700 disabled:bg-slate-100 disabled:text-slate-400`}
         />
       </div>
 
       {/* Số HS */}
       <div className="flex items-center justify-center p-3 text-center flex items-center">
-        <input
-          type="number"
-          min="0"
-          step="0.01"
+        <DecimalInput
           value={Number(inputData.studentCount) || ""}
           disabled={sharedLocked}
-          onChange={(e) =>
-            updateShared("studentCount", Number(e.target.value || 0))
-          }
+          commitOnBlur
+          onValueChange={(value) => updateShared("studentCount", value)}
           className={`${metricInputClass} text-sky-700 disabled:bg-slate-100 disabled:text-slate-400`}
         />
       </div>
 
       {/* Số tháng — tối đa 4 chữ số thập phân, khớp numeric(15,4) ở DB */}
       <div className="flex items-center justify-center p-3 text-center flex items-center">
-        <input
-          type="number"
-          min="0"
-          step="any"
+        <DecimalInput
           value={Number(inputData.monthsCount) || ""}
           disabled={sharedLocked}
-          onChange={(e) =>
-            updateShared(
-              "monthsCount",
-              roundDecimal(Number(e.target.value || 0), 4),
-            )
+          commitOnBlur
+          fractionDigits={4}
+          onValueChange={(value) =>
+            updateShared("monthsCount", roundDecimal(value, 4))
           }
           className={`${metricInputClass} text-indigo-700 disabled:bg-slate-100 disabled:text-slate-400`}
         />
@@ -228,6 +216,7 @@ export default function ManagementExpenseRow({
           disabled={policyReadOnly}
           onValueChange={(value) => updateRow(index, "ql1UnitPrice", value)}
           allowDecimal={false}
+          commitOnBlur
           className={`${metricInputClass} text-emerald-700`}
         />
       </div>
@@ -238,6 +227,7 @@ export default function ManagementExpenseRow({
           disabled={policyReadOnly}
           onValueChange={(value) => updateRow(index, "ql1Tax", value)}
           allowDecimal={false}
+          commitOnBlur
           className={`${metricInputClass} text-rose-700`}
         />
       </div>
@@ -267,6 +257,7 @@ export default function ManagementExpenseRow({
           disabled={policyReadOnly}
           onValueChange={(value) => updateRow(index, "ql2UnitPrice", value)}
           allowDecimal={false}
+          commitOnBlur
           className={`${metricInputClass} text-cyan-700`}
         />
       </div>
@@ -277,6 +268,7 @@ export default function ManagementExpenseRow({
           disabled={policyReadOnly}
           onValueChange={(value) => updateRow(index, "ql2Tax", value)}
           allowDecimal={false}
+          commitOnBlur
           className={`${metricInputClass} text-rose-700`}
         />
       </div>
@@ -316,6 +308,7 @@ export default function ManagementExpenseRow({
                 })
               }
               allowDecimal={false}
+              commitOnBlur
               className={`${metricInputClass} text-fuchsia-700`}
             />
           </div>,
@@ -330,6 +323,7 @@ export default function ManagementExpenseRow({
                 })
               }
               allowDecimal={false}
+              commitOnBlur
               className={`${metricInputClass} text-rose-700`}
             />
           </div>,
@@ -410,6 +404,7 @@ export default function ManagementExpenseRow({
           }}
           placeholder="0"
           allowDecimal={false}
+          commitOnBlur
           className="
             w-full h-11 rounded-lg
             border border-slate-200

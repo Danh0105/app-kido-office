@@ -113,15 +113,13 @@ export default function InputExpenseTable({
                   </td>
 
                   <td className="border p-3">
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
+                    <DecimalInput
                       value={Number(row.totalPeriods) || ""}
                       disabled={locked}
-                      onChange={(e) => {
+                      commitOnBlur
+                      onValueChange={(value) => {
                         // Chỉ đổi số tiết — không tự sinh, ghi đè hay xoá HS.
-                        const next = applyPeriodsInput(row, e.target.value);
+                        const next = applyPeriodsInput(row, value);
                         onUpdate(idx, "totalPeriods", next.totalPeriods);
                       }}
                       className="w-full h-16 text-center border rounded-lg text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-400"
@@ -129,34 +127,25 @@ export default function InputExpenseTable({
                   </td>
 
                   <td className="border p-3">
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
+                    <DecimalInput
                       value={Number(row.studentCount) || ""}
                       disabled={locked}
-                      onChange={(e) => {
-                        onUpdate(idx, "studentCount", Number(e.target.value || 0));
-                      }}
+                      commitOnBlur
+                      onValueChange={(value) =>
+                        onUpdate(idx, "studentCount", value)
+                      }
                       className="w-full h-16 text-center border rounded-lg text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-400"
                     />
                   </td>
                   <td className="border p-3">
-                    <input
-                      type="number"
-                      step="any"
-                      min="0"
+                    <DecimalInput
                       value={Number(row.monthsCount) || ""}
                       disabled={locked}
-                      onChange={(e) => {
-                        const value = e.target.value;
-
+                      commitOnBlur
+                      fractionDigits={4}
+                      onValueChange={(value) => {
                         // Tối đa 4 chữ số thập phân, khớp numeric(15,4) ở DB.
-                        onUpdate(
-                          idx,
-                          "monthsCount",
-                          value === "" ? 0 : roundDecimal(Number(value), 4),
-                        );
+                        onUpdate(idx, "monthsCount", roundDecimal(value, 4));
                       }}
                       className="w-full h-16 text-center border rounded-lg text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-400"
                     />
@@ -171,6 +160,7 @@ export default function InputExpenseTable({
                       }
                       placeholder="0"
                       allowDecimal={false}
+                      commitOnBlur
                       className="w-full h-14 text-center font-bold text-emerald-700 border rounded-lg text-sm disabled:bg-slate-100 disabled:text-slate-400"
                     />
                   </td>
@@ -191,6 +181,7 @@ export default function InputExpenseTable({
                       }
                       placeholder="0"
                       allowDecimal={false}
+                      commitOnBlur
                       className="w-full h-16 text-center font-bold text-sm text-green-700 border rounded-lg"
                     />
                   </td>

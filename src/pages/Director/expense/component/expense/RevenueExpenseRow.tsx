@@ -149,14 +149,12 @@ export default function RevenueExpenseRow({
 
       {/* SỐ TIẾT */}
       <div className="flex text-center items-center justify-center border-r border-slate-200 px-2 py-2 font-semibold text-slate-700">
-        <input
-          type="number"
-          min="0"
-          step="0.01"
+        <DecimalInput
           value={Number(inputData.totalPeriods) || ""}
           disabled={locked}
-          onChange={(e) =>
-            updateInputRow(index, "totalPeriods", Number(e.target.value || 0))
+          commitOnBlur
+          onValueChange={(value) =>
+            updateInputRow(index, "totalPeriods", value)
           }
           className={`${metricInputClass} text-slate-700`}
         />
@@ -164,14 +162,12 @@ export default function RevenueExpenseRow({
 
       {/* SỐ HS */}
       <div className="flex text-center items-center justify-center border-r border-slate-200 px-2 py-2 font-semibold text-sky-700">
-        <input
-          type="number"
-          min="0"
-          step="0.01"
+        <DecimalInput
           value={Number(inputData.studentCount) || ""}
           disabled={locked}
-          onChange={(e) =>
-            updateInputRow(index, "studentCount", Number(e.target.value || 0))
+          commitOnBlur
+          onValueChange={(value) =>
+            updateInputRow(index, "studentCount", value)
           }
           className={`${metricInputClass} text-sky-700`}
         />
@@ -179,18 +175,13 @@ export default function RevenueExpenseRow({
 
       {/* SỐ THÁNG — tối đa 4 chữ số thập phân, khớp numeric(15,4) ở DB */}
       <div className="flex text-center items-center justify-center border-r border-slate-200 px-2 py-2 font-semibold text-indigo-700">
-        <input
-          type="number"
-          min="0"
-          step="any"
+        <DecimalInput
           value={Number(inputData.monthsCount) || ""}
           disabled={locked}
-          onChange={(e) =>
-            updateInputRow(
-              index,
-              "monthsCount",
-              roundDecimal(Number(e.target.value || 0), 4),
-            )
+          commitOnBlur
+          fractionDigits={4}
+          onValueChange={(value) =>
+            updateInputRow(index, "monthsCount", roundDecimal(value, 4))
           }
           className={`${metricInputClass} text-indigo-700`}
         />
@@ -205,6 +196,7 @@ export default function RevenueExpenseRow({
           }
           placeholder="0"
           allowDecimal={false}
+          commitOnBlur
           className={`${metricInputClass} text-emerald-700`}
         />
       </div>
@@ -232,6 +224,7 @@ export default function RevenueExpenseRow({
             updateRow(index, "teacherUnitPrice", value)
           }
           allowDecimal={false}
+          commitOnBlur
           className={`${metricInputClass} text-amber-700`}
         />
       </div>
@@ -262,6 +255,7 @@ export default function RevenueExpenseRow({
           }
           placeholder="0"
           allowDecimal={false}
+          commitOnBlur
           className={`${metricInputClass} text-rose-700`}
         />
       </div>
@@ -346,6 +340,7 @@ export default function RevenueExpenseRow({
           }}
           placeholder="0"
           allowDecimal={false}
+          commitOnBlur
           className="
             w-full h-10
             rounded-lg

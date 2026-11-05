@@ -38,6 +38,14 @@ export function revenueQuantityDefaultsFromPolicy(
   };
 }
 
+/** Có số học sinh thì lấy số học sinh, nếu không thì lấy số tiết — chưa nhân số tháng. */
+export function revenueBaseQuantity(row: RevenueAmountInput): number {
+  const students = Number(row.studentCount || 0);
+  const periods = Number(row.totalPeriods || 0);
+
+  return students > 0 ? students : periods;
+}
+
 /**
  * Số lượng tính doanh thu/hóa đơn:
  * - có số học sinh thì lấy số học sinh;
@@ -45,12 +53,7 @@ export function revenueQuantityDefaultsFromPolicy(
  * - nhân với số tháng của dòng.
  */
 export function calculateRevenueQuantity(row: RevenueAmountInput): number {
-  const students = Number(row.studentCount || 0);
-  const periods = Number(row.totalPeriods || 0);
-  const months = Number(row.monthsCount || 0);
-  const baseQuantity = students > 0 ? students : periods;
-
-  return baseQuantity * months;
+  return revenueBaseQuantity(row) * Number(row.monthsCount || 0);
 }
 
 /**

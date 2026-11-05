@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { arrayFrom, formatCurrency, toNumber, unwrap } from "./ExpenseSummary";
+import { revenueBaseQuantity } from "@/utils/revenueAmount";
 
 type Props = {
   data: any;
@@ -167,7 +168,11 @@ export default function ExpenseSummaryTable({ data, subjects }: Props) {
             schoolItem?.subject?.name ||
             managementItem?.subject?.name,
           totalPeriods: sourceItem.totalPeriods,
-          studentCount: sourceItem.studentCount,
+          // Cột Số học sinh lấy theo Số lượng của bảng Hóa Đơn:
+          // ưu tiên số HS, nếu trống thì dùng số tiết.
+          studentCount: revenue
+            ? revenueBaseQuantity(revenue)
+            : sourceItem.studentCount,
           invoiceAmount,
           collectedDate: revenue?.collectedDate || revenue?.paymentDate,
           totalOutsideExpense,

@@ -78,7 +78,8 @@ const employeeAvatarUrl = (employee: Employee) => {
 const employeeInitial = (employee: Employee) =>
   (employee.name || employee.email || "U").trim().charAt(0).toUpperCase() || "U";
 
-export default function EmployeeManagement() {
+/** `embedded`: nằm trong khung của phân hệ khác, không dựng header/nền toàn trang. */
+export default function EmployeeManagement({ embedded = false }: { embedded?: boolean }) {
   const [roleOptions, setRoleOptions] = useState(ROLE_OPTIONS);
   const roleLabel = (role: string) => roleOptions.find(option => option.value === role)?.label ?? role;
   useEffect(() => {
@@ -315,11 +316,11 @@ export default function EmployeeManagement() {
   };
 
   return (
-    <div className="bg-gray-100 min-h-screen pb-32">
-      <HeaderWithBack title="Quản lý nhân viên" />
+    <div className={embedded ? "" : "bg-gray-100 min-h-screen pb-32"}>
+      {!embedded && <HeaderWithBack title="Quản lý nhân viên" />}
 
       {/* ── Tabs ── */}
-      <div className="px-3 pt-[68px] pb-2 flex gap-2">
+      <div className={`px-3 pb-2 flex gap-2 ${embedded ? "" : "pt-[68px]"}`}>
         {TABS.map(({ key, label }) => (
           <button
             key={key}

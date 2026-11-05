@@ -19,7 +19,7 @@ import type {
 } from "@/types/finance";
 import { getApiErrorMessage } from "@/utils/apiError";
 import { Badge, Card, ErrorState, LoadingState, Modal } from "./components/FinanceUi";
-import { FINANCE_META_KEY } from "./FinanceRoutes";
+import { FINANCE_META_KEY, useFinanceMeta } from "./FinanceRoutes";
 import {
   ROLE_LABELS,
   SELF_MODE_LABELS,
@@ -602,6 +602,11 @@ type AssignRole = FinanceRole | typeof STAFF;
 const EMPTY_ACCOUNT = { name: "", phone: "", email: "", password: "", departmentId: "" };
 
 function Assignments({ data, run }: SectionProps) {
+  // Nhân sự cấu hình được nhưng vai trò quản trị và vai trò của chính mình do quản trị thao tác — backend cũng chặn.
+  const isAdmin = useFinanceMeta().capabilities.isAdmin;
+  const assignableRoles = isAdmin ? ROLES : ROLES.filter((role) => role !== "ADMIN");
+  const canRevoke = (a: { role: FinanceRole; employeeId: number }) =>
+    isAdmin || (a.role !== "ADMIN" && a.employeeId !== data.me.id);
   const [form, setForm] = useState<{ employeeId: string; role: AssignRole; companyId: string; departmentId: string; approvalLimit: number; note: string }>({
     employeeId: "",
     role: "MANAGER",
@@ -699,7 +704,7 @@ function Assignments({ data, run }: SectionProps) {
             Vai trò
             <select className={inputClass} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as AssignRole })}>
               <option value={STAFF}>Nhân viên</option>
-              {ROLES.map((role) => (
+              {assignableRoles.map((role) => (
                 <option key={role} value={role}>{ROLE_LABELS[role]}</option>
               ))}
             </select>
@@ -837,13 +842,15 @@ function Assignments({ data, run }: SectionProps) {
                   <td className="px-3 py-2">{a.departmentName ?? "Mọi phòng ban"}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{a.approvalLimit ? formatMoney(a.approvalLimit) : "—"}</td>
                   <td className="px-3 py-2 text-right">
-                    <button
-                      type="button"
-                      className="text-xs font-semibold text-rose-600"
-                      onClick={() => window.confirm(`Thu hồi quyền ${ROLE_LABELS[a.role]} của ${a.employeeName}?`) && void run(() => financeConfigApi.removeAssignment(a.id), "Đã thu hồi quyền")}
-                    >
-                      Thu hồi
-                    </button>
+                    {canRevoke(a) && (
+                      <button
+                        type="button"
+                        className="text-xs font-semibold text-rose-600"
+                        onClick={() => window.confirm(`Thu hồi quyền ${ROLE_LABELS[a.role]} của ${a.employeeName}?`) && void run(() => financeConfigApi.removeAssignment(a.id), "Đã thu hồi quyền")}
+                      >
+                        Thu hồi
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -88,6 +88,10 @@ export type FinanceMeta = {
   };
   capabilities: {
     isAdmin: boolean;
+    /** Vào được Cấu hình quy trình: quản trị phân hệ hoặc Nhân sự. */
+    canConfigure: boolean;
+    /** Quản lý tài khoản nhân viên: Nhân sự hoặc Giám đốc. */
+    canManageEmployees: boolean;
     canViewAll: boolean;
     canApprove: boolean;
     canManagePayments: boolean;

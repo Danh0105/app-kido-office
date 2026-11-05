@@ -5,6 +5,7 @@ import { Landmark, Plus } from "lucide-react";
 
 import HeaderWithBack from "@/components/HeaderWithBack";
 import BottomNav from "@/layout/BottomNav";
+import EmployeeManagement from "@/pages/Director/EmployeeManagement";
 import { financeApi } from "@/service/finance";
 import type { FinanceMeta } from "@/types/finance";
 import { getApiErrorMessage } from "@/utils/apiError";
@@ -41,7 +42,8 @@ function Shell({ meta, children }: { meta: FinanceMeta; children: ReactNode }) {
     { to: `${base}/list`, label: "Tất cả đề nghị", show: caps.canViewAll },
     { to: `${base}/payments`, label: "Quản lý thanh toán", show: caps.canManagePayments || caps.canConfirmDeductions },
     { to: `${base}/reports`, label: "Báo cáo – Thống kê", show: caps.canViewReports },
-    { to: `${base}/config`, label: "Cấu hình quy trình", show: caps.isAdmin },
+    { to: `${base}/employees`, label: "Nhân viên", show: caps.canManageEmployees },
+    { to: `${base}/config`, label: "Cấu hình quy trình", show: caps.canConfigure },
   ].filter((tab) => tab.show);
 
   return (
@@ -187,9 +189,17 @@ function FinanceModule() {
             }
           />
           <Route
+            path="employees"
+            element={
+              <Guard allow={caps.canManageEmployees}>
+                <EmployeeManagement embedded />
+              </Guard>
+            }
+          />
+          <Route
             path="config"
             element={
-              <Guard allow={caps.isAdmin}>
+              <Guard allow={caps.canConfigure}>
                 <FinanceConfig />
               </Guard>
             }

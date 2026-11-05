@@ -42,7 +42,7 @@ const canWriteSchoolExpense = () =>
     "director",
   );
 
-/** Sales admin không sửa được bảng, chỉ tạo bảng rỗng để nhập Chi Ngoài. */
+/** Sales admin chỉ đọc, tạo được bảng rỗng để xem và xác nhận đúng BBCS. */
 const canCreateSchoolExpense = () =>
   canWriteSchoolExpense() ||
   hasRole("saleadmin", "salesadmin", "salesadmin_la");
@@ -1292,7 +1292,8 @@ export default function RealExpense() {
                             {label}
                           </button>
 
-                          <div className="flex items-center justify-end gap-1 mt-1">
+                          {canWriteSchoolExpense() && (
+                            <div className="flex items-center justify-end gap-1 mt-1">
                             <button
                               onClick={() => {
                                 setEditingPeriodId(period.id);
@@ -1336,6 +1337,7 @@ export default function RealExpense() {
                               <Trash2 size={14} />
                             </button>
                           </div>
+                          )}
                         </div>
                       );
                     })}
@@ -1398,7 +1400,7 @@ export default function RealExpense() {
                         </button>
                       </div>
                     </div>
-                  ) : (
+                  ) : canWriteSchoolExpense() ? (
                     <button
                       onClick={() => setAddingCustomPeriod(true)}
                       disabled={!activeSchool}
@@ -1413,7 +1415,7 @@ export default function RealExpense() {
                     >
                       + Thêm dòng
                     </button>
-                  )}
+                  ) : null}
                 </div>
               </div>
             </div>

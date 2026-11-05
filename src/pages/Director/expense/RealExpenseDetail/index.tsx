@@ -137,7 +137,7 @@ export default function RealExpenseDetail({
   // chi như KTT, nhưng chỉ trên dòng đã lưu (server không thêm dòng cho họ).
   // Trợ lý GĐ / giám đốc chỉ còn Ngày chi + Nguồn chi.
   const isLockedPaymentEditor = hasRole("accountant", "ketoan_congno", "thuquy");
-  // Sales admin chỉnh sửa DUY NHẤT bảng "Chi Ngoài" — xem ManagementExpenseTable.
+  // Sales admin xem toàn bộ dữ liệu thu chi nhưng chỉ được xác nhận đúng BBCS.
   const isSalesAdmin = hasRole("saleadmin", "salesadmin", "salesadmin_la");
   const [managementConfirmed, setManagementConfirmed] = useState(false);
   const [managementConfirmedByName, setManagementConfirmedByName] =
@@ -1724,20 +1724,22 @@ export default function RealExpenseDetail({
             {/* SUB TABS */}
 
             <div className="space-y-5">
-              {!isSalesAdmin && (
-                // Đã "Kết thúc" → fieldset disabled khoá mọi ô nhập/nút bên trong.
-                <fieldset disabled={finalized} className="m-0 min-w-0 border-0 p-0">
-                  <InputExpenseTable
-                    rows={inputRows}
-                    defaultFee={Number(
-                      activeSubject?.policies?.[0]?.data?.fee || 0,
-                    )}
-                    onUpdate={updateInputRow}
-                    onAdd={addInputRow}
-                    onRemove={removeInputRow}
-                  />
-                </fieldset>
-              )}
+              {/* Sales admin xem đủ bảng thông tin chung nhưng không được sửa.
+                  Đã "Kết thúc" → fieldset disabled khoá mọi ô nhập/nút. */}
+              <fieldset
+                disabled={finalized || isSalesAdmin}
+                className="m-0 min-w-0 border-0 p-0"
+              >
+                <InputExpenseTable
+                rows={inputRows}
+                defaultFee={Number(
+                  activeSubject?.policies?.[0]?.data?.fee || 0,
+                )}
+                onUpdate={updateInputRow}
+                onAdd={addInputRow}
+                onRemove={removeInputRow}
+              />
+              </fieldset>
               {!isSalesAdmin && <ExpenseFormTable
                 inputRows={inputRows}
                 revenueRows={revenueRows}
@@ -1788,7 +1790,8 @@ export default function RealExpenseDetail({
               />}
 
               {/*
-                Sales admin: chỉnh sửa DUY NHẤT bảng "Chi Ngoài" + nút xác nhận.
+                Sales admin: xem đầy đủ mọi bảng ở chế độ chỉ đọc và chỉ được
+                thao tác nút xác nhận đúng BBCS.
                 Kế toán trưởng đi qua form đầy đủ phía trên giống Kế toán/Giám đốc.
               */}
               {isSalesAdmin && <ExpenseFormTable
@@ -1806,9 +1809,9 @@ export default function RealExpenseDetail({
                 updateManagementRow={updateManagementRow}
                 handleSubmit={handleSubmit}
                 handleCancelEdit={handleCancelEdit}
-                managementOnly
+                readOnly
                 managementConfirmed={managementConfirmed}
-                managementReadOnly={managementConfirmed}
+                managementReadOnly
                 managementConfirmedByName={managementConfirmedByName}
                 managementConfirmedAt={managementConfirmedAt}
                 canConfirmManagement={isSalesAdmin}
@@ -1819,6 +1822,9 @@ export default function RealExpenseDetail({
                 finalizedAt={finalizedAt}
                 schoolName={resolvedSchool?.name}
                 schoolYear={selectedSchoolYear}
+                handleViewHistory={handleViewHistory}
+                historyLoading={historyLoading}
+                historyCount={historyList.length}
               />}
 
               {/* SAVED DATA */}

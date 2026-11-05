@@ -53,6 +53,8 @@ type Props = {
 
   /** Sales admin / kế toán trưởng: chỉ hiển thị bảng "Chi Ngoài", ẩn Doanh thu + Hoá đơn. */
   managementOnly?: boolean;
+  /** Hiển thị đầy đủ các bảng nhưng khoá toàn bộ thao tác ghi. */
+  readOnly?: boolean;
   /** Bảng "Chi Ngoài" đã được sales admin xác nhận (khoá). */
   managementConfirmed?: boolean;
   /** true khi bảng "Chi Ngoài" bị khoá với người xem hiện tại. */
@@ -138,6 +140,7 @@ export default function ExpenseFormTable({
   historyCount = 0,
 
   managementOnly = false,
+  readOnly = false,
   managementConfirmed = false,
   managementReadOnly = false,
   canConfirmManagement = false,
@@ -192,7 +195,10 @@ export default function ExpenseFormTable({
         {!managementOnly && (
           <>
             {/* DOANH THU */}
-            <div className="space-y-3">
+            <fieldset
+              disabled={readOnly}
+              className="m-0 min-w-0 space-y-3 border-0 p-0"
+            >
               <RevenueExpenseTable
                 inputRows={inputRows}
                 rows={revenueRows}
@@ -202,11 +208,11 @@ export default function ExpenseFormTable({
                 removeRow={removeRevenueRow}
                 finalized={finalized}
               />
-            </div>
+            </fieldset>
 
             {/* HÓA ĐƠN — nằm giữa Chi Trường và Chi Ngoài */}
             <fieldset
-              disabled={finalized}
+              disabled={finalized || readOnly}
               className="m-0 min-w-0 border-0 p-0 space-y-3"
             >
               <InvoiceTable
@@ -237,7 +243,7 @@ export default function ExpenseFormTable({
             addRow={addManagementRow}
             showActions={!managementOnly}
             isConfirmed={managementConfirmed}
-            readOnly={managementReadOnly}
+            readOnly={managementReadOnly || readOnly}
             canConfirm={canConfirmManagement}
             confirming={confirmingManagement}
             onConfirm={onConfirmManagement}
@@ -267,7 +273,7 @@ export default function ExpenseFormTable({
         )}
 
         <div className="flex flex-wrap items-center gap-3 justify-end">
-          {!managementOnly && !finalized && (
+          {!managementOnly && !readOnly && !finalized && (
             <button
               onClick={addRow}
               disabled={invoiceExported}
@@ -293,7 +299,7 @@ export default function ExpenseFormTable({
             </button>
           )}
 
-          {!managementOnly && !finalized && (
+          {!managementOnly && !readOnly && !finalized && (
             <button
               onClick={lockAllInvoices}
               disabled={exportingInvoices}
@@ -313,7 +319,7 @@ export default function ExpenseFormTable({
             </button>
           )}
 
-          {!managementOnly && isChief && !finalized && (
+          {!managementOnly && !readOnly && isChief && !finalized && (
             <button
               onClick={unlockAllInvoices}
               className="
@@ -331,7 +337,7 @@ export default function ExpenseFormTable({
             </button>
           )}
 
-          {!managementOnly && isChief && !finalized && (
+          {!managementOnly && !readOnly && isChief && !finalized && (
             <button
               onClick={
                 managementConfirmed ? onUnconfirmManagement : onConfirmManagement
@@ -361,7 +367,7 @@ export default function ExpenseFormTable({
             </button>
           )}
 
-          {!managementOnly && isChief && !finalized && !confirmFinalize && (
+          {!managementOnly && !readOnly && isChief && !finalized && !confirmFinalize && (
             <button
               onClick={() => setConfirmFinalize(true)}
               disabled={lockActionLoading}
@@ -380,7 +386,7 @@ export default function ExpenseFormTable({
             </button>
           )}
 
-          {!managementOnly && isChief && !finalized && confirmFinalize && (
+          {!managementOnly && !readOnly && isChief && !finalized && confirmFinalize && (
             <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-300 bg-white px-3 py-2">
               <span className="text-sm text-slate-600">
                 Nhớ Lưu trước — kết thúc xong sẽ khoá toàn bộ kỳ thu chi.
@@ -404,7 +410,7 @@ export default function ExpenseFormTable({
             </div>
           )}
 
-          {!managementOnly && isChief && finalized && (
+          {!managementOnly && !readOnly && isChief && finalized && (
             <button
               onClick={onReopen}
               disabled={lockActionLoading}
@@ -424,7 +430,7 @@ export default function ExpenseFormTable({
             </button>
           )}
 
-          {editingItem && !finalized && (
+          {!readOnly && editingItem && !finalized && (
             <button
               onClick={handleCancelEdit}
               className="
@@ -439,7 +445,7 @@ export default function ExpenseFormTable({
           )}
 
           {/* Kỳ đã kết thúc vẫn lưu được Ngày chi + Nguồn chi (trừ sales admin). */}
-          {!(managementOnly && (managementReadOnly || finalized)) && (
+          {!readOnly && !(managementOnly && (managementReadOnly || finalized)) && (
             <button
               onClick={handleSubmit}
               disabled={loading}

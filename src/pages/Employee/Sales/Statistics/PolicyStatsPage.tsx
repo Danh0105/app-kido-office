@@ -10,6 +10,10 @@ import { policiesApi } from "@/service/policy";
 import PolicyPopup from "./components/PolicyPopup";
 import SchoolInfoCard from "./components/SchoolInfoCard";
 import SearchableSelect from "@/components/SearchableSelect";
+import {
+    DEFAULT_SCHOOL_YEAR,
+    includeDefaultSchoolYear,
+} from "@/constants/schoolYear";
 
 const groupByProvince = (rows: any[]) => {
     const map = new Map();
@@ -61,7 +65,7 @@ export default function PolicyStatsPage() {
     const [selectedProvince, setSelectedProvince] = useState<number | null>(null);
     const [openSidebar, setOpenSidebar] = useState(false);
     const [selectedSubject, setSelectedSubject] = useState<number | null>(null);
-    const [selectedYear, setSelectedYear] = useState<string | null>();
+    const [selectedYear, setSelectedYear] = useState<string | null>(DEFAULT_SCHOOL_YEAR);
     const { data, isLoading, isFetching } = usePolicyStats(filters);
     const [openPolicy, setOpenPolicy] = useState<any>(null);
     const [viewMode, setViewMode] = useState<"card" | "table">("card");
@@ -127,7 +131,7 @@ export default function PolicyStatsPage() {
     const schoolYears = useMemo(() => {
         if (!schoolData) return [];
 
-        return [...new Set(schoolData.map((i: any) => i.schoolYear))];
+        return includeDefaultSchoolYear(schoolData.map((i: any) => i.schoolYear));
     }, [schoolData]);
     const getProfit = (p: any) => {
         const d = p.policyData || {};
@@ -279,7 +283,7 @@ export default function PolicyStatsPage() {
                             className="border rounded px-2 py-2 text-sm w-1/2"
                             value={selectedYear || ""}
                             onChange={(e) =>
-                                setSelectedYear(e.target.value || undefined)
+                                setSelectedYear(e.target.value || null)
                             }
                         >
                             <option value="">Năm học</option>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
 
 import { getApiErrorMessage } from "@/utils/apiError";
+import { DEFAULT_SCHOOL_YEAR } from "@/constants/schoolYear";
 import { subjectApi } from "@/service/subject.api";
 import { subjectCatalogApi, type SubjectCatalog } from "@/service/subjectCatalog.api";
 import SearchableSelect from "@/components/SearchableSelect";
@@ -36,7 +37,7 @@ type Props = {
 export default function BulkSubjectRateModal({ onClose, onApplied }: Props) {
   const [catalogs, setCatalogs] = useState<SubjectCatalog[]>([]);
   const [catalogId, setCatalogId] = useState("");
-  const [schoolYear, setSchoolYear] = useState("");
+  const [schoolYear, setSchoolYear] = useState(DEFAULT_SCHOOL_YEAR);
 
   const [rows, setRows] = useState<SchoolSubjectRow[]>([]);
   const [loadingRows, setLoadingRows] = useState(false);

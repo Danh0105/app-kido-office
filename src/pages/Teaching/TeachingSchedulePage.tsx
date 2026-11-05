@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { DEFAULT_SCHOOL_YEAR } from "@/constants/schoolYear";
 
 import TeachingLayout from "./components/TeachingLayout";
 import TeachingTabs from "./components/TeachingTabs";
@@ -53,7 +54,9 @@ export default function TeachingSchedulePage() {
           // Tới từ màn "Nhập TKB": mở sẵn đúng trường + giáo viên vừa xếp lịch.
           initialSchoolId={searchParams.get("schoolId") || ""}
           initialTeacherId={searchParams.get("teacherId") || ""}
-          initialSchoolYear={searchParams.get("schoolYear") || ""}
+          initialSchoolYear={
+            searchParams.get("schoolYear") || DEFAULT_SCHOOL_YEAR
+          }
           focusScheduleId={focusScheduleId}
         />
       )}

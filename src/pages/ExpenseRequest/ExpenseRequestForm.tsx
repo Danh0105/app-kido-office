@@ -14,6 +14,10 @@ import { teacherApi } from "@/service/teaching";
 import { expenseRequestApi } from "@/service/expenseRequest";
 import { statusLabel, type ExpenseRequest } from "@/types/expenseRequest";
 import { canDoStep, expenseBasePath, todayISO } from "./lib";
+import {
+  DEFAULT_SCHOOL_YEAR,
+  includeDefaultSchoolYear,
+} from "@/constants/schoolYear";
 
 const MAX_SIZE = 50 * 1024 * 1024;
 
@@ -314,19 +318,15 @@ export default function ExpenseRequestForm() {
         const schoolYearValues: string[] = subjects
           .map((subject: any) => String(subject?.schoolYear || "").trim())
           .filter((schoolYear: string) => Boolean(schoolYear));
-        const options: Option[] = [...new Set<string>(schoolYearValues)]
+        const options: Option[] = includeDefaultSchoolYear(schoolYearValues)
           .sort((first, second) => second.localeCompare(first))
           .map((schoolYear) => ({ id: schoolYear, name: schoolYear }));
 
         setSchoolYears(options);
 
         if (options.length > 0) {
-          const now = new Date();
-          const startYear =
-            now.getMonth() + 1 >= 8 ? now.getFullYear() : now.getFullYear() - 1;
-          const currentSchoolYear = `${startYear}-${startYear + 1}`;
           const preferred =
-            options.find((option) => option.id === currentSchoolYear) ||
+            options.find((option) => option.id === DEFAULT_SCHOOL_YEAR) ||
             options[0];
 
           setSelectedSchoolYear((current) =>

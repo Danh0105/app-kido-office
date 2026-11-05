@@ -3,6 +3,10 @@ import { toast } from "react-hot-toast";
 import { Pencil, Plus, Search, Trash2 } from "lucide-react";
 
 import { getApiErrorMessage } from "@/utils/apiError";
+import {
+  DEFAULT_SCHOOL_YEAR,
+  includeDefaultSchoolYear,
+} from "@/constants/schoolYear";
 import { schoolClassApi } from "@/service/teaching";
 import type { SchoolClass, SchoolClassQuery } from "@/types/teaching";
 
@@ -55,7 +59,7 @@ export default function SchoolClassPage() {
   const [schoolId, setSchoolId] = useState("");
   /** "" = mọi cơ sở. Chỉ có nghĩa khi trường đã khai điểm trường. */
   const [schoolLocationId, setSchoolLocationId] = useState("");
-  const [schoolYear, setSchoolYear] = useState("");
+  const [schoolYear, setSchoolYear] = useState(DEFAULT_SCHOOL_YEAR);
   const [gradeLevel, setGradeLevel] = useState("");
   const [isActive, setIsActive] = useState<"" | "true" | "false">("");
   const [searchInput, setSearchInput] = useState("");
@@ -107,7 +111,7 @@ export default function SchoolClassPage() {
 
   const schoolYearOptions = useMemo(
     () =>
-      Array.from(new Set(allClasses.map((item) => item.schoolYear))).sort(
+      includeDefaultSchoolYear(allClasses.map((item) => item.schoolYear)).sort(
         (a, b) => b.localeCompare(a, "vi"),
       ),
     [allClasses],
@@ -124,7 +128,7 @@ export default function SchoolClassPage() {
   const clearFilters = () => {
     setSchoolId("");
     setSchoolLocationId("");
-    setSchoolYear("");
+    setSchoolYear(DEFAULT_SCHOOL_YEAR);
     setGradeLevel("");
     setIsActive("");
     setSearchInput("");
@@ -134,7 +138,7 @@ export default function SchoolClassPage() {
   // Đổi trường → bỏ năm học đang lọc: trường mới có thể không có năm học đó.
   const changeSchool = (value: string) => {
     setSchoolId(value);
-    setSchoolYear("");
+    setSchoolYear(DEFAULT_SCHOOL_YEAR);
     // Điểm trường thuộc về một trường cụ thể — giữ lại là lọc theo cơ sở của
     // trường cũ, danh sách sẽ trống mà không rõ vì sao.
     setSchoolLocationId("");

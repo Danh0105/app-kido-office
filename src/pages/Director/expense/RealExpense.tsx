@@ -4,6 +4,7 @@ import { toast } from "react-hot-toast";
 
 import HeaderWithBack from "@/components/HeaderWithBack";
 import SearchableSelect from "@/components/SearchableSelect";
+import { DEFAULT_SCHOOL_YEAR } from "@/constants/schoolYear";
 
 import {
   Search,
@@ -59,12 +60,7 @@ const getSchoolYearRange = (schoolYear: string) => {
 };
 
 const getCurrentSchoolYear = () => {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = today.getMonth() + 1;
-  const startYear = month >= 8 ? year : year - 1;
-
-  return `${startYear}-${startYear + 1}`;
+  return DEFAULT_SCHOOL_YEAR;
 };
 
 const getExpensePeriodYear = (

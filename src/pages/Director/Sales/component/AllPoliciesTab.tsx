@@ -22,6 +22,10 @@ import {
 } from "@/components/AuthenticatedFile";
 import { isDirectorBrandUiEnabled } from "@/utils/directorUi";
 import PolicyDetail from "../Policy/Sales";
+import {
+  DEFAULT_SCHOOL_YEAR,
+  includeDefaultSchoolYear,
+} from "@/constants/schoolYear";
 
 type Employee = {
   id: number;
@@ -128,7 +132,7 @@ export default function AllPoliciesTab({ employees }: Props) {
     status: "",
     schoolId: "",
     subject: "",
-    schoolYear: "",
+    schoolYear: DEFAULT_SCHOOL_YEAR,
     employeeId: "",
     fromDate: "",
     toDate: "",
@@ -221,8 +225,8 @@ export default function AllPoliciesTab({ employees }: Props) {
   );
   const schoolYears = useMemo(
     () =>
-      Array.from(
-        new Set(policies.map((item) => item.schoolYear).filter(Boolean)),
+      includeDefaultSchoolYear(
+        policies.map((item) => item.schoolYear).filter(Boolean) as string[],
       ).sort((a, b) => String(b).localeCompare(String(a))),
     [policies],
   );
@@ -569,7 +573,7 @@ export default function AllPoliciesTab({ employees }: Props) {
             onClick={() => {
               setCurrentPage(1);
               setFilters({
-                policyCode: "", status: "", schoolId: "", subject: "", schoolYear: "",
+                policyCode: "", status: "", schoolId: "", subject: "", schoolYear: DEFAULT_SCHOOL_YEAR,
                 employeeId: "", fromDate: "", toDate: "",
               });
             }}

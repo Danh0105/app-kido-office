@@ -4,6 +4,7 @@ import { Building2, CalendarDays, Lock, Plus, ShieldCheck, Wallet, Receipt, User
 
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
 import {
+  calculateOtherCostExpense,
   getOtherCostGrossPrice,
   getOtherCostKey,
   getOtherCostTax,
@@ -123,7 +124,7 @@ export default function ManagementExpenseTable({
           row.otherCostUnitPrices?.[key] ?? getOtherCostGrossPrice(item)
         );
         const tax = Number(row.otherCostTaxes?.[key] ?? getOtherCostTax(item));
-        return Math.max(0, grossPrice - tax);
+        return calculateOtherCostExpense(grossPrice, tax, quantity);
       });
       const totalOtherCostExpense = otherCostExpenses.reduce(
         (total, value) => total + value,

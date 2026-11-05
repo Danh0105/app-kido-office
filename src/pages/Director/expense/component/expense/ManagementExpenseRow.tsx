@@ -4,6 +4,7 @@ import { Trash2 } from "lucide-react";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
 import CashAccountSelect from "./CashAccountSelect";
 import {
+  calculateOtherCostExpense,
   getOtherCostGrossPrice,
   getOtherCostKey,
   getOtherCostTax,
@@ -109,7 +110,7 @@ export default function ManagementExpenseRow({
     return {
       unitPrice,
       tax,
-      expense: Math.max(0, unitPrice - tax),
+      expense: calculateOtherCostExpense(unitPrice, tax, quantity),
     };
   });
   const totalOtherCostExpense = otherCostValues.reduce(

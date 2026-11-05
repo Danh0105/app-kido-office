@@ -64,3 +64,14 @@ export const getOtherCostTax = (item: PolicyOtherCost) => Number(item.tax ?? 0);
 
 export const getOtherCostsTotal = (items: PolicyOtherCost[]) =>
   items.reduce((total, item) => total + getOtherCostUnitPrice(item), 0);
+
+/**
+ * Thành tiền thực chi của một nguồn Chi khác.
+ * `quantity` đã bao gồm số tháng và ưu tiên số HS, nếu không có
+ * số HS thì dùng số tiết, giống QL1/QL2 và backend.
+ */
+export const calculateOtherCostExpense = (
+  unitPrice: number | string | null | undefined,
+  tax: number | string | null | undefined,
+  quantity: number,
+) => Math.max(0, Number(unitPrice ?? 0) - Number(tax ?? 0)) * quantity;

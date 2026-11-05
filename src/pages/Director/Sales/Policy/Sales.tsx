@@ -511,7 +511,10 @@ export default function Sales({
       try {
         const resSubject = await subjectApi.findOne(finalSubjectId);
 
-        const resEmployee = await employeeApi.getById(Number(finalUser));
+        // Chính sách cũ có thể không còn người tạo: không gọi API với id rỗng.
+        const resEmployee = finalUser
+          ? await employeeApi.getById(Number(finalUser))
+          : null;
 
         setSubject(resSubject);
         setEmployee(resEmployee);

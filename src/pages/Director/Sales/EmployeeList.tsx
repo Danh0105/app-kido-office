@@ -9,6 +9,7 @@ import { wardApi } from "@/service/ward";
 import AssignAreaModal from "./component/AssignAreaModal";
 import HandoverRegionModal from "./component/HandoverRegionModal";
 import { hasRole, isChiefAccountant } from "@/utils/auth";
+import { isRestrictedLongAnDirector } from "@/utils/longAnDirector";
 import { CATALOG_ADMIN_ROLES } from "@/service/subjectCatalog.api";
 import AllPoliciesTab from "./component/AllPoliciesTab";
 import OtherCashflowPanel from "@/pages/OtherCashflow/OtherCashflowPanel";
@@ -55,7 +56,8 @@ const roleLabel = (role: string) => {
 };
 
 export default function EmployeeList() {
-  const readOnly = isChiefAccountant();
+  const isLongAnDirector = isRestrictedLongAnDirector();
+  const readOnly = isChiefAccountant() || isLongAnDirector;
   const isBrand = isDirectorBrandUiEnabled();
   const navigate = useNavigate();
   const location = useLocation();
@@ -115,7 +117,12 @@ export default function EmployeeList() {
         : Array.isArray(response?.data)
         ? response.data
         : [];
-      setEmployees(data);
+      // Báo cáo không gắn với trường: Giám đốc Long An chỉ xem nhân viên thuần Long An.
+      setEmployees(
+        isLongAnDirector && from === "report"
+          ? data.filter((item: any) => item.longAnOnly)
+          : data,
+      );
     } catch (err) {
       console.error("Load employees failed", err);
       setEmployees([]);
@@ -175,7 +182,7 @@ export default function EmployeeList() {
       />
       {from === "policy" && (
         <div className={`px-4 pt-4 mt-[60px] ${isBrand ? "lg:max-w-6xl lg:mx-auto" : ""}`}>
-          <div className={`bg-white p-1 rounded-xl shadow-sm grid grid-cols-3 gap-1 ${isBrand ? "border border-blue-900/10" : ""}`}>
+          <div className={`bg-white p-1 rounded-xl shadow-sm grid ${isLongAnDirector ? "grid-cols-2" : "grid-cols-3"} gap-1 ${isBrand ? "border border-blue-900/10" : ""}`}>
             <button
               type="button"
               onClick={() => setActiveTab("employees")}
@@ -198,17 +205,19 @@ export default function EmployeeList() {
             >
               Tất cả chính sách
             </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("other-cashflow")}
-              className={`py-2.5 rounded-lg text-sm font-medium ${
-                activeTab === "other-cashflow"
-                  ? isBrand ? "bg-[#005BEA] text-white" : "bg-blue-500 text-white"
-                  : "text-gray-600"
-              }`}
-            >
-              Thu Chi ngoài
-            </button>
+            {!isLongAnDirector && (
+              <button
+                type="button"
+                onClick={() => setActiveTab("other-cashflow")}
+                className={`py-2.5 rounded-lg text-sm font-medium ${
+                  activeTab === "other-cashflow"
+                    ? isBrand ? "bg-[#005BEA] text-white" : "bg-blue-500 text-white"
+                    : "text-gray-600"
+                }`}
+              >
+                Thu Chi ngoài
+              </button>
+            )}
           </div>
         </div>
       )}

@@ -49,6 +49,8 @@ type DashboardSection =
 type Props = {
   employeeId?: number;
   showExpenses?: boolean;
+  /** Xem được toàn bộ nhân viên, tách khỏi quyền xem thu chi. */
+  directorView?: boolean;
 };
 
 const EMPTY_FILTERS: DashboardFilters = {
@@ -81,10 +83,11 @@ const formatDateTime = (value: Date) =>
 export default function StatisticsDashboardPage({
   employeeId: employeeIdProp,
   showExpenses = true,
+  directorView,
 }: Props = {}) {
   const { employeeId: routeEmployeeId } = useParams();
   const initialEmployeeId = Number(employeeIdProp ?? routeEmployeeId) || 0;
-  const isDirectorView = showExpenses;
+  const isDirectorView = directorView ?? showExpenses;
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(
     initialEmployeeId
   );

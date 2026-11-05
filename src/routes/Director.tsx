@@ -29,7 +29,10 @@ import PayrollPage from "@/pages/Payroll/PayrollPage";
 import RecruitmentPage from "@/pages/Recruitment/RecruitmentPage";
 import FinanceRoutes from "@/pages/Finance/FinanceRoutes";
 import OtherCashflowPage from "@/pages/OtherCashflow/OtherCashflowPage";
-import { isRestrictedLongAnDirector } from "@/utils/longAnDirector";
+import {
+  isLongAnDirectorPath,
+  isRestrictedLongAnDirector,
+} from "@/utils/longAnDirector";
 
 const EXPENSE_HOME = "/director/expense-management";
 const DIRECTOR_HOME = "/director";
@@ -136,6 +139,10 @@ export default function DirectorRoutes() {
   // khoác chung một shell ở đây để giao diện đồng bộ mà không phải bọc từng trang.
   const isHome = pathname.replace(/\/+$/, "") === DIRECTOR_HOME;
 
+  if (isRestrictedLongAnDirector() && !isLongAnDirectorPath(pathname)) {
+    return <Navigate to={DIRECTOR_HOME} replace />;
+  }
+
   return (
     <DirectorBrandShell enabled={!isHome && isDirectorBrandUiEnabled()}>
       <Routes>
@@ -171,7 +178,12 @@ export default function DirectorRoutes() {
             isChiefAccountant() ? (
               <StatisticsDashboardPage />
             ) : (
-              directorOnly(<StatisticsDashboardPage />)
+              directorOnly(
+                <StatisticsDashboardPage
+                  directorView
+                  showExpenses={!isRestrictedLongAnDirector()}
+                />
+              )
             )
           }
         />

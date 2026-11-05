@@ -3,7 +3,7 @@ import { DEPARTMENT_HEAD_ROLES } from "@/utils/departmentHeads";
 import { isEquipmentOnlyUser } from "@/pages/ExpenseRequest/lib";
 import {
   isRestrictedLongAnDirector,
-  LONG_AN_DIRECTOR_HIDDEN_DIRECTOR_MENUS,
+  LONG_AN_DIRECTOR_MENUS,
 } from "@/utils/longAnDirector";
 import expense from "@/pages/Director/static/expense.png";
 import policy from "@/pages/Director/static/policy.png";
@@ -230,7 +230,5 @@ export const directorBaseMenus = (): DirectorMenu[] => {
   ];
 
   if (!isRestrictedLongAnDirector()) return result;
-  return result.filter(
-    (item) => !LONG_AN_DIRECTOR_HIDDEN_DIRECTOR_MENUS.has(item.from)
-  );
+  return result.filter((item) => LONG_AN_DIRECTOR_MENUS.has(item.from));
 };

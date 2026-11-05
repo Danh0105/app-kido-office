@@ -10,12 +10,22 @@ import { GiaoVienRoutes, NhanSuRoutes } from "./Teaching";
 import VirtualTryOnPage from "@/pages/VirtualTryOn/VirtualTryOnPage";
 import { isAccountantOnly, isChiefAccountant } from "@/utils/auth";
 import { getHomePath } from "@/utils/nav";
+import { isRestrictedLongAnDirector } from "@/utils/longAnDirector";
 /* import TabletPage from "@/pages/Display/TabletPage";
  */ /* import Display from "@/pages/Display/Display";
  */ /* import INTRO from "@/pages/Display"; */
 
 function BlockAccountingRolesOutsideDirector({ children }: any) {
   if (isAccountantOnly() || isChiefAccountant()) {
+    return <Navigate to="/director" replace />;
+  }
+
+  return children;
+}
+
+/** Giám đốc Long An chỉ làm việc trong trang /director. */
+function BlockLongAnDirectorOutsideDirector({ children }: any) {
+  if (isRestrictedLongAnDirector()) {
     return <Navigate to="/director" replace />;
   }
 
@@ -56,9 +66,11 @@ export default function AppRoutes() {
         path="/employee/*"
         element={
           <ProtectedRoute>
-            <BlockAccountingRolesOutsideDirector>
-              <EmployeeRoutes />
-            </BlockAccountingRolesOutsideDirector>
+            <BlockLongAnDirectorOutsideDirector>
+              <BlockAccountingRolesOutsideDirector>
+                <EmployeeRoutes />
+              </BlockAccountingRolesOutsideDirector>
+            </BlockLongAnDirectorOutsideDirector>
           </ProtectedRoute>
         }
       />
@@ -83,7 +95,9 @@ export default function AppRoutes() {
         path="/nhan-su/*"
         element={
           <ProtectedRoute>
-            <NhanSuRoutes />
+            <BlockLongAnDirectorOutsideDirector>
+              <NhanSuRoutes />
+            </BlockLongAnDirectorOutsideDirector>
           </ProtectedRoute>
         }
       />
@@ -92,7 +106,9 @@ export default function AppRoutes() {
         path="/giao-vien/*"
         element={
           <ProtectedRoute>
-            <GiaoVienRoutes />
+            <BlockLongAnDirectorOutsideDirector>
+              <GiaoVienRoutes />
+            </BlockLongAnDirectorOutsideDirector>
           </ProtectedRoute>
         }
       />

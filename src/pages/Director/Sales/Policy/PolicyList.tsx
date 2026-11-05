@@ -5,7 +5,7 @@ import { PolicyStatus } from "../../enum/PolicyStatus";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import HeaderWithBack from "@/components/HeaderWithBack";
 import { isDirectorBrandUiEnabled } from "@/utils/directorUi";
-import { resolveApiFileUrl } from "@/utils/fileUrl";
+import { openAuthenticatedFile } from "@/components/AuthenticatedFile";
 import { FileText, ExternalLink, X } from "lucide-react";
 import type { PolicyContractFile } from "@/types/policy";
 type Subject = {
@@ -242,17 +242,16 @@ export default function PolicyList() {
                     <ul className="mt-3 flex flex-col gap-2">
                         {getContractFiles(filesModal).map((file) => (
                             <li key={file.id}>
-                                <a
-                                    href={resolveApiFileUrl(file.url)}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                <button
+                                    type="button"
+                                    onClick={() => void openAuthenticatedFile(file.url, file.originalName)}
                                     title={file.originalName}
                                     className="flex min-w-0 items-center gap-2 rounded-xl border border-gray-100 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
                                 >
                                     <FileText size={16} className="shrink-0" />
                                     <span className="truncate">{file.originalName}</span>
                                     <ExternalLink size={14} className="ml-auto shrink-0" />
-                                </a>
+                                </button>
                             </li>
                         ))}
                     </ul>

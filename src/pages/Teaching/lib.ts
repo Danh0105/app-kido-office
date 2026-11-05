@@ -7,6 +7,7 @@ import {
   type TeachingSession,
 } from "@/types/teaching";
 import { hasRole } from "@/utils/auth";
+import { DEFAULT_SCHOOL_YEAR } from "@/constants/schoolYear";
 
 // ================= PHÂN QUYỀN =================
 // User nhiều role → lấy quyền rộng nhất (vừa giaovien vừa nhansu/giaovu → dùng giao diện quản lý).
@@ -279,10 +280,7 @@ export const MAX_STUDENT_COUNT = 1000;
  * Chỉ dùng làm phương án dự phòng khi trường chưa có năm học nào trong dữ liệu.
  */
 export const currentSchoolYear = () => {
-  const now = new Date();
-  const year =
-    now.getMonth() + 1 >= 8 ? now.getFullYear() : now.getFullYear() - 1;
-  return `${year}-${year + 1}`;
+  return DEFAULT_SCHOOL_YEAR;
 };
 
 /** Năm học mới nhất lên đầu; "Hè 2026-2027" xếp cạnh năm tương ứng. */

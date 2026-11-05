@@ -20,6 +20,10 @@ import QuantityStatsSection from "./components/QuantityStatsSection";
 import { expensePeriodApi } from "@/service/expensePeriod";
 import { schoolExpenseApi } from "@/service/schoolExpense";
 import { buildSchoolQuantitySummary } from "./quantityStats";
+import {
+  DEFAULT_SCHOOL_YEAR,
+  includeDefaultSchoolYear,
+} from "@/constants/schoolYear";
 
 const groupByProvince = (rows: any[]) => {
   const map = new Map();
@@ -133,7 +137,9 @@ export default function PolicyStatsPage({
   const [selectedProvince, setSelectedProvince] = useState<number | null>(null);
   const [openSidebar, setOpenSidebar] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState<number | null>(null);
-  const [selectedYear, setSelectedYear] = useState<string | null>(null);
+  const [selectedYear, setSelectedYear] = useState<string | null>(
+    DEFAULT_SCHOOL_YEAR,
+  );
   const [selectedDevice, setSelectedDevice] = useState("");
   const [activeStatsTab, setActiveStatsTab] = useState<
     "policies" | "devices" | "quantities"
@@ -302,7 +308,7 @@ export default function PolicyStatsPage({
     setSelectedProvince(null);
     setSelectedSchool(null);
     setSelectedSubject(null);
-    setSelectedYear(null);
+    setSelectedYear(DEFAULT_SCHOOL_YEAR);
     setSelectedDevice("");
     setSelectedPeriodId(null);
   };
@@ -330,11 +336,9 @@ export default function PolicyStatsPage({
   const schoolYears = useMemo(() => {
     if (!filteredPolicies) return [];
 
-    return [
-      ...new Set(
-        filteredPolicies.map((i: any) => i.schoolYear).filter(Boolean),
-      ),
-    ];
+    return includeDefaultSchoolYear(
+      filteredPolicies.map((i: any) => i.schoolYear).filter(Boolean),
+    );
   }, [filteredPolicies]);
 
   const schoolOptions = useMemo(() => {

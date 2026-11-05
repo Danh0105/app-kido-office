@@ -1,33 +1,38 @@
 import { io, Socket } from "socket.io-client";
-import { getEmployeeId } from "./auth";
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL;
 
 let socketInstance: Socket | null = null;
 let suggestSocketInstance: Socket | null = null;
+let socketToken: string | null = null;
+
+const currentToken = () => localStorage.getItem("access_token");
+
+const requireToken = () => {
+    const token = currentToken();
+    if (!token) throw new Error("Missing access token");
+    return token;
+};
+
+const resetIfTokenChanged = (token: string) => {
+    if (socketToken && socketToken !== token) {
+        disconnectSockets();
+    }
+    socketToken = token;
+};
 
 export const getSocket = () => {
-    const employeeId = getEmployeeId();
-    console.log("SOCKET_URL:", SOCKET_URL);
-    console.log("EMPLOYEE ID:", employeeId);
-
-    if (!employeeId) {
-        throw new Error("Missing employeeId");
-    }
+    const token = requireToken();
+    resetIfTokenChanged(token);
 
     if (!socketInstance) {
         socketInstance = io(SOCKET_URL, {
             transports: ["websocket"],
-            query: {
-                employeeId: String(employeeId),
-            },
+            auth: { token },
         });
 
         socketInstance.on("connect", () => {
-            console.log("CONNECTED", {
-                socketId: socketInstance?.id,
-                employeeId,
-            });
+            console.log("Realtime connected", socketInstance?.id);
         });
 
         socketInstance.on("connect_error", (err) => {
@@ -43,18 +48,13 @@ export const getSocket = () => {
 };
 
 export const getSuggestSocket = () => {
-    const employeeId = getEmployeeId();
-
-    if (!employeeId) {
-        throw new Error("Missing employeeId");
-    }
+    const token = requireToken();
+    resetIfTokenChanged(token);
 
     if (!suggestSocketInstance) {
         suggestSocketInstance = io(`${SOCKET_URL}/suggest`, {
             transports: ["websocket"],
-            query: {
-                employeeId,
-            },
+            auth: { token },
         });
     }
 
@@ -67,4 +67,5 @@ export const disconnectSockets = () => {
 
     socketInstance = null;
     suggestSocketInstance = null;
+    socketToken = null;
 };

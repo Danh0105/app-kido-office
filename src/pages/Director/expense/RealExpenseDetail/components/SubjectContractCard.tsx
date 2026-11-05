@@ -1,7 +1,7 @@
 import { ExternalLink, FileText } from "lucide-react";
 
 import type { PolicyContractFile } from "@/types/policy";
-import { resolveApiFileUrl } from "@/utils/fileUrl";
+import { openAuthenticatedFile } from "@/components/AuthenticatedFile";
 
 const formatSize = (bytes?: number) =>
   bytes ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : "";
@@ -59,11 +59,10 @@ export default function SubjectContractCard({
       {files.length > 0 && (
         <div className="flex flex-wrap gap-2 px-6 py-4">
           {files.map((file) => (
-            <a
+            <button
+              type="button"
               key={file.id}
-              href={resolveApiFileUrl(file.url)}
-              target="_blank"
-              rel="noopener noreferrer"
+              onClick={() => void openAuthenticatedFile(file.url, file.originalName)}
               title={file.originalName}
               className="inline-flex max-w-full items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"
             >
@@ -75,7 +74,7 @@ export default function SubjectContractCard({
                 </span>
               ) : null}
               <ExternalLink size={13} className="shrink-0" />
-            </a>
+            </button>
           ))}
         </div>
       )}

@@ -76,6 +76,7 @@ import {
   type SchoolCatalogOption,
   type TimetableRow,
 } from "../lib";
+import { DEFAULT_SCHOOL_YEAR } from "@/constants/schoolYear";
 
 type Props = {
   teachers: Teacher[];
@@ -189,7 +190,9 @@ export default function TimetableTab({
   const headerRows = isMobile ? 1 : 2;
   /** "" = cả trường (mọi cơ sở). Chỉ có nghĩa khi trường đã khai điểm trường. */
   const [schoolLocationId, setSchoolLocationId] = useState("");
-  const [schoolYear, setSchoolYear] = useState(initialSchoolYear);
+  const [schoolYear, setSchoolYear] = useState(
+    initialSchoolYear || DEFAULT_SCHOOL_YEAR,
+  );
   const [catalogId, setCatalogId] = useState("");
   const [defaultTeacherId, setDefaultTeacherId] = useState(initialTeacherId);
 

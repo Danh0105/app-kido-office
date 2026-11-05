@@ -11,6 +11,7 @@ import { subjectApi } from "../../../../service/subject.api";
 import { canManageSubjects } from "@/utils/auth";
 import { getApiErrorMessage } from "@/utils/apiError";
 import { isDirectorBrandUiEnabled } from "@/utils/directorUi";
+import { DEFAULT_SCHOOL_YEAR } from "@/constants/schoolYear";
 
 type Subject = {
     id: number;
@@ -33,12 +34,7 @@ type Subject = {
 
 const ALL_YEARS = "";
 
-/** Năm học hiện tại — mốc chuyển năm là tháng 8. */
-const currentSchoolYear = () => {
-    const now = new Date();
-    const year = now.getMonth() + 1 >= 8 ? now.getFullYear() : now.getFullYear() - 1;
-    return `${year}-${year + 1}`;
-};
+const currentSchoolYear = () => DEFAULT_SCHOOL_YEAR;
 
 /** Các năm học chọn được: từ 2021 tới năm học hiện tại. */
 const schoolYearOptions = () => {
@@ -64,7 +60,7 @@ export default function SubjectList() {
 
     const [subjects, setSubjects] = useState<Subject[]>([]);
     const [loading, setLoading] = useState(true);
-    const [schoolYear, setSchoolYear] = useState<string>(ALL_YEARS);
+    const [schoolYear, setSchoolYear] = useState<string>(DEFAULT_SCHOOL_YEAR);
 
     /** undefined = đóng, null = thêm mới, có giá trị = sửa. */
     const [formTarget, setFormTarget] = useState<

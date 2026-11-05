@@ -1,4 +1,5 @@
 import api from "./api";
+import { DEFAULT_SCHOOL_YEAR } from "@/constants/schoolYear";
 
 export const statisticsApi = {
     // 📊 Lấy thống kê theo năm học
@@ -11,7 +12,7 @@ export const statisticsApi = {
 
     // 📊 (Optional) Lấy default năm học hiện tại
     getCurrentYear: async () => {
-        const currentYear = "2025-2026"; // hoặc tự tính
+        const currentYear = DEFAULT_SCHOOL_YEAR;
         const res = await api.get(`/statistics`, {
             params: { schoolYear: currentYear },
         });

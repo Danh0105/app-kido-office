@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import HeaderWithBack from "@/components/HeaderWithBack";
+import { DEFAULT_SCHOOL_YEAR } from "@/constants/schoolYear";
 import Tabs from "./components/Tabs";
 import Pagination from "./components/Pagination";
 import {
@@ -204,7 +205,7 @@ export default function RealExpenseDetail({
 
   const [subjectId, setSubjectId] = useState<number>(0);
 
-  const [localSchoolYear, setLocalSchoolYear] = useState("");
+  const [localSchoolYear, setLocalSchoolYear] = useState(DEFAULT_SCHOOL_YEAR);
   const selectedSchoolYear = controlledSchoolYear ?? localSchoolYear;
   const setSelectedSchoolYear = onSchoolYearChange ?? setLocalSchoolYear;
   const [subTab, setSubTab] = useState<"expense" | "cash-policy">("expense");
@@ -1531,20 +1532,11 @@ export default function RealExpenseDetail({
     }
 
     if (!schoolYears.includes(selectedSchoolYear)) {
-      const today = new Date();
-      const currentYear = today.getFullYear();
-      const currentStartYear =
-        today.getMonth() + 1 >= 8 ? currentYear : currentYear - 1;
-      const currentSchoolYear = schoolYears.find((schoolYear) => {
-        const years = schoolYear.match(/\d{4}/g)?.map(Number) || [];
-
-        return (
-          years[0] === currentStartYear &&
-          (years[1] || years[0]) === currentStartYear + 1
-        );
-      });
-
-      setSelectedSchoolYear(currentSchoolYear || schoolYears[0]);
+      setSelectedSchoolYear(
+        schoolYears.includes(DEFAULT_SCHOOL_YEAR)
+          ? DEFAULT_SCHOOL_YEAR
+          : schoolYears[0],
+      );
     }
   }, [
     onSchoolYearChange,

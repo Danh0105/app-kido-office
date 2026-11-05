@@ -7,6 +7,10 @@ import { getSalesEmployees } from "@/service/employee";
 import { subjectApi } from "@/service/subject.api";
 import SearchableSelect from "@/components/SearchableSelect";
 import { formatCurrency } from "../RealExpenseDetail/components/ExpenseSummary";
+import {
+  DEFAULT_SCHOOL_YEAR,
+  includeDefaultSchoolYear,
+} from "@/constants/schoolYear";
 
 const listFrom = (value: any) =>
   Array.isArray(value) ? value : Array.isArray(value?.data) ? value.data : [];
@@ -66,7 +70,7 @@ export default function GlobalExpenseReport() {
   const [keyword, setKeyword] = useState("");
   const [employeeId, setEmployeeId] = useState("");
   const [schoolId, setSchoolId] = useState("");
-  const [year, setYear] = useState("");
+  const [year, setYear] = useState(DEFAULT_SCHOOL_YEAR);
   const [month, setMonth] = useState("");
   const [onlyRemaining, setOnlyRemaining] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -171,15 +175,13 @@ export default function GlobalExpenseReport() {
   }, [rows, employeeId]);
   const years = useMemo(
     () =>
-      [
-        ...new Set(
-          rows
-            .map((row) =>
-              getSchoolYear(Number(row.period?.month), Number(row.period?.year))
-            )
-            .filter(Boolean)
-        ),
-      ]
+      includeDefaultSchoolYear(
+        rows
+          .map((row) =>
+            getSchoolYear(Number(row.period?.month), Number(row.period?.year)),
+          )
+          .filter(Boolean),
+      )
         .sort()
         .reverse(),
     [rows]

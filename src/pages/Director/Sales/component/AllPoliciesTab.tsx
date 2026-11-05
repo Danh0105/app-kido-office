@@ -16,9 +16,16 @@ import {
 import SearchableSelect from "@/components/SearchableSelect";
 import { hasRole } from "@/utils/auth";
 import { getApiErrorMessage } from "@/utils/apiError";
-import { resolveApiFileUrl } from "@/utils/fileUrl";
+import {
+  AuthenticatedFileImage,
+  openAuthenticatedFile,
+} from "@/components/AuthenticatedFile";
 import { isDirectorBrandUiEnabled } from "@/utils/directorUi";
 import PolicyDetail from "../Policy/Sales";
+import {
+  DEFAULT_SCHOOL_YEAR,
+  includeDefaultSchoolYear,
+} from "@/constants/schoolYear";
 
 type Employee = {
   id: number;
@@ -125,7 +132,7 @@ export default function AllPoliciesTab({ employees }: Props) {
     status: "",
     schoolId: "",
     subject: "",
-    schoolYear: "",
+    schoolYear: DEFAULT_SCHOOL_YEAR,
     employeeId: "",
     fromDate: "",
     toDate: "",
@@ -218,8 +225,8 @@ export default function AllPoliciesTab({ employees }: Props) {
   );
   const schoolYears = useMemo(
     () =>
-      Array.from(
-        new Set(policies.map((item) => item.schoolYear).filter(Boolean)),
+      includeDefaultSchoolYear(
+        policies.map((item) => item.schoolYear).filter(Boolean) as string[],
       ).sort((a, b) => String(b).localeCompare(String(a))),
     [policies],
   );
@@ -440,30 +447,28 @@ export default function AllPoliciesTab({ employees }: Props) {
               <li key={file.id} className="rounded-xl border border-gray-100 p-2">
                 <div className="flex min-w-0 items-center gap-2">
                   {isImageFile(file) && (
-                    <a
-                      href={resolveApiFileUrl(file.url)}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      type="button"
+                      onClick={() => void openAuthenticatedFile(file.url, file.originalName)}
                       className="shrink-0"
                     >
-                      <img
-                        src={resolveApiFileUrl(file.url)}
+                      <AuthenticatedFileImage
+                        fileUrl={file.url}
                         alt={file.originalName}
                         className="h-12 w-12 rounded-md border border-gray-100 object-cover"
                       />
-                    </a>
+                    </button>
                   )}
-                  <a
-                    href={resolveApiFileUrl(file.url)}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
+                    onClick={() => void openAuthenticatedFile(file.url, file.originalName)}
                     title={file.originalName}
                     className="inline-flex min-w-0 items-center gap-1.5 text-sm font-medium text-blue-700 hover:underline"
                   >
                     {!isImageFile(file) && <span className="shrink-0" aria-hidden>📎</span>}
                     <span className="truncate">{file.originalName}</span>
                     <ExternalLink size={14} className="shrink-0" />
-                  </a>
+                  </button>
                   {canUploadContract && file.id !== "legacy" && (
                     <button
                       type="button"
@@ -568,7 +573,7 @@ export default function AllPoliciesTab({ employees }: Props) {
             onClick={() => {
               setCurrentPage(1);
               setFilters({
-                policyCode: "", status: "", schoolId: "", subject: "", schoolYear: "",
+                policyCode: "", status: "", schoolId: "", subject: "", schoolYear: DEFAULT_SCHOOL_YEAR,
                 employeeId: "", fromDate: "", toDate: "",
               });
             }}

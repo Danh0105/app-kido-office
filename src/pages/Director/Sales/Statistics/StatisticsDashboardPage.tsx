@@ -38,6 +38,10 @@ import {
   type DashboardFilters,
   type StatisticsPolicy,
 } from "./statisticsDashboard";
+import {
+  DEFAULT_SCHOOL_YEAR,
+  includeDefaultSchoolYear,
+} from "@/constants/schoolYear";
 
 type DashboardSection =
   | "overview"
@@ -59,7 +63,7 @@ const EMPTY_FILTERS: DashboardFilters = {
   wardId: null,
   schoolId: null,
   subjectId: null,
-  schoolYear: "",
+  schoolYear: DEFAULT_SCHOOL_YEAR,
 };
 
 const listFromResponse = (response: any): any[] => {
@@ -276,7 +280,7 @@ export default function StatisticsDashboardPage({
       wards: mapRows(wards),
       schools: mapRows(schools),
       subjects: mapRows(subjects),
-      years: Array.from(years).sort((left, right) =>
+      years: includeDefaultSchoolYear(Array.from(years)).sort((left, right) =>
         right.localeCompare(left, "vi")
       ),
     };

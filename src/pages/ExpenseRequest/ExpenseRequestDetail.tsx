@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-hot-toast";
 
 import HeaderWithBack from "@/components/HeaderWithBack";
+import { DEFAULT_SCHOOL_YEAR } from "@/constants/schoolYear";
 import { formatVnd } from "@/utils/decimal";
 import { hasRole } from "@/utils/auth";
 import {
@@ -1518,7 +1519,9 @@ function SchoolPolicyDetails({
   loading: boolean;
   error: string;
 }) {
-  const [selectedSchoolYear, setSelectedSchoolYear] = useState("");
+  const [selectedSchoolYear, setSelectedSchoolYear] = useState(
+    DEFAULT_SCHOOL_YEAR,
+  );
   const [selectedSubjectId, setSelectedSubjectId] = useState<number | null>(
     null
   );
@@ -1528,7 +1531,7 @@ function SchoolPolicyDetails({
       ...new Set(
         subjects
           .map((subject) => subject.schoolYear)
-          .filter((schoolYear): schoolYear is string => Boolean(schoolYear))
+          .filter((schoolYear): schoolYear is string => Boolean(schoolYear)),
       ),
     ];
 
@@ -1552,14 +1555,11 @@ function SchoolPolicyDetails({
 
     if (schoolYears.includes(selectedSchoolYear)) return;
 
-    const today = new Date();
-    const currentStartYear =
-      today.getMonth() + 1 >= 8 ? today.getFullYear() : today.getFullYear() - 1;
-    const currentSchoolYear = schoolYears.find(
-      (schoolYear) => getSchoolYearStart(schoolYear) === currentStartYear
+    setSelectedSchoolYear(
+      schoolYears.includes(DEFAULT_SCHOOL_YEAR)
+        ? DEFAULT_SCHOOL_YEAR
+        : schoolYears[0],
     );
-
-    setSelectedSchoolYear(currentSchoolYear || schoolYears[0]);
   }, [schoolYear, schoolYears, selectedSchoolYear]);
 
   const filteredSubjects = useMemo(

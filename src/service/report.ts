@@ -17,6 +17,8 @@ export const dailyReportApi = {
     create: async (data: {
         employeeId: number;
         date: string;
+        schoolId?: number | null;
+        provinceId?: number | null;
         tasks: {
             title: string;
             content: string;
@@ -69,6 +71,8 @@ export const dailyReportApi = {
         id: number,
         data: {
             date?: string;
+            schoolId?: number | null;
+            provinceId?: number | null;
             tasks?: {
                 id?: number;
                 title: string;

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { isChiefAccountant } from "@/utils/auth";
+import { DEFAULT_SCHOOL_YEAR } from "@/constants/schoolYear";
 import { MOCK_POLICY_SUBJECTS, MOCK_POLICY_YEARS } from "./mockData";
 import { PolicySubject, PolicyYear, PolicyYearStatus } from "./types";
 import {
@@ -130,12 +131,7 @@ const isPeriodInSchoolYear = (
 };
 
 const getCurrentSchoolYear = () => {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = today.getMonth() + 1;
-  const startYear = month >= 8 ? year : year - 1;
-
-  return `${startYear}-${startYear + 1}`;
+  return DEFAULT_SCHOOL_YEAR;
 };
 
 const clonePolicies = (

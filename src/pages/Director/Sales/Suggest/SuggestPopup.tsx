@@ -6,6 +6,7 @@ import { subjectApi } from "@/service/subject.api";
 import { policiesApi } from "@/service/policy";
 import { wardApi } from "@/service/ward";
 import { getEmployeeId } from "@/utils/auth";
+import { DEFAULT_SCHOOL_YEAR } from "@/constants/schoolYear";
 import MobileSelect from "./MobileSelect";
 import "./css/suggest.css";
 
@@ -46,7 +47,7 @@ export default function SuggestPopup({ open, onClose, onSuccess, initialData }: 
     const [selectedRegion, setSelectedRegion] = useState<number | null>(null);
     const [selectedWard, setSelectedWard] = useState<number | null>(null);
     const [selectedSchool, setSelectedSchool] = useState<number | null>(null);
-    const [selectedYear, setSelectedYear] = useState<string | null>(null);
+    const [selectedYear, setSelectedYear] = useState<string | null>(DEFAULT_SCHOOL_YEAR);
     const [selectedSubject, setSelectedSubject] = useState<number | null>(null);
     const [selectedPolicy, setSelectedPolicy] = useState<number | null>(null);
 
@@ -67,7 +68,7 @@ export default function SuggestPopup({ open, onClose, onSuccess, initialData }: 
 
         setSelectedWard(null);
         setSelectedSchool(null);
-        setSelectedYear(null);
+        setSelectedYear(DEFAULT_SCHOOL_YEAR);
         setSelectedSubject(null);
         setSelectedPolicy(null);
         setAllSchools([]);
@@ -106,7 +107,7 @@ export default function SuggestPopup({ open, onClose, onSuccess, initialData }: 
 
     useEffect(() => {
         setSelectedSchool(null);
-        setSelectedYear(null);
+        setSelectedYear(DEFAULT_SCHOOL_YEAR);
         setSelectedSubject(null);
         setSelectedPolicy(null);
         setSubjects([]);
@@ -163,7 +164,7 @@ export default function SuggestPopup({ open, onClose, onSuccess, initialData }: 
 
     useEffect(() => {
         const arr: Option[] = [];
-        const currentYear = new Date().getFullYear();
+        const currentYear = Math.max(new Date().getFullYear(), 2026);
 
         for (let y = 2021; y <= currentYear; y++) {
             arr.push({ id: `${y}-${y + 1}`, name: `${y}-${y + 1}` });

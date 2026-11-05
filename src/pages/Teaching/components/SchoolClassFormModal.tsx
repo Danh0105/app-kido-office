@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "react-hot-toast";
 
 import { getApiErrorMessage } from "@/utils/apiError";
+import { DEFAULT_SCHOOL_YEAR } from "@/constants/schoolYear";
 import { schoolClassApi } from "@/service/teaching";
 import type { SchoolClass } from "@/types/teaching";
 
@@ -38,7 +39,7 @@ export default function SchoolClassFormModal({
   schoolClass,
   schools,
   defaultSchoolId = "",
-  defaultSchoolYear = "",
+  defaultSchoolYear = DEFAULT_SCHOOL_YEAR,
   onClose,
   onSaved,
 }: Props) {

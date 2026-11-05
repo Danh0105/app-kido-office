@@ -21,6 +21,11 @@ import SubjectFormModal from "@/components/subject/SubjectFormModal";
 import SearchableSelect from "@/components/SearchableSelect";
 import FormCreate from "./FormCreate";
 import { currentSchoolYear } from "@/pages/Teaching/lib";
+import {
+  DEFAULT_SCHOOL_YEAR,
+  includeDefaultSchoolYear,
+  PREVIOUS_SCHOOL_YEAR,
+} from "@/constants/schoolYear";
 import type {
   PolicyFilterOptions,
   PolicyPageItem,
@@ -28,6 +33,7 @@ import type {
 } from "@/types/policy";
 
 const PAGE_SIZE = 12;
+const ALL_SCHOOL_YEARS_QUERY = "__all__";
 type Tab = "policies" | "schools" | "subjects" | "other-cashflow";
 type SimpleOption = { value: string; label: string };
 /** Trường trực thuộc nhân viên — đủ field cho thẻ danh sách và form chỉnh sửa. */
@@ -115,7 +121,7 @@ export default function PolicySelector() {
   const [managementRegion, setManagementRegion] = useState("");
   const [managementWard, setManagementWard] = useState("");
   const [managementSchool, setManagementSchool] = useState("");
-  const [managementYear, setManagementYear] = useState("");
+  const [managementYear, setManagementYear] = useState(DEFAULT_SCHOOL_YEAR);
   const [schools, setSchools] = useState<ManagedSchool[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [managementSearch, setManagementSearch] = useState("");
@@ -489,7 +495,10 @@ export default function PolicySelector() {
       status: searchParams.get("status") || "",
       schoolId: searchParams.get("schoolId") || "",
       subjectId: searchParams.get("subjectId") || "",
-      schoolYear: searchParams.get("schoolYear") || "",
+      schoolYear:
+        searchParams.get("schoolYear") === ALL_SCHOOL_YEARS_QUERY
+          ? ""
+          : searchParams.get("schoolYear") || DEFAULT_SCHOOL_YEAR,
       fromDate: searchParams.get("fromDate") || "",
       toDate: searchParams.get("toDate") || "",
     }),
@@ -505,7 +514,9 @@ export default function PolicySelector() {
   const updateFilter = (key: PolicyFilterKey, value: string) => {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
-      if (value) next.set(key, value);
+      if (key === "schoolYear" && !value) {
+        next.set(key, ALL_SCHOOL_YEARS_QUERY);
+      } else if (value) next.set(key, value);
       else next.delete(key);
       // Đổi filter thì luôn về trang 1.
       next.delete("page");
@@ -612,9 +623,10 @@ export default function PolicySelector() {
   // Gộp năm học thực tế từ backend với dải năm mặc định (đến 2028-2029) —
   // trước đây chỉ dùng backend khi có dữ liệu nên bị mất các năm tương lai
   // chưa phát sinh môn học nào.
-  const managementYears = Array.from(
-    new Set([...(options?.schoolYears || []), ...fallbackSchoolYears()]),
-  ).sort((a, b) => b.localeCompare(a));
+  const managementYears = includeDefaultSchoolYear([
+    ...(options?.schoolYears || []),
+    ...fallbackSchoolYears(),
+  ]).sort((a, b) => b.localeCompare(a));
   const policyYears = Array.from(
     new Set(
       [
@@ -662,7 +674,7 @@ export default function PolicySelector() {
 
   const clearSubjectFilters = () => {
     setManagementSchool("");
-    setManagementYear("");
+    setManagementYear(DEFAULT_SCHOOL_YEAR);
     setManagementSearch("");
   };
 
@@ -1022,7 +1034,7 @@ export default function PolicySelector() {
               />
             </div>
             <Select label="Môn học" value={filters.subjectId} options={policyFilterSubjects.map(x => ({ value: String(x.id), label: x.name }))} onChange={v => updateFilter("subjectId", v)} disabled={optionsLoading} />
-            <Select label="Năm học" value={filters.schoolYear} options={(options?.schoolYears || []).map(x => ({ value: x, label: x }))} onChange={v => updateFilter("schoolYear", v)} disabled={optionsLoading} />
+            <Select label="Năm học" value={filters.schoolYear} options={includeDefaultSchoolYear(options?.schoolYears || []).map(x => ({ value: x, label: x }))} onChange={v => updateFilter("schoolYear", v)} disabled={optionsLoading} />
           </div>
           <div className="mt-2 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 sm:w-1/2 sm:pr-1">
             <label className="text-[11px] font-semibold text-slate-500">
@@ -1473,8 +1485,8 @@ function SchoolSubjectsModal({
     [state.subjects],
   );
 
-  const [fromYear, setFromYear] = useState("");
-  const [toYear, setToYear] = useState("");
+  const [fromYear, setFromYear] = useState(PREVIOUS_SCHOOL_YEAR);
+  const [toYear, setToYear] = useState(DEFAULT_SCHOOL_YEAR);
   const [pickedSubjectIds, setPickedSubjectIds] = useState<number[]>([]);
   const [applying, setApplying] = useState(false);
   const [result, setResult] = useState<RolloverResult | null>(null);

@@ -630,10 +630,13 @@ export default function ExpenseRequestDetail({
           embedded ? "min-h-0 overflow-y-auto py-3 pb-6" : "mt-[60px] pb-32"
         }`}
       >
-        {/* ===== Header card (sticky khi scroll) ===== */}
+        {/* ===== Header card: chỉ dính khi màn hình đủ rộng và đủ cao, điện thoại
+            mà dính thì thẻ này che hơn nửa màn hình, không còn chỗ đọc nội dung ===== */}
         <div
-          className={`sticky z-40 -mx-3 px-3 pb-1 bg-gray-100 ${
-            embedded ? "-top-3 -mt-3 pt-3" : "top-[60px]"
+          className={`z-40 -mx-3 px-3 pb-1 bg-gray-100 ${
+            embedded
+              ? "sticky -top-3 -mt-3 pt-3"
+              : "top-[60px] [@media(min-width:768px)_and_(min-height:600px)]:sticky"
           }`}
         >
           <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-2 max-h-[55vh] overflow-y-auto">

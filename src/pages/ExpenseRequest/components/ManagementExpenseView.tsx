@@ -106,9 +106,14 @@ function RowCard({ row }: { row: ManagementExpenseRow }) {
   );
 }
 
-const th = "border-b border-slate-200 bg-slate-800 px-2 py-2 text-right font-semibold text-white";
-const td = "border-b border-slate-100 px-2 py-1.5 text-right tabular-nums";
-const tf = "border-t border-slate-300 bg-slate-100 px-2 py-2 text-right font-bold tabular-nums";
+const thBase = "border-b border-slate-200 bg-slate-800 px-2 py-2 font-semibold text-white";
+const tdBase = "border-b border-slate-100 px-2 py-1.5 tabular-nums";
+const tfBase = "border-t border-slate-300 bg-slate-100 px-2 py-2 font-bold tabular-nums";
+const th = `${thBase} text-right`;
+const thLeft = `${thBase} text-left`;
+const td = `${tdBase} text-right`;
+const tdLeft = `${tdBase} text-left`;
+const tf = `${tfBase} text-right`;
 
 function SectionTable({ section }: { section: ManagementExpenseSection }) {
   const { otherCostColumns, rows, totals } = section;
@@ -119,7 +124,7 @@ function SectionTable({ section }: { section: ManagementExpenseSection }) {
       <table className="w-full min-w-max border-separate border-spacing-0 whitespace-nowrap text-xs text-slate-700">
         <thead>
           <tr>
-            <th className={`${th} sticky left-0 z-10 min-w-[160px] max-w-[260px] text-left`}>
+            <th className={`${thLeft} sticky left-0 z-10 min-w-[160px] max-w-[260px]`}>
               Nội dung
             </th>
             <th className={th}>Số tiết</th>
@@ -144,17 +149,17 @@ function SectionTable({ section }: { section: ManagementExpenseSection }) {
             ])}
             <th className={th}>Chi ngoài</th>
             <th className={th}>Ngày chi</th>
-            <th className={`${th} text-left`}>Nguồn chi</th>
+            <th className={thLeft}>Nguồn chi</th>
             <th className={th}>Đã chi</th>
             <th className={th}>Còn chi</th>
-            <th className={`${th} text-left`}>Người chi</th>
-            <th className={`${th} text-left`}>Ghi chú</th>
+            <th className={thLeft}>Người chi</th>
+            <th className={thLeft}>Ghi chú</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
             <tr key={row.rowIndex}>
-              <td className={`${td} sticky left-0 z-10 max-w-[260px] whitespace-normal break-words bg-white text-left font-medium`}>
+              <td className={`${tdLeft} sticky left-0 z-10 max-w-[260px] whitespace-normal break-words bg-white font-medium`}>
                 {row.content || "(Không có nội dung)"}
               </td>
               <td className={td}>{quantity(row.totalPeriods)}</td>
@@ -184,13 +189,13 @@ function SectionTable({ section }: { section: ManagementExpenseSection }) {
                 {money(row.totalOutside)}
               </td>
               <td className={td}>{row.paymentDate ? formatDate(row.paymentDate) : ""}</td>
-              <td className={`${td} text-left`}>{invoiceCashAccountLabel(row.cashAccount)}</td>
+              <td className={tdLeft}>{invoiceCashAccountLabel(row.cashAccount)}</td>
               <td className={`${td} text-emerald-700`}>{money(row.paidAmount)}</td>
               <td className={`${td} font-semibold ${remainingTone(row.remaining)}`}>
                 {money(row.remaining)}
               </td>
-              <td className={`${td} text-left`}>{row.payer}</td>
-              <td className={`${td} min-w-[140px] max-w-[260px] whitespace-normal break-words text-left`}>
+              <td className={tdLeft}>{row.payer}</td>
+              <td className={`${tdLeft} min-w-[140px] max-w-[260px] whitespace-normal break-words`}>
                 {row.note}
               </td>
             </tr>
@@ -198,7 +203,7 @@ function SectionTable({ section }: { section: ManagementExpenseSection }) {
         </tbody>
         <tfoot>
           <tr>
-            <td className={`${tf} sticky left-0 z-10 text-left`}>Tổng cộng</td>
+            <td className={`${tfBase} sticky left-0 z-10 text-left`}>Tổng cộng</td>
             <td className={tf} colSpan={5} />
             <td className={tf}>{money(totals.ql1Expense)}</td>
             <td className={tf} colSpan={2} />
@@ -234,35 +239,43 @@ function SectionBlock({
   return (
     <details
       open={defaultOpen}
-      className="overflow-hidden rounded-xl border border-slate-200 bg-white"
+      className="group overflow-hidden rounded-xl border border-slate-200 bg-white"
     >
-      <summary className="cursor-pointer select-none space-y-2 p-3">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="text-sm font-semibold text-slate-800">
-            {section.periodName} · {section.subjectName}
-          </span>
-          {section.schoolYear && (
-            <span className="text-xs text-slate-500">{section.schoolYear}</span>
-          )}
-          {section.confirmed && (
-            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
-              Đã xác nhận BBCS
+      <summary className="flex cursor-pointer select-none list-none items-start gap-2 p-3 [&::-webkit-details-marker]:hidden">
+        <span
+          aria-hidden
+          className="mt-0.5 shrink-0 text-[10px] leading-4 text-slate-400 transition-transform group-open:rotate-90"
+        >
+          ▶
+        </span>
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="text-sm font-semibold text-slate-800">
+              {section.periodName} · {section.subjectName}
             </span>
-          )}
-          {section.finalized && (
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-              Kỳ đã kết thúc
-            </span>
-          )}
-        </div>
-        <div className="grid grid-cols-3 gap-1.5 sm:max-w-md">
-          <Stat label="Chi ngoài" value={totals.totalOutside} tone="text-red-700" />
-          <Stat label="Đã chi" value={totals.paidAmount} tone="text-emerald-700" />
-          <Stat
-            label="Còn chi"
-            value={totals.remaining}
-            tone={remainingTone(totals.remaining)}
-          />
+            {section.schoolYear && (
+              <span className="text-xs text-slate-500">{section.schoolYear}</span>
+            )}
+            {section.confirmed && (
+              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                Đã xác nhận BBCS
+              </span>
+            )}
+            {section.finalized && (
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                Kỳ đã kết thúc
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-3 gap-1.5 sm:max-w-md">
+            <Stat label="Chi ngoài" value={totals.totalOutside} tone="text-red-700" />
+            <Stat label="Đã chi" value={totals.paidAmount} tone="text-emerald-700" />
+            <Stat
+              label="Còn chi"
+              value={totals.remaining}
+              tone={remainingTone(totals.remaining)}
+            />
+          </div>
         </div>
       </summary>
       <div className="space-y-2 border-t border-slate-100 bg-slate-50 p-2 md:hidden">

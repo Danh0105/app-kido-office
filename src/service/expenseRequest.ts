@@ -1,5 +1,6 @@
 import api from "./api";
 import type {
+  ManagementExpenseSection,
   ExpenseGroupedByEmployeeResponse,
   ExpenseNotificationGroupedResponse,
   ExpenseNotificationListResponse,
@@ -368,6 +369,14 @@ export const expenseRequestApi = {
 
   getById: async (id: number): Promise<ExpenseRequest> => {
     const res = await api.get(`${BASE}/${id}`);
+    return res.data;
+  },
+
+  /** Bảng Chi Ngoài chỉ đọc của đề xuất — cùng quyền đọc với Quản lý thu chi. */
+  getManagementExpense: async (
+    id: number,
+  ): Promise<{ sections: ManagementExpenseSection[] }> => {
+    const res = await api.get(`${BASE}/${id}/management-expense`);
     return res.data;
   },
 

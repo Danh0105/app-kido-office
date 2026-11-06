@@ -21,7 +21,12 @@ const money = (value?: number | null) =>
 /** Có dữ liệu chi tiết thật không — log cũ lưu `{}`. */
 export const hasLogDetails = (log: ExpenseLog) => {
   const d = log.data;
-  return !!d && typeof d === "object" && Object.keys(d).length > 0;
+  // Ảnh chụp Bảng Chi Ngoài có khung riêng, không tính là chi tiết của bước.
+  return (
+    !!d &&
+    typeof d === "object" &&
+    Object.keys(d).some((key) => key !== "managementExpense")
+  );
 };
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {

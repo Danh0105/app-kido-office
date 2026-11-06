@@ -576,6 +576,8 @@ export type FinanceDelegation = {
 };
 
 export type FinanceConfigOverview = {
+  /** Người đang đăng nhập — để ẩn thao tác backend không cho với chính mình. */
+  me: { id: number };
   companies: (FinanceCompany & { phone: string | null; email: string | null; isActive: boolean })[];
   categories: {
     id: number;

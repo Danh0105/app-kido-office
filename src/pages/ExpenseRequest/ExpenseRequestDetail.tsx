@@ -38,6 +38,7 @@ import Timeline from "./components/Timeline";
 import ActionModal, { type ActionPayload } from "./components/ActionModal";
 import ApproveModal from "./components/ApproveModal";
 import PaymentOrderModal from "./components/PaymentOrderModal";
+import { ManagementExpensePanel } from "./components/ManagementExpenseView";
 import ReassignRepairModal from "./components/ReassignRepairModal";
 import StockIssueOrderModal from "./components/StockIssueOrderModal";
 import StockInReceiptModal from "./components/StockInReceiptModal";
@@ -47,6 +48,7 @@ import { invoiceCashAccountLabel } from "@/pages/Director/expense/RealExpenseDet
 import {
   activeAssignments,
   availableActions,
+  canDoStep,
   canReplaceAssignment,
   myDeclinableAssignment,
   creatorDetails,
@@ -60,6 +62,7 @@ import {
   waitingMessage,
   expenseBasePath,
   expenseEditPath,
+  canReadManagementExpense,
   type ActionKey,
 } from "./lib";
 
@@ -799,6 +802,13 @@ export default function ExpenseRequestDetail({
             error={schoolContextError}
           />
         )}
+
+        {/* ===== Chi Ngoài cho người duyệt ===== */}
+        {(data.school?.id || (data as any).schoolId) &&
+          canDoStep("approve", data) &&
+          canReadManagementExpense() && (
+            <ManagementExpensePanel requestId={data.id} />
+          )}
 
         {/* ===== Payment order ===== */}
         {po && (

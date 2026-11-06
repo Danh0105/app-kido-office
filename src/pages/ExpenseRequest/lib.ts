@@ -60,6 +60,20 @@ export const isApproverSide = () =>
     "ky_thuat"
   );
 
+// Khớp CASHFLOW_READ_ROLES của backend: ai không xem được thu chi thì không thấy Bảng Chi Ngoài.
+export const canReadManagementExpense = () =>
+  hasRole(
+    "accountant",
+    "ketoan_congno",
+    "ketoan_truong",
+    "troly_gd",
+    "director",
+    "thuquy",
+    "saleadmin",
+    "salesadmin",
+    "salesadmin_la"
+  );
+
 export const isDebtAccountant = () => hasRole("ketoan_congno", "ketoan_truong");
 
 /** Phòng kỹ thuật — xử lý đề xuất thiết bị và sửa chữa. */

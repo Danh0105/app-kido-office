@@ -5,13 +5,15 @@ import {
   statusLabel,
   type ExpenseAttachment,
   type ExpenseLog,
+  type ExpenseLogDetails,
   type ExpenseRequest,
   type ExpenseRequestKind,
   type FundSource,
 } from "@/types/expenseRequest";
 import { formatVnd } from "@/utils/decimal";
 import { resolveFileUrl } from "@/service/expenseRequest";
-import { formatDateTime } from "../lib";
+import { canReadManagementExpense, formatDateTime } from "../lib";
+import { ManagementExpenseHistory } from "./ManagementExpenseView";
 import LogDetails, { hasLogDetails } from "./LogDetails";
 
 const APPROVAL_ACTIONS = new Set([
@@ -19,6 +21,13 @@ const APPROVAL_ACTIONS = new Set([
   "APPROVE_MONTHLY",
   "APPROVED",
   "APPROVE_EXPENSE_REQUEST",
+]);
+
+const DECISION_ACTIONS = new Set([
+  "APPROVE",
+  "APPROVE_MONTHLY",
+  "REJECT",
+  "REJECT_MONTHLY",
 ]);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -167,6 +176,12 @@ export default function Timeline({
       "WITHDRAWN",
     ].includes(request.status);
 
+  const latestDecisionIndex = logs.reduce(
+    (latest, log, index) =>
+      DECISION_ACTIONS.has(log.action) ? index : latest,
+    -1
+  );
+
   const latestReleaseIndex = logs.reduce(
     (latest, log, index) =>
       log.action === "CONFIRM_CASH_RELEASED" ? index : latest,
@@ -249,6 +264,16 @@ export default function Timeline({
           index === latestIndexByAction[log.action]
             ? attachments?.filter((a) => a.action === log.action)
             : undefined;
+        const managementSnapshot = (log.data as ExpenseLogDetails | undefined)
+          ?.managementExpense;
+        // Log cũ chưa có ảnh chụp: chỉ lần quyết định gần nhất mới có bảng hiện
+        // tại, các lần trước không có số liệu để hiện cho đúng.
+        const showManagement =
+          !!request?.id &&
+          (!!managementSnapshot ||
+            (index === latestDecisionIndex &&
+              !!(request.school?.id || request.schoolId) &&
+              canReadManagementExpense()));
         return (
           <li key={log.id} className="mb-4 ml-4">
             <span className="absolute -left-[6px] mt-1.5 w-3 h-3 rounded-full bg-blue-500 border border-white" />
@@ -336,6 +361,13 @@ export default function Timeline({
               <div className="text-xs text-gray-600 mt-0.5 italic">
                 {visibleNote}
               </div>
+            )}
+            {showManagement && (
+              <ManagementExpenseHistory
+                requestId={request!.id!}
+                snapshot={managementSnapshot}
+                rejected={log.action.startsWith("REJECT")}
+              />
             )}
             {!!logFiles?.length && (
               <ul className="mt-1.5 space-y-0.5">

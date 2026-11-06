@@ -97,12 +97,70 @@ export type ExpenseLogPerson = {
   phone?: string | null;
 };
 
+/** Bảng Chi Ngoài chỉ đọc: số liệu đã được backend tính giống màn Quản lý thu chi. */
+export type ManagementExpenseOtherCost = {
+  key: string;
+  name: string;
+  unitPrice: number;
+  tax: number;
+  expense: number;
+};
+
+export type ManagementExpenseRow = {
+  rowIndex: number;
+  content: string;
+  standalone: boolean;
+  totalPeriods: number;
+  studentCount: number;
+  monthsCount: number;
+  ql1UnitPrice: number;
+  ql1Tax: number;
+  ql1Expense: number;
+  ql2UnitPrice: number;
+  ql2Tax: number;
+  ql2Expense: number;
+  otherCosts: ManagementExpenseOtherCost[];
+  totalOutside: number;
+  paymentDate: string | null;
+  cashAccount: string | null;
+  paidAmount: number;
+  remaining: number;
+  payer: string | null;
+  note: string | null;
+};
+
+export type ManagementExpenseSection = {
+  schoolExpenseId: number;
+  periodId: number | null;
+  periodName: string;
+  subjectId: number;
+  subjectName: string;
+  schoolYear: string | null;
+  confirmed: boolean;
+  finalized: boolean;
+  otherCostColumns: { key: string; name: string }[];
+  rows: ManagementExpenseRow[];
+  totals: {
+    ql1Expense: number;
+    ql2Expense: number;
+    otherCostExpenses: Record<string, number>;
+    totalOutside: number;
+    paidAmount: number;
+    remaining: number;
+  };
+};
+
 /**
  * Thông tin của từng bước backend lưu vào `SuggestHistory.data` lúc thực hiện
  * — để Lịch sử hiện đúng số liệu của lần đó, không lấy số liệu hiện tại.
  * Log cũ (trước khi có trường này) là `{}`.
  */
 export type ExpenseLogDetails = {
+  /** Ảnh chụp Bảng Chi Ngoài lúc Giám đốc duyệt/từ chối; chỉ có khi được xem thu chi. */
+  managementExpense?: {
+    capturedAt?: string;
+    sections?: ManagementExpenseSection[];
+  };
   // APPROVE
   requestKind?: ExpenseRequestKind | null;
   amount?: number | null;

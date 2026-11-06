@@ -32,9 +32,9 @@ function Stat({
   tone?: string;
 }) {
   return (
-    <div className="min-w-0 rounded-lg bg-slate-50 px-2 py-1.5">
+    <div className="flex min-w-0 items-baseline justify-between gap-2 rounded-lg bg-slate-50 px-2 py-1 sm:block sm:py-1.5">
       <p className="text-[11px] text-slate-500">{label}</p>
-      <p className={`break-words text-xs font-bold sm:text-sm ${tone}`}>
+      <p className={`whitespace-nowrap text-sm font-bold ${tone}`}>
         {money(value)}
       </p>
     </div>
@@ -68,7 +68,7 @@ function RowCard({ row }: { row: ManagementExpenseRow }) {
         </p>
         <p className="text-xs text-slate-500">{quantityLabel(row)}</p>
       </div>
-      <div className="grid grid-cols-3 gap-1.5">
+      <div className="grid grid-cols-1 gap-1 sm:grid-cols-3 sm:gap-1.5">
         <Stat label="Chi ngoài" value={row.totalOutside} tone="text-red-700" />
         <Stat label="Đã chi" value={row.paidAmount} tone="text-emerald-700" />
         <Stat
@@ -267,7 +267,7 @@ function SectionBlock({
               </span>
             )}
           </div>
-          <div className="grid grid-cols-3 gap-1.5 sm:max-w-md">
+          <div className="grid grid-cols-1 gap-1 sm:max-w-md sm:grid-cols-3 sm:gap-1.5">
             <Stat label="Chi ngoài" value={totals.totalOutside} tone="text-red-700" />
             <Stat label="Đã chi" value={totals.paidAmount} tone="text-emerald-700" />
             <Stat

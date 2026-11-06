@@ -442,6 +442,13 @@ export const canDoStep = (
 
   if (req.isMonthlyExpense) {
     if (step === "saleadminReview" || step === "saleadminReject") return false;
+    // Khớp backend: tiền đã xuất thì chủ đơn không sửa, vì lệnh chi là căn cứ của sổ quỹ.
+    if (
+      step === "edit" &&
+      ["CASH_RELEASED", "CASH_RECEIVED", "SPENT", "NOT_SPENT"].includes(req.status)
+    ) {
+      return false;
+    }
     if (
       (step === "approve" || step === "reject") &&
       !user.roles.some((role) => ["director", "director_la"].includes(role))

@@ -189,9 +189,14 @@ export const expenseTasksPath = () =>
 // Creating a request is always a sales/owner action. A multi-role sales user
 // may otherwise inherit the director base path from roles such as `thuquy`,
 // causing `/director/expense-requests/new` to be parsed as the `:id` route.
-export const expenseCreatePath = () => `${expenseBasePath()}/new`;
+const expenseOwnerBasePath = () =>
+  isTeacherFinanceWorkspace()
+    ? "/giao-vien/de-nghi-tai-chinh"
+    : "/employee/expense-requests";
+
+export const expenseCreatePath = () => `${expenseOwnerBasePath()}/new`;
 export const expenseEditPath = (id: number) =>
-  `${expenseBasePath()}/${id}/edit`;
+  `${expenseOwnerBasePath()}/${id}/edit`;
 
 export const isOwner = (req?: ExpenseCreatorFields) => {
   const me = Number(getEmployeeId());

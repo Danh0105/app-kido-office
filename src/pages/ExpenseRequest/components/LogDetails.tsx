@@ -181,7 +181,10 @@ function StepDetails({ log, kind: requestKind }: { log: ExpenseLog; kind?: Expen
     }
 
     case "CREATE_PAYMENT_ORDER":
-    case "EDIT_PAYMENT_ORDER": {
+    case "EDIT_PAYMENT_ORDER":
+    case "CREATE_MONTHLY_PAYMENT_ORDER":
+    case "EDIT_MONTHLY_PAYMENT_ORDER":
+    case "APPROVE_MONTHLY": {
       const po = d.paymentOrder;
       if (!po) return null;
       return (

@@ -14,8 +14,10 @@ import {
   getManagementRowInput,
   isStandaloneManagementRow,
 } from "../../utils/managementRows";
+import type { ManagementStatRow } from "../../utils/managementStats";
 import { calculateRevenueQuantity } from "@/utils/revenueAmount";
 import ManagementExpenseRow from "./ManagementExpenseRow";
+import ManagementExpenseStats from "./ManagementExpenseStats";
 
 type Props = {
   rows: any[];
@@ -148,6 +150,10 @@ export default function ManagementExpenseTable({
         paidAmount: sum.paidAmount + paidAmount,
         remainingOutsideExpense:
           sum.remainingOutsideExpense + totalOutsideExpense - paidAmount,
+        rowStats: [
+          ...sum.rowStats,
+          { totalOutside: totalOutsideExpense, paidAmount },
+        ],
       };
     },
     {
@@ -159,6 +165,7 @@ export default function ManagementExpenseTable({
       totalOutsideExpense: 0,
       paidAmount: 0,
       remainingOutsideExpense: 0,
+      rowStats: [] as ManagementStatRow[],
     }
   );
 
@@ -192,6 +199,20 @@ export default function ManagementExpenseTable({
           </div>
         </div>
       </div>
+
+      <ManagementExpenseStats
+        ql1Expense={totals.ql1Expense}
+        ql2Expense={totals.ql2Expense}
+        otherCosts={otherCosts.map((item, index) => ({
+          key: getOtherCostKey(item, index),
+          name: item.name || `Chi khác ${index + 1}`,
+          expense: totals.otherCostExpenses[index] || 0,
+        }))}
+        totalOutside={totals.totalOutsideExpense}
+        paidAmount={totals.paidAmount}
+        remaining={totals.remainingOutsideExpense}
+        rows={totals.rowStats}
+      />
 
       <div className="overflow-x-auto">
         <div style={{ minWidth: `${tableMinWidth}px` }}>

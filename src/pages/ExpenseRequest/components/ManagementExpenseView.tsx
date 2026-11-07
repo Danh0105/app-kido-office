@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import ManagementExpenseStats from "@/pages/Director/expense/component/expense/ManagementExpenseStats";
 import { invoiceCashAccountLabel } from "@/pages/Director/expense/RealExpenseDetail/utils/invoiceCashAccounts";
 import { expenseRequestApi } from "@/service/expenseRequest";
 import type {
@@ -278,6 +279,22 @@ function SectionBlock({
           </div>
         </div>
       </summary>
+      <div className="border-t border-slate-100">
+        <ManagementExpenseStats
+          showTotals={false}
+          ql1Expense={totals.ql1Expense}
+          ql2Expense={totals.ql2Expense}
+          otherCosts={section.otherCostColumns.map((column) => ({
+            key: column.key,
+            name: column.name,
+            expense: totals.otherCostExpenses[column.key] ?? 0,
+          }))}
+          totalOutside={totals.totalOutside}
+          paidAmount={totals.paidAmount}
+          remaining={totals.remaining}
+          rows={section.rows}
+        />
+      </div>
       <div className="space-y-2 border-t border-slate-100 bg-slate-50 p-2 md:hidden">
         {section.rows.map((row) => (
           <RowCard key={row.rowIndex} row={row} />
@@ -302,6 +319,7 @@ export function ManagementExpenseSections({
   }
   return (
     <div className="space-y-2">
+      {sections.length > 1 && <SectionsOverview sections={sections} />}
       {sections.map((section, index) => (
         <SectionBlock
           key={`${section.schoolExpenseId}-${section.subjectId}`}
@@ -309,6 +327,42 @@ export function ManagementExpenseSections({
           defaultOpen={index === 0}
         />
       ))}
+    </div>
+  );
+}
+
+/** Thống kê cộng dồn khi đề xuất có nhiều bảng; Chi khác gộp theo tên. */
+function SectionsOverview({ sections }: { sections: ManagementExpenseSection[] }) {
+  const otherCosts = new Map<string, number>();
+  const sum = (pick: (section: ManagementExpenseSection) => number) =>
+    sections.reduce((total, section) => total + Number(pick(section) || 0), 0);
+  for (const section of sections) {
+    for (const column of section.otherCostColumns) {
+      otherCosts.set(
+        column.name,
+        (otherCosts.get(column.name) ?? 0) +
+          Number(section.totals.otherCostExpenses[column.key] ?? 0),
+      );
+    }
+  }
+  return (
+    <div className="overflow-hidden rounded-xl border border-emerald-200">
+      <p className="bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">
+        Tổng {sections.length} bảng
+      </p>
+      <ManagementExpenseStats
+        ql1Expense={sum((section) => section.totals.ql1Expense)}
+        ql2Expense={sum((section) => section.totals.ql2Expense)}
+        otherCosts={[...otherCosts].map(([name, expense]) => ({
+          key: name,
+          name,
+          expense,
+        }))}
+        totalOutside={sum((section) => section.totals.totalOutside)}
+        paidAmount={sum((section) => section.totals.paidAmount)}
+        remaining={sum((section) => section.totals.remaining)}
+        rows={sections.flatMap((section) => section.rows)}
+      />
     </div>
   );
 }

@@ -5,14 +5,31 @@ export type RevenueAmountInput = {
   unitPrice?: number | string | null;
 };
 
+export type RevenuePolicyData = {
+  mode?: string | null;
+  periods?: number | string | null;
+  fee?: number | string | null;
+  giaovien?: number | string | null;
+  thue?: number | string | null;
+  tax?: number | string | null;
+  csvc?: number | string | null;
+};
+
 export type RevenuePolicySubject = {
   studentCount?: number | string | null;
-  policies?: Array<{
-    data?: {
-      mode?: string | null;
-      periods?: number | string | null;
-    } | null;
-  }> | null;
+  policies?: Array<{ data?: RevenuePolicyData | null }> | null;
+};
+
+/** Đơn giá trên dòng Chi Trường, cột nào chưa có thì lấy theo chính sách. */
+export type SchoolUnitPriceInput = {
+  teacherUnitPrice?: number | string | null;
+  giaovien?: number | string | null;
+  taxUnitPrice?: number | string | null;
+  thue?: number | string | null;
+  tax?: number | string | null;
+  csvcUnitPrice?: number | string | null;
+  csvc?: number | string | null;
+  paymentType?: string | null;
 };
 
 /**
@@ -78,4 +95,67 @@ export function applyPeriodsInput<T extends RevenueAmountInput>(
   value: number | string | null | undefined,
 ): T {
   return { ...row, totalPeriods: Number(value || 0) };
+}
+
+/** Tổng đơn giá Chi trường (CSVC + giáo viên + thuế) của 1 dòng — không nhân HS/tháng. */
+export function schoolUnitPriceOf(
+  row?: SchoolUnitPriceInput | null,
+  policyData?: RevenuePolicyData | null,
+): number {
+  const teacherUnitPrice = Number(
+    row?.teacherUnitPrice ?? row?.giaovien ?? policyData?.giaovien ?? 0,
+  );
+  const taxUnitPrice = Number(
+    row?.taxUnitPrice ??
+      row?.thue ??
+      row?.tax ??
+      policyData?.thue ??
+      policyData?.tax ??
+      0,
+  );
+  const csvcUnitPrice = Number(
+    row?.csvcUnitPrice ?? row?.csvc ?? policyData?.csvc ?? 0,
+  );
+  return teacherUnitPrice + taxUnitPrice + csvcUnitPrice;
+}
+
+/**
+ * Đơn giá trên hóa đơn công ty của 1 dòng, tuỳ row.paymentType (Hình thức chi):
+ * - 'not_in_contract' (Không có trong HĐ): = Đơn giá trên doanh thu (không trừ CSVC/GV/thuế).
+ * - 'in_contract' hoặc rỗng/chưa chọn (mặc định, giữ hành vi cũ): = Đơn giá trên doanh thu - (ĐG CSVC + ĐG GV + ĐG thuế).
+ */
+export function companyPaymentOf(
+  revenueUnitPrice: number,
+  row?: SchoolUnitPriceInput | null,
+  policyData?: RevenuePolicyData | null,
+): number {
+  if (row?.paymentType === "not_in_contract") {
+    return revenueUnitPrice;
+  }
+  return revenueUnitPrice - schoolUnitPriceOf(row, policyData);
+}
+
+/**
+ * Thành tiền của 1 dòng đã lưu trên bảng Hóa Đơn: Số lượng × đơn giá công ty.
+ * Giống màn nhập liệu: chưa lưu đơn giá hoặc số lượng thì lấy theo chính sách.
+ */
+export function invoiceAmountOfSavedRow(
+  revenue: RevenueAmountInput,
+  school?: SchoolUnitPriceInput | null,
+  subject?: RevenuePolicySubject | null,
+): number {
+  const policyData = subject?.policies?.[0]?.data;
+  const hasSavedQuantity =
+    Number(revenue.totalPeriods || 0) > 0 ||
+    Number(revenue.studentCount || 0) > 0;
+  const quantity = calculateRevenueQuantity({
+    ...(hasSavedQuantity
+      ? revenue
+      : revenueQuantityDefaultsFromPolicy(subject)),
+    monthsCount: revenue.monthsCount,
+  });
+  const unitPrice =
+    Number(revenue.unitPrice || 0) || Number(policyData?.fee || 0);
+
+  return quantity * companyPaymentOf(unitPrice, school, policyData);
 }

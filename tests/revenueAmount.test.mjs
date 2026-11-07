@@ -5,6 +5,8 @@ import {
   applyPeriodsInput,
   calculateRevenueAmount,
   calculateRevenueQuantity,
+  companyPaymentOf,
+  invoiceAmountOfSavedRow,
   revenueQuantityDefaultsFromPolicy,
 } from "../src/utils/revenueAmount.ts";
 
@@ -155,4 +157,71 @@ test("xoá HS (về 0) thì chuyển sang tính theo số tiết", () => {
   const withStudents = { studentCount: 120, totalPeriods: 24, monthsCount: 1 };
   assert.equal(calculateRevenueQuantity(withStudents), 120);
   assert.equal(calculateRevenueQuantity({ ...withStudents, studentCount: 0 }), 24);
+});
+
+test("hóa đơn trừ Chi Trường khỏi đơn giá doanh thu", () => {
+  const revenue = { studentCount: 1402, monthsCount: 1, unitPrice: 60000 };
+  const school = { teacherUnitPrice: 18000, taxUnitPrice: 5200, csvcUnitPrice: 0 };
+  assert.equal(companyPaymentOf(60000, school), 36800);
+  assert.equal(invoiceAmountOfSavedRow(revenue, school), 51593600);
+});
+
+test("Không có trong HĐ thì hóa đơn giữ nguyên đơn giá doanh thu", () => {
+  const revenue = { studentCount: 100, monthsCount: 2, unitPrice: 50000 };
+  const school = {
+    teacherUnitPrice: 10000,
+    taxUnitPrice: 1000,
+    csvcUnitPrice: 2000,
+    paymentType: "not_in_contract",
+  };
+  assert.equal(invoiceAmountOfSavedRow(revenue, school), 10000000);
+});
+
+test("hóa đơn tính theo số tiết khi không có học sinh, có nhân số tháng", () => {
+  const revenue = { totalPeriods: 24, studentCount: 0, monthsCount: 0.5, unitPrice: 100000 };
+  assert.equal(
+    invoiceAmountOfSavedRow(revenue, { teacherUnitPrice: 40000 }),
+    720000,
+  );
+});
+
+test("chưa có dòng Chi Trường thì lấy đơn giá chi từ chính sách", () => {
+  const revenue = { studentCount: 10, monthsCount: 1, unitPrice: 50000 };
+  const subject = {
+    policies: [{ data: { giaovien: 10000, thue: 1000, csvc: 2000, fee: 99000 } }],
+  };
+  assert.equal(invoiceAmountOfSavedRow(revenue, undefined, subject), 370000);
+});
+
+test("dòng chưa lưu đơn giá hoặc số lượng lấy theo chính sách như màn nhập liệu", () => {
+  const subject = {
+    studentCount: 200,
+    policies: [{ data: { mode: "HS", fee: 60000 } }],
+  };
+  assert.equal(
+    invoiceAmountOfSavedRow(
+      { studentCount: 100, monthsCount: 1, unitPrice: 0 },
+      { teacherUnitPrice: 0 },
+      subject,
+    ),
+    6000000,
+  );
+  assert.equal(
+    invoiceAmountOfSavedRow(
+      { studentCount: 0, totalPeriods: 0, monthsCount: 1, unitPrice: 50000 },
+      { teacherUnitPrice: 0 },
+      subject,
+    ),
+    10000000,
+  );
+});
+
+test("số tháng bằng 0 thì hóa đơn bằng 0", () => {
+  assert.equal(
+    invoiceAmountOfSavedRow(
+      { studentCount: 100, monthsCount: 0, unitPrice: 80000 },
+      { teacherUnitPrice: 0 },
+    ),
+    0,
+  );
 });

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { arrayFrom, formatCurrency, toNumber, unwrap } from "./ExpenseSummary";
-import { revenueBaseQuantity } from "@/utils/revenueAmount";
+import { invoiceAmountOfSavedRow, revenueBaseQuantity } from "@/utils/revenueAmount";
 
 type Props = {
   data: any;
@@ -105,12 +105,21 @@ export default function ExpenseSummaryTable({ data, subjects }: Props) {
       .sort((a, b) => a.subjectId - b.subjectId || a.rowIndex - b.rowIndex)
       .map(({ key, subjectId, revenue, schoolItem, managementItem }) => {
         const sourceItem = revenue || schoolItem || managementItem || {};
-        const invoiceAmount = toNumber(
+        // Thành tiền của bảng Doanh Thu, chưa trừ Chi Trường.
+        const revenueTotal = toNumber(
           revenue?.invoiceAmount ??
             toNumber(revenue?.unitPrice) *
               toNumber(revenue?.studentCount) *
               toNumber(revenue?.monthsCount)
         );
+        // Số tiền hóa đơn phải khớp cột Thành tiền của bảng Hóa Đơn.
+        const invoiceAmount = revenue
+          ? invoiceAmountOfSavedRow(
+              revenue,
+              schoolItem,
+              subjects.find((item: any) => toNumber(item.id) === subjectId),
+            )
+          : 0;
         const schoolExpenseAmount = toNumber(
           schoolItem?.schoolExpenseAmount ??
             (toNumber(schoolItem?.teacherUnitPrice ?? schoolItem?.giaovien) +
@@ -188,7 +197,7 @@ export default function ExpenseSummaryTable({ data, subjects }: Props) {
             schoolItem?.expenseDate ||
             managementItem?.expenseDate,
           payer: schoolItem?.payer || managementItem?.payer,
-          revenueAmount: toNumber(revenue?.revenueAmount ?? invoiceAmount),
+          revenueAmount: toNumber(revenue?.revenueAmount ?? revenueTotal),
           expenseAmount: toNumber(
             schoolItem?.expenseAmount ??
               managementItem?.expenseAmount ??
@@ -201,7 +210,7 @@ export default function ExpenseSummaryTable({ data, subjects }: Props) {
             sourceItem.expensePeriod,
         };
       });
-  }, [data]);
+  }, [data, subjects]);
 
   const subjectLabel = (row: any) => {
     if (row.subjectName) return row.subjectName;

@@ -7,7 +7,7 @@ import type {
   RevenueEInvoice,
   RevenueEInvoiceLine,
 } from "@/service/schoolExpense";
-import { calculateRevenueQuantity } from "@/utils/revenueAmount";
+import { calculateRevenueQuantity, companyPaymentOf } from "@/utils/revenueAmount";
 
 type Props = {
   inputRows: InputExpenseRow[];
@@ -51,46 +51,6 @@ export const invoiceOptions: {
 
 const isInvoiceIssued = (value: InputExpenseRow["invoiceType"]) =>
   value === "company" || value === "student" || value === "other";
-
-/**
- * Hóa đơn của từng dòng doanh thu — tách khỏi bảng Doanh Thu, đặt giữa
- * Chi Trường và Chi Ngoài. Mỗi dòng tương ứng 1 dòng doanh thu (cùng index).
- */
-/** Tổng đơn giá Chi trường (CSVC + giáo viên + thuế) của 1 dòng — không nhân HS/tháng. */
-const schoolUnitPriceOf = (row: any, policyData: any) => {
-  const teacherUnitPrice = Number(
-    row?.teacherUnitPrice ?? row?.giaovien ?? policyData?.giaovien ?? 0,
-  );
-  const taxUnitPrice = Number(
-    row?.taxUnitPrice ??
-      row?.thue ??
-      row?.tax ??
-      policyData?.thue ??
-      policyData?.tax ??
-      0,
-  );
-  const csvcUnitPrice = Number(
-    row?.csvcUnitPrice ?? row?.csvc ?? policyData?.csvc ?? 0,
-  );
-  return teacherUnitPrice + taxUnitPrice + csvcUnitPrice;
-};
-
-/**
- * Tổng thanh toán công ty của 1 dòng — tính theo ĐƠN GIÁ (không nhân HS/tháng),
- * tuỳ theo row.paymentType (Hình thức chi):
- * - 'not_in_contract' (Không có trong HĐ): = Đơn giá trên doanh thu (không trừ CSVC/GV/thuế).
- * - 'in_contract' hoặc rỗng/chưa chọn (mặc định, giữ hành vi cũ): = Đơn giá trên doanh thu - (ĐG CSVC + ĐG giáo viên + ĐG thuế).
- */
-const companyPaymentOf = (
-  revenueUnitPrice: number,
-  row: any,
-  policyData: any,
-) => {
-  if (row?.paymentType === "not_in_contract") {
-    return revenueUnitPrice;
-  }
-  return revenueUnitPrice - schoolUnitPriceOf(row, policyData);
-};
 
 const formatVND = (value: number) => value.toLocaleString("vi-VN");
 
@@ -181,6 +141,10 @@ function EInvoiceStatus({
   );
 }
 
+/**
+ * Hóa đơn của từng dòng doanh thu — tách khỏi bảng Doanh Thu, đặt giữa
+ * Chi Trường và Chi Ngoài. Mỗi dòng tương ứng 1 dòng doanh thu (cùng index).
+ */
 export default function InvoiceTable({
   inputRows,
   revenueRows = [],

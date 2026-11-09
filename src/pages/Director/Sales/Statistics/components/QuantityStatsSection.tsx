@@ -13,6 +13,7 @@ import {
   Loader2,
   ReceiptText,
   RefreshCw,
+  Table2,
 } from "lucide-react";
 import {
   buildSchoolQuantitySummary,
@@ -26,6 +27,7 @@ import {
   useSheetSummaries,
 } from "../hooks/useSheetSummaries";
 import PolicyDetailModal from "./PolicyDetailModal";
+import AccountingSourceModal from "./AccountingSourceModal";
 
 type Props = {
   /** Chính sách đã duyệt theo bộ lọc trang. */
@@ -68,6 +70,10 @@ export default function QuantityStatsSection({
   const selectedPeriod = useSelectedPeriod(period);
   const [reloadKey, setReloadKey] = useState(0);
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
+  const [sourceModal, setSourceModal] = useState<{
+    row: SchoolQuantitySummary;
+    subjectId?: number;
+  } | null>(null);
   const [policyModal, setPolicyModal] = useState<{
     schoolName: string;
     policies: PolicyRef[];
@@ -161,6 +167,33 @@ export default function QuantityStatsSection({
         Chi tiết
       </button>
     ) : null;
+
+  const sourceButton = (row: SchoolQuantitySummary, subjectId?: number) => {
+    const subjects =
+      subjectId === undefined
+        ? row.subjects
+        : row.subjects.filter((subject) => subject.subjectId === subjectId);
+    if (
+      !canShowAccounting ||
+      !subjects.some((subject) => subject.sources.length > 0)
+    ) {
+      return <span className="text-slate-300">—</span>;
+    }
+    return (
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          setSourceModal({ row, subjectId });
+        }}
+        title="Xem các dòng Doanh Thu / Hóa Đơn / Chi Trường / Chi Ngoài đã dùng"
+        className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-emerald-200 bg-white px-2 py-0.5 text-sm font-bold text-emerald-700 transition hover:bg-emerald-50"
+      >
+        <Table2 size={14} />
+        Chi tiết
+      </button>
+    );
+  };
 
   return (
     <section className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -300,61 +333,9 @@ export default function QuantityStatsSection({
                 </button>
               </div>
               <div className="overflow-x-auto border-t border-slate-100 [&_table]:text-xl [&_table]:leading-8 [&_th]:!px-5 [&_th]:!py-4 [&_th]:!text-xl [&_td]:!px-5 [&_td]:!py-4 [&_td]:!text-xl">
-                <table className="w-full min-w-[1800px]">
-                  <thead className="bg-slate-900 text-white">
-                    <tr>
-                      <th
-                        rowSpan={2}
-                        className="min-w-[240px] bg-slate-900 px-4 py-3 text-left sm:sticky sm:left-0 sm:z-10 sm:min-w-[320px]"
-                      >
-                        Trường / Môn
-                      </th>
-                      <th
-                        colSpan={2}
-                        className="border-l border-slate-700 px-4 py-2 text-center"
-                      >
-                        Kinh doanh nhập
-                      </th>
-                      <th
-                        colSpan={5}
-                        className="border-l border-slate-700 px-4 py-2 text-center"
-                      >
-                        Kế toán nhập
-                      </th>
-                      <th
-                        colSpan={2}
-                        className="border-l border-slate-700 px-4 py-2 text-center"
-                      >
-                        Chênh lệch
-                      </th>
-                    </tr>
-                    <tr className="text-xl text-slate-200">
-                      <th className="whitespace-nowrap border-l border-slate-700 px-4 py-2 text-right">
-                        Học sinh
-                      </th>
-                      <th className="whitespace-nowrap px-4 py-2 text-right">
-                        Số tiết
-                      </th>
-                      {ACCOUNTING_COLUMNS.map((column, index) => (
-                        <th
-                          key={column.key}
-                          className={`whitespace-nowrap px-4 py-2 text-right ${
-                            index === 0 ? "border-l border-slate-700" : ""
-                          }`}
-                        >
-                          {column.label}
-                        </th>
-                      ))}
-                      <th className="whitespace-nowrap px-4 py-2 text-right">
-                        Số tiết
-                      </th>
-                      <th className="whitespace-nowrap border-l border-slate-700 px-4 py-2 text-right">
-                        Học sinh
-                      </th>
-                      <th className="whitespace-nowrap px-4 py-2 text-right">
-                        Số tiết
-                      </th>
-                    </tr>
+                <table className="w-full min-w-[1960px]">
+                  <thead>
+                    <HeaderRows />
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {rows.map((row) => {
@@ -399,6 +380,9 @@ export default function QuantityStatsSection({
                             ))}
                             <td className="px-4 py-3 text-right font-semibold text-teal-700">
                               {accountingValue(row.accountingPeriods)}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              {sourceButton(row)}
                             </td>
                             <td className="px-4 py-3 text-right font-semibold text-amber-700">
                               {canShowAccounting
@@ -457,6 +441,9 @@ export default function QuantityStatsSection({
                                     visible={canShowAccounting}
                                   />
                                 </td>
+                                <td className="px-4 py-3 text-center">
+                                  {sourceButton(row, subject.subjectId)}
+                                </td>
                                 <td className="px-4 py-3 text-right text-amber-700">
                                   {canShowAccounting
                                     ? formatDifference(
@@ -498,6 +485,7 @@ export default function QuantityStatsSection({
                       <td className="px-4 py-3 text-right">
                         {accountingValue(totals.accountingPeriods)}
                       </td>
+                      <td className="px-4 py-3" />
                       <td className="px-4 py-3 text-right">
                         {canShowAccounting
                           ? formatDifference(
@@ -513,6 +501,7 @@ export default function QuantityStatsSection({
                           : "—"}
                       </td>
                     </tr>
+                    <HeaderRows />
                   </tfoot>
                 </table>
               </div>
@@ -523,6 +512,15 @@ export default function QuantityStatsSection({
             </div>
           )}
         </>
+      )}
+
+      {sourceModal && (
+        <AccountingSourceModal
+          schoolName={sourceModal.row.schoolName}
+          subjects={sourceModal.row.subjects}
+          initialSubjectId={sourceModal.subjectId}
+          onClose={() => setSourceModal(null)}
+        />
       )}
 
       {policyModal && (
@@ -537,6 +535,62 @@ export default function QuantityStatsSection({
         />
       )}
     </section>
+  );
+}
+
+/** Hai dòng tiêu đề cột — dùng ở đầu bảng và lặp lại ở cuối bảng. */
+function HeaderRows() {
+  return (
+    <>
+      <tr className="bg-slate-900 text-white">
+        <th
+          rowSpan={2}
+          className="min-w-[240px] bg-slate-900 px-4 py-3 text-left sm:sticky sm:left-0 sm:z-10 sm:min-w-[320px]"
+        >
+          Trường / Môn
+        </th>
+        <th
+          colSpan={2}
+          className="border-l border-slate-700 px-4 py-2 text-center"
+        >
+          Kinh doanh nhập
+        </th>
+        <th
+          colSpan={ACCOUNTING_COLUMNS.length + 2}
+          className="border-l border-slate-700 px-4 py-2 text-center"
+        >
+          Kế toán nhập
+        </th>
+        <th
+          colSpan={2}
+          className="border-l border-slate-700 px-4 py-2 text-center"
+        >
+          Chênh lệch
+        </th>
+      </tr>
+      <tr className="bg-slate-900 text-xl text-slate-200">
+        <th className="whitespace-nowrap border-l border-slate-700 px-4 py-2 text-right">
+          Học sinh
+        </th>
+        <th className="whitespace-nowrap px-4 py-2 text-right">Số tiết</th>
+        {ACCOUNTING_COLUMNS.map((column, index) => (
+          <th
+            key={column.key}
+            className={`whitespace-nowrap px-4 py-2 text-right ${
+              index === 0 ? "border-l border-slate-700" : ""
+            }`}
+          >
+            {column.label}
+          </th>
+        ))}
+        <th className="whitespace-nowrap px-4 py-2 text-right">Số tiết</th>
+        <th className="whitespace-nowrap px-4 py-2 text-center">Bảng nguồn</th>
+        <th className="whitespace-nowrap border-l border-slate-700 px-4 py-2 text-right">
+          Học sinh
+        </th>
+        <th className="whitespace-nowrap px-4 py-2 text-right">Số tiết</th>
+      </tr>
+    </>
   );
 }
 

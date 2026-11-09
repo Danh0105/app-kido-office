@@ -62,10 +62,16 @@ export type CreateExpensePayload = {
   /** Có trường = đề xuất theo trường; để trống = đề xuất theo xã/phường. */
   schoolId?: number;
   schoolYear?: string;
-  /** Chi tháng bắt buộc có schoolId, schoolYear, subjectId và expensePeriodId. */
+  /** Chi tháng gửi danh sách trường ở `monthlyItems` (gửi dạng JSON). */
   isMonthlyExpense?: boolean;
   subjectId?: number;
   expensePeriodId?: number;
+  monthlyItems?: {
+    schoolId: number;
+    schoolYear: string;
+    subjectId: number;
+    expensePeriodId: number;
+  }[];
   wardId?: number;
   /** Kinh doanh tự đánh dấu: đề xuất này nên trừ vào chính sách liên quan (chỉ để hiển thị). */
   deductPolicy?: boolean;
@@ -375,7 +381,11 @@ export const expenseRequestApi = {
   /** Bảng Chi Ngoài chỉ đọc của đề xuất — cùng quyền đọc với Quản lý thu chi. */
   getManagementExpense: async (
     id: number,
-  ): Promise<{ sections: ManagementExpenseSection[] }> => {
+  ): Promise<{
+    sections: ManagementExpenseSection[];
+    /** Tổng Còn chi — số tiền lệnh chi tháng sẽ lập khi Giám đốc duyệt. */
+    remainingTotal?: number;
+  }> => {
     const res = await api.get(`${BASE}/${id}/management-expense`);
     return res.data;
   },

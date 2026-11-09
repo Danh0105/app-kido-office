@@ -11,6 +11,7 @@ import {
   isEquipmentRequest,
   requestKindOf,
   isSupplierEquipment,
+  monthlyItemsOf,
 } from "../lib";
 
 export default function ExpenseCard({
@@ -51,6 +52,9 @@ export default function ExpenseCard({
   const cashAccount = hasActiveOrder
     ? item.paymentOrder?.cashAccount ?? null
     : null;
+  // Chi tháng nhiều trường: danh sách chỉ có tên trường (môn/kỳ xem ở chi tiết).
+  const monthlyItems = monthlyItemsOf(item);
+  const multiSchool = monthlyItems.length > 1;
   const directorApprovedAmount =
     hasRole("thuquy") &&
     !equipment &&
@@ -169,10 +173,19 @@ export default function ExpenseCard({
             </span>
           )
         )}
-        {item.school?.name && <span>🏫 {item.school.name}</span>}
-        {item.schoolYear && <span>🎓 {item.schoolYear}</span>}
-        {item.subject?.name && <span>📘 {item.subject.name}</span>}
-        {item.expensePeriod && (
+        {multiSchool ? (
+          <span>
+            🏫 {monthlyItems.length} trường:{" "}
+            {monthlyItems
+              .map((entry) => entry.school?.name || `#${entry.schoolId}`)
+              .join(", ")}
+          </span>
+        ) : (
+          item.school?.name && <span>🏫 {item.school.name}</span>
+        )}
+        {!multiSchool && item.schoolYear && <span>🎓 {item.schoolYear}</span>}
+        {!multiSchool && item.subject?.name && <span>📘 {item.subject.name}</span>}
+        {!multiSchool && item.expensePeriod && (
           <span>
             🧾{" "}
             {item.expensePeriod.name ||

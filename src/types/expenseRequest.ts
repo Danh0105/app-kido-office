@@ -1,5 +1,6 @@
 // Types & metadata for the "Đề xuất chi" (expense request) module.
-// Chi Năm vào PENDING_APPROVAL; chi tháng vào PENDING_ACCOUNTING.
+// Chi Năm và chi tháng đều vào PENDING_APPROVAL (Giám đốc duyệt). PENDING_ACCOUNTING
+// chỉ còn ở đề xuất chi tháng tạo trước khi bỏ bước Kế toán nhập số tiền.
 
 export type ExpenseStatus =
   | "PENDING_ACCOUNTING"
@@ -129,8 +130,33 @@ export type ManagementExpenseRow = {
   note: string | null;
 };
 
+/** Một trường của đề xuất chi tháng. */
+export type ExpenseMonthlyItem = {
+  id?: number;
+  position?: number;
+  schoolId: number | null;
+  schoolYear: string | null;
+  subjectId: number | null;
+  expensePeriodId: number | null;
+  school?: { id: number; name: string } | null;
+  subject?: {
+    id: number;
+    name: string;
+    catalog?: { id: number; name: string } | null;
+  } | null;
+  expensePeriod?: {
+    id: number;
+    name?: string;
+    month: number;
+    year: number;
+  } | null;
+};
+
 export type ManagementExpenseSection = {
   schoolExpenseId: number;
+  /** Bảng thuộc trường nào — đề xuất chi tháng có thể gồm nhiều trường. */
+  schoolId?: number | null;
+  schoolName?: string | null;
   periodId: number | null;
   periodName: string;
   subjectId: number;
@@ -164,6 +190,8 @@ export type ExpenseLogDetails = {
   // APPROVE
   requestKind?: ExpenseRequestKind | null;
   amount?: number | null;
+  /** APPROVE_MONTHLY: số tiền lệnh chi lấy từ tổng Còn chi của bảng Chi Ngoài. */
+  amountFromManagementExpense?: boolean;
   equipmentSource?: "STOCK" | "SUPPLIER" | null;
   handover?: ExpenseLogPerson | null;
   supporters?: ExpenseLogPerson[];
@@ -375,8 +403,12 @@ export type ExpenseRequest = {
       province?: { id: number; name: string } | null;
     } | null;
   };
-  /** Đề xuất chi tháng gắn với một môn học và kỳ kế toán cụ thể. */
+  /**
+   * Đề xuất chi tháng: các cột trường/môn/kỳ đơn là trường đầu tiên; danh
+   * sách đầy đủ ở `monthlyItems` (đề xuất cũ không có thì chỉ có một trường).
+   */
   isMonthlyExpense?: boolean;
+  monthlyItems?: ExpenseMonthlyItem[];
   subjectId?: number;
   subject?: {
     id: number;

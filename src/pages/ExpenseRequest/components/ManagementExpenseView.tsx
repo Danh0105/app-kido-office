@@ -231,9 +231,11 @@ function SectionTable({ section }: { section: ManagementExpenseSection }) {
 
 function SectionBlock({
   section,
+  showSchool = false,
   defaultOpen,
 }: {
   section: ManagementExpenseSection;
+  showSchool?: boolean;
   defaultOpen: boolean;
 }) {
   const { totals } = section;
@@ -252,6 +254,7 @@ function SectionBlock({
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="text-sm font-semibold text-slate-800">
+              {showSchool && section.schoolName ? `${section.schoolName} · ` : ""}
               {section.periodName} · {section.subjectName}
             </span>
             {section.schoolYear && (
@@ -317,6 +320,9 @@ export function ManagementExpenseSections({
   if (!sections.length) {
     return <p className="text-xs text-slate-500">{emptyText}</p>;
   }
+  // Đề xuất chi tháng nhiều trường: tên trường đứng đầu mỗi bảng.
+  const showSchool =
+    new Set(sections.map((section) => section.schoolId ?? null)).size > 1;
   return (
     <div className="space-y-2">
       {sections.length > 1 && <SectionsOverview sections={sections} />}
@@ -324,6 +330,7 @@ export function ManagementExpenseSections({
         <SectionBlock
           key={`${section.schoolExpenseId}-${section.subjectId}`}
           section={section}
+          showSchool={showSchool}
           defaultOpen={index === 0}
         />
       ))}
@@ -368,7 +375,13 @@ function SectionsOverview({ sections }: { sections: ManagementExpenseSection[] }
 }
 
 /** Tải số liệu đang có trong Quản lý thu chi. */
-function LiveSections({ requestId }: { requestId: number }) {
+function LiveSections({
+  requestId,
+  onRemainingTotal,
+}: {
+  requestId: number;
+  onRemainingTotal?: (total: number | null) => void;
+}) {
   const [sections, setSections] = useState<ManagementExpenseSection[] | null>(
     null
   );
@@ -377,10 +390,22 @@ function LiveSections({ requestId }: { requestId: number }) {
   const load = useCallback(() => {
     setFailed(false);
     setSections(null);
+    onRemainingTotal?.(null);
     expenseRequestApi
       .getManagementExpense(requestId)
-      .then((res) => setSections(res.sections ?? []))
+      .then((res) => {
+        const list = res.sections ?? [];
+        setSections(list);
+        onRemainingTotal?.(
+          res.remainingTotal ??
+            list.reduce(
+              (sum, section) => sum + Number(section.totals?.remaining || 0),
+              0
+            )
+        );
+      })
       .catch(() => setFailed(true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestId]);
 
   useEffect(load, [load]);
@@ -402,7 +427,16 @@ function LiveSections({ requestId }: { requestId: number }) {
 }
 
 /** Khung ở màn duyệt: Giám đốc xem số liệu hiện tại trước khi quyết định. */
-export function ManagementExpensePanel({ requestId }: { requestId: number }) {
+export function ManagementExpensePanel({
+  requestId,
+  monthly = false,
+  onRemainingTotal,
+}: {
+  requestId: number;
+  /** Chi tháng: số tiền lệnh chi lấy theo tổng Còn chi khi duyệt. */
+  monthly?: boolean;
+  onRemainingTotal?: (total: number | null) => void;
+}) {
   return (
     <div className="min-w-0 space-y-2 rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
       <div>
@@ -412,9 +446,11 @@ export function ManagementExpensePanel({ requestId }: { requestId: number }) {
         <p className="text-xs text-slate-500">
           Số liệu hiện tại từ Quản lý thu chi, sẽ được lưu vào lịch sử khi bạn
           duyệt hoặc từ chối.
+          {monthly &&
+            " Chi tháng: khi bạn duyệt, lệnh chi được lập bằng tổng cột Còn chi của các bảng dưới đây."}
         </p>
       </div>
-      <LiveSections requestId={requestId} />
+      <LiveSections requestId={requestId} onRemainingTotal={onRemainingTotal} />
     </div>
   );
 }

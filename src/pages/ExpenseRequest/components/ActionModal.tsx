@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { ExpenseAttachment } from "@/types/expenseRequest";
 import { resolveFileUrl } from "@/service/expenseRequest";
 import CashAccountSelect from "@/pages/Director/expense/component/expense/CashAccountSelect";
@@ -13,6 +13,8 @@ export type ActionPayload = {
 
 type Props = {
   title: string;
+  /** Nội dung hiện đầu hộp thoại (VD số tiền sẽ chi khi duyệt). */
+  description?: ReactNode;
   submitLabel: string;
   submitColor?: string;
   showNote?: boolean;
@@ -36,6 +38,7 @@ const MAX_SIZE = 50 * 1024 * 1024; // 50MB
 
 export default function ActionModal({
   title,
+  description,
   submitLabel,
   submitColor = "bg-blue-500",
   showNote,
@@ -119,6 +122,7 @@ export default function ActionModal({
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {description}
           {requireReason && (
             <div>
               <label className="text-sm text-gray-600">

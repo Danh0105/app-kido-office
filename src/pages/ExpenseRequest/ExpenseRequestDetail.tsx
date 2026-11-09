@@ -63,6 +63,8 @@ import {
   expenseBasePath,
   expenseEditPath,
   canReadManagementExpense,
+  monthlyItemLabel,
+  monthlyItemsOf,
   type ActionKey,
 } from "./lib";
 
@@ -164,6 +166,8 @@ export default function ExpenseRequestDetail({
   const [schoolSubjects, setSchoolSubjects] = useState<SchoolSubject[]>([]);
   const [schoolContextLoading, setSchoolContextLoading] = useState(false);
   const [schoolContextError, setSchoolContextError] = useState("");
+  // Chi tháng: tổng Còn chi của bảng Chi Ngoài = số tiền lệnh chi khi duyệt.
+  const [monthlyRemaining, setMonthlyRemaining] = useState<number | null>(null);
 
   const loadSchoolContext = useCallback(async (request: ExpenseRequest) => {
     const schoolId = Number(
@@ -609,6 +613,7 @@ export default function ExpenseRequestDetail({
     (a) => a.action === "CONFIRM_CASH_RELEASED"
   );
   const otherAttachments = (data.attachments || []).filter((a) => !a.action);
+  const monthlyItems = monthlyItemsOf(data);
   const directorApprovedAmount =
     hasRole("thuquy") &&
     !equipment &&
@@ -725,23 +730,36 @@ export default function ExpenseRequestDetail({
                   strong
                 />
               )}
-              {data.school?.name && (
-                <Field label="Trường" value={data.school.name} />
-              )}
-              {data.schoolYear && (
-                <Field label="Năm học" value={data.schoolYear} />
-              )}
-              {data.isMonthlyExpense && data.subject?.name && (
-                <Field label="Môn học" value={data.subject.name} />
-              )}
-              {data.isMonthlyExpense && data.expensePeriod && (
-                <Field
-                  label="Kỳ kế toán"
-                  value={
-                    data.expensePeriod.name ||
-                    `Tháng ${data.expensePeriod.month}/${data.expensePeriod.year}`
-                  }
-                />
+              {data.isMonthlyExpense && monthlyItems.length > 0 ? (
+                <div className="col-span-2">
+                  <div className="text-xs text-gray-400">
+                    Trường ({monthlyItems.length}) · môn · kỳ kế toán
+                  </div>
+                  <ul className="mt-0.5 space-y-0.5">
+                    {monthlyItems.map((item, index) => (
+                      <li key={item.id ?? index} className="text-gray-800">
+                        <span className="font-medium">
+                          {item.school?.name || `Trường #${item.schoolId}`}
+                        </span>
+                        {monthlyItemLabel(item) && (
+                          <span className="text-gray-500">
+                            {" "}
+                            · {monthlyItemLabel(item)}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <>
+                  {data.school?.name && (
+                    <Field label="Trường" value={data.school.name} />
+                  )}
+                  {data.schoolYear && (
+                    <Field label="Năm học" value={data.schoolYear} />
+                  )}
+                </>
               )}
               {data.participants && (
                 <Field
@@ -795,8 +813,9 @@ export default function ExpenseRequestDetail({
           </div>
         </div>
 
-        {/* ===== School and policies ===== */}
-        {(data.school?.id || (data as any).schoolId) && (
+        {/* ===== School and policies (chi tháng nhiều trường: xem bảng Chi Ngoài) ===== */}
+        {(data.school?.id || (data as any).schoolId) &&
+          monthlyItems.length <= 1 && (
           <SchoolPolicyDetails
             school={school || data.school || null}
             subjects={schoolSubjects}
@@ -810,7 +829,11 @@ export default function ExpenseRequestDetail({
         {(data.school?.id || (data as any).schoolId) &&
           canDoStep("approve", data) &&
           canReadManagementExpense() && (
-            <ManagementExpensePanel requestId={data.id} />
+            <ManagementExpensePanel
+              requestId={data.id}
+              monthly={Boolean(data.isMonthlyExpense)}
+              onRemainingTotal={setMonthlyRemaining}
+            />
           )}
 
         {/* ===== Payment order ===== */}
@@ -829,7 +852,11 @@ export default function ExpenseRequestDetail({
               <Field
                 label="Hình thức"
                 value={
-                  PAYMENT_METHOD_LABEL[po.paymentMethod] || po.paymentMethod
+                  // Chi tháng: hình thức đi theo tài khoản Thủ quỹ chọn khi
+                  // xuất tiền, trước đó chỉ là giá trị ghi tạm.
+                  data.isMonthlyExpense && !po.cashAccount && !po.fundSource
+                    ? "Theo nguồn chi Thủ quỹ chọn"
+                    : PAYMENT_METHOD_LABEL[po.paymentMethod] || po.paymentMethod
                 }
               />
               {po.cashAccount ? (
@@ -1022,6 +1049,13 @@ export default function ExpenseRequestDetail({
       {modal === "approve" && data.isMonthlyExpense && (
         <ActionModal
           title="Duyệt đề xuất chi tháng"
+          description={
+            <MonthlyApproveAmount
+              existingAmount={data.paymentOrder?.amount ?? null}
+              remainingTotal={monthlyRemaining}
+              canSeeTable={canReadManagementExpense()}
+            />
+          }
           submitLabel="Duyệt và chuyển Thủ quỹ"
           submitColor="bg-blue-500"
           showNote
@@ -1912,6 +1946,53 @@ function RequesterInfo({ request }: { request: ExpenseRequest }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Hộp duyệt chi tháng: Giám đốc không nhập số tiền. Chưa có lệnh chi thì hệ
+ * thống lập bằng tổng Còn chi của bảng Chi Ngoài; đã có (Kế toán lập lại sau
+ * hoàn quỹ, sửa số tiền, đề xuất cũ) thì giữ số đó.
+ */
+function MonthlyApproveAmount({
+  existingAmount,
+  remainingTotal,
+  canSeeTable,
+}: {
+  existingAmount: number | null;
+  remainingTotal: number | null;
+  canSeeTable: boolean;
+}) {
+  if (existingAmount != null) {
+    return (
+      <div className="rounded-xl border border-purple-100 bg-purple-50 p-3 text-sm text-purple-800">
+        Chi theo lệnh chi Kế toán đã lập:{" "}
+        <b>{formatVnd(existingAmount) || "0"} đ</b>
+      </div>
+    );
+  }
+  if (remainingTotal == null) {
+    return (
+      <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-800">
+        {canSeeTable
+          ? "Đang tính số tiền từ bảng Chi Ngoài…"
+          : "Lệnh chi sẽ được lập bằng tổng cột Còn chi của bảng Chi Ngoài các trường trong đề xuất."}
+      </div>
+    );
+  }
+  if (remainingTotal <= 0) {
+    return (
+      <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-red-700">
+        Bảng Chi Ngoài của các trường không còn khoản nào cần chi (Còn chi =
+        0) nên chưa duyệt được. Có thể từ chối hoặc chờ cập nhật bảng.
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-800">
+      Lệnh chi sẽ được lập với số tiền <b>{formatVnd(remainingTotal)} đ</b>{" "}
+      (tổng cột Còn chi của bảng Chi Ngoài), chuyển Thủ quỹ xuất tiền.
     </div>
   );
 }

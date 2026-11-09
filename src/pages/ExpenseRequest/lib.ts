@@ -2,10 +2,49 @@ import { getEmployeeId, getEmployeeRoles, hasRole } from "@/utils/auth";
 import type {
   EquipmentSource,
   ExpenseAssignment,
+  ExpenseMonthlyItem,
   ExpenseRequest,
   ExpenseRequestKind,
   ExpenseStatus,
 } from "@/types/expenseRequest";
+
+/**
+ * Các trường của đề xuất chi tháng theo thứ tự đã chọn. Đề xuất cũ (một trường)
+ * chưa có danh sách thì lấy từ các cột đơn.
+ */
+export const monthlyItemsOf = (req: ExpenseRequest): ExpenseMonthlyItem[] => {
+  if (!req.isMonthlyExpense) return [];
+  if (req.monthlyItems?.length) {
+    return [...req.monthlyItems].sort(
+      (a, b) => (a.position ?? 0) - (b.position ?? 0) || (a.id ?? 0) - (b.id ?? 0)
+    );
+  }
+  const schoolId = req.schoolId ?? req.school?.id ?? null;
+  if (!schoolId) return [];
+  return [
+    {
+      schoolId,
+      schoolYear: req.schoolYear ?? null,
+      subjectId: req.subjectId ?? req.subject?.id ?? null,
+      expensePeriodId: req.expensePeriodId ?? req.expensePeriod?.id ?? null,
+      school: req.school ? { id: req.school.id, name: req.school.name } : null,
+      subject: req.subject ?? null,
+      expensePeriod: req.expensePeriod ?? null,
+    },
+  ];
+};
+
+export const monthlyItemLabel = (item: ExpenseMonthlyItem) =>
+  [
+    item.subject?.catalog?.name || item.subject?.name,
+    item.expensePeriod
+      ? item.expensePeriod.name ||
+        `Tháng ${item.expensePeriod.month}/${item.expensePeriod.year}`
+      : null,
+    item.schoolYear,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
 // Some expense endpoints/notification payloads use different wrappers for the
 // same request. Resolve them in one place so an absent `id` never becomes NaN.
@@ -469,6 +508,14 @@ export const canDoStep = (
     ) {
       return false;
     }
+    // Chi tháng mới chờ Giám đốc chưa có lệnh chi (số tiền lập lúc duyệt).
+    if (
+      step === "editPaymentOrder" &&
+      req.status === "PENDING_APPROVAL" &&
+      !req.paymentOrder
+    ) {
+      return false;
+    }
   } else if (step === "editPaymentOrder" && req.status === "PENDING_APPROVAL") {
     return false;
   }
@@ -627,9 +674,7 @@ export const waitingMessage = (req: ExpenseRequest): string | null => {
     case "PENDING_ACCOUNTING":
       return "Chờ Kế toán công nợ nhập số tiền…";
     case "PENDING_APPROVAL":
-      return req.isMonthlyExpense
-        ? "Kế toán đã nhập số tiền, chờ Giám đốc duyệt…"
-        : "Chờ giám đốc duyệt…";
+      return "Chờ giám đốc duyệt…";
     case "APPROVED":
       if (
         (req.assignments || []).some(

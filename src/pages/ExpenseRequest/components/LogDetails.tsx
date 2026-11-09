@@ -192,11 +192,19 @@ function StepDetails({ log, kind: requestKind }: { log: ExpenseLog; kind?: Expen
     case "APPROVE_MONTHLY": {
       const po = d.paymentOrder;
       if (!po) return null;
+      // Lệnh chi hệ thống lập lúc Giám đốc duyệt: hình thức chỉ là ghi tạm,
+      // đổi theo tài khoản Thủ quỹ chọn khi xuất tiền nên không hiện ở đây.
+      const fromTable = log.action === "APPROVE_MONTHLY" && d.amountFromManagementExpense;
       return (
         <Box tone="border-purple-100 bg-purple-50">
           {po.code && <Row label="Mã lệnh chi">{po.code}</Row>}
-          {po.amount != null && <Row label="Số tiền">{money(po.amount)}</Row>}
-          {po.paymentMethod && (
+          {po.amount != null && (
+            <Row label="Số tiền">
+              {money(po.amount)}
+              {fromTable && " (tổng Còn chi bảng Chi Ngoài)"}
+            </Row>
+          )}
+          {po.paymentMethod && !fromTable && (
             <Row label="Hình thức">{PAYMENT_METHOD_LABEL[po.paymentMethod] || po.paymentMethod}</Row>
           )}
         </Box>

@@ -1,4 +1,4 @@
-import { hasRole } from "@/utils/auth";
+import { hasRole, isDirectorAssistantViewer } from "@/utils/auth";
 import { DEPARTMENT_HEAD_ROLES } from "@/utils/departmentHeads";
 import { isEquipmentOnlyUser } from "@/pages/ExpenseRequest/lib";
 import {
@@ -191,7 +191,8 @@ const BROAD_ROLES = [
 
 /** Menu chính của trang Giám đốc theo vai trò — dùng chung cho Home và sidebar brand. */
 export const directorBaseMenus = (): DirectorMenu[] => {
-  const menus: DirectorMenu[] = hasRole(...BROAD_ROLES)
+  // Trợ lý GĐ xem mọi chức năng như Giám đốc (các màn tự ẩn nút sửa/duyệt).
+  const menus: DirectorMenu[] = hasRole(...BROAD_ROLES) || isDirectorAssistantViewer()
     ? ALL_MENUS
     : hasRole("ketoan_truong")
     ? CHIEF_ACCOUNTANT_MENUS

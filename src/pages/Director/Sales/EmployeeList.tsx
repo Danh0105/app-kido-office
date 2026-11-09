@@ -8,7 +8,11 @@ import { provinceApi } from "@/service/province";
 import { wardApi } from "@/service/ward";
 import AssignAreaModal from "./component/AssignAreaModal";
 import HandoverRegionModal from "./component/HandoverRegionModal";
-import { hasRole, isChiefAccountant } from "@/utils/auth";
+import {
+  hasRole,
+  isChiefAccountant,
+  isDirectorAssistantViewer,
+} from "@/utils/auth";
 import { isRestrictedLongAnDirector } from "@/utils/longAnDirector";
 import { CATALOG_ADMIN_ROLES } from "@/service/subjectCatalog.api";
 import AllPoliciesTab from "./component/AllPoliciesTab";
@@ -57,7 +61,8 @@ const roleLabel = (role: string) => {
 
 export default function EmployeeList() {
   const isLongAnDirector = isRestrictedLongAnDirector();
-  const readOnly = isChiefAccountant() || isLongAnDirector;
+  const readOnly =
+    isChiefAccountant() || isLongAnDirector || isDirectorAssistantViewer();
   const isBrand = isDirectorBrandUiEnabled();
   const navigate = useNavigate();
   const location = useLocation();

@@ -52,6 +52,15 @@ export const hasBroadRole = (): boolean => hasRole(...BROAD_ROLES);
 export const isChiefAccountant = (): boolean =>
     hasRole("ketoan_truong") && !hasBroadRole();
 
+/**
+ * Trợ lý giám đốc (`troly_gd`): xem được mọi chức năng như Giám đốc nhưng chỉ
+ * đọc — các màn mở thêm cho họ phải ẩn nút thêm/sửa/xoá/duyệt. Các việc đã
+ * giao riêng cho trợ lý GĐ (QL thu chi, duyệt Đề xuất...) giữ nguyên, vì các
+ * màn đó kiểm tra quyền riêng. False nếu tài khoản còn kiêm role rộng.
+ */
+export const isDirectorAssistantViewer = (): boolean =>
+    hasRole("troly_gd") && !hasBroadRole();
+
 // "Chỉ" kế toán — cùng nguyên tắc với isChiefAccountant.
 export const isAccountantOnly = (): boolean =>
     hasRole("accountant") && !hasBroadRole();

@@ -5,6 +5,7 @@ import { employeeApi } from "@/service/employee";
 import { teacherApi } from "@/service/teaching";
 import type { Teacher } from "@/types/teaching";
 import { getApiErrorMessage } from "@/utils/apiError";
+import { hasRole, isDirectorAssistantViewer } from "@/utils/auth";
 import { DEPARTMENT_HEAD_POSITIONS, DEPARTMENT_HEAD_ROLES } from "@/utils/departmentHeads";
 import { resolveApiFileUrl } from "@/utils/fileUrl";
 import TeacherDetailModal from "./components/TeacherDetailModal";
@@ -80,6 +81,8 @@ const employeeInitial = (employee: Employee) =>
 
 /** `embedded`: nằm trong khung của phân hệ khác, không dựng header/nền toàn trang. */
 export default function EmployeeManagement({ embedded = false }: { embedded?: boolean }) {
+  // Trợ lý GĐ chỉ xem (trừ khi kiêm Nhân sự): ẩn thêm / phân quyền / duyệt / xoá.
+  const readOnly = isDirectorAssistantViewer() && !hasRole("nhansu");
   const [roleOptions, setRoleOptions] = useState(ROLE_OPTIONS);
   const roleLabel = (role: string) => roleOptions.find(option => option.value === role)?.label ?? role;
   useEffect(() => {
@@ -340,6 +343,7 @@ export default function EmployeeManagement({ embedded = false }: { embedded?: bo
       </div>
 
       {/* ── Toolbar ── */}
+      {!readOnly && (
       <div className="px-3 pb-2 flex items-center gap-2">
         <button
           onClick={() => {
@@ -370,6 +374,7 @@ export default function EmployeeManagement({ embedded = false }: { embedded?: bo
           </button>
         )}
       </div>
+      )}
 
       {/* ── Search + filter ── */}
       <div className="px-3 pb-2 flex items-center gap-2">
@@ -438,13 +443,16 @@ export default function EmployeeManagement({ embedded = false }: { embedded?: bo
             >
               {/* ── Card header: avatar + checkbox ── */}
               <div
-                className="relative flex flex-col items-center pt-3 pb-1 px-2 cursor-pointer"
-                onClick={() =>
-                  tab === "ctv" ? setDetailTarget(item) : toggleSelect(item.id)
-                }
+                className={`relative flex flex-col items-center pt-3 pb-1 px-2 ${
+                  tab === "ctv" || !readOnly ? "cursor-pointer" : ""
+                }`}
+                onClick={() => {
+                  if (tab === "ctv") setDetailTarget(item);
+                  else if (!readOnly) toggleSelect(item.id);
+                }}
               >
                 {/* Tab CTV dùng cú chạm để mở hồ sơ, nên chọn hàng loạt tách ra ô tick riêng. */}
-                {tab === "ctv" && (
+                {tab === "ctv" && !readOnly && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -509,6 +517,7 @@ export default function EmployeeManagement({ embedded = false }: { embedded?: bo
               </div>
 
               {/* ── Actions ── */}
+              {!readOnly && (
               <div className="border-t border-gray-100 px-2 py-2 flex flex-col gap-1.5">
                 <button
                   onClick={() => {
@@ -536,6 +545,7 @@ export default function EmployeeManagement({ embedded = false }: { embedded?: bo
                   Xoá
                 </button>
               </div>
+              )}
             </div>
           );
         })}

@@ -3,7 +3,11 @@ import { createPortal } from "react-dom";
 import { X, Send, ClipboardList, MapPin } from "lucide-react";
 import { dailyReportApi } from "@/service/report";
 import { getSocket } from "@/utils/socket";
-import { getEmployeeId, getEmployeeName } from "@/utils/auth";
+import {
+  getEmployeeId,
+  getEmployeeName,
+  isDirectorAssistantViewer,
+} from "@/utils/auth";
 
 type Task = {
   id: number;
@@ -33,6 +37,8 @@ type Props = {
 };
 
 export default function ReportDetailPopup({ reportId, onClose }: Props) {
+  // Trợ lý GĐ chỉ xem báo cáo và tin nhắn, không gửi.
+  const canSendMessage = !isDirectorAssistantViewer();
   const [report, setReport] = useState<Report | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -313,6 +319,7 @@ export default function ReportDetailPopup({ reportId, onClose }: Props) {
             </div>
 
             {/* INPUT */}
+            {canSendMessage ? (
             <div className="relative border-t px-3 py-2 bg-white">
               {showSuggestions && (() => {
                 const tasks = report?.tasks || [];
@@ -447,6 +454,11 @@ export default function ReportDetailPopup({ reportId, onClose }: Props) {
                 </button>
               </div>
             </div>
+            ) : (
+              <p className="border-t bg-white px-3 py-2 text-center text-xs text-gray-400">
+                Chỉ xem — trợ lý giám đốc không gửi tin nhắn.
+              </p>
+            )}
           </>
         )}
       </div>

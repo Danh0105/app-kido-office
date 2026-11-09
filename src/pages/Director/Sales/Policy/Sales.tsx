@@ -7,7 +7,11 @@ import "./css/Sales.css";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { policiesApi } from "../../../../service/policy";
 import { PolicyStatus } from "../../enum/PolicyStatus";
-import { hasRole, isChiefAccountant } from "../../../../utils/auth";
+import {
+  hasRole,
+  isChiefAccountant,
+  isDirectorAssistantViewer,
+} from "../../../../utils/auth";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import HeaderWithBack from "@/components/HeaderWithBack";
 import { subjectApi } from "@/service/subject.api";
@@ -371,7 +375,8 @@ export default function Sales({
     hasRole("saleadmin", "salesadmin_la") &&
     !hasRole("director", "director_la");
   const isRejected = finalStatus === PolicyStatus.REJECTED;
-  const readOnly = isChiefAccountant();
+  // Kế toán trưởng, trợ lý GĐ chỉ xem — backend cũng không cho họ duyệt.
+  const readOnly = isChiefAccountant() || isDirectorAssistantViewer();
   const showActions =
     !isFinalApproved && !isRejected && !readOnly && !isWaitingOnDirector;
   useEffect(() => {

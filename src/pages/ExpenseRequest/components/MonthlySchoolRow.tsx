@@ -15,7 +15,8 @@ export type MonthlyRowValue = {
   key: string;
   schoolId: number | null;
   schoolYear: string | null;
-  subjectId: number | null;
+  /** Một trường chi được cho nhiều môn trong cùng kỳ. */
+  subjectIds: number[];
   expensePeriodId: number | null;
   /** "tháng/năm" của kỳ đã chọn — để dòng mới tự chọn cùng kỳ. */
   periodKey: string | null;
@@ -25,7 +26,7 @@ export const emptyMonthlyRow = (): MonthlyRowValue => ({
   key: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
   schoolId: null,
   schoolYear: null,
-  subjectId: null,
+  subjectIds: [],
   expensePeriodId: null,
   periodKey: null,
 });
@@ -96,7 +97,7 @@ export default function MonthlySchoolRow({
         if (options.length > 0 && !options.some((o) => o.id === schoolYear)) {
           const preferred =
             options.find((o) => o.id === DEFAULT_SCHOOL_YEAR) || options[0];
-          onPatch({ schoolYear: String(preferred.id), subjectId: null });
+          onPatch({ schoolYear: String(preferred.id), subjectIds: [] });
         }
       })
       .catch((error) => {
@@ -127,11 +128,19 @@ export default function MonthlySchoolRow({
           name: subject.catalog?.name || subject.name,
         }));
         setSubjects(options);
-        const current = value.subjectId;
-        if (!current || !options.some((o) => Number(o.id) === current)) {
-          onPatch({
-            subjectId: options.length === 1 ? Number(options[0].id) : null,
-          });
+        // Giữ các môn còn hợp lệ; chưa chọn môn nào mà trường chỉ có 1 môn thì chọn sẵn.
+        const valid = value.subjectIds.filter((id) =>
+          options.some((o) => Number(o.id) === id)
+        );
+        const next =
+          valid.length === 0 && options.length === 1
+            ? [Number(options[0].id)]
+            : valid;
+        if (
+          next.length !== value.subjectIds.length ||
+          next.some((id, index) => id !== value.subjectIds[index])
+        ) {
+          onPatch({ subjectIds: next });
         }
       })
       .catch((error) => {
@@ -218,7 +227,7 @@ export default function MonthlySchoolRow({
           onPatch({
             schoolId: next ? Number(next) : null,
             schoolYear: null,
-            subjectId: null,
+            subjectIds: [],
             expensePeriodId: null,
             periodKey: null,
           })
@@ -233,28 +242,74 @@ export default function MonthlySchoolRow({
           value={schoolYear}
           options={schoolYears}
           onChange={(next) =>
-            onPatch({ schoolYear: next ? String(next) : null, subjectId: null })
+            onPatch({ schoolYear: next ? String(next) : null, subjectIds: [] })
           }
           disabled={yearsLoading || schoolYears.length === 0}
         />
       )}
 
       {schoolId && schoolYear && (
-        <>
-          <MobileSelect
-            label="Môn học *"
-            placeholder={subjectsLoading ? "Đang tải môn học..." : "Chọn môn học"}
-            value={value.subjectId}
-            options={subjects}
-            onChange={(next) => onPatch({ subjectId: next ? Number(next) : null })}
-            disabled={subjectsLoading || subjects.length === 0}
-          />
-          {!subjectsLoading && subjects.length === 0 && (
-            <p className="-mt-1 text-xs text-amber-600">
+        <div>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-600">
+              Môn học * <span className="text-xs text-gray-400">(chọn được nhiều môn)</span>
+            </p>
+            {subjects.length > 1 && (
+              <button
+                type="button"
+                onClick={() =>
+                  onPatch({
+                    subjectIds:
+                      value.subjectIds.length === subjects.length
+                        ? []
+                        : subjects.map((o) => Number(o.id)),
+                  })
+                }
+                className="text-xs font-medium text-indigo-600"
+              >
+                {value.subjectIds.length === subjects.length
+                  ? "Bỏ chọn tất cả"
+                  : "Chọn tất cả"}
+              </button>
+            )}
+          </div>
+          {subjectsLoading ? (
+            <p className="mt-1 text-xs text-gray-400">Đang tải môn học...</p>
+          ) : subjects.length === 0 ? (
+            <p className="mt-1 text-xs text-amber-600">
               Trường chưa có môn học trong năm học này
             </p>
+          ) : (
+            <div className="mt-1 grid grid-cols-1 gap-1 rounded-lg border border-gray-200 bg-white p-2 sm:grid-cols-2">
+              {subjects.map((option) => {
+                const id = Number(option.id);
+                const on = value.subjectIds.includes(id);
+                return (
+                  <label
+                    key={id}
+                    className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm ${
+                      on ? "bg-indigo-50 text-indigo-800" : "text-gray-700"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={on}
+                      onChange={() =>
+                        onPatch({
+                          subjectIds: on
+                            ? value.subjectIds.filter((item) => item !== id)
+                            : [...value.subjectIds, id],
+                        })
+                      }
+                    />
+                    {option.name}
+                  </label>
+                );
+              })}
+            </div>
           )}
-        </>
+        </div>
       )}
 
       {schoolId && (

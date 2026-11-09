@@ -102,6 +102,8 @@ export type ApproveExpensePayload = {
   supporterIds?: number[];
   /** Ghi chú chung của Giám đốc/Sales Admin khi duyệt (không bắt buộc). */
   note?: string;
+  /** Chi tháng: các dòng trường được duyệt; bỏ trống = duyệt tất cả. */
+  approvedItemIds?: number[];
   /** Nguồn thiết bị khi requestKind = EQUIPMENT; bỏ trống = kho. */
   equipmentSource?: EquipmentSource;
   // --- chỉ khi equipmentSource = SUPPLIER ---
@@ -336,6 +338,27 @@ export const expenseRequestApi = {
     return res.data;
   },
 
+  /** Chi tháng nhiều trường: chọn trường đã chi, phần dư hoàn quỹ. */
+  confirmPartiallySpent: async (
+    id: number,
+    data: { spentItemIds: number[]; reason: string; files?: File[] }
+  ): Promise<ExpenseRequest> => {
+    const res = await api.post(
+      `${BASE}/${id}/confirm-partially-spent`,
+      buildFormData(data),
+      multipart
+    );
+    return res.data;
+  },
+
+  remainderReturned: async (
+    id: number,
+    note?: string
+  ): Promise<ExpenseRequest> => {
+    const res = await api.post(`${BASE}/${id}/remainder-returned`, { note });
+    return res.data;
+  },
+
   confirmNotSpent: async (
     id: number,
     reason: string
@@ -385,6 +408,8 @@ export const expenseRequestApi = {
     sections: ManagementExpenseSection[];
     /** Tổng Còn chi — số tiền lệnh chi tháng sẽ lập khi Giám đốc duyệt. */
     remainingTotal?: number;
+    /** Còn chi của từng dòng trường (id dòng) — Giám đốc bỏ bớt trường. */
+    items?: { id: number; amount: number }[];
   }> => {
     const res = await api.get(`${BASE}/${id}/management-expense`);
     return res.data;

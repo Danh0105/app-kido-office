@@ -374,13 +374,19 @@ function SectionsOverview({ sections }: { sections: ManagementExpenseSection[] }
   );
 }
 
+/** Số liệu cho hộp duyệt chi tháng: tổng Còn chi + Còn chi từng dòng trường. */
+export type MonthlyApprovalView = {
+  remainingTotal: number;
+  itemAmounts: Map<number, number>;
+};
+
 /** Tải số liệu đang có trong Quản lý thu chi. */
 function LiveSections({
   requestId,
-  onRemainingTotal,
+  onLoaded,
 }: {
   requestId: number;
-  onRemainingTotal?: (total: number | null) => void;
+  onLoaded?: (view: MonthlyApprovalView | null) => void;
 }) {
   const [sections, setSections] = useState<ManagementExpenseSection[] | null>(
     null
@@ -390,19 +396,23 @@ function LiveSections({
   const load = useCallback(() => {
     setFailed(false);
     setSections(null);
-    onRemainingTotal?.(null);
+    onLoaded?.(null);
     expenseRequestApi
       .getManagementExpense(requestId)
       .then((res) => {
         const list = res.sections ?? [];
         setSections(list);
-        onRemainingTotal?.(
-          res.remainingTotal ??
+        onLoaded?.({
+          remainingTotal:
+            res.remainingTotal ??
             list.reduce(
               (sum, section) => sum + Number(section.totals?.remaining || 0),
               0
-            )
-        );
+            ),
+          itemAmounts: new Map(
+            (res.items ?? []).map((item) => [item.id, Number(item.amount)])
+          ),
+        });
       })
       .catch(() => setFailed(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -430,12 +440,12 @@ function LiveSections({
 export function ManagementExpensePanel({
   requestId,
   monthly = false,
-  onRemainingTotal,
+  onLoaded,
 }: {
   requestId: number;
   /** Chi tháng: số tiền lệnh chi lấy theo tổng Còn chi khi duyệt. */
   monthly?: boolean;
-  onRemainingTotal?: (total: number | null) => void;
+  onLoaded?: (view: MonthlyApprovalView | null) => void;
 }) {
   return (
     <div className="min-w-0 space-y-2 rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
@@ -450,7 +460,7 @@ export function ManagementExpensePanel({
             " Chi tháng: khi bạn duyệt, lệnh chi được lập bằng tổng cột Còn chi của các bảng dưới đây."}
         </p>
       </div>
-      <LiveSections requestId={requestId} onRemainingTotal={onRemainingTotal} />
+      <LiveSections requestId={requestId} onLoaded={onLoaded} />
     </div>
   );
 }

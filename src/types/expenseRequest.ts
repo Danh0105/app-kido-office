@@ -23,6 +23,8 @@ export type ExpenseStatus =
   // --- dùng chung cho cả hai nhánh ---
   | "SPENT"
   | "NOT_SPENT"
+  // --- chi tháng nhiều trường: chi một số trường, chờ Thủ quỹ nhận phần dư ---
+  | "PARTIALLY_SPENT"
   | "REJECTED"
   | "WITHDRAWN";
 
@@ -134,6 +136,12 @@ export type ManagementExpenseRow = {
 export type ExpenseMonthlyItem = {
   id?: number;
   position?: number;
+  /** Phần của dòng này trong lệnh chi lúc Giám đốc duyệt (null nếu Kế toán lập lệnh chi). */
+  approvedAmount?: number | string | null;
+  /** Chi một phần: true đã chi, false không chi. */
+  spent?: boolean | null;
+  /** Giám đốc không duyệt dòng này — không tính vào lệnh chi. */
+  excluded?: boolean;
   schoolId: number | null;
   schoolYear: string | null;
   subjectId: number | null;
@@ -192,6 +200,8 @@ export type ExpenseLogDetails = {
   amount?: number | null;
   /** APPROVE_MONTHLY: số tiền lệnh chi lấy từ tổng Còn chi của bảng Chi Ngoài. */
   amountFromManagementExpense?: boolean;
+  /** APPROVE_MONTHLY: trường nào được duyệt / không duyệt. */
+  items?: { id: number; label: string; amount: number; approved: boolean }[];
   equipmentSource?: "STOCK" | "SUPPLIER" | null;
   handover?: ExpenseLogPerson | null;
   supporters?: ExpenseLogPerson[];
@@ -217,6 +227,19 @@ export type ExpenseLogDetails = {
     amount?: number | null;
     paymentMethod?: PaymentMethod | null;
   } | null;
+  // CONFIRM_PARTIALLY_SPENT
+  partialSpend?: {
+    spentAmount: number;
+    returnAmount: number;
+    items: {
+      id: number;
+      label: string;
+      amount: number | null;
+      spent: boolean;
+    }[];
+  } | null;
+  // CONFIRM_REMAINDER_RETURNED
+  returnAmount?: number | null;
   // CONFIRM_CASH_RELEASED
   fundSource?: FundSource | null;
   /** Nguồn chi — số hiệu tài khoản Nguồn thu chi (log từ 23/10/2026). */
@@ -651,6 +674,10 @@ export const STATUS_META: Record<
     done: true,
   },
   NOT_SPENT: { label: "Chưa chi", badge: "bg-amber-100 text-amber-700" },
+  PARTIALLY_SPENT: {
+    label: "Đã chi một phần, chờ hoàn phần dư",
+    badge: "bg-teal-100 text-teal-700",
+  },
   FUND_RETURNED: { label: "Đã hoàn quỹ", badge: "bg-green-100 text-green-700" },
   REJECTED: {
     label: "Từ chối ✗",
@@ -751,6 +778,8 @@ export const ACTION_LABEL: Record<string, string> = {
   CONFIRM_SPENT: "Xác nhận đã chi",
   SPENT: "Xác nhận đã chi",
   CONFIRM_NOT_SPENT: "Xác nhận chưa chi",
+  CONFIRM_PARTIALLY_SPENT: "Xác nhận đã chi một phần",
+  CONFIRM_REMAINDER_RETURNED: "Thủ quỹ nhận lại phần dư",
   NOT_SPENT: "Xác nhận chưa chi",
   FUND_RETURN: "Nhận lại quỹ",
   // --- nhánh đề xuất thiết bị ---

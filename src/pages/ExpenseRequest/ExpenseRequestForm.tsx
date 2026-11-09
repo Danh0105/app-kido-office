@@ -118,17 +118,34 @@ export default function ExpenseRequestForm() {
                   school: req.school ?? null,
                 },
               ];
-          setMonthlyRows(
-            items.map((item) => ({
-              ...emptyMonthlyRow(),
-              schoolId: item.schoolId ? Number(item.schoolId) : null,
-              schoolYear: item.schoolYear ?? null,
-              subjectId: item.subjectId ? Number(item.subjectId) : null,
-              expensePeriodId: item.expensePeriodId
-                ? Number(item.expensePeriodId)
-                : null,
-            }))
-          );
+          // Các môn cùng trường + năm học + kỳ gộp về một dòng như lúc tạo.
+          const rows: MonthlyRowValue[] = [];
+          for (const item of items) {
+            const schoolId = item.schoolId ? Number(item.schoolId) : null;
+            const expensePeriodId = item.expensePeriodId
+              ? Number(item.expensePeriodId)
+              : null;
+            const schoolYear = item.schoolYear ?? null;
+            const subjectId = item.subjectId ? Number(item.subjectId) : null;
+            const row = rows.find(
+              (current) =>
+                current.schoolId === schoolId &&
+                current.schoolYear === schoolYear &&
+                current.expensePeriodId === expensePeriodId
+            );
+            if (row) {
+              if (subjectId) row.subjectIds.push(subjectId);
+            } else {
+              rows.push({
+                ...emptyMonthlyRow(),
+                schoolId,
+                schoolYear,
+                subjectIds: subjectId ? [subjectId] : [],
+                expensePeriodId,
+              });
+            }
+          }
+          setMonthlyRows(rows);
           // Trường đã chọn nhưng nay không còn phụ trách vẫn phải hiện tên.
           const savedSchools = items
             .map((item) => item.school)
@@ -422,11 +439,13 @@ export default function ExpenseRequestForm() {
         const at = monthlyRows.length > 1 ? ` (trường ${index + 1})` : "";
         if (!row.schoolId) return `Vui lòng chọn trường${at}`;
         if (!row.schoolYear) return `Vui lòng chọn năm học${at}`;
-        if (!row.subjectId) return `Vui lòng chọn môn học${at}`;
+        if (row.subjectIds.length === 0) return `Vui lòng chọn môn học${at}`;
         if (!row.expensePeriodId) return `Vui lòng chọn kỳ kế toán${at}`;
-        const key = `${row.subjectId}:${row.expensePeriodId}`;
-        if (seen.has(key)) return `Chọn trùng môn và kỳ kế toán${at}`;
-        seen.add(key);
+        for (const subjectId of row.subjectIds) {
+          const key = `${subjectId}:${row.expensePeriodId}`;
+          if (seen.has(key)) return `Chọn trùng môn và kỳ kế toán${at}`;
+          seen.add(key);
+        }
       }
       return "";
     }
@@ -458,13 +477,16 @@ export default function ExpenseRequestForm() {
       return;
     }
     setSaving(true);
+    // Mỗi môn đã chọn là một dòng chi tháng (trường · môn · kỳ).
     const monthlyItems = isMonthlyExpense
-      ? monthlyRows.map((row) => ({
-          schoolId: Number(row.schoolId),
-          schoolYear: String(row.schoolYear),
-          subjectId: Number(row.subjectId),
-          expensePeriodId: Number(row.expensePeriodId),
-        }))
+      ? monthlyRows.flatMap((row) =>
+          row.subjectIds.map((subjectId) => ({
+            schoolId: Number(row.schoolId),
+            schoolYear: String(row.schoolYear),
+            subjectId,
+            expensePeriodId: Number(row.expensePeriodId),
+          }))
+        )
       : undefined;
     const singleSchool = !isMonthlyExpense && proposalTarget === "SCHOOL";
     try {
@@ -595,9 +617,9 @@ export default function ExpenseRequestForm() {
               </div>
               {isMonthlyExpense && (
                 <p className="mt-1 text-xs text-blue-600">
-                  Chọn một hoặc nhiều trường, mỗi trường chọn môn học và kỳ kế
-                  toán. Đề xuất gửi thẳng Giám đốc duyệt; số tiền chi lấy theo
-                  cột Còn chi của bảng Chi Ngoài.
+                  Chọn một hoặc nhiều trường, mỗi trường chọn một hoặc nhiều môn
+                  và kỳ kế toán. Đề xuất gửi thẳng Giám đốc duyệt; số tiền chi
+                  lấy theo cột Còn chi của bảng Chi Ngoài.
                 </p>
               )}
             </div>

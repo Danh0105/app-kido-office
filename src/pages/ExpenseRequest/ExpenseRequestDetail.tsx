@@ -38,7 +38,12 @@ import Timeline from "./components/Timeline";
 import ActionModal, { type ActionPayload } from "./components/ActionModal";
 import ApproveModal from "./components/ApproveModal";
 import PaymentOrderModal from "./components/PaymentOrderModal";
-import { ManagementExpensePanel } from "./components/ManagementExpenseView";
+import PartialSpentModal from "./components/PartialSpentModal";
+import {
+  ManagementExpensePanel,
+  type MonthlyApprovalView,
+} from "./components/ManagementExpenseView";
+import MonthlyApproveModal from "./components/MonthlyApproveModal";
 import ReassignRepairModal from "./components/ReassignRepairModal";
 import StockIssueOrderModal from "./components/StockIssueOrderModal";
 import StockInReceiptModal from "./components/StockInReceiptModal";
@@ -65,6 +70,7 @@ import {
   canReadManagementExpense,
   monthlyItemLabel,
   monthlyItemsOf,
+  monthlyRemainder,
   type ActionKey,
 } from "./lib";
 
@@ -77,8 +83,10 @@ type ModalKind =
   | "cashReleased"
   | "cashReceived"
   | "confirmSpent"
+  | "partialSpent"
   | "confirmNotSpent"
   | "fundReturned"
+  | "remainderReturned"
   | "paymentOrder"
   | "editPaymentOrder"
   | "stockIssueOrder"
@@ -167,7 +175,9 @@ export default function ExpenseRequestDetail({
   const [schoolContextLoading, setSchoolContextLoading] = useState(false);
   const [schoolContextError, setSchoolContextError] = useState("");
   // Chi tháng: tổng Còn chi của bảng Chi Ngoài = số tiền lệnh chi khi duyệt.
-  const [monthlyRemaining, setMonthlyRemaining] = useState<number | null>(null);
+  const [monthlyView, setMonthlyView] = useState<MonthlyApprovalView | null>(
+    null
+  );
 
   const loadSchoolContext = useCallback(async (request: ExpenseRequest) => {
     const schoolId = Number(
@@ -448,6 +458,12 @@ export default function ExpenseRequestDetail({
         run(
           () => expenseRequestApi.fundReturned(reqId, payload.note),
           "Đã nhận lại quỹ"
+        );
+        break;
+      case "remainderReturned":
+        run(
+          () => expenseRequestApi.remainderReturned(reqId, payload.note),
+          "Đã nhận lại phần dư"
         );
         break;
       case "equipmentReceived":
@@ -733,7 +749,13 @@ export default function ExpenseRequestDetail({
               {data.isMonthlyExpense && monthlyItems.length > 0 ? (
                 <div className="col-span-2">
                   <div className="text-xs text-gray-400">
-                    Trường ({monthlyItems.length}) · môn · kỳ kế toán
+                    Trường · môn · kỳ kế toán (
+                    {new Set(monthlyItems.map((item) => item.schoolId)).size} trường
+                    {monthlyItems.length >
+                    new Set(monthlyItems.map((item) => item.schoolId)).size
+                      ? `, ${monthlyItems.length} môn`
+                      : ""}
+                    )
                   </div>
                   <ul className="mt-0.5 space-y-0.5">
                     {monthlyItems.map((item, index) => (
@@ -745,6 +767,27 @@ export default function ExpenseRequestDetail({
                           <span className="text-gray-500">
                             {" "}
                             · {monthlyItemLabel(item)}
+                          </span>
+                        )}
+                        {item.approvedAmount != null && (
+                          <span className="text-gray-700">
+                            {" "}
+                            · {formatVnd(item.approvedAmount) || "0"} đ
+                          </span>
+                        )}
+                        {item.excluded && (
+                          <span className="ml-1 text-[10px] px-1.5 py-[1px] rounded-full bg-red-100 text-red-700">
+                            Giám đốc không duyệt
+                          </span>
+                        )}
+                        {item.spent === true && (
+                          <span className="ml-1 text-[10px] px-1.5 py-[1px] rounded-full bg-teal-100 text-teal-700">
+                            Đã chi
+                          </span>
+                        )}
+                        {item.spent === false && (
+                          <span className="ml-1 text-[10px] px-1.5 py-[1px] rounded-full bg-amber-100 text-amber-700">
+                            Không chi · hoàn quỹ
                           </span>
                         )}
                       </li>
@@ -796,7 +839,11 @@ export default function ExpenseRequestDetail({
             {data.notSpentReason && (
               <div className="mt-2 p-3 bg-amber-50 rounded-lg text-sm text-amber-700">
                 <span className="font-medium">
-                  {equipment ? "Lý do chưa dùng: " : "Lý do chưa chi: "}
+                  {equipment
+                    ? "Lý do chưa dùng: "
+                    : monthlyItems.some((item) => item.spent === false)
+                    ? "Lý do các trường không chi: "
+                    : "Lý do chưa chi: "}
                 </span>
                 {data.notSpentReason}
               </div>
@@ -832,7 +879,7 @@ export default function ExpenseRequestDetail({
             <ManagementExpensePanel
               requestId={data.id}
               monthly={Boolean(data.isMonthlyExpense)}
-              onRemainingTotal={setMonthlyRemaining}
+              onLoaded={setMonthlyView}
             />
           )}
 
@@ -1047,22 +1094,19 @@ export default function ExpenseRequestDetail({
 
       {/* ===== Modals ===== */}
       {modal === "approve" && data.isMonthlyExpense && (
-        <ActionModal
-          title="Duyệt đề xuất chi tháng"
-          description={
-            <MonthlyApproveAmount
-              existingAmount={data.paymentOrder?.amount ?? null}
-              remainingTotal={monthlyRemaining}
-              canSeeTable={canReadManagementExpense()}
-            />
+        <MonthlyApproveModal
+          items={monthlyItems.filter((item) => item.id != null)}
+          itemAmounts={monthlyView?.itemAmounts ?? null}
+          remainingTotal={monthlyView?.remainingTotal ?? null}
+          existingAmount={
+            data.paymentOrder?.amount != null
+              ? Number(data.paymentOrder.amount)
+              : null
           }
-          submitLabel="Duyệt và chuyển Thủ quỹ"
-          submitColor="bg-blue-500"
-          showNote
-          noteLabel="Ghi chú duyệt (không bắt buộc)"
+          canSeeTable={canReadManagementExpense()}
           loading={submitting}
           onClose={() => setModal(null)}
-          onSubmit={(payload) => onApproveSubmit({ note: payload.note })}
+          onSubmit={(payload) => onApproveSubmit(payload)}
         />
       )}
       {modal === "approve" && !data.isMonthlyExpense && (
@@ -1169,6 +1213,41 @@ export default function ExpenseRequestDetail({
           submitColor="bg-amber-500"
           requireReason
           reasonLabel={equipment ? "Lý do chưa dùng" : "Lý do chưa chi"}
+          loading={submitting}
+          onClose={() => setModal(null)}
+          onSubmit={onModalSubmit}
+        />
+      )}
+      {modal === "partialSpent" && (
+        <PartialSpentModal
+          items={monthlyItems.filter((item) => !item.excluded)}
+          orderAmount={Number(data.paymentOrder?.amount ?? data.amount ?? 0)}
+          loading={submitting}
+          onClose={() => setModal(null)}
+          onSubmit={(payload) =>
+            run(
+              () => expenseRequestApi.confirmPartiallySpent(reqId, payload),
+              "Đã xác nhận chi một phần, chờ thủ quỹ nhận lại phần dư"
+            )
+          }
+        />
+      )}
+      {modal === "remainderReturned" && (
+        <ActionModal
+          title="Nhận lại phần dư"
+          description={
+            <div className="rounded-xl border border-teal-100 bg-teal-50 p-3 text-sm text-teal-800">
+              Kinh doanh đã chi một phần. Nhận lại phần dư{" "}
+              <b>{formatVnd(monthlyRemainder(data) ?? 0) || "0"} đ</b>
+              {po?.cashAccount
+                ? ` về ${invoiceCashAccountLabel(po.cashAccount)}`
+                : ""}
+              .
+            </div>
+          }
+          submitLabel="Đã nhận phần dư"
+          submitColor="bg-green-600"
+          showNote
           loading={submitting}
           onClose={() => setModal(null)}
           onSubmit={onModalSubmit}
@@ -1950,53 +2029,6 @@ function RequesterInfo({ request }: { request: ExpenseRequest }) {
   );
 }
 
-/**
- * Hộp duyệt chi tháng: Giám đốc không nhập số tiền. Chưa có lệnh chi thì hệ
- * thống lập bằng tổng Còn chi của bảng Chi Ngoài; đã có (Kế toán lập lại sau
- * hoàn quỹ, sửa số tiền, đề xuất cũ) thì giữ số đó.
- */
-function MonthlyApproveAmount({
-  existingAmount,
-  remainingTotal,
-  canSeeTable,
-}: {
-  existingAmount: number | null;
-  remainingTotal: number | null;
-  canSeeTable: boolean;
-}) {
-  if (existingAmount != null) {
-    return (
-      <div className="rounded-xl border border-purple-100 bg-purple-50 p-3 text-sm text-purple-800">
-        Chi theo lệnh chi Kế toán đã lập:{" "}
-        <b>{formatVnd(existingAmount) || "0"} đ</b>
-      </div>
-    );
-  }
-  if (remainingTotal == null) {
-    return (
-      <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-800">
-        {canSeeTable
-          ? "Đang tính số tiền từ bảng Chi Ngoài…"
-          : "Lệnh chi sẽ được lập bằng tổng cột Còn chi của bảng Chi Ngoài các trường trong đề xuất."}
-      </div>
-    );
-  }
-  if (remainingTotal <= 0) {
-    return (
-      <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-red-700">
-        Bảng Chi Ngoài của các trường không còn khoản nào cần chi (Còn chi =
-        0) nên chưa duyệt được. Có thể từ chối hoặc chờ cập nhật bảng.
-      </div>
-    );
-  }
-  return (
-    <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-800">
-      Lệnh chi sẽ được lập với số tiền <b>{formatVnd(remainingTotal)} đ</b>{" "}
-      (tổng cột Còn chi của bảng Chi Ngoài), chuyển Thủ quỹ xuất tiền.
-    </div>
-  );
-}
-
 function Field({
   label,
   value,
@@ -2098,6 +2130,16 @@ function ActionButton({
       label: equipment ? "✅ Đã bàn giao" : "✅ Đã chi",
       color: "bg-green-500",
       onClick: () => onOpenModal("confirmSpent"),
+    },
+    partialSpent: {
+      label: "🧩 Đã chi một phần",
+      color: "bg-teal-600",
+      onClick: () => onOpenModal("partialSpent"),
+    },
+    remainderReturned: {
+      label: "🏦 Nhận lại phần dư",
+      color: "bg-green-600",
+      onClick: () => onOpenModal("remainderReturned"),
     },
     confirmNotSpent: {
       label: equipment ? "↩️ Chưa dùng" : "↩️ Chưa chi",

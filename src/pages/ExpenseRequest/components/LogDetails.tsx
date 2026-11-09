@@ -207,9 +207,49 @@ function StepDetails({ log, kind: requestKind }: { log: ExpenseLog; kind?: Expen
           {po.paymentMethod && !fromTable && (
             <Row label="Hình thức">{PAYMENT_METHOD_LABEL[po.paymentMethod] || po.paymentMethod}</Row>
           )}
+          {log.action === "APPROVE_MONTHLY" && d.items?.some((item) => !item.approved) && (
+            <ul className="mt-1 space-y-0.5">
+              {d.items.map((item) => (
+                <li key={item.id} className="text-xs text-gray-700">
+                  {item.approved ? "✅" : "⛔"} {item.label} · {money(item.amount)}
+                  {!item.approved && " (không duyệt)"}
+                </li>
+              ))}
+            </ul>
+          )}
         </Box>
       );
     }
+
+    case "CONFIRM_PARTIALLY_SPENT": {
+      const partial = d.partialSpend;
+      if (!partial) return null;
+      return (
+        <Box tone="border-teal-100 bg-teal-50">
+          <Row label="Đã chi">{money(partial.spentAmount)}</Row>
+          <Row label="Hoàn quỹ">{money(partial.returnAmount)}</Row>
+          <ul className="mt-1 space-y-0.5">
+            {partial.items.map((item) => (
+              <li key={item.id} className="text-xs text-gray-700">
+                {item.spent ? "✅" : "↩️"} {item.label}
+                {item.amount != null && ` · ${money(item.amount)}`}
+                {!item.spent && " (không chi)"}
+              </li>
+            ))}
+          </ul>
+        </Box>
+      );
+    }
+
+    case "CONFIRM_REMAINDER_RETURNED":
+      return d.returnAmount != null ? (
+        <Box tone="border-green-100 bg-green-50">
+          <Row label="Phần dư nhận lại">{money(d.returnAmount)}</Row>
+          {d.cashAccount && (
+            <Row label="Về tài khoản">{invoiceCashAccountLabel(d.cashAccount)}</Row>
+          )}
+        </Box>
+      ) : null;
 
     case "CONFIRM_CASH_RELEASED":
       // Log mới lưu tài khoản (Nguồn chi); log cũ chỉ có nhóm (Nguồn tiền).

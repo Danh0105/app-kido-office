@@ -55,6 +55,11 @@ export default function ExpenseCard({
   // Chi tháng nhiều trường: danh sách chỉ có tên trường (môn/kỳ xem ở chi tiết).
   const monthlyItems = monthlyItemsOf(item);
   const multiSchool = monthlyItems.length > 1;
+  const schoolNames = [
+    ...new Set(
+      monthlyItems.map((entry) => entry.school?.name || `#${entry.schoolId}`)
+    ),
+  ];
   const directorApprovedAmount =
     hasRole("thuquy") &&
     !equipment &&
@@ -175,10 +180,11 @@ export default function ExpenseCard({
         )}
         {multiSchool ? (
           <span>
-            🏫 {monthlyItems.length} trường:{" "}
-            {monthlyItems
-              .map((entry) => entry.school?.name || `#${entry.schoolId}`)
-              .join(", ")}
+            🏫 {schoolNames.length} trường
+            {monthlyItems.length > schoolNames.length
+              ? ` · ${monthlyItems.length} môn`
+              : ""}
+            : {schoolNames.join(", ")}
           </span>
         ) : (
           item.school?.name && <span>🏫 {item.school.name}</span>

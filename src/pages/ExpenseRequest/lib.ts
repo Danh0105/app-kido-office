@@ -34,6 +34,31 @@ export const monthlyItemsOf = (req: ExpenseRequest): ExpenseMonthlyItem[] => {
   ];
 };
 
+/** Lệnh chi chi tháng chia được theo trường: ≥2 trường, mỗi trường có phần tiền lúc duyệt. */
+export const canSplitMonthlyOrder = (req: ExpenseRequest) => {
+  // Trường Giám đốc không duyệt không có trong lệnh chi.
+  const items = (req.monthlyItems ?? []).filter((item) => !item.excluded);
+  return (
+    items.length >= 2 &&
+    items.every(
+      (item) => item.approvedAmount !== null && item.approvedAmount !== undefined
+    )
+  );
+};
+
+/** Chi một phần: phần dư = phần của các trường không chi (khớp backend). */
+export const monthlyRemainder = (req: ExpenseRequest): number | null => {
+  const items = req.monthlyItems ?? [];
+  if (!items.some((item) => item.spent === false)) return null;
+  return (
+    Math.round(
+      items
+        .filter((item) => item.spent === false)
+        .reduce((sum, item) => sum + Number(item.approvedAmount || 0), 0) * 100
+    ) / 100
+  );
+};
+
 export const monthlyItemLabel = (item: ExpenseMonthlyItem) =>
   [
     item.subject?.catalog?.name || item.subject?.name,
@@ -190,6 +215,7 @@ export const KIND_STATUSES: Record<ExpenseRequestKind, ExpenseStatus[]> = {
     "CASH_RECEIVED",
     "SPENT",
     "NOT_SPENT",
+    "PARTIALLY_SPENT",
     "FUND_RETURNED",
     "REJECTED",
     "WITHDRAWN",
@@ -270,8 +296,10 @@ export type ActionKey =
   | "cashReleased"
   | "cashReceived"
   | "confirmSpent"
+  | "partialSpent"
   | "confirmNotSpent"
   | "fundReturned"
+  | "remainderReturned"
   // --- nhánh đề xuất thiết bị ---
   | "stockIssueOrder"
   | "equipmentReceived"
@@ -479,6 +507,19 @@ export const EXPENSE_STEPS: Record<ActionKey, ExpenseStepDefinition> = {
     from: ["CASH_RECEIVED", "EQUIPMENT_RECEIVED"],
     owner: true,
   },
+  // Chi tháng nhiều trường: chỉ chi một số trường, phần dư hoàn quỹ.
+  partialSpent: {
+    roles: ["sales", "giaovien_congty"],
+    from: ["CASH_RECEIVED"],
+    owner: true,
+    kinds: ["CASH"],
+  },
+  remainderReturned: {
+    roles: ["thuquy", "ketoan_truong"],
+    from: ["PARTIALLY_SPENT"],
+    owner: false,
+    kinds: ["CASH"],
+  },
   confirmNotSpent: {
     roles: ["sales", "giaovien_congty"],
     from: ["CASH_RECEIVED", "EQUIPMENT_RECEIVED"],
@@ -493,15 +534,20 @@ export const canDoStep = (
 ) => {
   const definition = EXPENSE_STEPS[step];
 
+  if (!req.isMonthlyExpense && step === "partialSpent") return false;
+
   if (req.isMonthlyExpense) {
     if (step === "saleadminReview" || step === "saleadminReject") return false;
     // Khớp backend: tiền đã xuất thì chủ đơn không sửa, vì lệnh chi là căn cứ của sổ quỹ.
     if (
       step === "edit" &&
-      ["CASH_RELEASED", "CASH_RECEIVED", "SPENT", "NOT_SPENT"].includes(req.status)
+      ["CASH_RELEASED", "CASH_RECEIVED", "SPENT", "NOT_SPENT", "PARTIALLY_SPENT"].includes(req.status)
     ) {
       return false;
     }
+    // Chi một phần chỉ khi có từ 2 trường và lệnh chi chia được theo trường
+    // (do hệ thống lập lúc Giám đốc duyệt).
+    if (step === "partialSpent" && !canSplitMonthlyOrder(req)) return false;
     if (
       (step === "approve" || step === "reject") &&
       !user.roles.some((role) => ["director", "director_la"].includes(role))
@@ -710,6 +756,12 @@ export const waitingMessage = (req: ExpenseRequest): string | null => {
       return equipment
         ? "Chưa dùng, chờ phòng kỹ thuật nhận lại thiết bị…"
         : "Chưa chi, chờ thủ quỹ nhận lại quỹ…";
+    case "PARTIALLY_SPENT": {
+      const remainder = monthlyRemainder(req);
+      return remainder != null
+        ? `Đã chi một phần, chờ thủ quỹ nhận lại phần dư ${remainder.toLocaleString("vi-VN")} đ…`
+        : "Đã chi một phần, chờ thủ quỹ nhận lại phần dư…";
+    }
     case "FUND_RETURNED":
       return "Đã hoàn quỹ, chờ kế toán công nợ lên lại lệnh chi…";
     case "STOCK_ISSUE_ORDERED":

@@ -652,7 +652,12 @@ export default function StatisticsDashboardPage({
                   restrictToPolicySchools
                   subjectId={filters.subjectId}
                   employeeId={employeeId || undefined}
-                  periodId={selectedPeriodId}
+                  schoolYear={filters.schoolYear}
+                  period={
+                    expensePeriods.find(
+                      (period: any) => Number(period.id) === selectedPeriodId
+                    ) || null
+                  }
                 />
               )}
               {activeSection === "policies" && (

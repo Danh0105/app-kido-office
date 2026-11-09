@@ -19,7 +19,6 @@ import ExpenseStatsSection from "./components/ExpenseStatsSection";
 import QuantityStatsSection from "./components/QuantityStatsSection";
 import { expensePeriodApi } from "@/service/expensePeriod";
 import { schoolExpenseApi } from "@/service/schoolExpense";
-import { buildSchoolQuantitySummary } from "./quantityStats";
 import {
   DEFAULT_SCHOOL_YEAR,
   includeDefaultSchoolYear,
@@ -428,14 +427,6 @@ export default function PolicyStatsPage({
   const totalSelectedDeviceQuantity = deviceAllocations.reduce(
     (total, school) => total + school.quantity,
     0,
-  );
-  const quantityRows = useMemo(
-    () =>
-      buildSchoolQuantitySummary(
-        filteredPolicies,
-        Array.from(schoolExpenses.values()),
-      ),
-    [filteredPolicies, schoolExpenses],
   );
   const getProfit = (p: any) => {
     const d = p.policyData || {};
@@ -941,10 +932,10 @@ export default function PolicyStatsPage({
 
         {activeStatsTab === "quantities" && (
           <QuantityStatsSection
-            rows={quantityRows}
-            loading={showExpenses && expenseLoading}
+            policies={filteredPolicies}
             accountingAvailable={showExpenses}
-            error={expenseError}
+            subjectId={selectedSubject}
+            schoolYear={selectedYear || ""}
           />
         )}
 

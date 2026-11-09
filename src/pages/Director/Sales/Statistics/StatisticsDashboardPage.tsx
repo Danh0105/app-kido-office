@@ -19,7 +19,6 @@ import {
 import HeaderWithBack from "@/components/HeaderWithBack";
 import { employeeApi } from "@/service/employee";
 import { expensePeriodApi } from "@/service/expensePeriod";
-import { schoolExpenseApi } from "@/service/schoolExpense";
 import { usePolicyStats } from "./hooks/usePolicyStats";
 import PolicyPopup from "./components/PolicyPopup";
 import QuantityStatsSection from "./components/QuantityStatsSection";
@@ -27,7 +26,6 @@ import ExpenseStatsSection from "./components/ExpenseStatsSection";
 import DashboardOverview from "./components/DashboardOverview";
 import DeviceAnalytics from "./components/DeviceAnalytics";
 import PolicyAnalytics from "./components/PolicyAnalytics";
-import { buildSchoolQuantitySummary } from "./quantityStats";
 import {
   buildStatisticsDashboardModel,
   filterStatisticsPolicies,
@@ -66,15 +64,6 @@ const EMPTY_FILTERS: DashboardFilters = {
   schoolYear: DEFAULT_SCHOOL_YEAR,
 };
 
-const listFromResponse = (response: any): any[] => {
-  if (Array.isArray(response)) return response;
-  if (Array.isArray(response?.data)) return response.data;
-  if (Array.isArray(response?.items)) return response.items;
-  if (Array.isArray(response?.results)) return response.results;
-  if (Array.isArray(response?.data?.data)) return response.data.data;
-  return [];
-};
-
 const formatDateTime = (value: Date) =>
   new Intl.DateTimeFormat("vi-VN", {
     hour: "2-digit",
@@ -105,9 +94,6 @@ export default function StatisticsDashboardPage({
     Array<{ id: number; name?: string }>
   >([]);
   const [expensePeriods, setExpensePeriods] = useState<any[]>([]);
-  const [accountingRecords, setAccountingRecords] = useState<any[]>([]);
-  const [accountingLoading, setAccountingLoading] = useState(false);
-  const [accountingError, setAccountingError] = useState("");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const employeeId = isDirectorView
@@ -175,67 +161,20 @@ export default function StatisticsDashboardPage({
     };
   }, [showExpenses]);
 
-  useEffect(() => {
-    if (!showExpenses || activeSection !== "quantities") {
-      if (!showExpenses) setAccountingRecords([]);
-      return;
-    }
-
-    let active = true;
-    const loadAccountingQuantity = async () => {
-      setAccountingLoading(true);
-      setAccountingError("");
-      try {
-        const response = await schoolExpenseApi.getAll({
-          page: 1,
-          limit: 500,
-          ...(selectedPeriodId ? { periodId: selectedPeriodId } : {}),
-        });
-        const records = listFromResponse(response);
-        const enriched = await Promise.all(
-          records.map(async (record: any) => {
-            if (!record?.id) return record;
-            try {
-              const summary = await schoolExpenseApi.getSummary(
-                Number(record.id),
-                filters.subjectId || undefined
-              );
-              return { ...record, summary };
-            } catch {
-              return record;
-            }
-          })
-        );
-        if (active) setAccountingRecords(enriched);
-      } catch {
-        if (active) {
-          setAccountingRecords([]);
-          setAccountingError(
-            "Không thể tải số học sinh / số tiết do kế toán nhập."
-          );
-        }
-      } finally {
-        if (active) setAccountingLoading(false);
-      }
-    };
-
-    loadAccountingQuantity();
-    return () => {
-      active = false;
-    };
-  }, [activeSection, filters.subjectId, selectedPeriodId, showExpenses]);
-
   const filteredPolicies = useMemo(
     () => filterStatisticsPolicies(policies, filters),
     [filters, policies]
   );
+  const selectedExpensePeriod = useMemo(
+    () =>
+      expensePeriods.find(
+        (period: any) => Number(period.id) === selectedPeriodId
+      ) || null,
+    [expensePeriods, selectedPeriodId]
+  );
   const model = useMemo(
     () => buildStatisticsDashboardModel(filteredPolicies),
     [filteredPolicies]
-  );
-  const quantityRows = useMemo(
-    () => buildSchoolQuantitySummary(filteredPolicies, accountingRecords),
-    [accountingRecords, filteredPolicies]
   );
 
   const options = useMemo(() => {
@@ -637,10 +576,13 @@ export default function StatisticsDashboardPage({
               )}
               {activeSection === "quantities" && (
                 <QuantityStatsSection
-                  rows={quantityRows}
-                  loading={accountingLoading}
+                  policies={filteredPolicies}
                   accountingAvailable={showExpenses}
-                  error={accountingError}
+                  subjectId={filters.subjectId}
+                  schoolYear={filters.schoolYear}
+                  period={selectedExpensePeriod}
+                  canOpenPolicy={isDirectorView}
+                  onPolicyClosed={() => query.refetch()}
                 />
               )}
               {activeSection === "devices" && (
@@ -653,11 +595,7 @@ export default function StatisticsDashboardPage({
                   subjectId={filters.subjectId}
                   employeeId={employeeId || undefined}
                   schoolYear={filters.schoolYear}
-                  period={
-                    expensePeriods.find(
-                      (period: any) => Number(period.id) === selectedPeriodId
-                    ) || null
-                  }
+                  period={selectedExpensePeriod}
                 />
               )}
               {activeSection === "policies" && (

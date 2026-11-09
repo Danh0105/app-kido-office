@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   Banknote,
@@ -25,12 +25,13 @@ import {
   fromCashflowSummaryItem,
   fromSchoolExpenseSummary,
   getPeriodLabel,
-  matchesPeriodFilter,
-  toPeriod,
   type CashflowFigures,
   type CashflowRow,
-  type ExpensePeriodInfo,
 } from "../expenseStats";
+import {
+  useSelectedPeriod,
+  useSheetSummaries,
+} from "../hooks/useSheetSummaries";
 
 type Props = {
   policies: any[];
@@ -41,35 +42,6 @@ type Props = {
   schoolYear?: string;
   /** Kỳ thu chi đang chọn ở bộ lọc trang. */
   period?: any | null;
-};
-
-const listFromResponse = (response: any): any[] => {
-  if (Array.isArray(response)) return response;
-  if (Array.isArray(response?.data)) return response.data;
-  if (Array.isArray(response?.items)) return response.items;
-  if (Array.isArray(response?.results)) return response.results;
-  if (Array.isArray(response?.data?.data)) return response.data.data;
-  return [];
-};
-
-/** Chạy tối đa `limit` request cùng lúc để không dồn hàng trăm request. */
-const mapWithConcurrency = async <T, R>(
-  items: T[],
-  limit: number,
-  worker: (item: T) => Promise<R>,
-) => {
-  const results: R[] = new Array(items.length);
-  let next = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, async () => {
-      while (next < items.length) {
-        const index = next;
-        next += 1;
-        results[index] = await worker(items[index]);
-      }
-    }),
-  );
-  return results;
 };
 
 const formatMoney = (value: number) =>
@@ -226,35 +198,16 @@ export default function ExpenseStatsSection({
   // Cùng nguồn với "Báo cáo tổng hợp" của QL thu chi. Sales admin không được
   // gọi API này (403 kèm thông báo lỗi) nên đọc từng bảng qua /summary.
   const canUseCashflowSummary = hasRole(...CASHFLOW_SUMMARY_ROLES);
-  const [rows, setRows] = useState<CashflowRow[]>([]);
-  const [records, setRecords] = useState<any[] | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [failedCount, setFailedCount] = useState(0);
-  const [progress, setProgress] = useState<{ done: number; total: number }>();
+  const [summaryRows, setSummaryRows] = useState<CashflowRow[]>([]);
+  const [summaryLoading, setSummaryLoading] = useState(canUseCashflowSummary);
+  const [summaryError, setSummaryError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
   const [routeEmployee, setRouteEmployee] = useState<any>(null);
   const [expandedSchools, setExpandedSchools] = useState<Set<number>>(
     () => new Set(),
   );
-  const summaryCache = useRef(new Map<string, CashflowRow>());
 
-  const periodId = Number(period?.id || 0);
-  const periodMonth = Number(period?.month || 0);
-  const periodYear = Number(period?.year || 0);
-  const periodName = period?.name ?? null;
-  const selectedPeriod = useMemo<ExpensePeriodInfo | null>(
-    () =>
-      periodId
-        ? toPeriod({
-            id: periodId,
-            month: periodMonth,
-            year: periodYear,
-            name: periodName,
-          })
-        : null,
-    [periodId, periodMonth, periodYear, periodName],
-  );
+  const selectedPeriod = useSelectedPeriod(period);
 
   useEffect(() => {
     let active = true;
@@ -283,20 +236,19 @@ export default function ExpenseStatsSection({
     if (!canUseCashflowSummary) return;
     let active = true;
 
-    setLoading(true);
-    setError("");
-    setFailedCount(0);
+    setSummaryLoading(true);
+    setSummaryError("");
     schoolExpenseApi
       .getCashflowSummary(subjectId ? { subjectId } : undefined)
       .then((response) => {
         if (!active) return;
         const items = Array.isArray(response?.items) ? response.items : [];
-        setRows(items.map(fromCashflowSummaryItem));
+        setSummaryRows(items.map(fromCashflowSummaryItem));
       })
       .catch((fetchError: any) => {
         if (!active) return;
-        setRows([]);
-        setError(
+        setSummaryRows([]);
+        setSummaryError(
           getApiErrorMessage(
             fetchError,
             "Không thể tải dữ liệu thống kê thu chi",
@@ -304,7 +256,7 @@ export default function ExpenseStatsSection({
         );
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (active) setSummaryLoading(false);
       });
 
     return () => {
@@ -312,122 +264,34 @@ export default function ExpenseStatsSection({
     };
   }, [canUseCashflowSummary, subjectId, reloadKey]);
 
-  // Sales admin: lấy danh sách bảng thu chi, số liệu từng bảng tải ở dưới.
-  useEffect(() => {
-    if (canUseCashflowSummary) return;
-    let active = true;
-
-    setLoading(true);
-    setError("");
-    setRecords(null);
-    summaryCache.current.clear();
-    schoolExpenseApi
-      .getAll()
-      .then((response) => {
-        if (active) setRecords(listFromResponse(response));
-      })
-      .catch((fetchError: any) => {
-        if (!active) return;
-        setRows([]);
-        setLoading(false);
-        setError(
-          getApiErrorMessage(
-            fetchError,
-            "Không thể tải dữ liệu thống kê thu chi",
-          ),
-        );
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [canUseCashflowSummary, reloadKey]);
-
-  const policySchoolKey = useMemo(
-    () =>
-      [
-        ...new Set(
-          policies
-            .map((policy: any) => Number(policy?.schoolId || 0))
-            .filter(Boolean),
-        ),
-      ]
-        .sort((left, right) => left - right)
-        .join(","),
-    [policies],
-  );
-
-  // Chỉ tải /summary cho bảng nằm trong bộ lọc hiện tại, bảng đã tải thì dùng lại.
-  useEffect(() => {
-    if (canUseCashflowSummary || !records) return;
-    let active = true;
-    const policySchoolIds = new Set(
-      policySchoolKey ? policySchoolKey.split(",").map(Number) : [],
-    );
-    const scoped = records.filter(
-      (record: any) =>
-        record?.id &&
-        (!restrictToPolicySchools ||
-          policySchoolIds.has(Number(record?.school?.id ?? record?.schoolId))) &&
-        matchesPeriodFilter(
-          { period: toPeriod(record?.period) },
-          schoolYear,
-          selectedPeriod,
-        ),
-    );
-    const cacheKey = (record: any) => `${record.id}:${subjectId || 0}`;
-    const missing = scoped.filter(
-      (record) => !summaryCache.current.has(cacheKey(record)),
-    );
-
-    const run = async () => {
-      setLoading(true);
-      setError("");
-      let failed = 0;
-      let done = 0;
-      setProgress({ done, total: missing.length });
-
-      await mapWithConcurrency(missing, 6, async (record: any) => {
-        try {
-          const summary = await schoolExpenseApi.getSummary(
-            Number(record.id),
-            subjectId || undefined,
-          );
-          summaryCache.current.set(
-            cacheKey(record),
-            fromSchoolExpenseSummary(record, summary),
-          );
-        } catch {
-          failed += 1;
-        }
-        done += 1;
-        if (active) setProgress({ done, total: missing.length });
-      });
-
-      if (!active) return;
-      setFailedCount(failed);
-      setRows(
-        scoped
-          .map((record) => summaryCache.current.get(cacheKey(record)))
-          .filter((row): row is CashflowRow => Boolean(row)),
-      );
-      setProgress(undefined);
-      setLoading(false);
-    };
-
-    run();
-    return () => {
-      active = false;
-    };
-  }, [
-    canUseCashflowSummary,
-    records,
-    policySchoolKey,
-    restrictToPolicySchools,
+  // Sales admin: đọc từng bảng qua /summary, chỉ bảng nằm trong bộ lọc.
+  const sheetSummaries = useSheetSummaries({
+    enabled: !canUseCashflowSummary,
+    schoolIds: restrictToPolicySchools
+      ? policies.map((policy: any) => Number(policy?.schoolId || 0))
+      : null,
     schoolYear,
     selectedPeriod,
     subjectId,
-  ]);
+    reloadKey,
+  });
+  const sheetRows = useMemo(
+    () =>
+      sheetSummaries.sheets.map(({ record, summary }) =>
+        fromSchoolExpenseSummary(record, summary),
+      ),
+    [sheetSummaries.sheets],
+  );
+
+  const rows = canUseCashflowSummary ? summaryRows : sheetRows;
+  const loading = canUseCashflowSummary
+    ? summaryLoading
+    : sheetSummaries.loading;
+  const error = canUseCashflowSummary ? summaryError : sheetSummaries.error;
+  const failedCount = canUseCashflowSummary ? 0 : sheetSummaries.failedCount;
+  const progress = canUseCashflowSummary
+    ? undefined
+    : sheetSummaries.progress;
 
   const report = useMemo(
     () =>

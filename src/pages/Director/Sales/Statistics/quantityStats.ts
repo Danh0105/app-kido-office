@@ -1,15 +1,60 @@
+import {
+  matchesPeriodFilter,
+  toPeriod,
+  type ExpensePeriodInfo,
+} from "./expenseStats";
+
 export type QuantityPolicy = {
+  policyId?: number | string | null;
+  id?: number | string | null;
   schoolId?: number | string | null;
   schoolName?: string | null;
   subjectId?: number | string | null;
+  subjectName?: string | null;
+  employeeId?: number | string | null;
   studentCount?: number | string | null;
   totalLessons?: number | string | null;
 };
 
-export type AccountingRecord = {
-  schoolId?: number | string | null;
-  school?: { id?: number | string | null; name?: string | null } | null;
-  summary?: any;
+/** Bảng thu chi (trường × kỳ) kèm kết quả `/school-expenses/:id/summary`. */
+export type QuantitySheet = { record: any; summary: any };
+
+/** Các bảng của QL thu chi có số học sinh, theo thứ tự hiển thị. */
+export const QUANTITY_TABLES = [
+  { key: "revenue", label: "Doanh Thu" },
+  { key: "invoice", label: "Hóa Đơn" },
+  { key: "school", label: "Chi Trường" },
+  { key: "management", label: "Chi Ngoài" },
+] as const;
+
+export type QuantityTableKey = (typeof QUANTITY_TABLES)[number]["key"];
+
+export type QuantityCell = {
+  students: number;
+  periods: number;
+  /** Kỳ đã lấy số (kỳ mới nhất có dòng nhập); null = chưa có dòng nào. */
+  period: ExpensePeriodInfo | null;
+};
+
+export type QuantityTotals = Record<
+  QuantityTableKey,
+  { students: number; periods: number }
+>;
+
+export type PolicyRef = {
+  policyId: number;
+  subjectName: string;
+  studentCount: number;
+  employeeId: number;
+};
+
+export type SubjectQuantity = {
+  subjectId: number;
+  subjectName: string;
+  policyStudents: number;
+  policyPeriods: number;
+  policies: PolicyRef[];
+  tables: Record<QuantityTableKey, QuantityCell>;
 };
 
 export type SchoolQuantitySummary = {
@@ -17,8 +62,12 @@ export type SchoolQuantitySummary = {
   schoolName: string;
   policyStudents: number;
   policyPeriods: number;
+  /** HS / số tiết kế toán dùng để so với kinh doanh = bảng Doanh Thu. */
   accountingStudents: number;
   accountingPeriods: number;
+  tables: QuantityTotals;
+  subjects: SubjectQuantity[];
+  policies: PolicyRef[];
 };
 
 const numberValue = (value: unknown) => {
@@ -26,73 +75,218 @@ const numberValue = (value: unknown) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const getRevenueItems = (record: AccountingRecord) => {
-  const summary = record.summary?.summary || record.summary || {};
-  return Array.isArray(summary.revenueItems) ? summary.revenueItems : [];
+const itemsOf = (summary: any, key: string): any[] => {
+  const payload =
+    summary?.data && !Array.isArray(summary.data) ? summary.data : summary;
+  const source = payload?.summary || payload || {};
+  return Array.isArray(source?.[key]) ? source[key] : [];
+};
+
+/** Khớp `invoiceTypeOf` + `isInvoiceIssued` của bảng Hóa Đơn. */
+const INVOICE_ISSUED_TYPES = new Set(["company", "student", "other"]);
+export const isInvoiceIssued = (item: any) =>
+  INVOICE_ISSUED_TYPES.has(item?.invoiceType || (item?.invoiced ? "company" : ""));
+
+/**
+ * Thứ tự "mới nhất": tháng thật theo năm/tháng; dòng tuỳ chỉnh (tháng ảo > 12,
+ * thường là bản nhân bản) xếp sau mọi tháng thật, chỉ dùng khi không có tháng
+ * thật nào có số.
+ */
+const periodRank = (period: ExpensePeriodInfo) =>
+  period.month >= 1 && period.month <= 12
+    ? period.year * 100 + period.month
+    : period.year * 100 + period.month - 100_000_000;
+
+const emptyTotals = (): QuantityTotals => ({
+  revenue: { students: 0, periods: 0 },
+  invoice: { students: 0, periods: 0 },
+  school: { students: 0, periods: 0 },
+  management: { students: 0, periods: 0 },
+});
+
+const emptyCells = (): Record<QuantityTableKey, QuantityCell> => ({
+  revenue: { students: 0, periods: 0, period: null },
+  invoice: { students: 0, periods: 0, period: null },
+  school: { students: 0, periods: 0, period: null },
+  management: { students: 0, periods: 0, period: null },
+});
+
+type Snapshot = {
+  period: ExpensePeriodInfo;
+  rank: number;
+  sheetId: number;
+  totals: QuantityTotals;
+};
+
+type BuildOptions = {
+  schoolYear: string;
+  selectedPeriod: ExpensePeriodInfo | null;
 };
 
 /**
- * Tổng hợp số lượng theo trường từ hai nguồn độc lập:
+ * Tổng hợp số học sinh / số tiết theo trường từ hai nguồn:
  * - chính sách đã duyệt do kinh doanh khai;
- * - dòng Doanh thu do kế toán nhập.
+ * - các bảng kế toán nhập trong QL thu chi: Doanh Thu, Hóa Đơn (HS của dòng
+ *   đã xuất hóa đơn), Chi Trường, Chi Ngoài.
  *
- * Không cộng schoolExpenseItems/managementExpenseItems vì các bảng đó dùng lại
- * cùng số lượng của dòng Doanh thu và sẽ làm số liệu kế toán bị nhân ba.
+ * HS là sĩ số nên không cộng dồn các kỳ: với từng môn và từng bảng, lấy số của
+ * kỳ mới nhất có dòng nhập (trong năm học / kỳ đang lọc), cộng các dòng trong
+ * kỳ đó; số của trường = tổng các môn.
  */
 export const buildSchoolQuantitySummary = (
   policies: QuantityPolicy[],
-  accountingRecords: AccountingRecord[],
+  sheets: QuantitySheet[],
+  { schoolYear, selectedPeriod }: BuildOptions = {
+    schoolYear: "",
+    selectedPeriod: null,
+  },
 ): SchoolQuantitySummary[] => {
-  const rows = new Map<number, SchoolQuantitySummary>();
-  const allowedSubjectsBySchool = new Map<number, Set<number>>();
+  type SchoolBucket = {
+    schoolId: number;
+    schoolName: string;
+    subjects: Map<number, SubjectQuantity>;
+    policies: PolicyRef[];
+  };
+  const schools = new Map<number, SchoolBucket>();
 
   policies.forEach((policy) => {
     const schoolId = numberValue(policy.schoolId);
     if (!schoolId) return;
-
-    const current = rows.get(schoolId) || {
+    const school = schools.get(schoolId) || {
       schoolId,
       schoolName: policy.schoolName || `Trường #${schoolId}`,
+      subjects: new Map<number, SubjectQuantity>(),
+      policies: [],
+    };
+    const subjectId = numberValue(policy.subjectId);
+    const subject = school.subjects.get(subjectId) || {
+      subjectId,
+      subjectName:
+        policy.subjectName || (subjectId ? `Môn #${subjectId}` : "Chưa rõ môn"),
       policyStudents: 0,
       policyPeriods: 0,
-      accountingStudents: 0,
-      accountingPeriods: 0,
+      policies: [],
+      tables: emptyCells(),
+    };
+    subject.policyStudents += numberValue(policy.studentCount);
+    subject.policyPeriods += numberValue(policy.totalLessons);
+
+    const policyId = numberValue(policy.policyId || policy.id);
+    if (policyId && !school.policies.some((ref) => ref.policyId === policyId)) {
+      const ref: PolicyRef = {
+        policyId,
+        subjectName: subject.subjectName,
+        studentCount: numberValue(policy.studentCount),
+        employeeId: numberValue(policy.employeeId),
+      };
+      subject.policies.push(ref);
+      school.policies.push(ref);
+    }
+
+    school.subjects.set(subjectId, subject);
+    schools.set(schoolId, school);
+  });
+
+  // school → subject → các kỳ có dòng nhập
+  const snapshots = new Map<number, Map<number, Snapshot[]>>();
+
+  sheets.forEach(({ record, summary }) => {
+    const schoolId = numberValue(record?.school?.id ?? record?.schoolId);
+    const school = schools.get(schoolId);
+    if (!school) return;
+    const period = toPeriod(record?.period);
+    if (!matchesPeriodFilter({ period }, schoolYear, selectedPeriod)) return;
+
+    // Chính sách có môn thì chỉ tính đúng các môn đó (như trước).
+    const restrictSubjects = Array.from(school.subjects.keys()).some(Boolean);
+    const perSubject = new Map<number, QuantityTotals>();
+    const add = (table: QuantityTableKey, item: any) => {
+      const subjectId = numberValue(item?.subjectId);
+      if (restrictSubjects && !school.subjects.has(subjectId)) return;
+      const totals = perSubject.get(subjectId) || emptyTotals();
+      totals[table].students += numberValue(item?.studentCount);
+      totals[table].periods += numberValue(item?.totalPeriods);
+      perSubject.set(subjectId, totals);
     };
 
-    current.policyStudents += numberValue(policy.studentCount);
-    current.policyPeriods += numberValue(policy.totalLessons);
-    rows.set(schoolId, current);
-
-    const subjectId = numberValue(policy.subjectId);
-    if (subjectId) {
-      const subjects =
-        allowedSubjectsBySchool.get(schoolId) || new Set<number>();
-      subjects.add(subjectId);
-      allowedSubjectsBySchool.set(schoolId, subjects);
-    }
-  });
-
-  accountingRecords.forEach((record) => {
-    const schoolId = numberValue(record.schoolId || record.school?.id);
-    const current = rows.get(schoolId);
-    if (!current) return;
-
-    const allowedSubjects = allowedSubjectsBySchool.get(schoolId);
-    getRevenueItems(record).forEach((item: any) => {
-      const subjectId = numberValue(item?.subjectId);
-      if (
-        allowedSubjects?.size &&
-        (!subjectId || !allowedSubjects.has(subjectId))
-      ) {
-        return;
-      }
-
-      current.accountingStudents += numberValue(item?.studentCount);
-      current.accountingPeriods += numberValue(item?.totalPeriods);
+    itemsOf(summary, "revenueItems").forEach((item) => {
+      add("revenue", item);
+      if (isInvoiceIssued(item)) add("invoice", item);
     });
+    itemsOf(summary, "schoolExpenseItems").forEach((item) =>
+      add("school", item),
+    );
+    itemsOf(summary, "managementExpenseItems").forEach((item) =>
+      add("management", item),
+    );
+
+    const bySubject = snapshots.get(schoolId) || new Map<number, Snapshot[]>();
+    perSubject.forEach((totals, subjectId) => {
+      bySubject.set(subjectId, [
+        ...(bySubject.get(subjectId) || []),
+        {
+          period,
+          rank: periodRank(period),
+          sheetId: numberValue(record?.id),
+          totals,
+        },
+      ]);
+    });
+    snapshots.set(schoolId, bySubject);
   });
 
-  return Array.from(rows.values()).sort((left, right) =>
-    left.schoolName.localeCompare(right.schoolName, "vi"),
-  );
+  return Array.from(schools.values())
+    .map((school) => {
+      const bySubject = snapshots.get(school.schoolId);
+      bySubject?.forEach((list, subjectId) => {
+        if (!school.subjects.has(subjectId)) {
+          school.subjects.set(subjectId, {
+            subjectId,
+            subjectName: subjectId ? `Môn #${subjectId}` : "Chưa rõ môn",
+            policyStudents: 0,
+            policyPeriods: 0,
+            policies: [],
+            tables: emptyCells(),
+          });
+        }
+        const subject = school.subjects.get(subjectId)!;
+        QUANTITY_TABLES.forEach(({ key }) => {
+          const latest = list
+            .filter(
+              (item) => item.totals[key].students || item.totals[key].periods,
+            )
+            .sort(
+              (left, right) =>
+                right.rank - left.rank || right.sheetId - left.sheetId,
+            )[0];
+          if (latest) {
+            subject.tables[key] = { ...latest.totals[key], period: latest.period };
+          }
+        });
+      });
+
+      const subjects = Array.from(school.subjects.values()).sort(
+        (left, right) => left.subjectName.localeCompare(right.subjectName, "vi"),
+      );
+      const tables = emptyTotals();
+      subjects.forEach((subject) => {
+        QUANTITY_TABLES.forEach(({ key }) => {
+          tables[key].students += subject.tables[key].students;
+          tables[key].periods += subject.tables[key].periods;
+        });
+      });
+
+      return {
+        schoolId: school.schoolId,
+        schoolName: school.schoolName,
+        policyStudents: subjects.reduce((sum, s) => sum + s.policyStudents, 0),
+        policyPeriods: subjects.reduce((sum, s) => sum + s.policyPeriods, 0),
+        accountingStudents: tables.revenue.students,
+        accountingPeriods: tables.revenue.periods,
+        tables,
+        subjects,
+        policies: school.policies,
+      };
+    })
+    .sort((left, right) => left.schoolName.localeCompare(right.schoolName, "vi"));
 };

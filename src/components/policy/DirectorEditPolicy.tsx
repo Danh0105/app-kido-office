@@ -12,6 +12,7 @@ import { POLICY_TAX_RATE, RowType, policyPercentBase } from "@/types/policy";
 import { toast } from "react-hot-toast";
 import { getApiErrorMessage } from "@/utils/apiError";
 import PolicyHistoryTimeline from "./PolicyHistoryTimeline";
+import { resolvePolicyMode } from "./policyMode";
 import { Employee, getSalesEmployees } from "@/service/employee";
 import SearchableSelect from "@/components/SearchableSelect";
 
@@ -326,7 +327,6 @@ export default function DirectorEditPolicy({
       teacherCompany = 0,
       durationMonths = 0,
       periods = 36,
-      mode,
       percentAfterTax = false,
       giaoCuPerHS: savedGiaoCuPerHS,
       vanHanhPerHS: savedVanHanhPerHS,
@@ -380,12 +380,8 @@ export default function DirectorEditPolicy({
     setDurationMonths(durationMonths);
     setPeriods(periods);
 
-    // Không đoán mode qua studentPerClass — field này vẫn giữ giá trị cũ khi
-    // đổi tab nên không đáng tin, từng khiến chính sách HP/HS bị mở nhầm
-    // sang tab HP/TIẾT. Dữ liệu cũ không có `mode`: mặc định an toàn HS.
-    const nextTab: "TIET" | "HS" =
-      mode === "TIET" || mode === "HS" ? mode : "HS";
-    setActiveTab(nextTab);
+    // Mở đúng tab kinh doanh đã chọn (xem resolvePolicyMode).
+    setActiveTab(resolvePolicyMode(defaultData));
   }, [defaultData]);
 
   useEffect(() => {

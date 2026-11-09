@@ -11,6 +11,7 @@ import {
     XAxis,
     YAxis,
 } from "recharts";
+import { resolvePolicyMode } from "@/components/policy/policyMode";
 
 /** Một hue duy nhất cho mọi mark — cả hai biểu đồ đều chỉ có 1 chuỗi số liệu. */
 const SERIES = "#2563eb";
@@ -110,13 +111,8 @@ export default function PolicyPopup({ data, onClose }: any) {
         return raw?.htthietbi || [];
     }, [raw]);
 
-    // Suy luận mode giống hệt FormCreate/DirectorEditPolicy: dữ liệu mới lưu rõ
-    // `mode`, dữ liệu cũ suy theo có sĩ số lớp hay không.
-    const policyMode = useMemo(() => {
-        const p = Array.isArray(raw) ? {} : raw || {};
-        if (p.mode === "TIET" || p.mode === "HS") return p.mode;
-        return num(p.studentPerClass) > 0 ? "TIET" : "HS";
-    }, [raw]);
+    // Cùng quy tắc với form sửa (FormCreate/DirectorEditPolicy).
+    const policyMode = useMemo(() => resolvePolicyMode(raw), [raw]);
 
     const studentPerClass = useMemo(() => {
         const p = Array.isArray(raw) ? {} : raw || {};

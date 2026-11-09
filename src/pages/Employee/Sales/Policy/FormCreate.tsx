@@ -13,6 +13,7 @@ import { subjectApi } from "@/service/subject.api";
 import { POLICY_TAX_RATE, RowType, policyPercentBase } from "../../../../types/policy";
 import { useLocation } from "react-router-dom";
 import { getEmployeeName, getUserFromToken } from "../../../../utils/auth";
+import { resolvePolicyMode } from "@/components/policy/policyMode";
 const MoneyInput = ({
   value,
   onChange,
@@ -367,7 +368,6 @@ export default function FormCreate({
       notes = {},
       studentPerClass = 0,
       supportStudentCount: savedSupportStudentCount,
-      mode,
       teacherCompany = 0,
       durationMonths = 0,
       percentAfterTax = false,
@@ -437,14 +437,8 @@ export default function FormCreate({
     setStudentPerClass(studentPerClass);
     setTeacherCompany(teacherCompany);
     setDurationMonths(durationMonths);
-    // Dữ liệu mới lưu rõ loại chính sách qua `mode`. Dữ liệu cũ không có
-    // `mode` thì không đoán qua studentPerClass nữa — field này vẫn giữ giá
-    // trị cũ khi đổi tab (theo thiết kế) nên không đáng tin, từng khiến
-    // chính sách HP/HS bị mở nhầm sang tab HP/TIẾT. Mặc định an toàn: HS.
-    const nextTab: "TIET" | "HS" =
-      mode === "TIET" || mode === "HS" ? mode : "HS";
-
-    setActiveTab(nextTab);
+    // Mở đúng tab kinh doanh đã chọn (xem resolvePolicyMode).
+    setActiveTab(resolvePolicyMode(defaultData));
   }, [defaultData]);
   useEffect(() => {
     setRows((prev) => [...prev]); // trigger re-render

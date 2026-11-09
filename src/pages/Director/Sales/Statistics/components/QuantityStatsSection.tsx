@@ -501,7 +501,7 @@ export default function QuantityStatsSection({
                           : "—"}
                       </td>
                     </tr>
-                    <HeaderRows />
+                    <HeaderRows bottom />
                   </tfoot>
                 </table>
               </div>
@@ -538,8 +538,42 @@ export default function QuantityStatsSection({
   );
 }
 
-/** Hai dòng tiêu đề cột — dùng ở đầu bảng và lặp lại ở cuối bảng. */
-function HeaderRows() {
+/**
+ * Tiêu đề cột. Đầu bảng: dòng nhóm (Kinh doanh nhập / Kế toán nhập / Chênh
+ * lệch) + dòng tên cột. Cuối bảng (`bottom`): chỉ một dòng tên cột.
+ */
+function HeaderRows({ bottom = false }: { bottom?: boolean }) {
+  const labelRow = (
+    <tr className="bg-slate-900 text-xl text-slate-200">
+      {bottom && (
+        <th className="min-w-[240px] bg-slate-900 px-4 py-3 text-left text-white sm:sticky sm:left-0 sm:z-10 sm:min-w-[320px]">
+          Trường / Môn
+        </th>
+      )}
+      <th className="whitespace-nowrap border-l border-slate-700 px-4 py-2 text-right">
+        Học sinh
+      </th>
+      <th className="whitespace-nowrap px-4 py-2 text-right">Số tiết</th>
+      {ACCOUNTING_COLUMNS.map((column, index) => (
+        <th
+          key={column.key}
+          className={`whitespace-nowrap px-4 py-2 text-right ${
+            index === 0 ? "border-l border-slate-700" : ""
+          }`}
+        >
+          {column.label}
+        </th>
+      ))}
+      <th className="whitespace-nowrap px-4 py-2 text-right">Số tiết</th>
+      <th className="whitespace-nowrap px-4 py-2 text-center">Bảng nguồn</th>
+      <th className="whitespace-nowrap border-l border-slate-700 px-4 py-2 text-right">
+        Học sinh
+      </th>
+      <th className="whitespace-nowrap px-4 py-2 text-right">Số tiết</th>
+    </tr>
+  );
+  if (bottom) return labelRow;
+
   return (
     <>
       <tr className="bg-slate-900 text-white">
@@ -568,28 +602,7 @@ function HeaderRows() {
           Chênh lệch
         </th>
       </tr>
-      <tr className="bg-slate-900 text-xl text-slate-200">
-        <th className="whitespace-nowrap border-l border-slate-700 px-4 py-2 text-right">
-          Học sinh
-        </th>
-        <th className="whitespace-nowrap px-4 py-2 text-right">Số tiết</th>
-        {ACCOUNTING_COLUMNS.map((column, index) => (
-          <th
-            key={column.key}
-            className={`whitespace-nowrap px-4 py-2 text-right ${
-              index === 0 ? "border-l border-slate-700" : ""
-            }`}
-          >
-            {column.label}
-          </th>
-        ))}
-        <th className="whitespace-nowrap px-4 py-2 text-right">Số tiết</th>
-        <th className="whitespace-nowrap px-4 py-2 text-center">Bảng nguồn</th>
-        <th className="whitespace-nowrap border-l border-slate-700 px-4 py-2 text-right">
-          Học sinh
-        </th>
-        <th className="whitespace-nowrap px-4 py-2 text-right">Số tiết</th>
-      </tr>
+      {labelRow}
     </>
   );
 }

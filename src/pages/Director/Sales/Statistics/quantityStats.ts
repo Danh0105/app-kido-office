@@ -3,6 +3,7 @@ import {
   toPeriod,
   type ExpensePeriodInfo,
 } from "./expenseStats";
+import { getPolicyData } from "./statisticsDashboard";
 
 export type QuantityPolicy = {
   policyId?: number | string | null;
@@ -96,6 +97,26 @@ const itemsOf = (summary: any, key: string): any[] => {
     summary?.data && !Array.isArray(summary.data) ? summary.data : summary;
   const source = payload?.summary || payload || {};
   return Array.isArray(source?.[key]) ? source[key] : [];
+};
+
+/**
+ * Số học sinh kinh doanh nhập trong chính sách = ô "Số học sinh" của bảng chi
+ * phí. Đọc đúng như form chính sách mở lại số đã lưu
+ * (Employee/Sales/Policy/FormCreate.tsx): `supportStudentCount` → HS thực tế
+ * rồi HS của dòng hỗ trợ tiền mặt / thiết bị đầu tiên → số HS của môn.
+ */
+export const getPolicyStudentCount = (policy: QuantityPolicy) => {
+  const data: any = getPolicyData(policy as any);
+  const cash = Array.isArray(data?.httienmat) ? data.httienmat[0] : undefined;
+  const device = Array.isArray(data?.htthietbi) ? data.htthietbi[0] : undefined;
+  return (
+    numberValue(data?.supportStudentCount) ||
+    numberValue(cash?.realStudents) ||
+    numberValue(device?.realStudents) ||
+    numberValue(cash?.students) ||
+    numberValue(device?.students) ||
+    numberValue(policy.studentCount)
+  );
 };
 
 /** Khớp `invoiceTypeOf` + `isInvoiceIssued` của bảng Hóa Đơn. */
@@ -202,7 +223,8 @@ export const buildSchoolQuantitySummary = (
       tables: emptyCells(),
       sources: [],
     };
-    subject.policyStudents += numberValue(policy.studentCount);
+    const policyStudents = getPolicyStudentCount(policy);
+    subject.policyStudents += policyStudents;
     subject.policyPeriods += numberValue(policy.totalLessons);
 
     const policyId = numberValue(policy.policyId || policy.id);
@@ -210,7 +232,7 @@ export const buildSchoolQuantitySummary = (
       const ref: PolicyRef = {
         policyId,
         subjectName: subject.subjectName,
-        studentCount: numberValue(policy.studentCount),
+        studentCount: policyStudents,
         employeeId: numberValue(policy.employeeId),
       };
       subject.policies.push(ref);

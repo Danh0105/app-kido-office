@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "react-hot-toast";
+import HeaderWithBack from "@/components/HeaderWithBack";
 import {
   AlertTriangle,
   ChartNoAxesCombined,
@@ -262,7 +263,9 @@ export default function CashflowReportPage() {
   ];
 
   return (
-    <div className="relative min-h-screen space-y-4 overflow-hidden bg-[#f5f5f7] p-3 text-slate-900 md:p-5">
+    // pt chừa thanh header cố định (h-14) như các phân hệ khác.
+    <div className="relative min-h-screen space-y-4 overflow-hidden bg-[#f5f5f7] p-3 pt-[68px] text-slate-900 md:p-5 md:pt-[76px]">
+      <HeaderWithBack title="Tổng hợp thu chi" />
       <div className="pointer-events-none absolute -right-32 -top-32 h-96 w-96 rounded-full bg-blue-200/35 blur-3xl" />
       <div className="pointer-events-none absolute -left-24 top-72 h-80 w-80 rounded-full bg-indigo-200/25 blur-3xl" />
 

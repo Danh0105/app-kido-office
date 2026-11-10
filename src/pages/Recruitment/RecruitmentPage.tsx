@@ -24,6 +24,7 @@ import {
   X
 } from "lucide-react";
 import toast from "react-hot-toast";
+import HeaderWithBack from "@/components/HeaderWithBack";
 
 import {
   recruitmentApi,
@@ -232,8 +233,10 @@ export default function RecruitmentPage() {
   }).format(new Date());
 
   return (
-    <div className="min-h-screen bg-[#FFF8E6] pb-12 text-slate-800">
-      <header className="sticky top-0 z-20 border-b border-blue-100/80 bg-white/95 px-4 py-4 backdrop-blur md:px-8">
+    <div className="min-h-screen bg-[#FFF8E6] pb-12 pt-14 text-slate-800">
+      <HeaderWithBack title="Tuyển dụng" />
+      {/* Dính ngay dưới thanh header cố định (h-14). */}
+      <header className="sticky top-14 z-20 border-b border-blue-100/80 bg-white/95 px-4 py-4 backdrop-blur md:px-8">
         <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4">
           <div>
             <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#005BEA]">

@@ -134,8 +134,13 @@ export default function FinanceRequestForm() {
   const [type, setType] = useState<FinanceRequestType | null>(
     (params.get("type") as FinanceRequestType) || null,
   );
+  // Chọn sẵn công ty của nhân viên (xếp ở màn Phân quyền); chỉ có một công ty thì chọn luôn.
   const [companyId, setCompanyId] = useState<number | "">(
-    meta.companies.length === 1 ? meta.companies[0].id : "",
+    meta.me.companyId && meta.companies.some((c) => c.id === meta.me.companyId)
+      ? meta.me.companyId
+      : meta.companies.length === 1
+        ? meta.companies[0].id
+        : "",
   );
   // Thông tin nhận tiền đã lưu được ưu tiên; chưa lưu thì lấy tài khoản trong hồ sơ.
   const defaultPayee = pickPayee(

@@ -618,7 +618,18 @@ function Assignments({ data, run }: SectionProps) {
   const [account, setAccount] = useState<typeof EMPTY_ACCOUNT | null>(null);
   const isStaff = form.role === STAFF;
   const department = data.departments.find((d) => String(d.id) === form.departmentId);
+  const company = data.companies.find((c) => String(c.id) === form.companyId);
   const selected = data.employees.find((e) => String(e.id) === form.employeeId);
+  /** Vai trò Nhân viên: điền sẵn phòng ban + công ty hiện tại của nhân viên để sửa tiếp. */
+  const placementOf = (employeeId: string) => {
+    const employee = data.employees.find((e) => String(e.id) === employeeId);
+    return employee
+      ? {
+          departmentId: employee.departmentId ? String(employee.departmentId) : "",
+          companyId: employee.companyId ? String(employee.companyId) : "",
+        }
+      : {};
+  };
 
   const add = async () => {
     if (!form.employeeId) {
@@ -626,13 +637,17 @@ function Assignments({ data, run }: SectionProps) {
       return;
     }
     if (isStaff) {
+      if (!company) {
+        toast.error("Chọn công ty nhân viên thuộc về");
+        return;
+      }
       if (!department) {
         toast.error("Chọn phòng ban cho nhân viên");
         return;
       }
       const ok = await run(
-        () => financeConfigApi.setEmployeeDepartment(Number(form.employeeId), department.id),
-        `Đã xếp ${selected?.name ?? "nhân viên"} vào phòng ${department.name}`,
+        () => financeConfigApi.setEmployeeDepartment(Number(form.employeeId), department.id, company.id),
+        `Đã xếp ${selected?.name ?? "nhân viên"} vào phòng ${department.name} — ${company.shortName || company.name}`,
       );
       if (ok) setForm({ ...form, employeeId: "" });
       return;
@@ -693,8 +708,11 @@ function Assignments({ data, run }: SectionProps) {
             Nhân viên
             <SearchableSelect
               value={form.employeeId}
-              onChange={(value) => setForm({ ...form, employeeId: value })}
-              options={data.employees.map((e) => ({ id: e.id, name: `${e.name}${e.departmentName ? ` — ${e.departmentName}` : ""}` }))}
+              onChange={(value) => setForm({ ...form, employeeId: value, ...(isStaff ? placementOf(value) : {}) })}
+              options={data.employees.map((e) => ({
+                id: e.id,
+                name: `${e.name}${e.departmentName ? ` — ${e.departmentName}` : ""}${e.companyName ? ` · ${e.companyName}` : ""}`,
+              }))}
               placeholder="Chọn nhân viên"
               searchPlaceholder="Tìm tên…"
               className="mt-1"
@@ -702,25 +720,32 @@ function Assignments({ data, run }: SectionProps) {
           </label>
           <label className={labelClass}>
             Vai trò
-            <select className={inputClass} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as AssignRole })}>
+            <select
+              className={inputClass}
+              value={form.role}
+              onChange={(e) => {
+                const role = e.target.value as AssignRole;
+                setForm({ ...form, role, ...(role === STAFF && form.employeeId ? placementOf(form.employeeId) : {}) });
+              }}
+            >
               <option value={STAFF}>Nhân viên</option>
               {assignableRoles.map((role) => (
                 <option key={role} value={role}>{ROLE_LABELS[role]}</option>
               ))}
             </select>
           </label>
-          {!isStaff && (
-            <label className={labelClass}>
-              Công ty
-              <select className={inputClass} value={form.companyId} onChange={(e) => setForm({ ...form, companyId: e.target.value })}>
-                <option value="">Mọi công ty</option>
-                {data.companies.map((c) => (
+          <label className={labelClass}>
+            {isStaff ? "Công ty *" : "Công ty"}
+            <select className={inputClass} value={form.companyId} onChange={(e) => setForm({ ...form, companyId: e.target.value })}>
+              <option value="">{isStaff ? "Chọn công ty" : "Mọi công ty"}</option>
+              {data.companies
+                .filter((c) => !isStaff || c.isActive || String(c.id) === form.companyId)
+                .map((c) => (
                   <option key={c.id} value={c.id}>{c.shortName || c.name}</option>
                 ))}
-              </select>
-            </label>
-          )}
-          <label className={`${labelClass} ${isStaff ? "md:col-span-3" : ""}`}>
+            </select>
+          </label>
+          <label className={`${labelClass} ${isStaff ? "md:col-span-2" : ""}`}>
             {isStaff ? "Phòng ban *" : "Phòng ban"}
             <select className={inputClass} value={form.departmentId} onChange={(e) => setForm({ ...form, departmentId: e.target.value })}>
               <option value="">{isStaff ? "Chọn phòng ban" : "Mọi phòng ban"}</option>
@@ -739,11 +764,12 @@ function Assignments({ data, run }: SectionProps) {
             <div className="rounded-xl bg-blue-50 px-3 py-2 text-xs leading-5 text-slate-700 md:col-span-5">
               {selected && (
                 <p>
-                  {selected.name} đang ở: <b>{selected.departmentName ?? "chưa có phòng ban"}</b>
+                  {selected.name} đang ở: <b>{selected.departmentName ?? "chưa có phòng ban"}</b> ·{" "}
+                  <b>{selected.companyName ?? "chưa xếp công ty"}</b>
                 </p>
               )}
               {!department ? (
-                <p>Chọn phòng ban — nhân viên sẽ thuộc phòng ban đó, đề nghị tài chính tự chọn quản lý trực tiếp của phòng.</p>
+                <p>Chọn công ty và phòng ban — đề nghị tài chính của nhân viên tự chọn công ty này và quản lý trực tiếp của phòng.</p>
               ) : department.managers?.length ? (
                 <p>
                   Quản lý trực tiếp chọn sẵn khi lập đề nghị: <b>{department.managers[0].name}</b>
@@ -763,7 +789,7 @@ function Assignments({ data, run }: SectionProps) {
           )}
           <div className="flex items-end">
             <button type="button" className={`${primaryButton} w-full`} onClick={() => void add()}>
-              <Plus size={16} /> {isStaff ? "Xếp vào phòng" : "Gán quyền"}
+              <Plus size={16} /> {isStaff ? "Lưu" : "Gán quyền"}
             </button>
           </div>
         </div>

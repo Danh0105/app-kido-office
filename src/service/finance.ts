@@ -263,8 +263,9 @@ export const financeConfigApi = {
     (await api.delete(`${BASE}/config/assignments/${id}`)).data,
 
   /** Vai trò "Nhân viên": chuyển nhân viên vào phòng ban. */
-  setEmployeeDepartment: async (employeeId: number, departmentId: number) =>
-    (await api.put(`${BASE}/config/employees/${employeeId}/department`, { departmentId })).data,
+  /** Xếp nhân viên vào phòng ban + công ty (bỏ trống công ty = giữ nguyên). */
+  setEmployeeDepartment: async (employeeId: number, departmentId: number, companyId?: number) =>
+    (await api.put(`${BASE}/config/employees/${employeeId}/department`, { departmentId, companyId })).data,
 
   createAccount: async (payload: FinanceAccountInput) =>
     (await api.post<{ id: number; name: string; departmentId: number; departmentName: string }>(`${BASE}/config/accounts`, payload))

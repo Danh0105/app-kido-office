@@ -80,6 +80,8 @@ export type FinanceMeta = {
     name: string;
     departmentId: number | null;
     departmentName: string | null;
+    /** Công ty được xếp ở màn Phân quyền — đề nghị mới chọn sẵn (đổi được). */
+    companyId: number | null;
     position: string | null;
     bankName: string | null;
     bankAccountNumber: string | null;
@@ -651,7 +653,15 @@ export type FinanceConfigOverview = {
   implicitRoles: Record<string, FinanceRole[]>;
   policies: FinancePolicy[];
   delegations: FinanceDelegation[];
-  employees: { id: number; name: string; departmentId: number | null; departmentName: string | null }[];
+  employees: {
+    id: number;
+    name: string;
+    departmentId: number | null;
+    departmentName: string | null;
+    /** Công ty nhân viên thuộc về (xếp cùng phòng ban). */
+    companyId: number | null;
+    companyName: string | null;
+  }[];
   /** `managers`: quản lý trực tiếp của riêng phòng ban, theo thứ tự ưu tiên chọn sẵn. */
   departments: { id: number; name: string; managers?: { id: number; name: string }[] }[];
   /** Giám đốc / nhân sự — được tạo tài khoản đăng nhập. */

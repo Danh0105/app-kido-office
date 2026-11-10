@@ -1,5 +1,11 @@
 import api from "@/service/api";
 import { decodeJwtPayload } from "./jwt";
+import {
+    hasBroadRoleIn,
+    isAccountantOnlyIn,
+    isChiefAccountantIn,
+    isDirectorAssistantViewerIn,
+} from "./rolePrecedence";
 
 export const getUserFromToken = () => {
     const token = localStorage.getItem("access_token");
@@ -37,20 +43,12 @@ export const hasRole = (...roles: string[]): boolean => {
  * (kế toán trưởng, kế toán...) vẫn phải giữ nguyên quyền/menu đầy đủ của vai
  * rộng, không bị các guard/menu dành riêng cho vai hẹp thu hẹp lại.
  */
-const BROAD_ROLES = [
-    "director",
-    "director_la",
-    "saleadmin",
-    "salesadmin",
-    "salesadmin_la",
-];
+export const hasBroadRole = (): boolean => hasBroadRoleIn(getEmployeeRoles());
 
-export const hasBroadRole = (): boolean => hasRole(...BROAD_ROLES);
-
-// "Chỉ" kế toán trưởng — false nếu tài khoản còn kiêm role rộng hơn, để
-// không bị thu hẹp menu/route dành cho vai kế toán trưởng đơn thuần.
+// "Chỉ" kế toán trưởng — false nếu tài khoản còn kiêm role rộng hơn hoặc
+// Trợ lý GĐ, để role ưu tiên không bị thu hẹp menu/route.
 export const isChiefAccountant = (): boolean =>
-    hasRole("ketoan_truong") && !hasBroadRole();
+    isChiefAccountantIn(getEmployeeRoles());
 
 /**
  * Trợ lý giám đốc (`troly_gd`): xem được mọi chức năng như Giám đốc nhưng chỉ
@@ -59,11 +57,11 @@ export const isChiefAccountant = (): boolean =>
  * màn đó kiểm tra quyền riêng. False nếu tài khoản còn kiêm role rộng.
  */
 export const isDirectorAssistantViewer = (): boolean =>
-    hasRole("troly_gd") && !hasBroadRole();
+    isDirectorAssistantViewerIn(getEmployeeRoles());
 
-// "Chỉ" kế toán — cùng nguyên tắc với isChiefAccountant.
+// "Chỉ" kế toán — cùng nguyên tắc ưu tiên với isChiefAccountant.
 export const isAccountantOnly = (): boolean =>
-    hasRole("accountant") && !hasBroadRole();
+    isAccountantOnlyIn(getEmployeeRoles());
 
 /**
  * Được sửa môn học của trường trong luồng Chính sách.

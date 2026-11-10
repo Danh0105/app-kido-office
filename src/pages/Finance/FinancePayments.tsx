@@ -1,18 +1,19 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, HandCoins, Wallet } from "lucide-react";
+import { CalendarClock, HandCoins, Loader2, Wallet } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import { financeApi } from "@/service/finance";
-import type { FinanceDeductionRow, FinanceListItem } from "@/types/finance";
+import type { FinanceDeductionRow, FinanceDetail, FinanceListItem } from "@/types/finance";
 import { getApiErrorMessage } from "@/utils/apiError";
 import { DeductionModal, MoneyModal } from "./components/DetailModals";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, StatusBadges, TypeBadge } from "./components/FinanceUi";
 import { useFinanceMeta } from "./FinanceRoutes";
 import { formatDate, formatMoney, inputClass, labelClass, primaryButton, secondaryButton, todayVN, useFinanceBase } from "./lib";
 
-type MoneyTarget = { item: FinanceListItem; kind: "payment" | "refund" };
+/** `detail` (chỉ khi chi tiền): người nhận + tài khoản gợi ý, giống màn chi tiết phiếu. */
+type MoneyTarget = { item: FinanceListItem; kind: "payment" | "refund"; detail?: FinanceDetail };
 
 export default function FinancePayments() {
   const meta = useFinanceMeta();
@@ -22,6 +23,7 @@ export default function FinancePayments() {
   const caps = meta.capabilities;
   const [companyId, setCompanyId] = useState("");
   const [moneyTarget, setMoneyTarget] = useState<MoneyTarget | null>(null);
+  const [openingId, setOpeningId] = useState<number | null>(null);
   const [deduction, setDeduction] = useState<FinanceDeductionRow | null>(null);
   const [year, setYear] = useState(Number(todayVN().slice(0, 4)));
   const [month, setMonth] = useState(Number(todayVN().slice(5, 7)));
@@ -40,6 +42,25 @@ export default function FinancePayments() {
 
   const payable = (queue.data?.data ?? []).filter((r) => r.payableRemaining > 0);
   const receivable = (queue.data?.data ?? []).filter((r) => r.receivableRemaining > 0);
+
+  /**
+   * Chi tiền: tải chi tiết phiếu trước — phiếu chuyển cho nhà cung cấp cần ô
+   * "Chuyển cho" (không chọn thì backend hiểu là chi cho người đề nghị).
+   */
+  const openMoney = async (item: FinanceListItem, kind: MoneyTarget["kind"]) => {
+    if (kind !== "payment") {
+      setMoneyTarget({ item, kind });
+      return;
+    }
+    setOpeningId(item.id);
+    try {
+      setMoneyTarget({ item, kind, detail: await financeApi.get(item.id) });
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Không tải được phiếu."));
+    } finally {
+      setOpeningId(null);
+    }
+  };
 
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: ["finance-list"] });
@@ -85,8 +106,14 @@ export default function FinancePayments() {
               <td className="px-3 py-2"><StatusBadges item={item} /></td>
               <td className="px-3 py-2 text-right">
                 {!item.isOwner && (
-                  <button type="button" className={primaryButton} onClick={() => setMoneyTarget({ item, kind })}>
-                    <Wallet size={15} /> {kind === "payment" ? "Ghi nhận chi" : "Ghi nhận thu"}
+                  <button
+                    type="button"
+                    className={primaryButton}
+                    disabled={openingId !== null}
+                    onClick={() => void openMoney(item, kind)}
+                  >
+                    {openingId === item.id ? <Loader2 size={15} className="animate-spin" /> : <Wallet size={15} />}{" "}
+                    {kind === "payment" ? "Ghi nhận chi" : "Ghi nhận thu"}
                   </button>
                 )}
               </td>
@@ -211,7 +238,14 @@ export default function FinancePayments() {
       {moneyTarget && (
         <MoneyModal
           kind={moneyTarget.kind}
-          remaining={moneyTarget.kind === "payment" ? moneyTarget.item.payableRemaining : moneyTarget.item.receivableRemaining}
+          remaining={
+            moneyTarget.kind === "payment"
+              ? (moneyTarget.detail?.summary.payableRemaining ?? moneyTarget.item.payableRemaining)
+              : moneyTarget.item.receivableRemaining
+          }
+          defaultMethod={moneyTarget.detail?.paymentMethod}
+          defaultCashAccountCode={moneyTarget.detail?.paymentAccountCode}
+          recipients={(moneyTarget.detail?.suppliers?.length ?? 0) > 0 ? moneyTarget.detail?.recipients : undefined}
           onClose={() => setMoneyTarget(null)}
           onSubmit={async ({ payload, proofs }) => {
             try {

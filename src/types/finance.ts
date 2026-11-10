@@ -183,9 +183,38 @@ export type FinanceItem = {
   invoiceNumber: string | null;
   invoiceType: InvoiceType | null;
   supplierName: string | null;
+  /** NCC nhận tiền của dòng; null = người đề nghị. */
+  supplierId: number | null;
   note: string | null;
   overLimit: boolean;
   attachmentCount: number;
+};
+
+/** Nhà cung cấp nhận tiền chuyển khoản (phiếu Thanh toán chi phí). */
+export type FinanceSupplier = {
+  id: number;
+  lineNo: number;
+  name: string;
+  bankAccountHolder: string | null;
+  bankName: string | null;
+  bankAccountNumber: string | null;
+  note: string | null;
+};
+
+/** Người nhận tiền của phiếu: người đề nghị hoặc một NCC. */
+export type FinanceRecipient = {
+  /** null = người đề nghị. */
+  supplierId: number | null;
+  kind: "REQUESTER" | "SUPPLIER";
+  name: string;
+  bankAccountHolder: string | null;
+  bankName: string | null;
+  bankAccountNumber: string | null;
+  /** Tổng các dòng gán cho người nhận (số được duyệt nếu đã điều chỉnh). */
+  amount: number;
+  paidAmount: number;
+  /** Còn phải chi — chỉ > 0 khi phiếu đã duyệt. */
+  remaining: number;
 };
 
 export type FinanceAttachment = {
@@ -226,6 +255,9 @@ export type FinanceStep = {
 export type FinanceMovement = {
   id: number;
   amount: number;
+  /** Lần chi: chuyển cho NCC nào (null = người đề nghị). Không có ở hoàn trả. */
+  supplierId?: number | null;
+  recipientName?: string;
   date: string;
   method: PaymentMethod;
   cashAccountCode: string | null;
@@ -336,6 +368,8 @@ export type FinanceDetail = {
   paymentAccountCode: string | null;
   paymentAccountName: string | null;
   paymentNote: string | null;
+  suppliers: FinanceSupplier[];
+  recipients: FinanceRecipient[];
   totalAmount: number;
   approvedAmount: number | null;
   offsetAmount: number;
@@ -410,6 +444,17 @@ export type FinanceItemInput = {
   invoiceNumber?: string | null;
   invoiceType?: InvoiceType | null;
   supplierName?: string | null;
+  /** Vị trí NCC trong `suppliers` của cùng payload; null = người đề nghị. */
+  supplierIndex?: number | null;
+  note?: string | null;
+};
+
+export type FinanceSupplierInput = {
+  id?: number;
+  name: string;
+  bankAccountHolder?: string | null;
+  bankName?: string | null;
+  bankAccountNumber?: string | null;
   note?: string | null;
 };
 
@@ -439,6 +484,7 @@ export type FinanceRequestInput = {
   bankAccountNumber?: string | null;
   paymentNote?: string | null;
   items?: FinanceItemInput[];
+  suppliers?: FinanceSupplierInput[];
   allocations?: { advanceId: number; amount: number }[];
 };
 

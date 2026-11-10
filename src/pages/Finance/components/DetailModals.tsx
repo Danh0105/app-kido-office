@@ -3,7 +3,7 @@ import { Loader2 } from "lucide-react";
 
 import DecimalInput from "@/components/DecimalInput";
 import { newIdempotencyKey, type MoneyMovementPayload } from "@/service/finance";
-import type { FinanceDeduction, FinanceDetail, PaymentMethod } from "@/types/finance";
+import type { FinanceDeduction, FinanceDetail, FinanceRecipient, PaymentMethod } from "@/types/finance";
 import { useFinanceMeta } from "../FinanceRoutes";
 import {
   PAYMENT_METHOD_LABELS,
@@ -221,11 +221,14 @@ export function ReasonModal({
  * Ghi nhận chi tiền / thu hoàn trả. Khoá chống gửi lặp sinh một lần khi mở
  * modal — bấm nhiều lần hay mạng chập chờn vẫn chỉ ghi một phiếu.
  */
+const recipientKey = (r: Pick<FinanceRecipient, "supplierId">) => (r.supplierId === null ? "requester" : String(r.supplierId));
+
 export function MoneyModal({
   kind,
-  remaining,
+  remaining: totalRemaining,
   defaultMethod,
   defaultCashAccountCode,
+  recipients = [],
   onClose,
   onSubmit,
 }: {
@@ -233,11 +236,20 @@ export function MoneyModal({
   remaining: number;
   defaultMethod?: PaymentMethod | null;
   defaultCashAccountCode?: string | null;
+  /**
+   * Phiếu có NCC nhận tiền: những người còn phải chi (NCC / người đề nghị) —
+   * thủ quỹ chọn chuyển cho ai, số tiền không vượt phần còn lại của người đó.
+   */
+  recipients?: FinanceRecipient[];
   onClose: () => void;
   onSubmit: Submit<{ payload: MoneyMovementPayload; proofs: File[] }>;
 }) {
   const meta = useFinanceMeta();
   const idempotencyKey = useMemo(() => newIdempotencyKey(), []);
+  const choices = kind === "payment" ? recipients.filter((r) => r.remaining > 0) : [];
+  const [chosenKey, setChosenKey] = useState(choices[0] ? recipientKey(choices[0]) : "");
+  const recipient = choices.find((r) => recipientKey(r) === chosenKey);
+  const remaining = recipient ? Math.min(recipient.remaining, totalRemaining) : totalRemaining;
   // Gợi ý tài khoản lần chi trước (hoặc kiểm soát đã chọn ở phiếu cũ); thủ quỹ được đổi.
   const defaultAccount = meta.cashAccounts.find((a) => a.code === defaultCashAccountCode);
   const [amount, setAmount] = useState(remaining);
@@ -275,6 +287,7 @@ export function MoneyModal({
                 await onSubmit({
                   payload: {
                     amount,
+                    ...(recipient ? { supplierId: recipient.supplierId } : {}),
                     date,
                     method,
                     cashAccountCode: cashAccountCode || undefined,
@@ -295,8 +308,47 @@ export function MoneyModal({
       }
     >
       <div className="grid gap-3 sm:grid-cols-2">
+        {choices.length > 0 && (
+          <div className="sm:col-span-2">
+            <label className={labelClass}>
+              Chuyển cho *
+              <select
+                className={inputClass}
+                value={chosenKey}
+                onChange={(e) => {
+                  const next = choices.find((r) => recipientKey(r) === e.target.value);
+                  setChosenKey(e.target.value);
+                  if (next) setAmount(Math.min(next.remaining, totalRemaining));
+                }}
+              >
+                {choices.map((r) => (
+                  <option key={recipientKey(r)} value={recipientKey(r)}>
+                    {r.kind === "SUPPLIER" ? "NCC" : "Người đề nghị"}: {r.name} — còn {formatMoney(r.remaining)} đ
+                  </option>
+                ))}
+              </select>
+            </label>
+            {recipient && (
+              <dl className="mt-2 grid gap-x-4 gap-y-1 rounded-lg bg-slate-50 px-3 py-2 text-sm sm:grid-cols-2" data-testid="money-recipient">
+                <div>
+                  <dt className="text-xs text-slate-500">Ngân hàng</dt>
+                  <dd className="font-medium text-slate-800">{recipient.bankName || "—"}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-500">Số tài khoản</dt>
+                  <dd className="font-mono font-medium text-slate-800">{recipient.bankAccountNumber || "—"}</dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="text-xs text-slate-500">Chủ tài khoản</dt>
+                  <dd className="font-medium text-slate-800">{recipient.bankAccountHolder || recipient.name}</dd>
+                </div>
+              </dl>
+            )}
+          </div>
+        )}
         <label className={`${labelClass} sm:col-span-2`}>
-          Số tiền (đ) — còn {kind === "payment" ? "phải chi" : "phải thu"} {formatMoney(remaining)} đ
+          Số tiền (đ) — còn {kind === "payment" ? "phải chi" : "phải thu"}
+          {recipient ? ` cho ${recipient.name}` : ""} {formatMoney(remaining)} đ
           <DecimalInput allowDecimal={false} value={amount} max={remaining} onValueChange={setAmount} className={inputClass} />
         </label>
         <label className={labelClass}>

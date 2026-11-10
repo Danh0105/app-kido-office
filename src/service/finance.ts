@@ -35,6 +35,8 @@ export const newIdempotencyKey = () =>
 
 export type MoneyMovementPayload = {
   amount: number;
+  /** Chi tiền: chuyển cho NCC nào của phiếu; bỏ trống = người đề nghị. */
+  supplierId?: number | null;
   date: string;
   method: "BANK_TRANSFER" | "CASH";
   cashAccountCode?: string;

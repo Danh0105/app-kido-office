@@ -11,6 +11,7 @@ import {
   Plus,
   Save,
   Send,
+  Store,
   Trash2,
   Wallet,
   X,
@@ -26,6 +27,7 @@ import type {
   FinancePayeeProfile,
   FinanceRequestInput,
   FinanceRequestType,
+  FinanceSupplierInput,
   InvoiceType,
 } from "@/types/finance";
 import { getApiErrorMessage } from "@/utils/apiError";
@@ -48,7 +50,33 @@ import {
   vndToWords,
 } from "./lib";
 
-type ItemRow = FinanceItemInput & { key: string; attachmentCount?: number };
+/** `supplierKey` = key của NCC nhận tiền dòng này; null = người đề nghị. */
+type ItemRow = FinanceItemInput & { key: string; attachmentCount?: number; supplierKey?: string | null };
+
+/** NCC nhận tiền chuyển khoản (chỉ phiếu Thanh toán chi phí). */
+type SupplierRow = FinanceSupplierInput & { key: string };
+
+const newSupplier = (): SupplierRow => ({
+  key: Math.random().toString(36).slice(2),
+  name: "",
+  bankName: "",
+  bankAccountNumber: "",
+  bankAccountHolder: "",
+  note: "",
+});
+
+const supplierKeyOf = (id: number | null | undefined) => (id ? `s${id}` : null);
+
+const toSupplierRows = (detail: FinanceDetail): SupplierRow[] =>
+  (detail.suppliers ?? []).map((supplier) => ({
+    key: supplierKeyOf(supplier.id)!,
+    id: supplier.id,
+    name: supplier.name,
+    bankName: supplier.bankName ?? "",
+    bankAccountNumber: supplier.bankAccountNumber ?? "",
+    bankAccountHolder: supplier.bankAccountHolder ?? "",
+    note: supplier.note ?? "",
+  }));
 
 type PayeeFields = Pick<FinanceRequestInput, "payeeName" | "bankAccountHolder" | "bankName" | "bankAccountNumber">;
 
@@ -127,6 +155,7 @@ export default function FinanceRequestForm() {
     deductionPeriods: 1,
   });
   const [items, setItems] = useState<ItemRow[]>([newRow()]);
+  const [suppliers, setSuppliers] = useState<SupplierRow[]>([]);
   // Có số tài khoản thì chỉ hiện để xem; bấm "Chỉnh sửa" mới mở ô nhập.
   const [editingPayee, setEditingPayee] = useState(!defaultPayee.bankAccountNumber);
   const [rememberPayee, setRememberPayee] = useState(true);
@@ -190,11 +219,13 @@ export default function FinanceRequestForm() {
                 invoiceNumber: item.invoiceNumber,
                 invoiceType: item.invoiceType,
                 supplierName: item.supplierName,
+                supplierKey: supplierKeyOf(item.supplierId),
                 note: item.note,
                 attachmentCount: item.attachmentCount,
               }))
             : [newRow()],
         );
+        setSuppliers(toSupplierRows(detail));
         setAllocations(Object.fromEntries(detail.allocations.map((a) => [a.advanceId, a.amount])));
       })
       .catch((error) => setLoadError(getApiErrorMessage(error, "Không tải được phiếu.")))
@@ -254,6 +285,15 @@ export default function FinanceRequestForm() {
       ? Number(form.requestedAmount || 0)
       : lineAmounts.reduce((sum, value) => sum + value, 0);
   const offset = Object.values(allocations).reduce((sum, value) => sum + (value || 0), 0);
+  // Chuyển thẳng cho NCC: chỉ phiếu Thanh toán chi phí.
+  const supplierMode = type === "EXPENSE_PAYMENT";
+  const activeSuppliers = supplierMode ? suppliers : [];
+  const recipientOf = (item: ItemRow) =>
+    item.supplierKey && activeSuppliers.some((s) => s.key === item.supplierKey) ? item.supplierKey : null;
+  const amountFor = (supplierKey: string | null) =>
+    items.reduce((sum, item, index) => (recipientOf(item) === supplierKey ? sum + lineAmounts[index] : sum), 0);
+  const linesFor = (supplierKey: string) => items.filter((item) => recipientOf(item) === supplierKey).length;
+  const requesterShare = amountFor(null);
   const difference = total - offset;
   const categories = meta.categories;
   const showExpenseFields = type === "SETTLEMENT" || type === "EXPENSE_PAYMENT";
@@ -268,6 +308,14 @@ export default function FinanceRequestForm() {
   const updateItem = (key: string, patch: Partial<ItemRow>) =>
     setItems((prev) => prev.map((item) => (item.key === key ? { ...item, ...patch } : item)));
 
+  const updateSupplier = (key: string, patch: Partial<SupplierRow>) =>
+    setSuppliers((prev) => prev.map((row) => (row.key === key ? { ...row, ...patch } : row)));
+  /** Bỏ NCC → các dòng của NCC đó quay về chuyển cho người đề nghị. */
+  const removeSupplier = (key: string) => {
+    setSuppliers((prev) => prev.filter((row) => row.key !== key));
+    setItems((prev) => prev.map((item) => (item.supplierKey === key ? { ...item, supplierKey: null } : item)));
+  };
+
   const rowsToSave = () => items.filter((item) => item.description.trim() || item.unitPrice);
 
   const payload = (rows: ItemRow[]): FinanceRequestInput => {
@@ -279,14 +327,29 @@ export default function FinanceRequestForm() {
     if (type === "SALARY_ADVANCE") {
       delete body.items;
     } else {
-      body.items = rows.map(({ key: _key, attachmentCount: _count, ...item }) => ({
+      body.items = rows.map(({ key: _key, attachmentCount: _count, supplierKey: _supplier, ...item }) => {
+        const supplierKey = recipientOf({ ...item, key: _key, supplierKey: _supplier });
+        const supplierIndex = supplierKey ? activeSuppliers.findIndex((s) => s.key === supplierKey) : -1;
+        return {
           ...item,
           description: item.description.trim(),
           quantity: item.quantity || "0",
           unitPrice: item.unitPrice || "0",
           unit: item.unit || null,
-        }));
+          supplierIndex: supplierIndex >= 0 ? supplierIndex : null,
+        };
+      });
       delete body.requestedAmount;
+    }
+    if (supplierMode) {
+      body.suppliers = activeSuppliers.map(({ key: _key, ...supplier }) => ({
+        ...supplier,
+        name: supplier.name.trim(),
+        bankName: supplier.bankName?.trim() || null,
+        bankAccountNumber: supplier.bankAccountNumber?.trim() || null,
+        bankAccountHolder: supplier.bankAccountHolder?.trim() || null,
+        note: supplier.note?.trim() || null,
+      }));
     }
     if (type === "SETTLEMENT") {
       body.allocations = Object.entries(allocations)
@@ -309,6 +372,8 @@ export default function FinanceRequestForm() {
         return "Dòng có tệp đính kèm phải có nội dung";
     }
     if (type === "SETTLEMENT" && offset <= 0) return "Chọn phiếu tạm ứng cần đối trừ";
+    const unnamed = activeSuppliers.findIndex((s) => !s.name.trim());
+    if (unnamed >= 0) return `Nhập tên nhà cung cấp ${unnamed + 1} (hoặc bỏ NCC đó)`;
     return "";
   };
 
@@ -369,6 +434,10 @@ export default function FinanceRequestForm() {
         );
       }
 
+      // NCC: server trả đúng thứ tự gửi lên → gắn id, giữ key để dòng vẫn trỏ đúng NCC.
+      setSuppliers((prev) =>
+        prev.map((row, index) => ({ ...row, id: saved.suppliers?.[index]?.id ?? row.id })),
+      );
       // Gắn id backend cho các dòng nhưng giữ nguyên key tạm để hàng đợi tệp
       // không bị mất nếu một lần tải lên gặp lỗi.
       setItems((prev) =>
@@ -437,10 +506,12 @@ export default function FinanceRequestForm() {
             invoiceNumber: item.invoiceNumber,
             invoiceType: item.invoiceType,
             supplierName: item.supplierName,
+            supplierKey: supplierKeyOf(item.supplierId),
             note: item.note,
             attachmentCount: item.attachmentCount,
           })),
         );
+        setSuppliers(toSupplierRows(saved));
       }
     } catch (error) {
       if (persisted && phase === "upload") {
@@ -950,13 +1021,38 @@ export default function FinanceRequestForm() {
                           </option>
                         ))}
                       </select>
-                      <input
-                        className={`${inputClass} mt-0 md:col-span-3`}
-                        placeholder="Nhà cung cấp"
-                        value={item.supplierName ?? ""}
-                        onChange={(e) => updateItem(item.key, { supplierName: e.target.value || null })}
-                      />
-                      <div className="md:col-span-3" />
+                      {(() => {
+                        const recipient = activeSuppliers.find((s) => s.key === recipientOf(item));
+                        return (
+                          <>
+                            <input
+                              className={`${inputClass} mt-0 md:col-span-3 disabled:bg-slate-50 disabled:text-slate-500`}
+                              placeholder="Nhà cung cấp"
+                              title={recipient ? "Theo NCC nhận tiền đã chọn" : undefined}
+                              disabled={!!recipient}
+                              value={recipient ? recipient.name : (item.supplierName ?? "")}
+                              onChange={(e) => updateItem(item.key, { supplierName: e.target.value || null })}
+                            />
+                            {activeSuppliers.length > 0 ? (
+                              <select
+                                aria-label={`Người nhận tiền dòng ${index + 1}`}
+                                className={`${inputClass} mt-0 md:col-span-3`}
+                                value={recipientOf(item) ?? ""}
+                                onChange={(e) => updateItem(item.key, { supplierKey: e.target.value || null })}
+                              >
+                                <option value="">Chuyển cho tôi</option>
+                                {activeSuppliers.map((s, supplierIndex) => (
+                                  <option key={s.key} value={s.key}>
+                                    NCC: {s.name.trim() || `NCC ${supplierIndex + 1}`}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <div className="md:col-span-3" />
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   )}
                   <div className="mt-2 grid gap-2 md:grid-cols-12">
@@ -1027,6 +1123,93 @@ export default function FinanceRequestForm() {
         </Card>
       )}
 
+      {supplierMode && (
+        <Card
+          title="Nhà cung cấp nhận tiền"
+          icon={<Store size={16} />}
+          action={
+            <button
+              type="button"
+              className={secondaryButton}
+              onClick={() => setSuppliers((prev) => [...prev, newSupplier()])}
+            >
+              <Plus size={16} /> Thêm nhà cung cấp
+            </button>
+          }
+        >
+          <p className="text-sm text-slate-500">
+            Mua hàng của nhà cung cấp: thêm NCC kèm thông tin chuyển khoản, rồi chọn NCC nhận tiền ở từng dòng
+            của Bảng chi tiết. Thủ quỹ sẽ chuyển khoản thẳng cho NCC; dòng không chọn NCC vẫn chuyển cho bạn.
+          </p>
+          {suppliers.length > 0 && (
+            <div className="mt-3 space-y-3">
+              {suppliers.map((supplier, index) => {
+                const lines = linesFor(supplier.key);
+                return (
+                  <div key={supplier.key} className="rounded-xl border border-slate-200 p-3" data-testid="supplier-row">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-sm font-semibold text-slate-700">NCC {index + 1}</span>
+                      <div className="flex items-center gap-3">
+                        <span className={`text-sm ${lines ? "text-slate-600" : "text-amber-700"}`}>
+                          {lines
+                            ? <>Số tiền chuyển: <b className="tabular-nums text-slate-900">{formatMoney(amountFor(supplier.key))} đ</b> ({lines} dòng)</>
+                            : "Chưa gán dòng chi tiết nào"}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={`Bỏ nhà cung cấp ${index + 1}`}
+                          className="rounded-lg p-1.5 text-red-500 hover:bg-red-50"
+                          onClick={() => removeSupplier(supplier.key)}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <label className={labelClass}>
+                        Tên nhà cung cấp *
+                        <input className={inputClass} value={supplier.name} onChange={(e) => updateSupplier(supplier.key, { name: e.target.value })} />
+                      </label>
+                      <label className={labelClass}>
+                        Ngân hàng *
+                        <input className={inputClass} value={supplier.bankName ?? ""} onChange={(e) => updateSupplier(supplier.key, { bankName: e.target.value })} />
+                      </label>
+                      <label className={labelClass}>
+                        Số tài khoản *
+                        <input
+                          className={inputClass}
+                          inputMode="numeric"
+                          value={supplier.bankAccountNumber ?? ""}
+                          onChange={(e) => updateSupplier(supplier.key, { bankAccountNumber: e.target.value })}
+                        />
+                      </label>
+                      <label className={labelClass}>
+                        Chủ tài khoản
+                        <input
+                          className={inputClass}
+                          placeholder="Bỏ trống nếu trùng tên NCC"
+                          value={supplier.bankAccountHolder ?? ""}
+                          onChange={(e) => updateSupplier(supplier.key, { bankAccountHolder: e.target.value })}
+                        />
+                      </label>
+                      <label className={`${labelClass} md:col-span-2`}>
+                        Ghi chú chuyển khoản
+                        <input
+                          className={inputClass}
+                          placeholder="VD: nội dung chuyển khoản, số hợp đồng / báo giá"
+                          value={supplier.note ?? ""}
+                          onChange={(e) => updateSupplier(supplier.key, { note: e.target.value })}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      )}
+
       <Card title="Thông tin nhận tiền" icon={<Banknote size={16} />}
         action={
           editingPayee ? (
@@ -1056,6 +1239,15 @@ export default function FinanceRequestForm() {
           )
         }
       >
+        {activeSuppliers.length > 0 && (
+          <p className={`mb-3 rounded-lg px-3 py-2 text-sm ${requesterShare > 0 ? "bg-blue-50 text-blue-800" : "bg-slate-50 text-slate-600"}`}>
+            {requesterShare > 0 ? (
+              <>Phần chuyển vào tài khoản của bạn: <b className="tabular-nums">{formatMoney(requesterShare)} đ</b> (các dòng không chọn NCC).</>
+            ) : (
+              "Toàn bộ số tiền chuyển cho nhà cung cấp — không chuyển vào tài khoản của bạn."
+            )}
+          </p>
+        )}
         <div className="grid gap-3 md:grid-cols-3">
           {editingPayee ? (
             <>

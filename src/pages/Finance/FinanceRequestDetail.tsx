@@ -453,18 +453,54 @@ export default function FinanceRequestDetail() {
                     ? `${detail.paymentAccountCode}${detail.paymentAccountName ? ` — ${detail.paymentAccountName}` : ""}`
                     : "Thủ quỹ chọn khi chi tiền"}
                 </InfoRow>
-                <InfoRow label="Người thụ hưởng">{detail.payeeName}</InfoRow>
-                {(detail.bankName || detail.bankAccountNumber) && (
+                {(detail.suppliers?.length ?? 0) === 0 && (
                   <>
-                    <InfoRow label="Chủ tài khoản">{detail.bankAccountHolder}</InfoRow>
-                    <InfoRow label="Ngân hàng">{detail.bankName}</InfoRow>
-                    <InfoRow label="Số tài khoản">
-                      <span className="font-mono">{detail.bankAccountNumber}</span>
-                    </InfoRow>
+                    <InfoRow label="Người thụ hưởng">{detail.payeeName}</InfoRow>
+                    {(detail.bankName || detail.bankAccountNumber) && (
+                      <>
+                        <InfoRow label="Chủ tài khoản">{detail.bankAccountHolder}</InfoRow>
+                        <InfoRow label="Ngân hàng">{detail.bankName}</InfoRow>
+                        <InfoRow label="Số tài khoản">
+                          <span className="font-mono">{detail.bankAccountNumber}</span>
+                        </InfoRow>
+                      </>
+                    )}
                   </>
                 )}
                 <InfoRow label="Ghi chú">{detail.paymentNote}</InfoRow>
               </dl>
+              {(detail.suppliers?.length ?? 0) > 0 && (
+                <ul className="mt-3 space-y-2" data-testid="recipients">
+                  {(detail.recipients ?? []).map((r) => (
+                    <li key={r.supplierId ?? "requester"} className="rounded-xl border border-slate-200 p-3 text-sm">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-slate-800">
+                            {r.name}{" "}
+                            <Badge tone={r.kind === "SUPPLIER" ? "blue" : "slate"}>
+                              {r.kind === "SUPPLIER" ? "Nhà cung cấp" : "Người đề nghị"}
+                            </Badge>
+                          </p>
+                          <p className="text-slate-600">
+                            {r.bankName || "—"} · <span className="font-mono">{r.bankAccountNumber || "—"}</span>
+                            {r.bankAccountHolder ? ` · ${r.bankAccountHolder}` : ""}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold tabular-nums text-slate-900">{formatMoney(r.amount)} đ</p>
+                          {detail.approvalStatus === "APPROVED" && (
+                            <p className={`text-xs ${r.remaining > 0 ? "text-amber-700" : "text-emerald-700"}`}>
+                              {r.remaining > 0
+                                ? `Đã chi ${formatMoney(r.paidAmount)} · còn ${formatMoney(r.remaining)} đ`
+                                : "Đã chi đủ"}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </Card>
           </div>
 
@@ -492,6 +528,7 @@ export default function FinanceRequestDetail() {
                           <p className="font-medium text-slate-800">{item.description}</p>
                           {item.categoryName && <p className="text-xs text-slate-500">{item.categoryName}</p>}
                           {item.overLimit && <Badge tone="amber">Vượt định mức</Badge>}
+                          {item.supplierId && <Badge tone="blue">Chuyển cho NCC</Badge>}
                         </td>
                         <td className="px-3 py-2">{item.unit}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{formatQuantity(item.quantity)}</td>
@@ -727,6 +764,7 @@ export default function FinanceRequestDetail() {
           </div>
           <MovementTable
             title="Các lần chi tiền"
+            showRecipient={(detail.suppliers?.length ?? 0) > 0}
             rows={detail.payments}
             attachments={detail.attachments.filter((a) => a.paymentId)}
             canVoid={p.canVoidMoney}
@@ -851,6 +889,7 @@ export default function FinanceRequestDetail() {
           remaining={dialog.kind === "payment" ? s.payableRemaining : s.receivableRemaining}
           defaultMethod={dialog.kind === "payment" ? detail.paymentMethod : undefined}
           defaultCashAccountCode={dialog.kind === "payment" ? detail.paymentAccountCode : undefined}
+          recipients={dialog.kind === "payment" && (detail.suppliers?.length ?? 0) > 0 ? detail.recipients : undefined}
           onClose={() => setDialog(null)}
           onSubmit={({ payload, proofs }) =>
             safe(() =>
@@ -922,7 +961,9 @@ function MovementTable({
   canVoid,
   onVoid,
   linkKey,
+  showRecipient = false,
 }: {
+  showRecipient?: boolean;
   title: string;
   rows: FinanceMovement[];
   attachments: FinanceDetail["attachments"];
@@ -940,6 +981,7 @@ function MovementTable({
             <thead className="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-3 py-2">Ngày</th>
+                {showRecipient && <th className="px-3 py-2">Chuyển cho</th>}
                 <th className="px-3 py-2 text-right">Số tiền</th>
                 <th className="px-3 py-2">Hình thức</th>
                 <th className="px-3 py-2">Mã giao dịch</th>
@@ -952,6 +994,7 @@ function MovementTable({
               {rows.map((row) => (
                 <tr key={row.id} className={row.status === "VOIDED" ? "text-slate-400 line-through" : ""}>
                   <td className="px-3 py-2">{formatDate(row.date)}</td>
+                  {showRecipient && <td className="px-3 py-2">{row.recipientName ?? "—"}</td>}
                   <td className="px-3 py-2 text-right font-semibold tabular-nums">{formatMoney(row.amount)}</td>
                   <td className="px-3 py-2">
                     {PAYMENT_METHOD_LABELS[row.method]}

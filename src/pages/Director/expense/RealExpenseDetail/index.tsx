@@ -46,6 +46,10 @@ import {
   placeRowsByIndex,
 } from "../utils/managementRows";
 import { revenueQuantityDefaultsFromPolicy } from "@/utils/revenueAmount";
+import { COLLABORATOR_PAY_ROLES } from "@/service/collaboratorPayroll";
+import CollaboratorPayrollReport from "../components/CollaboratorPayroll/CollaboratorPayrollReport";
+import type { CollaboratorPayrollScope } from "../component/expense/CollaboratorPayrollRow";
+import { periodMonth } from "../utils/collaboratorPayroll";
 
 type CashPolicyRowType = {
   payer: string;
@@ -169,6 +173,13 @@ export default function RealExpenseDetail({
   const isLockedPaymentEditor = hasRole("accountant", "ketoan_congno", "thuquy");
   // Sales admin xem toàn bộ dữ liệu thu chi nhưng chỉ được xác nhận đúng BBCS.
   const isSalesAdmin = hasRole("saleadmin", "salesadmin", "salesadmin_la");
+  // Lương GV CTV (tab + dòng ở bảng Chi Trường) — khớp quyền API backend.
+  const canViewCollaboratorPay = hasRole(...COLLABORATOR_PAY_ROLES);
+  // Kỳ (tháng/năm) của phiếu thu chi đang xem; null = chưa tải được.
+  const [sheetPeriod, setSheetPeriod] = useState<{
+    month?: number;
+    year?: number;
+  } | null>(null);
   const [managementConfirmed, setManagementConfirmed] = useState(false);
   const [managementConfirmedByName, setManagementConfirmedByName] =
     useState<string | null>(null);
@@ -267,16 +278,21 @@ export default function RealExpenseDetail({
   useEffect(() => {
     if (!resolvedSchoolExpenseId) {
       applyLockState(null);
+      setSheetPeriod(null);
       return;
     }
     let active = true;
     schoolExpenseApi
       .getById(resolvedSchoolExpenseId)
       .then((res: any) => {
-        if (active) applyLockState(res);
+        if (!active) return;
+        applyLockState(res);
+        setSheetPeriod(res?.period || null);
       })
       .catch(() => {
-        if (active) applyLockState(null);
+        if (!active) return;
+        applyLockState(null);
+        setSheetPeriod(null);
       });
     return () => {
       active = false;
@@ -1484,6 +1500,20 @@ export default function RealExpenseDetail({
     : null;
 
   const activeSubject = subjects.find((s: any) => s.id === activeSubjectId);
+  const sheetMonth = useMemo(
+    () => periodMonth(sheetPeriod),
+    [sheetPeriod?.month, sheetPeriod?.year],
+  );
+  const collaboratorPayrollScope: CollaboratorPayrollScope | null =
+    canViewCollaboratorPay && sheetPeriod && resolvedSchoolId && activeSubjectId
+      ? {
+          schoolId: resolvedSchoolId,
+          subjectId: activeSubjectId,
+          month: sheetMonth,
+          schoolName: resolvedSchool?.name,
+          subjectName: activeSubject?.catalog?.name || activeSubject?.name,
+        }
+      : null;
   const activeOtherCosts = getPolicyOtherCosts(activeSubject);
   const activeTtcs = activeSubject?.policies?.[0]?.data?.ttcs?.[0] || {};
   useEffect(() => {
@@ -1597,7 +1627,17 @@ export default function RealExpenseDetail({
           setTab={setTab}
           subjects={subjects}
           setSubjectId={setSubjectId}
+          showCollaboratorPayroll={canViewCollaboratorPay}
         />
+
+        {tab === "ctv-payroll" && canViewCollaboratorPay && (
+          <CollaboratorPayrollReport
+            schoolId={resolvedSchoolId}
+            schoolName={resolvedSchool?.name}
+            schoolYear={selectedSchoolYear}
+            initialMonth={sheetMonth}
+          />
+        )}
 
         {tab === "summary" && (
           <div className="space-y-5">
@@ -1818,6 +1858,7 @@ export default function RealExpenseDetail({
                 unlinkingEInvoiceId={unlinkingEInvoiceId}
                 schoolName={resolvedSchool?.name}
                 schoolYear={selectedSchoolYear}
+                collaboratorPayroll={collaboratorPayrollScope}
               />}
 
               {/*
@@ -1853,6 +1894,7 @@ export default function RealExpenseDetail({
                 finalizedAt={finalizedAt}
                 schoolName={resolvedSchool?.name}
                 schoolYear={selectedSchoolYear}
+                collaboratorPayroll={collaboratorPayrollScope}
                 handleViewHistory={handleViewHistory}
                 historyLoading={historyLoading}
                 historyCount={historyList.length}

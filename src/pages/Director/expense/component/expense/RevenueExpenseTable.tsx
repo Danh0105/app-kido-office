@@ -3,6 +3,13 @@
 import { Building2, CalendarDays, Receipt, Wallet } from "lucide-react";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
 import RevenueExpenseRow from "./RevenueExpenseRow";
+import CollaboratorPayrollRow, {
+  type CollaboratorPayrollScope,
+} from "./CollaboratorPayrollRow";
+
+/** Lưới cột của bảng Chi Trường — header, dòng lương GV CTV và footer dùng chung. */
+const GRID_COLS =
+  "grid grid-cols-[200px_120px_90px_120px_140px_150px_160px_140px_120px_140px_150px_160px_180px_230px_150px_150px_160px_180px_70px]";
 
 type Props = {
   rows: any[];
@@ -18,6 +25,8 @@ type Props = {
   removeRow: (index: number) => void;
   /** Kỳ đã "Kết thúc" → chỉ còn Ngày chi + Nguồn chi sửa được. */
   finalized?: boolean;
+  /** Có thì hiện dòng "Lương GV CTV" (chỉ xem, không cộng tổng). */
+  collaboratorPayroll?: CollaboratorPayrollScope | null;
 };
 
 export default function RevenueExpenseTable({
@@ -28,6 +37,7 @@ export default function RevenueExpenseTable({
   updateRow,
   removeRow,
   finalized = false,
+  collaboratorPayroll,
 }: Props) {
   const policyData = subjects?.policies?.[0]?.data || {};
   const fallbackInputData = inputRows[0] || ({} as InputExpenseRow);
@@ -119,9 +129,8 @@ export default function RevenueExpenseTable({
         <div className="min-w-[2820px]">
           {/* HEADER ROW */}
           <div
-            className="
-              grid
-              grid-cols-[200px_120px_90px_120px_140px_150px_160px_140px_120px_140px_150px_160px_180px_230px_150px_150px_160px_180px_70px]
+            className={`
+              ${GRID_COLS}
               bg-slate-900
               text-white
               font-semibold
@@ -129,7 +138,7 @@ export default function RevenueExpenseTable({
               sticky
               top-0
               z-10
-            "
+            `}
           >
             <div className="p-3 text-center border-r border-slate-700">
               📄 Nội dung
@@ -227,16 +236,23 @@ export default function RevenueExpenseTable({
             ))}
           </div>
 
+          {/* LƯƠNG GV CTV — chỉ hiển thị, không cộng vào Tổng cộng bên dưới */}
+          {collaboratorPayroll && (
+            <CollaboratorPayrollRow
+              scope={collaboratorPayroll}
+              gridClass={GRID_COLS}
+            />
+          )}
+
           {/* FOOTER */}
           <div
-            className="
-              grid
-              grid-cols-[200px_120px_90px_120px_140px_150px_160px_140px_120px_140px_150px_160px_180px_230px_150px_150px_160px_180px_70px]
+            className={`
+              ${GRID_COLS}
               bg-slate-100
               border-t-2
               border-slate-300
               font-bold
-            "
+            `}
           >
             <div className={`${footerCellClass} col-span-4 text-slate-700`}>
               <span className="text-sm uppercase tracking-wide">Tổng cộng</span>

@@ -28,6 +28,8 @@ import { subjectApi } from "@/service/subject.api";
 import { StatCard } from "./component/StatCard";
 import RealExpenseDetail from "./RealExpenseDetail/index";
 import GlobalExpenseReport from "./components/GlobalExpenseReport";
+import CollaboratorPayrollReport from "./components/CollaboratorPayroll/CollaboratorPayrollReport";
+import { COLLABORATOR_PAY_ROLES } from "@/service/collaboratorPayroll";
 import SchoolInfoModal, { SchoolInfo } from "./components/SchoolInfoModal";
 import { getApiErrorMessage } from "@/utils/apiError";
 import { hasRole } from "@/utils/auth";
@@ -215,7 +217,11 @@ export default function RealExpense() {
   const [employeePage, setEmployeePage] = useState(1);
 
   const [loadingDetail, setLoadingDetail] = useState(false);
-  const [mainView, setMainView] = useState<"schools" | "report">("schools");
+  const [mainView, setMainView] = useState<
+    "schools" | "report" | "ctv-payroll"
+  >("schools");
+  // Tab "Lương GV CTV" — khớp quyền API backend (không gồm Sales Admin).
+  const canViewCollaboratorPay = hasRole(...COLLABORATOR_PAY_ROLES);
   const [customPeriodName, setCustomPeriodName] = useState("");
   // "" = dòng tuỳ chỉnh; số = thêm lại tháng thật (1–12) chưa có trong năm học.
   const [customPeriodMonth, setCustomPeriodMonth] = useState<number | "">("");
@@ -794,7 +800,7 @@ export default function RealExpense() {
       <div className="mt-[60px] p-4">
         <div
           className={`grid grid-cols-1 gap-5 items-start ${
-            !activeExpenseId && mainView === "report"
+            !activeExpenseId && mainView !== "schools"
               ? ""
               : "xl:grid-cols-[minmax(0,1fr)_150px]"
           }`}
@@ -824,10 +830,26 @@ export default function RealExpense() {
                 >
                   Báo cáo tổng hợp
                 </button>
+                {canViewCollaboratorPay && (
+                  <button
+                    onClick={() => setMainView("ctv-payroll")}
+                    className={`flex-1 rounded-xl px-4 py-3 text-base font-bold ${
+                      mainView === "ctv-payroll"
+                        ? "bg-blue-600 text-white"
+                        : "text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    Lương GV CTV
+                  </button>
+                )}
               </div>
             )}
             {!activeExpenseId && mainView === "report" ? (
               <GlobalExpenseReport />
+            ) : !activeExpenseId &&
+              mainView === "ctv-payroll" &&
+              canViewCollaboratorPay ? (
+              <CollaboratorPayrollReport />
             ) : (
             <>
             {/* SEARCH */}

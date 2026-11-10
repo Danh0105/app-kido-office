@@ -16,6 +16,7 @@ import InvoiceTable from "./InvoiceTable";
 import ExpensePrintButton from "./ExpensePrintButton";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
 import type { RevenueEInvoice } from "@/service/schoolExpense";
+import type { CollaboratorPayrollScope } from "./CollaboratorPayrollRow";
 
 type Props = {
   inputRows: InputExpenseRow[];
@@ -102,6 +103,8 @@ type Props = {
   /** Tiêu đề trang in. */
   schoolName?: string;
   schoolYear?: string;
+  /** Dòng "Lương GV CTV" ở bảng Chi Trường; không truyền thì ẩn. */
+  collaboratorPayroll?: CollaboratorPayrollScope | null;
 };
 
 const formatDateTime = (value: string | Date) =>
@@ -166,6 +169,7 @@ export default function ExpenseFormTable({
   unlinkingEInvoiceId = null,
   schoolName,
   schoolYear,
+  collaboratorPayroll,
 }: Props) {
   const [confirmFinalize, setConfirmFinalize] = useState(false);
   const lockAllInvoices = () => {
@@ -207,6 +211,7 @@ export default function ExpenseFormTable({
                 updateRow={updateRevenueRow}
                 removeRow={removeRevenueRow}
                 finalized={finalized}
+                collaboratorPayroll={collaboratorPayroll}
               />
             </fieldset>
 

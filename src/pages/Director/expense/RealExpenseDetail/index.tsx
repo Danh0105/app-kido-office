@@ -907,7 +907,19 @@ export default function RealExpenseDetail({
     ]);
   };
 
+  // Dòng Chi Ngoài có Đã chi từ đề xuất chi: không xoá được (server cũng chặn).
+  const blockSuggestPaidRowRemoval = (index: number) => {
+    const codes = managementRows[index]?.suggestCodes;
+    if (!codes) return false;
+    toast.error(
+      `Dòng Chi Ngoài ${index + 1} đã chi theo đề xuất ${codes} nên không xoá được`,
+      { id: "management-suggest-paid-row" },
+    );
+    return true;
+  };
+
   const removeInputRow = (index: number) => {
+    if (blockSuggestPaidRowRemoval(index)) return;
     setInputRows((prev) => prev.filter((_, i) => i !== index));
     setRevenueRows((prev) => {
       const nextRows = prev.filter((_, i) => i !== index);
@@ -944,6 +956,7 @@ export default function RealExpenseDetail({
   };
 
   const removeManagementRow = (index: number) => {
+    if (blockSuggestPaidRowRemoval(index)) return;
     setManagementRows((prev) => {
       const nextRows = prev.filter((_, i) => i !== index);
       // Xoá dòng đi kèm Doanh Thu khi phía sau còn dòng thêm riêng: chèn dòng
@@ -1150,6 +1163,8 @@ export default function RealExpenseDetail({
                 cashAccount: r.cashAccount || "",
                 payer: r.payer || "",
                 note: r.note || "",
+                suggestCodes: r.suggestCodes || undefined,
+                suggestPaidAmount: Number(r.suggestPaidAmount || 0),
               };
             }),
             nextInputRows.length,

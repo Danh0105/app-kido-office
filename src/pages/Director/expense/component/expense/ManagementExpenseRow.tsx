@@ -87,6 +87,12 @@ export default function ManagementExpenseRow({
     readOnly || (savedRowsOnly && !row?.id && !addedWhileLocked);
   // Đã chi, Người chi, Ghi chú.
   const paidReadOnly = paymentReadOnly || dateSourceOnly;
+  // Đã chi do đề xuất chi tháng ghi vào khi kinh doanh xác nhận chi: Ngày chi,
+  // Nguồn chi, Đã chi lấy từ đề xuất và khoá; Người chi / Ghi chú vẫn sửa được.
+  const suggestCodes: string | undefined = row?.suggestCodes || undefined;
+  const suggestTitle = suggestCodes
+    ? `Lấy từ đề xuất chi ${suggestCodes} — không sửa tay được`
+    : undefined;
   const policyQl1 = Number(
     subjects?.policies?.[0]?.data?.ttcs?.[0]?.ql1Percent || 0
   );
@@ -360,7 +366,8 @@ export default function ManagementExpenseRow({
         <input
           type="date"
           value={row.paymentDate || ""}
-          disabled={paymentReadOnly}
+          disabled={paymentReadOnly || !!suggestCodes}
+          title={suggestTitle}
           onChange={(e) => updateRow(index, "paymentDate", e.target.value)}
           className="
             w-full h-11 rounded-lg
@@ -373,10 +380,10 @@ export default function ManagementExpenseRow({
       </div>
 
       {/* PAYMENT SOURCE — Nguồn chi */}
-      <div className="p-2 border-r border-slate-100">
+      <div className="p-2 border-r border-slate-100" title={suggestTitle}>
         <CashAccountSelect
           value={row.cashAccount}
-          disabled={paymentReadOnly}
+          disabled={paymentReadOnly || !!suggestCodes}
           onChange={(value) => updateRow(index, "cashAccount", value)}
           className="
             w-full h-11 rounded-lg
@@ -388,10 +395,10 @@ export default function ManagementExpenseRow({
       </div>
 
       {/* PAID */}
-      <div className="p-2 border-r border-slate-100">
+      <div className="p-2 border-r border-slate-100" title={suggestTitle}>
         <DecimalInput
           value={paidAmount}
-          disabled={paidReadOnly}
+          disabled={paidReadOnly || !!suggestCodes}
           max={paidMax}
           onOverMax={(max) =>
             toast.error(
@@ -411,9 +418,14 @@ export default function ManagementExpenseRow({
             px-3 text-sm font-semibold
             text-orange-500
             text-center
-
+            disabled:bg-slate-100
           "
         />
+        {suggestCodes && (
+          <div className="mt-1 truncate text-center text-[11px] font-medium text-emerald-700">
+            Theo {suggestCodes}
+          </div>
+        )}
       </div>
 
       {/* REMAINING */}
@@ -465,7 +477,7 @@ export default function ManagementExpenseRow({
       </div>
       {showActions && (
         <div className="flex items-center justify-center gap-1">
-          {(!policyReadOnly || addedWhileLocked) && (
+          {(!policyReadOnly || addedWhileLocked) && !suggestCodes && (
             <button
               onClick={() => removeRow(index)}
               title="Xoá dòng"

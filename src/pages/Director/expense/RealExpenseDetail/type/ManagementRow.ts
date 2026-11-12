@@ -23,4 +23,8 @@ export type ManagementRow = {
   cashAccount: string;
   payer: string;
   note: string;
+  /** Mã đề xuất chi đã ghi Đã chi vào dòng — ô Ngày chi / Nguồn chi / Đã chi khoá. */
+  suggestCodes?: string;
+  /** Phần Đã chi do đề xuất chi ghi vào. */
+  suggestPaidAmount?: number;
 };

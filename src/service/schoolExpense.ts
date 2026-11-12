@@ -230,16 +230,23 @@ export const schoolExpenseApi = {
     return res.data;
   },
 
-  /** Sales admin xác nhận bảng "Chi Ngoài" → khoá chỉnh sửa (chỉ kế toán trưởng còn sửa được). */
-  confirmManagementExpense: async (id: number) => {
-    const res = await api.post(`/school-expenses/${id}/confirm-management-expense`);
+  /**
+   * Sales admin xác nhận bảng "Chi Ngoài" của MỘT MÔN → khoá chỉnh sửa môn đó
+   * (chỉ kế toán trưởng còn sửa được).
+   */
+  confirmManagementExpense: async (id: number, subjectId: number) => {
+    const res = await api.post(
+      `/school-expenses/${id}/confirm-management-expense`,
+      { subjectId },
+    );
     return res.data;
   },
 
-  /** Kế toán trưởng mở khoá "Xác nhận đúng BBCS" */
-  unconfirmManagementExpense: async (id: number) => {
+  /** Kế toán trưởng mở khoá "Xác nhận đúng BBCS" của MỘT MÔN. */
+  unconfirmManagementExpense: async (id: number, subjectId: number) => {
     const res = await api.post(
       `/school-expenses/${id}/unconfirm-management-expense`,
+      { subjectId },
     );
     return res.data;
   },

@@ -180,12 +180,9 @@ export default function RealExpenseDetail({
     month?: number;
     year?: number;
   } | null>(null);
-  const [managementConfirmed, setManagementConfirmed] = useState(false);
-  const [managementConfirmedByName, setManagementConfirmedByName] =
-    useState<string | null>(null);
-  const [managementConfirmedAt, setManagementConfirmedAt] = useState<
-    string | null
-  >(null);
+  // Trạng thái khoá trả về từ phiếu thu chi; "Xác nhận đúng BBCS" tính theo môn
+  // đang xem (xem activeManagementConfirmation).
+  const [managementLock, setManagementLock] = useState<any>(null);
   const [confirmingManagement, setConfirmingManagement] = useState(false);
   // Kế toán trưởng "Kết thúc" kỳ thu chi → khoá toàn bộ, kể cả KTT (phải mở lại).
   const [finalized, setFinalized] = useState(false);
@@ -265,9 +262,7 @@ export default function RealExpenseDetail({
 
   /** Trạng thái khoá "Xác nhận đúng BBCS" + "Kết thúc" từ phiếu thu chi. */
   const applyLockState = (res: any) => {
-    setManagementConfirmed(!!res?.managementExpenseConfirmed);
-    setManagementConfirmedByName(res?.managementExpenseConfirmedByName || null);
-    setManagementConfirmedAt(res?.managementExpenseConfirmedAt || null);
+    setManagementLock(res ?? null);
     setFinalized(!!res?.finalized);
     setFinalizedByName(res?.finalizedByName || null);
     setFinalizedAt(res?.finalizedAt || null);
@@ -301,14 +296,17 @@ export default function RealExpenseDetail({
   }, [resolvedSchoolExpenseId]);
 
   const handleConfirmManagementExpense = async () => {
-    if (!resolvedSchoolExpenseId) return;
+    if (!resolvedSchoolExpenseId || !activeSubjectId) return;
     setConfirmingManagement(true);
     try {
       const res: any = await schoolExpenseApi.confirmManagementExpense(
         resolvedSchoolExpenseId,
+        activeSubjectId,
       );
       applyLockState(res);
-      toast.success("Đã xác nhận đúng BBCS — bảng Chi Ngoài đã được khoá");
+      toast.success(
+        `Đã xác nhận đúng BBCS — bảng Chi Ngoài môn ${activeSubject?.name ?? "này"} đã được khoá`,
+      );
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Xác nhận thất bại"));
     } finally {
@@ -333,11 +331,14 @@ export default function RealExpenseDetail({
     }
   };
 
-  const handleUnconfirmManagementExpense = () =>
-    runLockAction(
-      schoolExpenseApi.unconfirmManagementExpense,
-      "Đã mở khoá BBCS — bảng Chi Ngoài sửa được lại",
+  const handleUnconfirmManagementExpense = () => {
+    if (!activeSubjectId) return;
+    const subjectId = activeSubjectId;
+    return runLockAction(
+      (id) => schoolExpenseApi.unconfirmManagementExpense(id, subjectId),
+      `Đã mở khoá BBCS — bảng Chi Ngoài môn ${activeSubject?.name ?? "này"} sửa được lại`,
     );
+  };
 
   const handleFinalize = () =>
     runLockAction(
@@ -1515,6 +1516,29 @@ export default function RealExpenseDetail({
     : null;
 
   const activeSubject = subjects.find((s: any) => s.id === activeSubjectId);
+  // "Xác nhận đúng BBCS" của môn đang xem. BE bản cũ chưa trả theo môn → dùng
+  // cờ của cả bảng thu chi như trước.
+  const activeManagementConfirmation = useMemo(() => {
+    if (!managementLock) return null;
+    if (Array.isArray(managementLock.managementConfirmations)) {
+      return (
+        managementLock.managementConfirmations.find(
+          (c: any) => Number(c?.subjectId) === activeSubjectId,
+        ) ?? null
+      );
+    }
+    return managementLock.managementExpenseConfirmed
+      ? {
+          confirmedByName: managementLock.managementExpenseConfirmedByName,
+          confirmedAt: managementLock.managementExpenseConfirmedAt,
+        }
+      : null;
+  }, [managementLock, activeSubjectId]);
+  const managementConfirmed = !!activeManagementConfirmation;
+  const managementConfirmedByName: string | null =
+    activeManagementConfirmation?.confirmedByName || null;
+  const managementConfirmedAt: string | null =
+    activeManagementConfirmation?.confirmedAt || null;
   const sheetMonth = useMemo(
     () => periodMonth(sheetPeriod),
     [sheetPeriod?.month, sheetPeriod?.year],

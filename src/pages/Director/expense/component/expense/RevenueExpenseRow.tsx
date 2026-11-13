@@ -22,6 +22,8 @@ type Props = {
   removeRow: (index: number) => void;
   /** Kỳ đã "Kết thúc" → chỉ còn Ngày chi + Nguồn chi sửa được. */
   finalized?: boolean;
+  /** Kỳ từ 11/2026: Giáo viên trường tách sang bảng riêng dưới Chi Ngoài. */
+  teacherSplit?: boolean;
 };
 
 export default function RevenueExpenseRow({
@@ -33,14 +35,15 @@ export default function RevenueExpenseRow({
   updateRow,
   removeRow,
   finalized = false,
+  teacherSplit = false,
 }: Props) {
   const students = Number(inputData.studentCount || 0);
   const months = Number(inputData.monthsCount || 0);
 
   const policyData = subjects?.policies?.[0]?.data || {};
-  const teacherUnitPrice = Number(
-    row.teacherUnitPrice ?? row.giaovien ?? policyData?.giaovien ?? 0,
-  );
+  const teacherUnitPrice = teacherSplit
+    ? 0
+    : Number(row.teacherUnitPrice ?? row.giaovien ?? policyData?.giaovien ?? 0);
   const taxUnitPrice = Number(
     row.taxUnitPrice ??
       row.thue ??
@@ -195,7 +198,7 @@ export default function RevenueExpenseRow({
             updateRow(index, "csvcUnitPrice", value)
           }
           placeholder="0"
-          allowDecimal={false}
+          fractionDigits={2}
           commitOnBlur
           className={`${metricInputClass} text-emerald-700`}
         />
@@ -216,14 +219,17 @@ export default function RevenueExpenseRow({
         </span>
       </div>
       {/* ĐƠN GIÁ GIÁO VIÊN (= đơn giá × tháng) */}
-      <div className="p-2 border-r border-slate-200">
+      <div
+        className="p-2 border-r border-slate-200"
+        title={teacherSplit ? "Từ kỳ 11/2026 nhập ở bảng Giáo viên trường (dưới Chi Ngoài)" : undefined}
+      >
         <DecimalInput
           value={teacherUnitPrice}
-          disabled={locked}
+          disabled={locked || teacherSplit}
           onValueChange={(value) =>
             updateRow(index, "teacherUnitPrice", value)
           }
-          allowDecimal={false}
+          fractionDigits={2}
           commitOnBlur
           className={`${metricInputClass} text-amber-700`}
         />
@@ -254,7 +260,7 @@ export default function RevenueExpenseRow({
             updateRow(index, "taxUnitPrice", value)
           }
           placeholder="0"
-          allowDecimal={false}
+          fractionDigits={2}
           commitOnBlur
           className={`${metricInputClass} text-rose-700`}
         />

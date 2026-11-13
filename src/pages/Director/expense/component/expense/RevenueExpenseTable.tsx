@@ -25,6 +25,8 @@ type Props = {
   removeRow: (index: number) => void;
   /** Kỳ đã "Kết thúc" → chỉ còn Ngày chi + Nguồn chi sửa được. */
   finalized?: boolean;
+  /** Kỳ từ 11/2026: Giáo viên trường tách sang bảng riêng dưới Chi Ngoài. */
+  teacherSplit?: boolean;
   /** Có thì hiện dòng "Lương GV CTV" (chỉ xem, không cộng tổng). */
   collaboratorPayroll?: CollaboratorPayrollScope | null;
 };
@@ -37,6 +39,7 @@ export default function RevenueExpenseTable({
   updateRow,
   removeRow,
   finalized = false,
+  teacherSplit = false,
   collaboratorPayroll,
 }: Props) {
   const policyData = subjects?.policies?.[0]?.data || {};
@@ -47,9 +50,9 @@ export default function RevenueExpenseTable({
       const inputData = inputRows[index] || fallbackInputData;
       const students = Number(inputData.studentCount || 0);
       const months = Number(inputData.monthsCount || 0);
-      const teacherUnitPrice = Number(
-        row.teacherUnitPrice ?? row.giaovien ?? policyData?.giaovien ?? 0,
-      );
+      const teacherUnitPrice = teacherSplit
+        ? 0
+        : Number(row.teacherUnitPrice ?? row.giaovien ?? policyData?.giaovien ?? 0);
       const taxUnitPrice = Number(
         row.taxUnitPrice ??
           row.thue ??
@@ -232,6 +235,7 @@ export default function RevenueExpenseTable({
                 updateRow={updateRow}
                 removeRow={removeRow}
                 finalized={finalized}
+                teacherSplit={teacherSplit}
               />
             ))}
           </div>

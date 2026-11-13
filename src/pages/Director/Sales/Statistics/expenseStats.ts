@@ -154,9 +154,16 @@ export const fromSchoolExpenseSummary = (
     revenue: sumMoney(revenueItems, (item) => item.invoiceAmount),
     revenuePaid: sumMoney(revenueItems, (item) => item.paidAmount),
     revenueRemaining: sumMoney(revenueItems, (item) => item.remainingAmount),
-    schoolExpense: sumMoney(schoolItems, (item) => item.schoolExpenseAmount),
-    schoolExpensePaid: sumMoney(schoolItems, (item) => item.paidAmount),
-    schoolExpenseRemaining: sumMoney(schoolItems, (item) => item.remaining),
+    // Giáo viên trường (kỳ từ 11/2026) tách khỏi Chi Trường — cộng lại cho đủ.
+    schoolExpense:
+      sumMoney(schoolItems, (item) => item.schoolExpenseAmount) +
+      toNumber(summary?.schoolTeacherTotals?.amount),
+    schoolExpensePaid:
+      sumMoney(schoolItems, (item) => item.paidAmount) +
+      toNumber(summary?.schoolTeacherTotals?.paid),
+    schoolExpenseRemaining:
+      sumMoney(schoolItems, (item) => item.remaining) +
+      toNumber(summary?.schoolTeacherTotals?.remaining),
     managementExpense: sumMoney(managementItems, (item) => item.totalOutside),
     managementExpensePaid: sumMoney(managementItems, (item) => item.paidAmount),
     managementExpenseRemaining: sumMoney(

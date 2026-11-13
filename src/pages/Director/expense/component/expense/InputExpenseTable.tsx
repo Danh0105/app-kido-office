@@ -159,7 +159,7 @@ export default function InputExpenseTable({
                         onUpdate(idx, "unitPrice", value)
                       }
                       placeholder="0"
-                      allowDecimal={false}
+                      fractionDigits={2}
                       commitOnBlur
                       className="w-full h-14 text-center font-bold text-emerald-700 border rounded-lg text-sm disabled:bg-slate-100 disabled:text-slate-400"
                     />

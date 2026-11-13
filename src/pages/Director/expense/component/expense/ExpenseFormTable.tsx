@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   Flag,
   History,
@@ -105,6 +105,10 @@ type Props = {
   schoolYear?: string;
   /** Dòng "Lương GV CTV" ở bảng Chi Trường; không truyền thì ẩn. */
   collaboratorPayroll?: CollaboratorPayrollScope | null;
+  /** Kỳ từ 11/2026: Chi Trường bỏ phần Giáo viên trường. */
+  teacherSplit?: boolean;
+  /** Bảng Giáo viên trường — hiện trong thẻ Chi Ngoài, ngay dưới bảng. */
+  schoolTeacherSection?: ReactNode;
 };
 
 const formatDateTime = (value: string | Date) =>
@@ -170,6 +174,8 @@ export default function ExpenseFormTable({
   schoolName,
   schoolYear,
   collaboratorPayroll,
+  teacherSplit = false,
+  schoolTeacherSection,
 }: Props) {
   const [confirmFinalize, setConfirmFinalize] = useState(false);
   const lockAllInvoices = () => {
@@ -211,6 +217,7 @@ export default function ExpenseFormTable({
                 updateRow={updateRevenueRow}
                 removeRow={removeRevenueRow}
                 finalized={finalized}
+                teacherSplit={teacherSplit}
                 collaboratorPayroll={collaboratorPayroll}
               />
             </fieldset>
@@ -257,6 +264,7 @@ export default function ExpenseFormTable({
             policyLocked={managementPolicyLocked}
             savedRowsOnly={managementSavedRowsOnly}
             dateSourceOnly={managementDateSourceOnly}
+            extraSection={schoolTeacherSection}
           />
         </div>
       </fieldset>

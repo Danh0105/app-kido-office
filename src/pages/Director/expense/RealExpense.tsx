@@ -28,7 +28,7 @@ import { subjectApi } from "@/service/subject.api";
 import { StatCard } from "./component/StatCard";
 import RealExpenseDetail from "./RealExpenseDetail/index";
 import GlobalExpenseReport from "./components/GlobalExpenseReport";
-import CollaboratorPayrollReport from "./components/CollaboratorPayroll/CollaboratorPayrollReport";
+import SchoolTeacherPayrollReport from "./components/SchoolTeacherPayroll/SchoolTeacherPayrollReport";
 import { COLLABORATOR_PAY_ROLES } from "@/service/collaboratorPayroll";
 import SchoolInfoModal, { SchoolInfo } from "./components/SchoolInfoModal";
 import { getApiErrorMessage } from "@/utils/apiError";
@@ -218,9 +218,9 @@ export default function RealExpense() {
 
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [mainView, setMainView] = useState<
-    "schools" | "report" | "ctv-payroll"
+    "schools" | "report" | "school-teacher-payroll"
   >("schools");
-  // Tab "Lương GV CTV" — khớp quyền API backend (không gồm Sales Admin).
+  // Tab "Lương GV trường" (thay Lương GV CTV) — khớp quyền API backend (không gồm Sales Admin).
   const canViewCollaboratorPay = hasRole(...COLLABORATOR_PAY_ROLES);
   const [customPeriodName, setCustomPeriodName] = useState("");
   // "" = dòng tuỳ chỉnh; số = thêm lại tháng thật (1–12) chưa có trong năm học.
@@ -832,14 +832,14 @@ export default function RealExpense() {
                 </button>
                 {canViewCollaboratorPay && (
                   <button
-                    onClick={() => setMainView("ctv-payroll")}
+                    onClick={() => setMainView("school-teacher-payroll")}
                     className={`flex-1 rounded-xl px-4 py-3 text-base font-bold ${
-                      mainView === "ctv-payroll"
+                      mainView === "school-teacher-payroll"
                         ? "bg-blue-600 text-white"
                         : "text-slate-600 hover:bg-slate-100"
                     }`}
                   >
-                    Lương GV CTV
+                    Lương GV trường
                   </button>
                 )}
               </div>
@@ -847,9 +847,9 @@ export default function RealExpense() {
             {!activeExpenseId && mainView === "report" ? (
               <GlobalExpenseReport />
             ) : !activeExpenseId &&
-              mainView === "ctv-payroll" &&
+              mainView === "school-teacher-payroll" &&
               canViewCollaboratorPay ? (
-              <CollaboratorPayrollReport />
+              <SchoolTeacherPayrollReport />
             ) : (
             <>
             {/* SEARCH */}

@@ -77,11 +77,14 @@ export default function ExpenseSummaryTable({ data, subjects }: Props) {
       "managementExpenseItems",
       "managementItems",
     ]);
+    // Giáo viên trường (kỳ từ 11/2026) tách khỏi Chi Trường — cộng lại vào Chi
+    // Trường cùng dòng để Tổng chi ngoài HĐ không đổi.
+    const schoolTeacherItems = arrayFrom(sources, ["schoolTeacherItems"]);
     const rowMap = new Map<string, any>();
 
     const addItems = (
       items: any[],
-      field: "revenue" | "schoolItem" | "managementItem"
+      field: "revenue" | "schoolItem" | "managementItem" | "schoolTeacherItem"
     ) => {
       items.forEach((item, index) => {
         const subjectId = toNumber(item.subjectId ?? item.subject?.id);
@@ -100,10 +103,11 @@ export default function ExpenseSummaryTable({ data, subjects }: Props) {
     addItems(revenues, "revenue");
     addItems(schoolItems, "schoolItem");
     addItems(managementItems, "managementItem");
+    addItems(schoolTeacherItems, "schoolTeacherItem");
 
     return [...rowMap.values()]
       .sort((a, b) => a.subjectId - b.subjectId || a.rowIndex - b.rowIndex)
-      .map(({ key, subjectId, revenue, schoolItem, managementItem }) => {
+      .map(({ key, subjectId, revenue, schoolItem, managementItem, schoolTeacherItem }) => {
         const sourceItem = revenue || schoolItem || managementItem || {};
         // Thành tiền của bảng Doanh Thu, chưa trừ Chi Trường.
         const revenueTotal = toNumber(
@@ -120,14 +124,15 @@ export default function ExpenseSummaryTable({ data, subjects }: Props) {
               subjects.find((item: any) => toNumber(item.id) === subjectId),
             )
           : 0;
-        const schoolExpenseAmount = toNumber(
-          schoolItem?.schoolExpenseAmount ??
-            (toNumber(schoolItem?.teacherUnitPrice ?? schoolItem?.giaovien) +
-              toNumber(schoolItem?.taxUnitPrice ?? schoolItem?.thue) +
-              toNumber(schoolItem?.csvcUnitPrice ?? schoolItem?.csvc)) *
-              toNumber(schoolItem?.studentCount) *
-              toNumber(schoolItem?.monthsCount)
-        );
+        const schoolExpenseAmount =
+          toNumber(
+            schoolItem?.schoolExpenseAmount ??
+              (toNumber(schoolItem?.teacherUnitPrice ?? schoolItem?.giaovien) +
+                toNumber(schoolItem?.taxUnitPrice ?? schoolItem?.thue) +
+                toNumber(schoolItem?.csvcUnitPrice ?? schoolItem?.csvc)) *
+                toNumber(schoolItem?.studentCount) *
+                toNumber(schoolItem?.monthsCount)
+          ) + toNumber(schoolTeacherItem?.amount);
         const managementExpenseAmount = toNumber(
           managementItem?.totalOutside ??
             managementItem?.totalOutsideExpense ??
@@ -161,12 +166,15 @@ export default function ExpenseSummaryTable({ data, subjects }: Props) {
           schoolExpenseAmount + managementExpenseAmount;
         const paidAmount =
           toNumber(schoolItem?.paidAmount) +
-          toNumber(managementItem?.paidAmount);
+          toNumber(managementItem?.paidAmount) +
+          toNumber(schoolTeacherItem?.paidAmount);
         const explicitRemaining =
           schoolItem?.remaining !== undefined ||
-          managementItem?.remaining !== undefined
+          managementItem?.remaining !== undefined ||
+          schoolTeacherItem?.remaining !== undefined
             ? toNumber(schoolItem?.remaining) +
-              toNumber(managementItem?.remaining)
+              toNumber(managementItem?.remaining) +
+              toNumber(schoolTeacherItem?.remaining)
             : undefined;
 
         return {

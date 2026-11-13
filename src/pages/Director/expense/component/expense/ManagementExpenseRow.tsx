@@ -221,7 +221,7 @@ export default function ManagementExpenseRow({
           value={ql1UnitPrice}
           disabled={policyReadOnly}
           onValueChange={(value) => updateRow(index, "ql1UnitPrice", value)}
-          allowDecimal={false}
+          fractionDigits={2}
           commitOnBlur
           className={`${metricInputClass} text-emerald-700`}
         />
@@ -232,7 +232,7 @@ export default function ManagementExpenseRow({
           value={rowQl1Tax}
           disabled={policyReadOnly}
           onValueChange={(value) => updateRow(index, "ql1Tax", value)}
-          allowDecimal={false}
+          fractionDigits={2}
           commitOnBlur
           className={`${metricInputClass} text-rose-700`}
         />
@@ -262,7 +262,7 @@ export default function ManagementExpenseRow({
           value={ql2UnitPrice}
           disabled={policyReadOnly}
           onValueChange={(value) => updateRow(index, "ql2UnitPrice", value)}
-          allowDecimal={false}
+          fractionDigits={2}
           commitOnBlur
           className={`${metricInputClass} text-cyan-700`}
         />
@@ -273,7 +273,7 @@ export default function ManagementExpenseRow({
           value={rowQl2Tax}
           disabled={policyReadOnly}
           onValueChange={(value) => updateRow(index, "ql2Tax", value)}
-          allowDecimal={false}
+          fractionDigits={2}
           commitOnBlur
           className={`${metricInputClass} text-rose-700`}
         />
@@ -313,7 +313,7 @@ export default function ManagementExpenseRow({
                   [key]: value,
                 })
               }
-              allowDecimal={false}
+              fractionDigits={2}
               commitOnBlur
               className={`${metricInputClass} text-fuchsia-700`}
             />
@@ -328,7 +328,7 @@ export default function ManagementExpenseRow({
                   [key]: value,
                 })
               }
-              allowDecimal={false}
+              fractionDigits={2}
               commitOnBlur
               className={`${metricInputClass} text-rose-700`}
             />

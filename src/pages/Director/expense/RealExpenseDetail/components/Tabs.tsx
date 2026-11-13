@@ -9,8 +9,8 @@ type Props = {
 
   setSubjectId: (subjectId: number) => void;
 
-  /** Hiện tab "Lương GV CTV" (kế toán, thủ quỹ, ban giám đốc). */
-  showCollaboratorPayroll?: boolean;
+  /** Hiện tab "Lương GV trường" (kế toán, thủ quỹ, ban giám đốc). */
+  showSchoolTeacherPayroll?: boolean;
 };
 
 const staticTabs = [
@@ -27,9 +27,9 @@ const policyYearTab = {
   activeClass: "bg-blue-600 text-white shadow-lg",
 };
 
-const collaboratorPayrollTab = {
-  key: "ctv-payroll",
-  label: "Lương GV CTV",
+const schoolTeacherPayrollTab = {
+  key: "school-teacher-payroll",
+  label: "Lương GV trường",
   activeClass: "bg-indigo-600 text-white shadow-lg",
 };
 
@@ -38,7 +38,7 @@ export default function Tabs({
   setTab,
   subjects,
   setSubjectId,
-  showCollaboratorPayroll = false,
+  showSchoolTeacherPayroll = false,
 }: Props) {
   console.log("Rendering Tabs with subjects:", subjects);
   const subjectTabs = subjects.map((subject: any) => ({
@@ -53,7 +53,7 @@ export default function Tabs({
     ...staticTabs,
     ...subjectTabs,
     policyYearTab,
-    ...(showCollaboratorPayroll ? [collaboratorPayrollTab] : []),
+    ...(showSchoolTeacherPayroll ? [schoolTeacherPayrollTab] : []),
   ];
 
   return (

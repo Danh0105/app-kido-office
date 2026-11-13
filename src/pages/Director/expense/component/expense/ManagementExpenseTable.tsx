@@ -1,4 +1,5 @@
 // components/expense/ManagementExpenseTable.tsx
+import type { ReactNode } from "react";
 
 import { Building2, CalendarDays, Lock, Plus, ShieldCheck, Wallet, Receipt, Users } from "lucide-react";
 
@@ -52,6 +53,8 @@ type Props = {
   confirmedByName?: string | null;
   /** Thời điểm xác nhận. */
   confirmedAt?: string | Date | null;
+  /** Phần thêm trong thẻ Chi Ngoài, ngay dưới bảng (bảng Giáo viên trường). */
+  extraSection?: ReactNode;
 };
 
 export default function ManagementExpenseTable({
@@ -73,6 +76,7 @@ export default function ManagementExpenseTable({
   onConfirm,
   confirmedByName,
   confirmedAt,
+  extraSection,
 }: Props) {
   const ql1 = Number(subjects?.policies?.[0]?.data?.ttcs?.[0]?.ql1Percent || 0);
 
@@ -473,6 +477,8 @@ export default function ManagementExpenseTable({
           </div>
         </div>
       </div>
+
+      {extraSection}
 
       {/* XÁC NHẬN / TRẠNG THÁI KHOÁ */}
       <div className="border-t border-slate-200 bg-slate-50 px-6 py-4 flex items-center justify-between gap-3">

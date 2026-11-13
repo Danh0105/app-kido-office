@@ -47,9 +47,15 @@ import {
 } from "../utils/managementRows";
 import { revenueQuantityDefaultsFromPolicy } from "@/utils/revenueAmount";
 import { COLLABORATOR_PAY_ROLES } from "@/service/collaboratorPayroll";
-import CollaboratorPayrollReport from "../components/CollaboratorPayroll/CollaboratorPayrollReport";
-import type { CollaboratorPayrollScope } from "../component/expense/CollaboratorPayrollRow";
-import { periodMonth } from "../utils/collaboratorPayroll";
+import SchoolTeacherPayrollReport from "../components/SchoolTeacherPayroll/SchoolTeacherPayrollReport";
+import SchoolTeacherTable from "../component/expense/SchoolTeacherTable";
+import type { SchoolTeacherRow } from "./type/SchoolTeacherRow";
+import type {
+  SchoolTeacher,
+  SchoolTeacherApproval,
+  SchoolTeacherItemsResponse,
+} from "@/service/schoolExpense";
+import { SCHOOL_TEACHER_APPROVE_ROLES } from "../utils/schoolTeacher";
 
 type CashPolicyRowType = {
   payer: string;
@@ -140,6 +146,29 @@ const lockedManagementRow = (subject: any): ManagementRow => {
 };
 
 const ALL_HISTORY_EMPLOYEES = "__all__";
+
+const initialSchoolTeacherRow: SchoolTeacherRow = {
+  expenseDate: "",
+  cashAccount: "",
+  note: "",
+};
+
+/**
+ * Phần số tiền của bảng Giáo viên trường đang hiện (gồm số lượng lấy từ dòng
+ * Doanh Thu) — khác bản đã lưu thì phải "Lưu tất cả" trước khi "Duyệt lương".
+ */
+const schoolTeacherSignature = (
+  rows: SchoolTeacherRow[],
+  inputRows: InputExpenseRow[],
+) =>
+  JSON.stringify({
+    rows,
+    quantities: inputRows.map((row) => [
+      row.totalPeriods,
+      row.studentCount,
+      row.monthsCount,
+    ]),
+  });
 
 const padRows = <T extends Record<string, any>>(
   rows: T[],
@@ -249,6 +278,28 @@ export default function RealExpenseDetail({
   const [managementRows, setManagementRows] = useState<ManagementRow[]>([
     initialManagementRow,
   ]);
+
+  // Bảng Giáo viên trường (kỳ từ 11/2026, dưới Chi Ngoài) — chỉ người xem được
+  // lương giáo viên (như Lương GV CTV), Sales Admin không thấy.
+  const canViewSchoolTeacher = canViewCollaboratorPay && !isSalesAdmin;
+  const canApproveSchoolTeacher = hasRole(...SCHOOL_TEACHER_APPROVE_ROLES);
+  const [schoolTeacherApplies, setSchoolTeacherApplies] = useState(false);
+  const [schoolTeacherRows, setSchoolTeacherRows] = useState<SchoolTeacherRow[]>([
+    initialSchoolTeacherRow,
+  ]);
+  const [schoolTeacherSavedSignature, setSchoolTeacherSavedSignature] =
+    useState("");
+  const [schoolTeacherApproval, setSchoolTeacherApproval] =
+    useState<SchoolTeacherApproval | null>(null);
+  const [approvingSchoolTeacher, setApprovingSchoolTeacher] = useState(false);
+  // Danh sách giáo viên của trường + thù lao của họ ở các môn khác (ngưỡng thuế).
+  const [schoolTeachers, setSchoolTeachers] = useState<SchoolTeacher[]>([]);
+  const [schoolTeacherOtherGross, setSchoolTeacherOtherGross] = useState<
+    Record<number, number>
+  >({});
+  const [schoolTeacherSchoolId, setSchoolTeacherSchoolId] = useState<
+    number | null
+  >(null);
 
   const pageSize = 5;
   const resolvedSchoolExpenseId =
@@ -507,6 +558,8 @@ export default function RealExpenseDetail({
         revenueItems: [] as any[],
         schoolExpenseItems: [] as any[],
         managementExpenseItems: [] as any[],
+        // Giáo viên trường (kỳ từ 11/2026) — cộng vào Chi Trường cùng dòng.
+        schoolTeacherItems: [] as any[],
       };
 
       summaries.forEach(({ record, summary: response }) => {
@@ -538,6 +591,7 @@ export default function RealExpenseDetail({
             "revenueItems",
             "schoolExpenseItems",
             "managementExpenseItems",
+            "schoolTeacherItems",
           ] as const
         ).forEach((key) => {
           const items = Array.isArray(source[key]) ? source[key] : [];
@@ -888,6 +942,97 @@ export default function RealExpenseDetail({
       nextRows.splice(inputRows.length, 0, { ...initialManagementRow });
       return nextRows;
     });
+    // Dòng Giáo viên trường đi kèm cũng nằm cùng vị trí, trước dòng thêm riêng.
+    setSchoolTeacherRows((prev) => {
+      const nextRows = padRows(prev, inputRows.length, initialSchoolTeacherRow);
+      nextRows.splice(inputRows.length, 0, { ...initialSchoolTeacherRow });
+      return nextRows;
+    });
+  };
+
+  /** Thêm 1 dòng chỉ cho bảng Giáo viên trường (tự giữ Nội dung + số lượng). */
+  const addSchoolTeacherRow = () => {
+    setSchoolTeacherRows((prev) => [
+      ...padRows(prev, inputRows.length, initialSchoolTeacherRow),
+      {
+        ...initialSchoolTeacherRow,
+        content: "",
+        totalPeriods: 0,
+        studentCount: 0,
+        monthsCount: 1,
+      },
+    ]);
+  };
+
+  const updateSchoolTeacherRow = (
+    index: number,
+    field: keyof SchoolTeacherRow,
+    value: any,
+  ) => {
+    setSchoolTeacherRows((prev) =>
+      prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)),
+    );
+  };
+
+  /** Chỉ dòng thêm riêng xoá được (dòng đi kèm theo dòng Doanh Thu). */
+  const removeSchoolTeacherRow = (index: number) => {
+    if (index < inputRows.length) return;
+    setSchoolTeacherRows((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  /** Dữ liệu bảng Giáo viên trường đã lưu → dòng trên màn hình (đi kèm + thêm riêng). */
+  const applySchoolTeacherData = (
+    data: SchoolTeacherItemsResponse | null,
+    nextInputRows: InputExpenseRow[],
+  ) => {
+    const inputCount = Math.max(nextInputRows.length, 1);
+    const saved = data?.items ?? [];
+    const toRow = (item: SchoolTeacherItemsResponse["items"][number]): SchoolTeacherRow => ({
+      id: item.id,
+      content: item.content ?? "",
+      totalPeriods: Number(item.totalPeriods || 0),
+      studentCount: Number(item.studentCount || 0),
+      monthsCount: Number(item.monthsCount ?? 1),
+      unitPrice: Number(item.unitPrice || 0),
+      schoolTeacherId: item.schoolTeacherId ?? null,
+      expenseDate: item.expenseDate ?? "",
+      cashAccount: item.cashAccount ?? "",
+      note: item.note ?? "",
+    });
+    const rows = [
+      ...Array.from({ length: inputCount }, (_, index) => {
+        const item = saved.find((row) => row.rowIndex === index);
+        return item ? toRow(item) : { ...initialSchoolTeacherRow };
+      }),
+      ...saved
+        .filter((row) => row.rowIndex >= inputCount)
+        .sort((a, b) => a.rowIndex - b.rowIndex)
+        .map(toRow),
+    ];
+    setSchoolTeacherApplies(!!data?.applies);
+    setSchoolTeacherApproval(data?.approval ?? null);
+    setSchoolTeachers(data?.teachers ?? []);
+    setSchoolTeacherOtherGross(data?.otherSubjectGross ?? {});
+    setSchoolTeacherSchoolId(data?.schoolId ?? null);
+    setSchoolTeacherRows(rows);
+    setSchoolTeacherSavedSignature(schoolTeacherSignature(rows, nextInputRows));
+  };
+
+  const handleApproveSchoolTeacher = async () => {
+    if (!resolvedSchoolExpenseId || !activeSubjectId) return;
+    setApprovingSchoolTeacher(true);
+    try {
+      const data = await schoolExpenseApi.approveSchoolTeacher(
+        resolvedSchoolExpenseId,
+        activeSubjectId,
+      );
+      setSchoolTeacherApproval(data?.approval ?? null);
+      toast.success("Đã duyệt lương giáo viên trường");
+    } catch (error: any) {
+      toast.error(getApiErrorMessage(error, "Không thể duyệt lương"));
+    } finally {
+      setApprovingSchoolTeacher(false);
+    }
   };
 
   /**
@@ -929,6 +1074,10 @@ export default function RealExpenseDetail({
     setManagementRows((prev) => {
       const nextRows = prev.filter((_, i) => i !== index);
       return nextRows.length ? nextRows : [{ ...initialManagementRow }];
+    });
+    setSchoolTeacherRows((prev) => {
+      const nextRows = prev.filter((_, i) => i !== index);
+      return nextRows.length ? nextRows : [{ ...initialSchoolTeacherRow }];
     });
   };
 
@@ -1177,6 +1326,16 @@ export default function RealExpenseDetail({
           padRows([], nextInputRows.length, initialManagementRow),
         );
       }
+
+      // Bảng Giáo viên trường: server cho biết kỳ có áp dụng không; lỗi thì ẩn.
+      applySchoolTeacherData(
+        canViewSchoolTeacher
+          ? await schoolExpenseApi
+              .getSchoolTeacherItems(resolvedSchoolExpenseId, subId)
+              .catch(() => null)
+          : null,
+        nextInputRows,
+      );
     } catch (error: any) {
       console.error("Failed to load expense data", error);
       toast.error(getApiErrorMessage(error, "Không thể tải dữ liệu thu chi"));
@@ -1235,9 +1394,10 @@ export default function RealExpenseDetail({
           totalPeriods: Number(inputRow.totalPeriods || 0),
           studentCount: Number(inputRow.studentCount || 0),
           monthsCount: Number(inputRow.monthsCount ?? 0),
-          teacherUnitPrice: Number(
-            row.teacherUnitPrice ?? policyData.giaovien ?? 0,
-          ),
+          // Kỳ từ 11/2026: tiền Giáo viên trường ở bảng riêng dưới Chi Ngoài.
+          teacherUnitPrice: schoolTeacherApplies
+            ? 0
+            : Number(row.teacherUnitPrice ?? policyData.giaovien ?? 0),
           taxUnitPrice: Number(
             row.taxUnitPrice ?? policyData.thue ?? policyData.tax ?? 0,
           ),
@@ -1299,6 +1459,31 @@ export default function RealExpenseDetail({
           note: row.note || "",
         };
       }),
+      // Có bảng Giáo viên trường thì server bỏ phần giáo viên khỏi Chi Trường.
+      ...(schoolTeacherApplies
+        ? {
+            schoolTeacherItems: schoolTeacherRows.map((row, index) => {
+              const standalone = index >= rows.length;
+              return {
+                id: row.id,
+                rowIndex: index,
+                ...(standalone
+                  ? {
+                      content: (row.content || "").slice(0, 500),
+                      totalPeriods: Number(row.totalPeriods || 0),
+                      studentCount: Number(row.studentCount || 0),
+                      monthsCount: Number(row.monthsCount ?? 1),
+                    }
+                  : {}),
+                schoolTeacherId: row.schoolTeacherId ?? null,
+                unitPrice: Number(row.unitPrice ?? policyData.giaovien ?? 0),
+                expenseDate: row.expenseDate || undefined,
+                cashAccount: row.cashAccount || undefined,
+                note: row.note || "",
+              };
+            }),
+          }
+        : {}),
     });
   };
 
@@ -1539,20 +1724,6 @@ export default function RealExpenseDetail({
     activeManagementConfirmation?.confirmedByName || null;
   const managementConfirmedAt: string | null =
     activeManagementConfirmation?.confirmedAt || null;
-  const sheetMonth = useMemo(
-    () => periodMonth(sheetPeriod),
-    [sheetPeriod?.month, sheetPeriod?.year],
-  );
-  const collaboratorPayrollScope: CollaboratorPayrollScope | null =
-    canViewCollaboratorPay && sheetPeriod && resolvedSchoolId && activeSubjectId
-      ? {
-          schoolId: resolvedSchoolId,
-          subjectId: activeSubjectId,
-          month: sheetMonth,
-          schoolName: resolvedSchool?.name,
-          subjectName: activeSubject?.catalog?.name || activeSubject?.name,
-        }
-      : null;
   const activeOtherCosts = getPolicyOtherCosts(activeSubject);
   const activeTtcs = activeSubject?.policies?.[0]?.data?.ttcs?.[0] || {};
   useEffect(() => {
@@ -1563,6 +1734,9 @@ export default function RealExpenseDetail({
       setInputRows([{ ...initialInputData, unitPrice: fee || 0 }]);
       setRevenueRows([initialRevenueRow]);
       setManagementRows([initialManagementRow]);
+      setSchoolTeacherRows([initialSchoolTeacherRow]);
+      setSchoolTeacherApplies(false);
+      setSchoolTeacherApproval(null);
     }
   }, [activeSubjectId]);
 
@@ -1666,15 +1840,15 @@ export default function RealExpenseDetail({
           setTab={setTab}
           subjects={subjects}
           setSubjectId={setSubjectId}
-          showCollaboratorPayroll={canViewCollaboratorPay}
+          showSchoolTeacherPayroll={canViewSchoolTeacher}
         />
 
-        {tab === "ctv-payroll" && canViewCollaboratorPay && (
-          <CollaboratorPayrollReport
-            schoolId={resolvedSchoolId}
+        {/* Lương giáo viên trường — thay tab Lương GV CTV (12/11/2026). */}
+        {tab === "school-teacher-payroll" && canViewSchoolTeacher && (
+          <SchoolTeacherPayrollReport
+            schoolExpenseId={resolvedSchoolExpenseId || null}
+            schoolId={resolvedSchoolId || null}
             schoolName={resolvedSchool?.name}
-            schoolYear={selectedSchoolYear}
-            initialMonth={sheetMonth}
           />
         )}
 
@@ -1897,7 +2071,40 @@ export default function RealExpenseDetail({
                 unlinkingEInvoiceId={unlinkingEInvoiceId}
                 schoolName={resolvedSchool?.name}
                 schoolYear={selectedSchoolYear}
-                collaboratorPayroll={collaboratorPayrollScope}
+                teacherSplit={schoolTeacherApplies}
+                schoolTeacherSection={
+                  schoolTeacherApplies ? (
+                    <SchoolTeacherTable
+                      rows={schoolTeacherRows}
+                      inputRows={inputRows}
+                      defaultUnitPrice={Number(
+                        activeSubject?.policies?.[0]?.data?.giaovien || 0,
+                      )}
+                      schoolId={schoolTeacherSchoolId ?? resolvedSchoolId ?? null}
+                      teachers={schoolTeachers}
+                      otherSubjectGross={schoolTeacherOtherGross}
+                      onTeacherSaved={(teacher) =>
+                        setSchoolTeachers((prev) =>
+                          [...prev.filter((item) => item.id !== teacher.id), teacher].sort(
+                            (a, b) => a.name.localeCompare(b.name, "vi"),
+                          ),
+                        )
+                      }
+                      updateRow={updateSchoolTeacherRow}
+                      addRow={addSchoolTeacherRow}
+                      removeRow={removeSchoolTeacherRow}
+                      dateSourceOnly={finalized}
+                      approval={schoolTeacherApproval}
+                      canApprove={canApproveSchoolTeacher}
+                      approving={approvingSchoolTeacher}
+                      dirty={
+                        schoolTeacherSignature(schoolTeacherRows, inputRows) !==
+                        schoolTeacherSavedSignature
+                      }
+                      onApprove={handleApproveSchoolTeacher}
+                    />
+                  ) : undefined
+                }
               />}
 
               {/*
@@ -1933,7 +2140,6 @@ export default function RealExpenseDetail({
                 finalizedAt={finalizedAt}
                 schoolName={resolvedSchool?.name}
                 schoolYear={selectedSchoolYear}
-                collaboratorPayroll={collaboratorPayrollScope}
                 handleViewHistory={handleViewHistory}
                 historyLoading={historyLoading}
                 historyCount={historyList.length}

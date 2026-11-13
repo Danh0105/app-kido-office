@@ -70,11 +70,182 @@ export type ManagementExpenseItemPayload = {
   note?: string;
 };
 
+/** 1 dòng bảng Giáo viên trường gửi lên khi "Lưu tất cả" (server tự tính tiền). */
+export type SchoolTeacherItemPayload = {
+  id?: number;
+  rowIndex: number;
+  /** Giáo viên trong danh sách giáo viên của trường. */
+  schoolTeacherId?: number | null;
+  /** Chỉ dòng thêm riêng (sau dòng Doanh Thu cuối). */
+  content?: string;
+  totalPeriods?: number;
+  studentCount?: number;
+  monthsCount?: number;
+  unitPrice: number;
+  expenseDate?: string;
+  cashAccount?: string;
+  note?: string;
+};
+
 export type SaveSchoolExpensePayload = {
   subjectId: number;
   revenueItems: RevenueItemPayload[];
   schoolExpenseItems: SchoolExpenseItemPayload[];
   managementExpenseItems: ManagementExpenseItemPayload[];
+  /** Có từ kỳ 11/2026 — kèm thì Chi Trường bỏ phần Giáo viên trường. */
+  schoolTeacherItems?: SchoolTeacherItemPayload[];
+};
+
+/** Giáo viên của trường (không phải giáo viên Kido) nhận lương ở bảng Giáo viên trường. */
+export type SchoolTeacher = {
+  id: number;
+  schoolId: number;
+  name: string;
+  bankAccount: string | null;
+  bankName: string | null;
+  taxCode: string | null;
+  note: string | null;
+  isActive: boolean;
+};
+
+export type SchoolTeacherInput = {
+  schoolId?: number;
+  name?: string;
+  bankAccount?: string;
+  bankName?: string;
+  taxCode?: string;
+  note?: string;
+  isActive?: boolean;
+};
+
+export type SchoolTeacherItem = {
+  id: number;
+  rowIndex: number;
+  schoolTeacherId: number | null;
+  content: string | null;
+  totalPeriods: number;
+  studentCount: number;
+  monthsCount: number;
+  unitPrice: number;
+  amount: number;
+  pitRate: number;
+  pitAmount: number;
+  netAmount: number;
+  expenseDate: string | null;
+  cashAccount: string | null;
+  note: string | null;
+  paid: boolean;
+};
+
+export type SchoolTeacherApproval = {
+  approvedBy: number | null;
+  approvedByName: string | null;
+  approvedAt: string;
+};
+
+export type SchoolTeacherItemsResponse = {
+  /** Kỳ từ 11/2026 mới có bảng Giáo viên trường. */
+  applies: boolean;
+  schoolId: number | null;
+  /** Giáo viên đang dùng của trường (+ người đã ngừng nhưng còn trên bảng). */
+  teachers: SchoolTeacher[];
+  /** Thù lao của từng giáo viên ở các môn khác cùng bảng thu chi (tính ngưỡng thuế). */
+  otherSubjectGross: Record<number, number>;
+  items: SchoolTeacherItem[];
+  approval: SchoolTeacherApproval | null;
+};
+
+export type SchoolTeacherPayrollActivity = {
+  itemId: number;
+  subjectId: number;
+  subjectName: string;
+  rowIndex: number;
+  className: string | null;
+  totalPeriods: number;
+  studentCount: number;
+  monthsCount: number;
+  unitPrice: number;
+  amount: number;
+  pitRate: number;
+  pitAmount: number;
+  netAmount: number;
+  expenseDate: string | null;
+  cashAccount: string | null;
+  paid: boolean;
+};
+
+export type SchoolTeacherPayrollTeacher = {
+  /** null = các dòng chưa chọn giáo viên. */
+  teacherId: number | null;
+  name: string | null;
+  bankAccount: string | null;
+  bankName: string | null;
+  taxCode: string | null;
+  classes: string[];
+  activities: SchoolTeacherPayrollActivity[];
+  gross: number;
+  tax: number;
+  net: number;
+  paidNet: number;
+};
+
+export type SchoolTeacherPayrollSheet = {
+  schoolExpenseId: number;
+  schoolId: number;
+  schoolName: string;
+  period: { id: number; month: number; year: number; name: string | null };
+  approvals: { subjectId: number; approvedByName: string | null; approvedAt: string }[];
+  teachers: SchoolTeacherPayrollTeacher[];
+  totals: {
+    teacherCount: number;
+    unassignedRows: number;
+    gross: number;
+    tax: number;
+    net: number;
+    paidNet: number;
+  };
+};
+
+export type SchoolTeacherPayrollReport = {
+  sheets: SchoolTeacherPayrollSheet[];
+  totals: {
+    sheetCount: number;
+    teacherCount: number;
+    gross: number;
+    tax: number;
+    net: number;
+    paidNet: number;
+  };
+};
+
+/** Danh sách giáo viên trường + báo cáo Lương giáo viên trường. */
+export const schoolTeacherApi = {
+  list: async (schoolId: number): Promise<SchoolTeacher[]> => {
+    const res = await api.get(`/school-teachers`, { params: { schoolId } });
+    return res.data;
+  },
+  create: async (data: SchoolTeacherInput): Promise<SchoolTeacher> => {
+    const res = await api.post(`/school-teachers`, data);
+    return res.data;
+  },
+  update: async (id: number, data: SchoolTeacherInput): Promise<SchoolTeacher> => {
+    const res = await api.patch(`/school-teachers/${id}`, data);
+    return res.data;
+  },
+  /** Ngừng dùng — không xoá để kỳ cũ vẫn hiện tên. */
+  deactivate: async (id: number): Promise<SchoolTeacher> => {
+    const res = await api.delete(`/school-teachers/${id}`);
+    return res.data;
+  },
+  payrollReport: async (params: {
+    year?: number;
+    month?: number;
+    schoolId?: number;
+    schoolExpenseId?: number;
+  }): Promise<SchoolTeacherPayrollReport> => {
+    const res = await api.get(`/school-teacher-payroll`, { params });
+    return res.data;
+  },
 };
 
 /** 1 dòng hàng trên hóa đơn điện tử — ứng với 1 dòng doanh thu (rowIndex). */
@@ -208,6 +379,28 @@ export const schoolExpenseApi = {
   },
   saveAll: async (id: number, data: SaveSchoolExpensePayload) => {
     const res = await api.post(`/school-expenses/${id}/save-all`, data);
+    return res.data;
+  },
+
+  getSchoolTeacherItems: async (
+    id: number,
+    subjectId: number,
+  ): Promise<SchoolTeacherItemsResponse> => {
+    const res = await api.get(`/school-expenses/${id}/school-teacher-items`, {
+      params: { subjectId },
+    });
+    return res.data;
+  },
+
+  /** "Duyệt lương" bảng Giáo viên trường của một môn (Giám đốc / Kế toán trưởng). */
+  approveSchoolTeacher: async (
+    id: number,
+    subjectId: number,
+  ): Promise<SchoolTeacherItemsResponse> => {
+    const res = await api.post(
+      `/school-expenses/${id}/school-teacher-items/approve`,
+      { subjectId },
+    );
     return res.data;
   },
 

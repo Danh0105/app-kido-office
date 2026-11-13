@@ -220,7 +220,7 @@ export default function RealExpenseDetail({
   const [lockActionLoading, setLockActionLoading] = useState(false);
   const { schoolId: schoolIdParam, schoolExpenseId: schoolExpenseIdParam } =
     useParams();
-  const [tab, setTab] = useState<string>("expense");
+  const [tab, setTab] = useState<string>("summary");
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState<any>(null);
   const [summaryTableData, setSummaryTableData] = useState<any>(null);
@@ -310,6 +310,9 @@ export default function RealExpenseDetail({
   const resolvedSchool = school || routeSchool;
   const resolvedSchoolId =
     Number(resolvedSchool?.id || schoolIdParam || 0) || null;
+  const isStandaloneRoute = Boolean(
+    schoolExpenseIdParam && !schoolExpenseId && !school,
+  );
 
   /** Trạng thái khoá "Xác nhận đúng BBCS" + "Kết thúc" từ phiếu thu chi. */
   const applyLockState = (res: any) => {
@@ -1852,7 +1855,11 @@ export default function RealExpenseDetail({
     <div className="min-h-screen bg-slate-100">
       <HeaderWithBack title="Chi tiết thu chi" />
 
-      <div className="space-y-5 pb-32">
+      <div
+        className={`space-y-5 pb-32 ${
+          isStandaloneRoute ? "px-4 pt-[60px]" : ""
+        }`}
+      >
         {/* STEP 2: CHỌN MÔN */}
         <Tabs
           tab={tab}
@@ -2193,14 +2200,16 @@ export default function RealExpenseDetail({
           </div>
         )}
         {/* PAGINATION */}
-        <Pagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPrev={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-          onNext={() =>
-            setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-          }
-        />
+        {tab.startsWith("subject-") && totalPages > 1 && (
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPrev={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+            onNext={() =>
+              setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+            }
+          />
+        )}
       </div>
 
       {/* HISTORY POPUP */}

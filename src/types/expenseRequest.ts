@@ -521,6 +521,8 @@ export type ExpenseListQuery = {
   status?: ExpenseStatus;
   requestKind?: ExpenseRequestKind;
   createdBy?: number;
+  /** Đi kèm createdBy = mình: trả thêm đề xuất mình được Giám đốc chỉ định. */
+  includeAssigned?: boolean;
   schoolId?: number;
   isMonthlyExpense?: boolean;
   subjectId?: number;

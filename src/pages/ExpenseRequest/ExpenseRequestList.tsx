@@ -228,12 +228,13 @@ export default function ExpenseRequestList() {
         setGroups(groupExpenseRequestsByEmployeeName(enrichedGroups));
         setTotalPages(res.totalPages || 1);
       } else {
+        // Sales chỉ xem đề xuất của mình; các role duyệt xem theo scope backend.
+        const ownOnly = viewMode === "mine" || !approverSide;
         const res = await expenseRequestApi.list({
-          // Sales chỉ xem đề xuất của mình; các role duyệt xem theo scope backend.
-          createdBy:
-            viewMode === "mine" || !approverSide
-              ? Number(getEmployeeId()) || undefined
-              : undefined,
+          createdBy: ownOnly ? Number(getEmployeeId()) || undefined : undefined,
+          // "Của tôi" gồm cả đề xuất mình được Giám đốc chỉ định (bàn giao,
+          // hỗ trợ, xử lý nhập kho, nghiệm thu).
+          includeAssigned: ownOnly || undefined,
           ...filters,
         });
         const enrichedItems = await enrichExpenseRequestsWithCreators(res.data || []);

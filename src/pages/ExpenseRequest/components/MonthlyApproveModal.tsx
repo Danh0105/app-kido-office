@@ -21,7 +21,12 @@ export default function MonthlyApproveModal({
   loading,
   onClose,
   onSubmit,
+  tableLabel = "Chi Ngoài",
+  title = "Duyệt đề xuất chi tháng",
 }: {
+  /** Bảng nguồn ở QL thu chi: Chi Ngoài / Chi Trường / Giáo viên trường. */
+  tableLabel?: string;
+  title?: string;
   items: ExpenseMonthlyItem[];
   /** Còn chi hiện tại của từng dòng (theo id); null khi chưa tải được bảng. */
   itemAmounts: Map<number, number> | null;
@@ -90,7 +95,7 @@ export default function MonthlyApproveModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b">
-          <h2 className="font-semibold">Duyệt đề xuất chi tháng</h2>
+          <h2 className="font-semibold">{title}</h2>
           <button
             onClick={onClose}
             className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
@@ -165,8 +170,8 @@ export default function MonthlyApproveModal({
               >
                 {total == null ? (
                   canSeeTable
-                    ? "Đang tính số tiền từ bảng Chi Ngoài…"
-                    : "Lệnh chi sẽ được lập bằng tổng cột Còn chi của bảng Chi Ngoài các trường được duyệt."
+                    ? `Đang tính số tiền từ bảng ${tableLabel}…`
+                    : `Lệnh chi sẽ được lập bằng tổng cột Còn chi của bảng ${tableLabel} các trường được duyệt.`
                 ) : total <= 0 ? (
                   "Các trường được chọn không còn khoản nào cần chi (Còn chi = 0) nên chưa duyệt được."
                 ) : (
@@ -175,7 +180,7 @@ export default function MonthlyApproveModal({
                     (tổng cột Còn chi
                     {excluded > 0
                       ? ` của ${checked.size}/${items.length} ${unit} được duyệt`
-                      : " của bảng Chi Ngoài"}
+                      : ` của bảng ${tableLabel}`}
                     ), chuyển Thủ quỹ xuất tiền.
                   </>
                 )}

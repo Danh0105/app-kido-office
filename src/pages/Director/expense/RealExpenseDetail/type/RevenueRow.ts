@@ -15,4 +15,8 @@ export type RevenueRow = {
     remainingOutsideExpense: number;
     payer: string;
     note: string;
+    /** Mã Đề xuất Chi Trường đã ghi Đã chi vào dòng — Ngày chi / Nguồn chi / Đã chi khoá. */
+    suggestCodes?: string;
+    /** Phần Đã chi do đề xuất ghi vào. */
+    suggestPaidAmount?: number;
 };

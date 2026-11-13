@@ -977,6 +977,7 @@ export default function RealExpenseDetail({
   /** Chỉ dòng thêm riêng xoá được (dòng đi kèm theo dòng Doanh Thu). */
   const removeSchoolTeacherRow = (index: number) => {
     if (index < inputRows.length) return;
+    if (blockSuggestPaidRowRemoval(index, ["teacher"])) return;
     setSchoolTeacherRows((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -998,6 +999,7 @@ export default function RealExpenseDetail({
       expenseDate: item.expenseDate ?? "",
       cashAccount: item.cashAccount ?? "",
       note: item.note ?? "",
+      suggestCodes: item.suggestCodes || undefined,
     });
     const rows = [
       ...Array.from({ length: inputCount }, (_, index) => {
@@ -1053,13 +1055,27 @@ export default function RealExpenseDetail({
     ]);
   };
 
-  // Dòng Chi Ngoài có Đã chi từ đề xuất chi: không xoá được (server cũng chặn).
-  const blockSuggestPaidRowRemoval = (index: number) => {
-    const codes = managementRows[index]?.suggestCodes;
-    if (!codes) return false;
+  // Dòng Chi Ngoài / Chi Trường / Giáo viên trường có tiền từ đề xuất chi:
+  // không xoá được (server cũng chặn).
+  const blockSuggestPaidRowRemoval = (
+    index: number,
+    tables: ("management" | "school" | "teacher")[] = [
+      "management",
+      "school",
+      "teacher",
+    ],
+  ) => {
+    const hit = (
+      [
+        ["management", "Chi Ngoài", managementRows[index]?.suggestCodes],
+        ["school", "Chi Trường", revenueRows[index]?.suggestCodes],
+        ["teacher", "Giáo viên trường", schoolTeacherRows[index]?.suggestCodes],
+      ] as const
+    ).find(([table, , codes]) => tables.includes(table) && !!codes);
+    if (!hit) return false;
     toast.error(
-      `Dòng Chi Ngoài ${index + 1} đã chi theo đề xuất ${codes} nên không xoá được`,
-      { id: "management-suggest-paid-row" },
+      `Dòng ${hit[1]} ${index + 1} đã chi theo đề xuất ${hit[2]} nên không xoá được`,
+      { id: "suggest-paid-row" },
     );
     return true;
   };
@@ -1082,6 +1098,7 @@ export default function RealExpenseDetail({
   };
 
   const removeRevenueRow = (index: number) => {
+    if (blockSuggestPaidRowRemoval(index, ["school"])) return;
     setRevenueRows((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -1106,7 +1123,7 @@ export default function RealExpenseDetail({
   };
 
   const removeManagementRow = (index: number) => {
-    if (blockSuggestPaidRowRemoval(index)) return;
+    if (blockSuggestPaidRowRemoval(index, ["management"])) return;
     setManagementRows((prev) => {
       const nextRows = prev.filter((_, i) => i !== index);
       // Xoá dòng đi kèm Doanh Thu khi phía sau còn dòng thêm riêng: chèn dòng
@@ -1230,6 +1247,8 @@ export default function RealExpenseDetail({
               remainingOutsideExpense: r.remaining || 0,
               payer: r.payer || "",
               note: r.note || "",
+              suggestCodes: r.suggestCodes || undefined,
+              suggestPaidAmount: Number(r.suggestPaidAmount || 0),
             })),
             nextInputRows.length,
             initialRevenueRow,

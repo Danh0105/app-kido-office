@@ -135,6 +135,8 @@ export type SchoolTeacherItem = {
   cashAccount: string | null;
   note: string | null;
   paid: boolean;
+  /** Đã trả theo Đề xuất Chi GV trường: Ngày chi / Nguồn chi khoá, hiện mã. */
+  suggestCodes?: string;
 };
 
 export type SchoolTeacherApproval = {

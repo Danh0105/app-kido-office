@@ -18,6 +18,7 @@ import { schoolApi } from "@/service/school.api";
 import { subjectApi } from "@/service/subject.api";
 import { policiesApi } from "@/service/policy";
 import {
+  CASHFLOW_SOURCE_META,
   EQUIPMENT_SOURCE_META,
   FUND_SOURCE_LABEL,
   PAYMENT_METHOD_LABEL,
@@ -44,6 +45,7 @@ import {
   type MonthlyApprovalView,
 } from "./components/ManagementExpenseView";
 import MonthlyApproveModal from "./components/MonthlyApproveModal";
+import CashflowItemsPanel from "./components/CashflowItemsPanel";
 import ReassignRepairModal from "./components/ReassignRepairModal";
 import StockIssueOrderModal from "./components/StockIssueOrderModal";
 import StockInReceiptModal from "./components/StockInReceiptModal";
@@ -68,6 +70,7 @@ import {
   expenseBasePath,
   expenseEditPath,
   canReadManagementExpense,
+  cashflowSourceOf,
   monthlyItemLabel,
   monthlyItemsOf,
   monthlyRemainder,
@@ -176,6 +179,10 @@ export default function ExpenseRequestDetail({
   const [schoolContextError, setSchoolContextError] = useState("");
   // Chi tháng: tổng Còn chi của bảng Chi Ngoài = số tiền lệnh chi khi duyệt.
   const [monthlyView, setMonthlyView] = useState<MonthlyApprovalView | null>(
+    null
+  );
+  // Chi Trường / GV trường: Còn lại từng khoản = số tiền lệnh chi khi duyệt.
+  const [cashflowView, setCashflowView] = useState<MonthlyApprovalView | null>(
     null
   );
 
@@ -630,6 +637,10 @@ export default function ExpenseRequestDetail({
   );
   const otherAttachments = (data.attachments || []).filter((a) => !a.action);
   const monthlyItems = monthlyItemsOf(data);
+  const source = cashflowSourceOf(data);
+  const sourceMeta = source ? CASHFLOW_SOURCE_META[source] : null;
+  // Số cho hộp duyệt: Chi Ngoài lấy từ bảng Chi Ngoài như trước.
+  const approvalView = source === "MANAGEMENT" ? monthlyView : cashflowView;
   const directorApprovedAmount =
     hasRole("thuquy") &&
     !equipment &&
@@ -679,20 +690,19 @@ export default function ExpenseRequestDetail({
                     {EQUIPMENT_SOURCE_META[equipmentSourceOf(data)].label}
                   </span>
                 )}
-                {data.schoolId ? (
+                {sourceMeta ? (
+                  <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-indigo-100 text-indigo-700">
+                    {sourceMeta.icon} {sourceMeta.label}
+                  </span>
+                ) : data.schoolId ? (
                   <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-purple-100 text-purple-700">
-                    🏫 Đề xuất cho trường
+                    🏫 Đề xuất ngoài chính sách
                   </span>
                 ) : data.wardId ? (
                   <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-teal-100 text-teal-700">
                     🏘️ Đề xuất cho phường/xã
                   </span>
                 ) : null}
-                {data.isMonthlyExpense && (
-                  <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-indigo-100 text-indigo-700">
-                    🗓️ Chi tháng
-                  </span>
-                )}
                 {data.deductPolicy && (
                   <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-orange-100 text-orange-700">
                     📉 Trừ chính sách
@@ -749,7 +759,10 @@ export default function ExpenseRequestDetail({
               {data.isMonthlyExpense && monthlyItems.length > 0 ? (
                 <div className="col-span-2">
                   <div className="text-xs text-gray-400">
-                    Trường · môn · kỳ kế toán (
+                    {source === "SCHOOL_TEACHER"
+                      ? "Trường · giáo viên · kỳ kế toán"
+                      : "Trường · môn · kỳ kế toán"}{" "}
+                    (
                     {new Set(monthlyItems.map((item) => item.schoolId)).size} trường
                     {monthlyItems.length >
                     new Set(monthlyItems.map((item) => item.schoolId)).size
@@ -872,8 +885,19 @@ export default function ExpenseRequestDetail({
           />
         )}
 
+        {/* ===== Khoản chi ở QL thu chi (Chi Ngoài / Chi Trường / GV trường) ===== */}
+        {source && (
+          <CashflowItemsPanel
+            requestId={data.id}
+            source={source}
+            reloadKey={data.status}
+            onLoaded={setCashflowView}
+          />
+        )}
+
         {/* ===== Chi Ngoài cho người duyệt ===== */}
         {(data.school?.id || (data as any).schoolId) &&
+          (!source || source === "MANAGEMENT") &&
           canDoStep("approve", data) &&
           canReadManagementExpense() && (
             <ManagementExpensePanel
@@ -1096,14 +1120,16 @@ export default function ExpenseRequestDetail({
       {modal === "approve" && data.isMonthlyExpense && (
         <MonthlyApproveModal
           items={monthlyItems.filter((item) => item.id != null)}
-          itemAmounts={monthlyView?.itemAmounts ?? null}
-          remainingTotal={monthlyView?.remainingTotal ?? null}
+          itemAmounts={approvalView?.itemAmounts ?? null}
+          remainingTotal={approvalView?.remainingTotal ?? null}
+          tableLabel={sourceMeta?.table}
+          title={sourceMeta ? `Duyệt ${sourceMeta.label}` : undefined}
           existingAmount={
             data.paymentOrder?.amount != null
               ? Number(data.paymentOrder.amount)
               : null
           }
-          canSeeTable={canReadManagementExpense()}
+          canSeeTable={source !== "MANAGEMENT" || canReadManagementExpense()}
           loading={submitting}
           onClose={() => setModal(null)}
           onSubmit={(payload) => onApproveSubmit(payload)}

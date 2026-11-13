@@ -147,7 +147,7 @@ export default function SchoolTeacherTable({
     ...amounts[index],
     ...taxes[index],
     standalone: isStandaloneSchoolTeacherRow(index, inputRows),
-    paid: !!row.expenseDate && !!row.cashAccount,
+    paid: (!!row.expenseDate && !!row.cashAccount) || !!row.suggestCodes,
   }));
   const totals = computed.reduce(
     (sum, row) => ({
@@ -230,6 +230,10 @@ export default function SchoolTeacherTable({
           {rows.map((row, index) => {
             const item = computed[index];
             const sharedLocked = !item.standalone || dateSourceOnly;
+            // Đã trả theo Đề xuất Chi GV trường: Ngày chi / Nguồn chi lấy từ đề xuất.
+            const suggestTitle = row.suggestCodes
+              ? `Lấy từ đề xuất chi ${row.suggestCodes} — không sửa tay được`
+              : undefined;
             return (
               <div
                 key={row.id ?? `new-${index}`}
@@ -317,17 +321,24 @@ export default function SchoolTeacherTable({
                 <div className="border-r border-slate-100 p-2">
                   <div className={`${readCellClass} text-purple-700`}>{money(item.netAmount)}</div>
                 </div>
-                <div className="border-r border-slate-100 p-2">
+                <div className="border-r border-slate-100 p-2" title={suggestTitle}>
                   <input
                     type="date"
                     value={row.expenseDate || ""}
+                    disabled={!!row.suggestCodes}
                     onChange={(e) => updateRow(index, "expenseDate", e.target.value)}
                     className={`${inputClass} text-center`}
                   />
+                  {row.suggestCodes && (
+                    <div className="mt-1 truncate text-center text-[11px] font-medium text-emerald-700">
+                      Theo {row.suggestCodes}
+                    </div>
+                  )}
                 </div>
-                <div className="border-r border-slate-100 p-2">
+                <div className="border-r border-slate-100 p-2" title={suggestTitle}>
                   <CashAccountSelect
                     value={row.cashAccount}
+                    disabled={!!row.suggestCodes}
                     onChange={(value) => updateRow(index, "cashAccount", value)}
                     className={`${inputClass} px-2`}
                   />
@@ -342,7 +353,7 @@ export default function SchoolTeacherTable({
                   />
                 </div>
                 <div className="flex items-center justify-center">
-                  {item.standalone && !dateSourceOnly && (
+                  {item.standalone && !dateSourceOnly && !row.suggestCodes && (
                     <button
                       type="button"
                       onClick={() => removeRow(index)}

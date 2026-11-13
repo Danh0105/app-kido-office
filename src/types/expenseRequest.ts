@@ -133,9 +133,135 @@ export type ManagementExpenseRow = {
 };
 
 /** Một trường của đề xuất chi tháng. */
+/**
+ * Bảng nguồn ở QL thu chi của đề xuất chi tháng (từ 13/11/2026):
+ * MANAGEMENT = "Đề xuất Chi Ngoài (Chi chính sách tháng)" — đề xuất chi tháng
+ * cũ (trống) cũng là loại này; SCHOOL_EXPENSE = "Đề xuất Chi Trường";
+ * SCHOOL_TEACHER = "Đề xuất Chi GV trường".
+ */
+export type CashflowSource = "MANAGEMENT" | "SCHOOL_EXPENSE" | "SCHOOL_TEACHER";
+
+export const CASHFLOW_SOURCE_META: Record<
+  CashflowSource,
+  { label: string; short: string; table: string; icon: string }
+> = {
+  MANAGEMENT: {
+    label: "Đề xuất Chi Ngoài (Chi chính sách tháng)",
+    short: "Chi Ngoài",
+    table: "Chi Ngoài",
+    icon: "🗓️",
+  },
+  SCHOOL_EXPENSE: {
+    label: "Đề xuất Chi Trường",
+    short: "Chi Trường",
+    table: "Chi Trường",
+    icon: "🏫",
+  },
+  SCHOOL_TEACHER: {
+    label: "Đề xuất Chi GV trường",
+    short: "Chi GV trường",
+    table: "Giáo viên trường",
+    icon: "👩‍🏫",
+  },
+};
+
+/** Trạng thái một khoản ở màn chọn khoản chi. */
+export type CashflowItemStatus =
+  | "UNPAID"
+  | "PROPOSED"
+  | "APPROVED_WAITING"
+  | "PARTIAL"
+  | "PAID";
+
+export const CASHFLOW_ITEM_STATUS_META: Record<
+  CashflowItemStatus,
+  { label: string; className: string }
+> = {
+  UNPAID: { label: "Chưa chi", className: "bg-slate-100 text-slate-700" },
+  PROPOSED: { label: "Đang đề xuất", className: "bg-amber-100 text-amber-700" },
+  APPROVED_WAITING: {
+    label: "Đã duyệt chờ chi",
+    className: "bg-blue-100 text-blue-700",
+  },
+  PARTIAL: { label: "Đã chi một phần", className: "bg-orange-100 text-orange-700" },
+  PAID: { label: "Đã chi đủ", className: "bg-emerald-100 text-emerald-700" },
+};
+
+/** Một khoản của QL thu chi (một môn hoặc một giáo viên trong bảng thu chi một kỳ). */
+export type CashflowItem = {
+  key: string;
+  source: CashflowSource;
+  label: string;
+  schoolId: number;
+  schoolName: string | null;
+  expensePeriodId: number;
+  periodMonth: number | null;
+  periodYear: number | null;
+  periodName: string | null;
+  schoolYear: string | null;
+  subjectId: number | null;
+  subjectName: string | null;
+  schoolTeacherId: number | null;
+  teacherName: string | null;
+  rowCount: number;
+  totalAmount: number;
+  paidAmount: number;
+  remainingAmount: number;
+  finalized: boolean;
+  status: CashflowItemStatus;
+  openRequest: { id: number; code: string | null; status: ExpenseStatus } | null;
+};
+
+export type CashflowItemsResponse = {
+  source: CashflowSource;
+  table: string;
+  items: CashflowItem[];
+  /** GV trường: dòng chưa chọn giáo viên (chưa đề xuất được). */
+  unassigned: {
+    schoolId: number;
+    schoolName: string | null;
+    expensePeriodId: number;
+    periodMonth: number | null;
+    periodYear: number | null;
+    periodName: string | null;
+    rowCount: number;
+    amount: number;
+  }[];
+};
+
+/** Khoản của một đề xuất với số hiện tại ở QL thu chi. */
+export type ExpenseCashflowItem = {
+  id: number;
+  label: string;
+  requestedAmount: number | null;
+  approvedAmount: number | null;
+  excluded: boolean;
+  spent: boolean | null;
+  totalAmount: number;
+  paidAmount: number;
+  remainingAmount: number;
+  /** Số vào lệnh chi nếu Giám đốc duyệt bây giờ. */
+  amount: number;
+  /** Phần đề xuất này đã ghi vào bảng nguồn. */
+  paidBySuggest: number;
+  status: CashflowItemStatus;
+};
+
+export type ExpenseCashflowItemsResponse = {
+  source: CashflowSource | null;
+  table: string | null;
+  items: ExpenseCashflowItem[];
+  remainingTotal: number;
+};
+
 export type ExpenseMonthlyItem = {
   id?: number;
   position?: number;
+  /** Đề xuất Chi GV trường: khoản = lương một giáo viên (không có môn). */
+  schoolTeacherId?: number | null;
+  schoolTeacher?: { id: number; name: string } | null;
+  /** Còn phải chi lúc tạo/sửa đề xuất. */
+  requestedAmount?: number | string | null;
   /** Phần của dòng này trong lệnh chi lúc Giám đốc duyệt (null nếu Kế toán lập lệnh chi). */
   approvedAmount?: number | string | null;
   /** Chi một phần: true đã chi, false không chi. */
@@ -189,6 +315,23 @@ export type ManagementExpenseSection = {
  * — để Lịch sử hiện đúng số liệu của lần đó, không lấy số liệu hiện tại.
  * Log cũ (trước khi có trường này) là `{}`.
  */
+/** Phần đề xuất ghi vào bảng nguồn khi kinh doanh xác nhận đã chi. */
+export type CashflowPaymentLog = {
+  source?: CashflowSource;
+  table?: string;
+  /** Lệnh chi do Kế toán lập/sửa — không tự ghi. */
+  skipped?: string;
+  paidDate?: string;
+  cashAccount?: string | null;
+  items?: {
+    monthlyItemId: number;
+    label: string;
+    amount: number;
+    unallocated: number;
+    rows: { itemId: number; amount: number }[];
+  }[];
+};
+
 export type ExpenseLogDetails = {
   /** Ảnh chụp Bảng Chi Ngoài lúc Giám đốc duyệt/từ chối; chỉ có khi được xem thu chi. */
   managementExpense?: {
@@ -198,8 +341,12 @@ export type ExpenseLogDetails = {
   // APPROVE
   requestKind?: ExpenseRequestKind | null;
   amount?: number | null;
-  /** APPROVE_MONTHLY: số tiền lệnh chi lấy từ tổng Còn chi của bảng Chi Ngoài. */
+  /** APPROVE_MONTHLY: số tiền lệnh chi lấy từ tổng Còn chi của bảng nguồn. */
   amountFromManagementExpense?: boolean;
+  cashflowSource?: CashflowSource;
+  /** CONFIRM_SPENT / CONFIRM_PARTIALLY_SPENT: phần ghi ngược về bảng nguồn. */
+  chiNgoai?: CashflowPaymentLog | null;
+  cashflowPayment?: CashflowPaymentLog | null;
   /** APPROVE_MONTHLY: trường nào được duyệt / không duyệt. */
   items?: { id: number; label: string; amount: number; approved: boolean }[];
   equipmentSource?: "STOCK" | "SUPPLIER" | null;
@@ -431,6 +578,8 @@ export type ExpenseRequest = {
    * sách đầy đủ ở `monthlyItems` (đề xuất cũ không có thì chỉ có một trường).
    */
   isMonthlyExpense?: boolean;
+  /** Bảng nguồn của đề xuất chi tháng; trống = Chi Ngoài. */
+  cashflowSource?: CashflowSource | null;
   monthlyItems?: ExpenseMonthlyItem[];
   subjectId?: number;
   subject?: {

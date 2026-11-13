@@ -1,5 +1,8 @@
 import api from "./api";
 import type {
+  CashflowItemsResponse,
+  CashflowSource,
+  ExpenseCashflowItemsResponse,
   ManagementExpenseSection,
   ExpenseGroupedByEmployeeResponse,
   ExpenseNotificationGroupedResponse,
@@ -64,13 +67,18 @@ export type CreateExpensePayload = {
   schoolYear?: string;
   /** Chi tháng gửi danh sách trường ở `monthlyItems` (gửi dạng JSON). */
   isMonthlyExpense?: boolean;
+  /** Bảng nguồn: Chi Ngoài (mặc định) / Chi Trường / GV trường. */
+  cashflowSource?: CashflowSource;
   subjectId?: number;
   expensePeriodId?: number;
   monthlyItems?: {
     schoolId: number;
-    schoolYear: string;
-    subjectId: number;
+    schoolYear?: string;
+    /** Chi Ngoài / Chi Trường. */
+    subjectId?: number;
     expensePeriodId: number;
+    /** Chi GV trường. */
+    schoolTeacherId?: number;
   }[];
   wardId?: number;
   /** Kinh doanh tự đánh dấu: đề xuất này nên trừ vào chính sách liên quan (chỉ để hiển thị). */
@@ -398,6 +406,27 @@ export const expenseRequestApi = {
 
   getById: async (id: number): Promise<ExpenseRequest> => {
     const res = await api.get(`${BASE}/${id}`);
+    return res.data;
+  },
+
+  /**
+   * Màn tạo đề xuất Chi Ngoài / Chi Trường / Chi GV trường: khoản ở các trường
+   * mình phụ trách kèm Phải chi / Đã chi / Còn lại / trạng thái.
+   */
+  cashflowItems: async (query: {
+    source: CashflowSource;
+    schoolId?: number;
+    year?: number;
+    month?: number;
+    excludeSuggestId?: number;
+  }): Promise<CashflowItemsResponse> => {
+    const res = await api.get(`${BASE}/cashflow-items`, { params: query });
+    return res.data;
+  },
+
+  /** Khoản của một đề xuất chi tháng với số hiện tại ở QL thu chi. */
+  getCashflowItems: async (id: number): Promise<ExpenseCashflowItemsResponse> => {
+    const res = await api.get(`${BASE}/${id}/cashflow-items`);
     return res.data;
   },
 

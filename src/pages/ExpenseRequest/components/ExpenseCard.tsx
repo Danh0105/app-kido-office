@@ -1,4 +1,8 @@
-import { FUND_SOURCE_LABEL, type ExpenseRequest } from "@/types/expenseRequest";
+import {
+  CASHFLOW_SOURCE_META,
+  FUND_SOURCE_LABEL,
+  type ExpenseRequest,
+} from "@/types/expenseRequest";
 import { hasRole } from "@/utils/auth";
 import { invoiceCashAccountLabel } from "@/pages/Director/expense/RealExpenseDetail/utils/invoiceCashAccounts";
 import StatusBadge from "./StatusBadge";
@@ -11,6 +15,7 @@ import {
   isEquipmentRequest,
   requestKindOf,
   isSupplierEquipment,
+  cashflowSourceOf,
   monthlyItemsOf,
 } from "../lib";
 
@@ -53,6 +58,7 @@ export default function ExpenseCard({
     ? item.paymentOrder?.cashAccount ?? null
     : null;
   // Chi tháng nhiều trường: danh sách chỉ có tên trường (môn/kỳ xem ở chi tiết).
+  const source = cashflowSourceOf(item);
   const monthlyItems = monthlyItemsOf(item);
   const multiSchool = monthlyItems.length > 1;
   const schoolNames = [
@@ -93,20 +99,20 @@ export default function ExpenseCard({
           ) : (
             <KindBadge kind={kind} />
           )}
-          {item.schoolId ? (
+          {source ? (
+            <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-indigo-100 text-indigo-700">
+              {CASHFLOW_SOURCE_META[source].icon}{" "}
+              {CASHFLOW_SOURCE_META[source].short}
+            </span>
+          ) : item.schoolId ? (
             <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-purple-100 text-purple-700">
-              🏫 Đề xuất cho trường
+              🏫 Đề xuất ngoài chính sách
             </span>
           ) : item.wardId ? (
             <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-teal-100 text-teal-700">
               🏘️ Đề xuất cho phường/xã
             </span>
           ) : null}
-          {item.isMonthlyExpense && (
-            <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-indigo-100 text-indigo-700">
-              🗓️ Chi tháng
-            </span>
-          )}
           {item.isOverdue && (
             <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-red-100 text-red-700">
               ⚠️ Quá hạn

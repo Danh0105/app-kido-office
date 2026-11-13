@@ -87,6 +87,12 @@ export default function RevenueExpenseRow({
   const locked = invoiceLocked || finalized;
   // Kỳ đã kết thúc: server chỉ ghi Ngày chi + Nguồn chi lên dòng đã lưu.
   const dateSourceLocked = finalized && !row?.id;
+  // Đã chi do Đề xuất Chi Trường ghi vào khi kinh doanh xác nhận chi: Ngày chi,
+  // Nguồn chi, Đã chi lấy từ đề xuất và khoá; Người chi / Ghi chú vẫn sửa được.
+  const suggestCodes: string | undefined = row?.suggestCodes || undefined;
+  const suggestTitle = suggestCodes
+    ? `Lấy từ đề xuất chi ${suggestCodes} — không sửa tay được`
+    : undefined;
 
   const inputClass = `
     w-full
@@ -316,31 +322,31 @@ export default function RevenueExpenseRow({
       </div>
 
       {/* NGÀY CHI — kỳ đã kết thúc vẫn sửa được (cùng Nguồn chi) */}
-      <div className="p-2 border-r border-slate-200">
+      <div className="p-2 border-r border-slate-200" title={suggestTitle}>
         <input
           type="date"
           value={row.paymentDate || ""}
-          disabled={invoiceLocked || dateSourceLocked}
+          disabled={invoiceLocked || dateSourceLocked || !!suggestCodes}
           onChange={(e) => updateRow(index, "paymentDate", e.target.value)}
           className={inputClass}
         />
       </div>
 
       {/* NGUỒN CHI — tài khoản tiền đã chi (báo cáo thu chi) */}
-      <div className="p-2 border-r border-slate-200">
+      <div className="p-2 border-r border-slate-200" title={suggestTitle}>
         <CashAccountSelect
           value={row.cashAccount}
-          disabled={dateSourceLocked}
+          disabled={dateSourceLocked || !!suggestCodes}
           onChange={(value) => updateRow(index, "cashAccount", value)}
           className={inputClass}
         />
       </div>
 
       {/* ĐÃ CHI */}
-      <div className="p-2 border-r border-slate-200">
+      <div className="p-2 border-r border-slate-200" title={suggestTitle}>
         <DecimalInput
           value={paidAmount}
-          disabled={finalized}
+          disabled={finalized || !!suggestCodes}
           onValueChange={(value) => {
             updateRow(index, "paidAmount", value);
           }}
@@ -357,6 +363,11 @@ export default function RevenueExpenseRow({
             font-bold
           "
         />
+        {suggestCodes && (
+          <div className="mt-1 truncate text-center text-[11px] font-medium text-emerald-700">
+            Theo {suggestCodes}
+          </div>
+        )}
       </div>
 
       {/* CÒN LẠI */}
@@ -402,7 +413,8 @@ export default function RevenueExpenseRow({
       <div className="flex items-center justify-center">
         <button
           onClick={() => removeRow(index)}
-          disabled={finalized}
+          disabled={finalized || !!suggestCodes}
+          title={suggestCodes ? `Đã chi theo đề xuất ${suggestCodes} — không xoá được` : undefined}
           className="
             flex items-center justify-center
             w-10 h-10

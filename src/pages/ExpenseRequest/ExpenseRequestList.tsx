@@ -396,7 +396,7 @@ export default function ExpenseRequestList() {
             [
               { value: "", label: "Tất cả hình thức" },
               { value: "REGULAR", label: "Chi Năm" },
-              { value: "MONTHLY", label: "Chi tháng" },
+              { value: "MONTHLY", label: "Chi từ QL thu chi" },
             ] as { value: MonthlyFilter; label: string }[]
           ).map((tab) => (
             <button

@@ -1,8 +1,10 @@
 import {
+  CASHFLOW_SOURCE_META,
   EQUIPMENT_SOURCE_META,
   FUND_SOURCE_LABEL,
   KIND_META,
   PAYMENT_METHOD_LABEL,
+  type CashflowPaymentLog,
   type ExpenseLog,
   type ExpenseLogDetails,
   type ExpenseLogPerson,
@@ -28,6 +30,34 @@ export const hasLogDetails = (log: ExpenseLog) => {
     Object.keys(d).some((key) => key !== "managementExpense")
   );
 };
+
+/** Phần đề xuất đã ghi ngược về bảng nguồn ở QL thu chi khi kinh doanh xác nhận chi. */
+function CashflowSync({ log }: { log?: CashflowPaymentLog | null }) {
+  if (!log) return null;
+  const table = log.table || "Chi Ngoài";
+  if (log.skipped) {
+    return <p className="mt-1 text-xs text-amber-700">⚠️ {log.skipped}</p>;
+  }
+  const rows = (log.items ?? []).flatMap((item) => item.rows ?? []);
+  const total = rows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  const unallocated = (log.items ?? []).reduce(
+    (sum, item) => sum + Number(item.unallocated || 0),
+    0
+  );
+  return (
+    <div className="mt-1 text-xs text-gray-700">
+      Đã ghi {money(total)} vào {rows.length} dòng {table}
+      {log.paidDate ? ` · ngày chi ${formatDate(log.paidDate)}` : ""}
+      {log.cashAccount ? ` · nguồn ${invoiceCashAccountLabel(log.cashAccount)}` : ""}
+      {unallocated > 0 && (
+        <span className="text-amber-700">
+          {" "}
+          · {money(unallocated)} không còn dòng nào để ghi (bảng đổi sau khi duyệt)
+        </span>
+      )}
+    </div>
+  );
+}
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -201,7 +231,8 @@ function StepDetails({ log, kind: requestKind }: { log: ExpenseLog; kind?: Expen
           {po.amount != null && (
             <Row label="Số tiền">
               {money(po.amount)}
-              {fromTable && " (tổng Còn chi bảng Chi Ngoài)"}
+              {fromTable &&
+                ` (tổng Còn chi bảng ${CASHFLOW_SOURCE_META[d.cashflowSource ?? "MANAGEMENT"].table})`}
             </Row>
           )}
           {po.paymentMethod && !fromTable && (
@@ -221,6 +252,15 @@ function StepDetails({ log, kind: requestKind }: { log: ExpenseLog; kind?: Expen
       );
     }
 
+    case "CONFIRM_SPENT": {
+      const sync = d.cashflowPayment ?? d.chiNgoai;
+      return sync ? (
+        <Box tone="border-teal-100 bg-teal-50">
+          <CashflowSync log={sync} />
+        </Box>
+      ) : null;
+    }
+
     case "CONFIRM_PARTIALLY_SPENT": {
       const partial = d.partialSpend;
       if (!partial) return null;
@@ -237,6 +277,7 @@ function StepDetails({ log, kind: requestKind }: { log: ExpenseLog; kind?: Expen
               </li>
             ))}
           </ul>
+          <CashflowSync log={d.cashflowPayment ?? d.chiNgoai} />
         </Box>
       );
     }

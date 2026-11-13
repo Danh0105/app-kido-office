@@ -1,5 +1,6 @@
 import { getEmployeeId, getEmployeeRoles, hasRole } from "@/utils/auth";
 import type {
+  CashflowSource,
   EquipmentSource,
   ExpenseAssignment,
   ExpenseMonthlyItem,
@@ -59,9 +60,20 @@ export const monthlyRemainder = (req: ExpenseRequest): number | null => {
   );
 };
 
+/**
+ * Bảng nguồn của đề xuất chi tháng: Chi Ngoài (đề xuất chi tháng cũ để trống),
+ * Chi Trường, Chi GV trường. Chi Năm trả null.
+ */
+export const cashflowSourceOf = (
+  req: Pick<ExpenseRequest, "isMonthlyExpense" | "cashflowSource">
+): CashflowSource | null =>
+  req.isMonthlyExpense ? req.cashflowSource ?? "MANAGEMENT" : null;
+
 export const monthlyItemLabel = (item: ExpenseMonthlyItem) =>
   [
-    item.subject?.catalog?.name || item.subject?.name,
+    item.schoolTeacherId
+      ? `GV ${item.schoolTeacher?.name || `#${item.schoolTeacherId}`}`
+      : item.subject?.catalog?.name || item.subject?.name,
     item.expensePeriod
       ? item.expensePeriod.name ||
         `Tháng ${item.expensePeriod.month}/${item.expensePeriod.year}`

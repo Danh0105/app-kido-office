@@ -15,4 +15,6 @@ export type SchoolTeacherRow = {
   expenseDate: string;
   cashAccount: string;
   note: string;
+  /** Đã trả theo Đề xuất Chi GV trường — Ngày chi / Nguồn chi khoá, không xoá dòng. */
+  suggestCodes?: string;
 };

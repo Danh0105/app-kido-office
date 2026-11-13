@@ -2,6 +2,10 @@ import React, { useEffect, useState } from "react";
 import logo from "../../static/Logo.png";
 import { useNavigate } from "react-router-dom";
 import FaceVerify from "../FaceId/FaceVerify";
+
+// 13/11/2026: tạm ẩn đăng nhập bằng FaceID — chỉ còn đăng nhập mật khẩu.
+// Đổi thành true để hiện lại tab FaceID.
+const FACE_LOGIN_ENABLED = false;
 import { initWebPush } from "@/utils/webPush";
 import { loginErrorMessage, loginWithRetry, networkMessage } from "./lib";
 import LoginNoticeModal, { type LoginNotice } from "./LoginNoticeModal";
@@ -168,29 +172,31 @@ export default function Login({ onSuccess }: Props) {
         {/* Form */}
         <div className="bg-white rounded-2xl p-4 shadow-sm space-y-4">
           {/* TAB SWITCH */}
-          <div className="flex mb-2 bg-gray-100 rounded-lg p-1">
-            <button
-              onClick={() => setTab("password")}
-              className={`flex-1 py-2 rounded-md text-sm ${
-                tab === "password"
-                  ? "bg-white shadow text-blue-500"
-                  : "text-gray-500"
-              }`}
-            >
-              🔑 Mật khẩu
-            </button>
+          {FACE_LOGIN_ENABLED && (
+            <div className="flex mb-2 bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setTab("password")}
+                className={`flex-1 py-2 rounded-md text-sm ${
+                  tab === "password"
+                    ? "bg-white shadow text-blue-500"
+                    : "text-gray-500"
+                }`}
+              >
+                🔑 Mật khẩu
+              </button>
 
-            <button
-              onClick={() => setTab("face")}
-              className={`flex-1 py-2 rounded-md text-sm ${
-                tab === "face"
-                  ? "bg-white shadow text-blue-500"
-                  : "text-gray-500"
-              }`}
-            >
-              📸 FaceID
-            </button>
-          </div>
+              <button
+                onClick={() => setTab("face")}
+                className={`flex-1 py-2 rounded-md text-sm ${
+                  tab === "face"
+                    ? "bg-white shadow text-blue-500"
+                    : "text-gray-500"
+                }`}
+              >
+                📸 FaceID
+              </button>
+            </div>
+          )}
 
           {/* ================= PASSWORD ================= */}
           {tab === "password" && (
@@ -253,7 +259,7 @@ export default function Login({ onSuccess }: Props) {
           )}
 
           {/* ================= FACE ================= */}
-          {tab === "face" && (
+          {FACE_LOGIN_ENABLED && tab === "face" && (
             <FaceVerify
               onSuccess={(user: any, notice?: LoginNotice) => {
                 // Cùng lý do với đăng nhập mật khẩu: không chờ đăng ký thông báo.

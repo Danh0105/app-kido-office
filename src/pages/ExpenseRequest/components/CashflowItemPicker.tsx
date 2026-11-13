@@ -10,6 +10,10 @@ import {
   type CashflowSource,
 } from "@/types/expenseRequest";
 import { formatVnd } from "@/utils/decimal";
+import {
+  DEFAULT_SCHOOL_YEAR,
+  includeDefaultSchoolYear,
+} from "@/constants/schoolYear";
 
 const money = (value: number) => `${formatVnd(value) || "0"} đ`;
 
@@ -28,6 +32,27 @@ const periodLabel = (item: {
       ? `Tháng ${item.periodMonth}/${item.periodYear}`
       : `Kỳ ${item.periodMonth}/${item.periodYear}`
     : "Kỳ không rõ");
+
+/**
+ * Năm học của kỳ kế toán (kỳ không lưu năm học): tháng 8–12 thuộc năm học bắt
+ * đầu năm đó, tháng 1–7 thuộc năm học trước. Kỳ tuỳ chỉnh (tháng > 12) không
+ * biết rơi vào nửa nào nên tính cho cả hai năm học chạm năm của nó.
+ */
+const periodSchoolYears = (period: { month: number; year: number }) =>
+  period.month > 12
+    ? [`${period.year - 1}-${period.year}`, `${period.year}-${period.year + 1}`]
+    : [
+        period.month >= 8
+          ? `${period.year}-${period.year + 1}`
+          : `${period.year - 1}-${period.year}`,
+      ];
+
+/** Năm học của khoản: theo môn (như màn QL thu chi); thiếu thì theo kỳ. */
+const itemSchoolYear = (item: CashflowItem) =>
+  item.schoolYear ||
+  (item.periodMonth && item.periodYear
+    ? periodSchoolYears({ month: item.periodMonth, year: item.periodYear })[0]
+    : "");
 
 type StatusFilter = "PAYABLE" | "ALL" | CashflowItemStatus;
 
@@ -67,8 +92,9 @@ export default function CashflowItemPicker({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [schoolId, setSchoolId] = useState("");
-  const [year, setYear] = useState("");
-  const [month, setMonth] = useState("");
+  // Mặc định năm học hiện tại; kỳ kế toán = các kỳ kế toán đã tạo (gom theo tên kỳ).
+  const [schoolYear, setSchoolYear] = useState(DEFAULT_SCHOOL_YEAR);
+  const [periodKey, setPeriodKey] = useState("");
   const [status, setStatus] = useState<StatusFilter>("PAYABLE");
   const [missingKeys, setMissingKeys] = useState<string[]>([]);
   const preselected = useRef(false);
@@ -86,11 +112,12 @@ export default function CashflowItemPicker({
         if (!preselected.current && initialKeys?.length) {
           preselected.current = true;
           const byKey = new Map(response.items.map((item) => [item.key, item]));
-          onChange(
-            initialKeys
-              .map((key) => byKey.get(key))
-              .filter((item): item is CashflowItem => !!item && selectable(item))
-          );
+          const picked = initialKeys
+            .map((key) => byKey.get(key))
+            .filter((item): item is CashflowItem => !!item && selectable(item));
+          onChange(picked);
+          // Sửa đề xuất: mở đúng năm học của các khoản đang chọn.
+          if (picked.length) setSchoolYear(itemSchoolYear(picked[0]));
           setMissingKeys(
             initialKeys.filter((key) => {
               const item = byKey.get(key);
@@ -123,19 +150,65 @@ export default function CashflowItemPicker({
     );
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], "vi"));
   }, [items]);
-  const years = useMemo(
+  const schoolYears = useMemo(
     () =>
-      [...new Set(items.map((item) => item.periodYear).filter(Boolean))].sort(
-        (a, b) => Number(b) - Number(a)
-      ) as number[],
-    [items]
+      includeDefaultSchoolYear([
+        ...items.map(itemSchoolYear),
+        ...(data?.periods ?? [])
+          .filter((period) => period.month <= 12)
+          .flatMap(periodSchoolYears),
+      ]).sort((a, b) => b.localeCompare(a)),
+    [items, data]
   );
+  // Kỳ kế toán đã tạo của trường đang lọc, thuộc năm học đang lọc (hoặc có
+  // khoản của năm học đó). Nhiều trường cùng một kỳ (vd. "Tháng 11/2026") gom
+  // thành một lựa chọn.
+  const periodOptions = useMemo(() => {
+    const groups = new Map<
+      string,
+      { label: string; year: number; month: number; ids: Set<number> }
+    >();
+    for (const period of data?.periods ?? []) {
+      if (schoolId && period.schoolId !== Number(schoolId)) continue;
+      if (
+        schoolYear &&
+        !periodSchoolYears(period).includes(schoolYear) &&
+        !items.some(
+          (item) =>
+            item.expensePeriodId === period.id &&
+            itemSchoolYear(item) === schoolYear
+        )
+      ) {
+        continue;
+      }
+      const label = periodLabel({
+        periodName: period.name,
+        periodMonth: period.month,
+        periodYear: period.year,
+      });
+      const key = `${period.year}|${period.month}|${label}`;
+      const group = groups.get(key) ?? {
+        label,
+        year: period.year,
+        month: period.month,
+        ids: new Set<number>(),
+      };
+      group.ids.add(period.id);
+      groups.set(key, group);
+    }
+    return [...groups.entries()].sort(
+      ([, a], [, b]) => b.year - a.year || b.month - a.month
+    );
+  }, [data, items, schoolId, schoolYear]);
+  const periodIds = periodKey
+    ? periodOptions.find(([key]) => key === periodKey)?.[1].ids ?? new Set<number>()
+    : null;
 
   const visible = items.filter(
     (item) =>
       (!schoolId || item.schoolId === Number(schoolId)) &&
-      (!year || item.periodYear === Number(year)) &&
-      (!month || item.periodMonth === Number(month)) &&
+      (!schoolYear || itemSchoolYear(item) === schoolYear) &&
+      (!periodIds || periodIds.has(item.expensePeriodId)) &&
       (status === "ALL" ||
         (status === "PAYABLE" ? selectable(item) : item.status === status))
   );
@@ -166,8 +239,13 @@ export default function CashflowItemPicker({
   const unassigned = (data?.unassigned ?? []).filter(
     (row) =>
       (!schoolId || row.schoolId === Number(schoolId)) &&
-      (!year || row.periodYear === Number(year)) &&
-      (!month || row.periodMonth === Number(month))
+      (!schoolYear ||
+        !row.periodMonth ||
+        !row.periodYear ||
+        periodSchoolYears({ month: row.periodMonth, year: row.periodYear }).includes(
+          schoolYear
+        )) &&
+      (!periodIds || periodIds.has(row.expensePeriodId))
   );
 
   return (
@@ -176,7 +254,10 @@ export default function CashflowItemPicker({
         <select
           className={`${selectClass} col-span-2`}
           value={schoolId}
-          onChange={(e) => setSchoolId(e.target.value)}
+          onChange={(e) => {
+            setSchoolId(e.target.value);
+            setPeriodKey("");
+          }}
           aria-label="Lọc trường"
         >
           <option value="">Tất cả trường</option>
@@ -188,27 +269,30 @@ export default function CashflowItemPicker({
         </select>
         <select
           className={selectClass}
-          value={year}
-          onChange={(e) => setYear(e.target.value)}
-          aria-label="Lọc năm"
+          value={schoolYear}
+          onChange={(e) => {
+            setSchoolYear(e.target.value);
+            setPeriodKey("");
+          }}
+          aria-label="Lọc năm học"
         >
-          <option value="">Mọi năm</option>
-          {years.map((value) => (
+          {schoolYears.map((value) => (
             <option key={value} value={value}>
-              Năm {value}
+              Năm học {value}
             </option>
           ))}
+          <option value="">Mọi năm học</option>
         </select>
         <select
           className={selectClass}
-          value={month}
-          onChange={(e) => setMonth(e.target.value)}
-          aria-label="Lọc tháng"
+          value={periodKey}
+          onChange={(e) => setPeriodKey(e.target.value)}
+          aria-label="Lọc kỳ kế toán"
         >
-          <option value="">Mọi tháng</option>
-          {Array.from({ length: 12 }, (_, index) => index + 1).map((value) => (
-            <option key={value} value={value}>
-              Tháng {value}
+          <option value="">Mọi kỳ kế toán</option>
+          {periodOptions.map(([key, option]) => (
+            <option key={key} value={key}>
+              {option.label}
             </option>
           ))}
         </select>

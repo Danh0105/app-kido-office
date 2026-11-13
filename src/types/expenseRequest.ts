@@ -227,6 +227,14 @@ export type CashflowItemsResponse = {
     rowCount: number;
     amount: number;
   }[];
+  /** Kỳ kế toán kế toán đã tạo ở các trường này (bộ lọc "Kỳ kế toán"). */
+  periods?: {
+    id: number;
+    schoolId: number;
+    month: number;
+    year: number;
+    name: string | null;
+  }[];
 };
 
 /** Khoản của một đề xuất với số hiện tại ở QL thu chi. */

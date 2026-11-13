@@ -282,8 +282,16 @@ export default function LedgerTable({
                       >
                         {index === 2 && href ? (
                           <span className="inline-flex items-center gap-1 font-mono font-semibold text-blue-700">
-                            {value}
-                            <ExternalLink size={12} />
+                            <a
+                              href={href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(event) => event.stopPropagation()}
+                              className="inline-flex items-center gap-1 hover:underline"
+                            >
+                              {value}
+                              <ExternalLink size={12} />
+                            </a>
                             {deleteButton}
                           </span>
                         ) : index === 2 && manualId ? (

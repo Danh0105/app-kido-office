@@ -89,7 +89,7 @@ export const deletableSource = (source: {
   return id ? { type: source.type, id } : null;
 };
 
-/** Đường dẫn (HashRouter) tới chứng từ gốc để mở xem. */
+/** Đường dẫn tuyệt đối theo gốc app (HashRouter) tới chứng từ gốc để mở xem. */
 export const sourceHref = (source: {
   type: string;
   schoolExpenseId?: number;
@@ -98,16 +98,16 @@ export const sourceHref = (source: {
   otherCashflowId?: number;
 }) => {
   if (source.type === "FINANCIAL_REQUEST" && source.requestId) {
-    return `#/director/finance/requests/${source.requestId}`;
+    return `/#/director/finance/requests/${source.requestId}`;
   }
   if (source.type === "EXPENSE_REQUEST" && source.suggestId) {
-    return `#/director/expense-requests/${source.suggestId}`;
+    return `/#/director/expense-requests/${source.suggestId}`;
   }
   if (source.type === "OTHER_CASHFLOW" && source.otherCashflowId) {
-    return `#/director/other-cashflows?contract=${source.otherCashflowId}`;
+    return `/#/director/other-cashflows?contract=${source.otherCashflowId}`;
   }
   if (source.schoolExpenseId) {
-    return `#/director/real-expense-detail/${source.schoolExpenseId}`;
+    return `/#/director/real-expense-detail/${source.schoolExpenseId}`;
   }
   return null;
 };

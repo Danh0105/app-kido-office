@@ -27,6 +27,8 @@ import { isDirectorBrandUiEnabled } from "@/utils/directorUi";
 import DirectorBrandShell from "@/pages/Director/components/DirectorBrandShell";
 import PayrollPage from "@/pages/Payroll/PayrollPage";
 import RecruitmentPage from "@/pages/Recruitment/RecruitmentPage";
+import AttendancePage from "@/pages/Attendance/AttendancePage";
+import { canViewAttendance } from "@/pages/Attendance/lib";
 import FinanceRoutes from "@/pages/Finance/FinanceRoutes";
 import OtherCashflowPage from "@/pages/OtherCashflow/OtherCashflowPage";
 import {
@@ -114,6 +116,14 @@ function RecruitmentGuard({ children }: { children: React.ReactNode }) {
 
 function HrFeatureGuard({ children }: { children: React.ReactNode }) {
   if (isRestrictedLongAnDirector()) {
+    return <Navigate to={DIRECTOR_HOME} replace />;
+  }
+  return <>{children}</>;
+}
+
+// Máy chấm công: phải khớp ATTENDANCE_ROLES (menu) và ADMIN_ROLES/VIEW_ROLES trên máy chủ chấm công.
+function AttendanceGuard({ children }: { children: React.ReactNode }) {
+  if (!canViewAttendance()) {
     return <Navigate to={DIRECTOR_HOME} replace />;
   }
   return <>{children}</>;
@@ -318,6 +328,14 @@ export default function DirectorRoutes() {
             <RecruitmentGuard>
               <RecruitmentPage />
             </RecruitmentGuard>
+          }
+        />
+        <Route
+          path="attendance"
+          element={
+            <AttendanceGuard>
+              <AttendancePage />
+            </AttendanceGuard>
           }
         />
         <Route

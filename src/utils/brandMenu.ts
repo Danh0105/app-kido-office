@@ -79,6 +79,7 @@ const DIRECTOR_ACTIVE_PATHS: Record<string, string[]> = {
   payroll: ["/director/payrolls"],
   finance: ["/director/finance"],
   recruitment: ["/director/recruitment"],
+  attendance: ["/director/attendance"],
 };
 
 const directorMenus = (): BrandMenuDefinition[] =>

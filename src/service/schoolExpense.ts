@@ -309,6 +309,17 @@ export type AccountingCashflowSummaryItem = {
     management: { expected: number; paid: number; payable: number };
   };
   cashPolicy: number;
+  /**
+   * Tổng hợp bảng Hóa Đơn (Tổng thanh toán công ty): total = issued (đã xuất —
+   * dòng đã khoá Xuất hóa đơn hoặc có số HĐ) + notIssued + noInvoice (dòng
+   * "Không xuất HĐ"). Server cũ chưa có thì không có trường này.
+   */
+  invoice?: {
+    total: number;
+    issued: number;
+    notIssued: number;
+    noInvoice: number;
+  };
   projectedBalance: number;
   projectedBalanceAfterPolicy: number;
   cashBalance: number;

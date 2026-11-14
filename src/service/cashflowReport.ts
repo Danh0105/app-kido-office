@@ -286,6 +286,10 @@ export const cashflowReportApi = {
   dayClosingStatus: async (): Promise<DayClosingStatus> =>
     (await api.get(`${BASE}/day-closings/status`)).data,
 
+  /** Lịch sử chốt quỹ trong khoảng ngày, gồm cả các lần đã mở lại. */
+  dayClosings: async (from: string, to: string): Promise<DayClosing[]> =>
+    (await api.get(`${BASE}/day-closings`, { params: { from, to } })).data,
+
   /** Các ngày sẽ chốt (mặc định tới hết hôm nay) + số dư từng tài khoản. */
   dayClosingPreview: async (
     date?: string,

@@ -501,6 +501,7 @@ export default function CashflowReportPage() {
         status={closingStatus}
         canClose={canManage}
         canReopen={canReopen}
+        range={{ from: filters.from, to: filters.to }}
         onChanged={() => setReloadKey((key) => key + 1)}
       />
 

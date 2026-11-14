@@ -112,7 +112,13 @@ const numbersFrom = (item: any): ReportNumbers => ({
   schoolExpense: Number(item.breakdown?.school?.expected || 0),
   schoolPaid: Number(item.breakdown?.school?.paid || 0),
   invoice: Number(item.invoice?.total || 0),
-  collected: Number(item.revenue?.collected || 0),
+  // Đã thu = Số tiền thu/chi của các dòng Hóa Đơn chọn "Thu" (như sổ thu chi);
+  // server cũ chưa trả trường này thì giữ số Đã thu của bảng Doanh Thu.
+  collected: Number(
+    typeof item.invoice?.collected === "number"
+      ? item.invoice.collected
+      : item.revenue?.collected || 0
+  ),
   outsideExpense: Number(item.breakdown?.outside?.expected || 0),
   outsidePaid: Number(item.breakdown?.outside?.paid || 0),
   schoolTeacher: Number(item.breakdown?.schoolTeacher || 0),
@@ -237,7 +243,10 @@ const COLUMN_HEADERS: { label: string; title?: string }[] = [
   { label: "Chi trường", title: "Chi trường, không gồm Giáo viên trường" },
   { label: "Đã chi", title: "Đã chi trường" },
   { label: "Hóa đơn", title: "Tổng thanh toán công ty của bảng Hóa Đơn" },
-  { label: "Đã thu" },
+  {
+    label: "Đã thu",
+    title: 'Số tiền thu/chi của các dòng Hóa Đơn chọn "Thu"',
+  },
   { label: "Chi ngoài", title: "Chi Ngoài" },
   { label: "Đã chi", title: "Đã chi ngoài" },
   { label: "Giáo viên trường" },

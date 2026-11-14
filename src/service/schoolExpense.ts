@@ -326,6 +326,8 @@ export type AccountingCashflowSummaryItem = {
     issued: number;
     notIssued: number;
     noInvoice: number;
+    /** Đã thu theo Hóa Đơn: Số tiền thu/chi của dòng chọn "Thu" (server từ 14/11). */
+    collected?: number;
   };
   /** Số liệu theo môn; khoản không có subject_id vẫn nằm ở tổng cấp phiếu. */
   subjects?: Array<{
@@ -344,6 +346,7 @@ export type AccountingCashflowSummaryItem = {
       issued: number;
       notIssued: number;
       noInvoice: number;
+      collected?: number;
     };
     breakdown: {
       school: { expected: number; paid: number };

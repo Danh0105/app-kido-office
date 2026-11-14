@@ -196,7 +196,11 @@ export type SchoolTeacherPayrollSheet = {
   schoolId: number;
   schoolName: string;
   period: { id: number; month: number; year: number; name: string | null };
-  approvals: { subjectId: number; approvedByName: string | null; approvedAt: string }[];
+  approvals: {
+    subjectId: number;
+    approvedByName: string | null;
+    approvedAt: string;
+  }[];
   teachers: SchoolTeacherPayrollTeacher[];
   totals: {
     teacherCount: number;
@@ -230,7 +234,10 @@ export const schoolTeacherApi = {
     const res = await api.post(`/school-teachers`, data);
     return res.data;
   },
-  update: async (id: number, data: SchoolTeacherInput): Promise<SchoolTeacher> => {
+  update: async (
+    id: number,
+    data: SchoolTeacherInput
+  ): Promise<SchoolTeacher> => {
     const res = await api.patch(`/school-teachers/${id}`, data);
     return res.data;
   },
@@ -320,6 +327,24 @@ export type AccountingCashflowSummaryItem = {
     notIssued: number;
     noInvoice: number;
   };
+  /** Số liệu theo môn; khoản không có subject_id vẫn nằm ở tổng cấp phiếu. */
+  subjects?: Array<{
+    subject: { id: number; name: string };
+    revenue: { expected: number; collected: number; receivable: number };
+    expense: {
+      expected: number;
+      paid: number;
+      payable: number;
+      school: { expected: number; paid: number; payable: number };
+      management: { expected: number; paid: number; payable: number };
+    };
+    invoice: {
+      total: number;
+      issued: number;
+      notIssued: number;
+      noInvoice: number;
+    };
+  }>;
   projectedBalance: number;
   projectedBalanceAfterPolicy: number;
   cashBalance: number;
@@ -397,7 +422,7 @@ export const schoolExpenseApi = {
 
   getSchoolTeacherItems: async (
     id: number,
-    subjectId: number,
+    subjectId: number
   ): Promise<SchoolTeacherItemsResponse> => {
     const res = await api.get(`/school-expenses/${id}/school-teacher-items`, {
       params: { subjectId },
@@ -408,11 +433,11 @@ export const schoolExpenseApi = {
   /** "Duyệt lương" bảng Giáo viên trường của một môn (Giám đốc / Kế toán trưởng). */
   approveSchoolTeacher: async (
     id: number,
-    subjectId: number,
+    subjectId: number
   ): Promise<SchoolTeacherItemsResponse> => {
     const res = await api.post(
       `/school-expenses/${id}/school-teacher-items/approve`,
-      { subjectId },
+      { subjectId }
     );
     return res.data;
   },
@@ -443,7 +468,7 @@ export const schoolExpenseApi = {
   confirmManagementExpense: async (id: number, subjectId: number) => {
     const res = await api.post(
       `/school-expenses/${id}/confirm-management-expense`,
-      { subjectId },
+      { subjectId }
     );
     return res.data;
   },
@@ -452,7 +477,7 @@ export const schoolExpenseApi = {
   unconfirmManagementExpense: async (id: number, subjectId: number) => {
     const res = await api.post(
       `/school-expenses/${id}/unconfirm-management-expense`,
-      { subjectId },
+      { subjectId }
     );
     return res.data;
   },
@@ -472,10 +497,10 @@ export const schoolExpenseApi = {
   /** Trạng thái hóa đơn điện tử của các dòng doanh thu trong 1 môn */
   getEInvoices: async (
     id: number,
-    subjectId: number,
+    subjectId: number
   ): Promise<RevenueEInvoice[]> => {
     const res = await api.get(
-      `/school-expenses/${id}/subjects/${subjectId}/einvoices`,
+      `/school-expenses/${id}/subjects/${subjectId}/einvoices`
     );
     return res.data;
   },
@@ -483,10 +508,10 @@ export const schoolExpenseApi = {
   /** "Đẩy hóa đơn": gộp các dòng "Xuất HĐ Cty" chưa có hóa đơn thành 1 hóa đơn nháp Viettel */
   exportEInvoiceDrafts: async (
     id: number,
-    subjectId: number,
+    subjectId: number
   ): Promise<EInvoiceExportSummary> => {
     const res = await api.post(
-      `/school-expenses/${id}/subjects/${subjectId}/einvoices/drafts`,
+      `/school-expenses/${id}/subjects/${subjectId}/einvoices/drafts`
     );
     return res.data;
   },
@@ -498,10 +523,10 @@ export const schoolExpenseApi = {
   unlinkEInvoice: async (
     id: number,
     subjectId: number,
-    einvoiceId: number,
+    einvoiceId: number
   ): Promise<{ rowIndexes: number[] }> => {
     const res = await api.delete(
-      `/school-expenses/${id}/subjects/${subjectId}/einvoices/${einvoiceId}`,
+      `/school-expenses/${id}/subjects/${subjectId}/einvoices/${einvoiceId}`
     );
     return res.data;
   },

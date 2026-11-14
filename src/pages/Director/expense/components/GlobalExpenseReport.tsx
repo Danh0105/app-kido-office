@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { Building2, Loader2, RefreshCw } from "lucide-react";
 
 import { schoolApi } from "@/service/school.api";
 import { schoolExpenseApi } from "@/service/schoolExpense";
@@ -295,10 +295,16 @@ const HEADER_TOTALS: {
 
 function HeaderTotals({ total }: { total: ReportNumbers }) {
   return (
-    <div className="overflow-x-auto border-b border-slate-100 bg-slate-50/70">
-      <div className="grid min-w-[1800px] grid-cols-13 divide-x divide-slate-200">
+    <div className="border-b border-slate-200 bg-slate-50 p-3">
+      <div
+        className="grid gap-2"
+        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))" }}
+      >
         {HEADER_TOTALS.map((item) => (
-          <div key={item.label} className="px-3 py-2 text-right">
+          <div
+            key={item.label}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left shadow-sm"
+          >
             <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
               {item.label}
             </p>
@@ -650,6 +656,13 @@ export default function GlobalExpenseReport() {
         const employee = employeeRows[0]?.employee || {};
         const roles = Array.isArray(employee.roles) ? employee.roles : [];
         const all = employeeTotals.get(employeeName);
+        const schoolOrder = new Map<string, number>();
+        const schoolRowCounts = new Map<string, number>();
+        employeeRows.forEach((row) => {
+          const key = String(row.school?.id || row.school?.name || "unknown");
+          if (!schoolOrder.has(key)) schoolOrder.set(key, schoolOrder.size);
+          schoolRowCounts.set(key, (schoolRowCounts.get(key) || 0) + 1);
+        });
 
         return (
           <section
@@ -701,7 +714,13 @@ export default function GlobalExpenseReport() {
                   <p className="text-xs font-semibold uppercase text-amber-600">
                     Lợi nhuận
                   </p>
-                  <p className="mt-1 text-base font-black tabular-nums text-rose-700">
+                  <p
+                    className={`mt-1 text-base font-black tabular-nums ${
+                      (all?.total.profit ?? 0) < 0
+                        ? "text-rose-700"
+                        : "text-blue-700"
+                    }`}
+                  >
                     {money(all?.total.profit ?? 0)}
                   </p>
                 </div>
@@ -714,19 +733,19 @@ export default function GlobalExpenseReport() {
                   <tr className="text-xs font-black uppercase tracking-wide">
                     <th
                       rowSpan={2}
-                      className="sticky left-0 z-10 bg-slate-100 px-3 py-2 text-left text-slate-700"
+                      className="sticky left-0 z-10 min-w-[260px] border-r border-slate-300 bg-slate-100 px-3 py-2 text-left text-slate-700"
                     >
                       Trường
                     </th>
                     <th
                       rowSpan={2}
-                      className="bg-slate-100 px-3 py-2 text-left text-slate-700"
+                      className="min-w-[130px] border-r border-slate-300 bg-slate-100 px-3 py-2 text-left text-slate-700"
                     >
                       Kỳ
                     </th>
                     <th
                       rowSpan={2}
-                      className="bg-slate-100 px-3 py-2 text-left text-slate-700"
+                      className="min-w-[220px] border-r border-slate-300 bg-slate-100 px-3 py-2 text-left text-slate-700"
                     >
                       Môn học
                     </th>
@@ -741,9 +760,9 @@ export default function GlobalExpenseReport() {
                     ))}
                   </tr>
                   <tr className="bg-slate-50 text-xs font-bold text-slate-600">
-                    {COLUMN_HEADERS.map((column) => (
+                    {COLUMN_HEADERS.map((column, index) => (
                       <th
-                        key={column.label}
+                        key={`${column.label}-${index}`}
                         title={column.title}
                         className="px-3 py-2 text-right"
                       >
@@ -753,28 +772,80 @@ export default function GlobalExpenseReport() {
                   </tr>
                 </thead>
                 <tbody>
-                  {employeeRows.map((row) => (
-                    <tr
-                      key={row.key}
-                      className="border-t border-slate-100 hover:bg-blue-50/60"
-                    >
-                      <td className="sticky left-0 z-[1] max-w-[280px] bg-white px-3 py-2.5">
-                        <p className="truncate font-bold text-slate-900">
-                          {row.school?.name || "--"}
-                        </p>
-                      </td>
-                      <td className="px-3 py-2.5 text-slate-600">
-                        {periodLabel(row.period)}
-                      </td>
-                      <td
-                        className="max-w-[240px] truncate px-3 py-2.5 font-semibold text-slate-700"
-                        title={row.subjectName}
-                      >
-                        {row.subjectName}
-                      </td>
-                      <NumberCells row={row} />
-                    </tr>
-                  ))}
+                  {employeeRows.map((row, index) => {
+                    const schoolKey = String(
+                      row.school?.id || row.school?.name || "unknown"
+                    );
+                    const previous = employeeRows[index - 1];
+                    const previousSchoolKey = previous
+                      ? String(
+                          previous.school?.id ||
+                            previous.school?.name ||
+                            "unknown"
+                        )
+                      : "";
+                    const startsSchool = schoolKey !== previousSchoolKey;
+                    const startsPeriod =
+                      startsSchool ||
+                      String(row.period?.id) !== String(previous?.period?.id);
+                    const order = schoolOrder.get(schoolKey) || 0;
+                    const rowBackground =
+                      order % 2 === 0 ? "bg-white" : "bg-sky-50/50";
+                    const schoolRowCount = schoolRowCounts.get(schoolKey) || 0;
+
+                    return (
+                      <Fragment key={row.key}>
+                        {startsSchool && (
+                          <tr
+                            className={
+                              order % 2 === 0
+                                ? "border-y-2 border-blue-200 bg-blue-50"
+                                : "border-y-2 border-cyan-200 bg-cyan-50"
+                            }
+                          >
+                            <td colSpan={16} className="px-4 py-3">
+                              <div className="sticky left-4 flex w-fit items-center gap-3">
+                                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-blue-600 shadow-sm">
+                                  <Building2 size={17} />
+                                </span>
+                                <span className="font-black text-slate-900">
+                                  {row.school?.name || "Chưa đặt tên trường"}
+                                </span>
+                                <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-slate-500 shadow-sm">
+                                  {schoolRowCount} dòng môn học
+                                </span>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        <tr
+                          className={`${rowBackground} ${
+                            startsPeriod
+                              ? "border-t-2 border-slate-300"
+                              : "border-t border-slate-100"
+                          } transition-colors hover:bg-amber-50/70`}
+                        >
+                          <td
+                            className={`sticky left-0 z-[1] max-w-[280px] border-l-4 border-blue-400 px-3 py-2.5 ${rowBackground}`}
+                          >
+                            <p className="truncate font-bold text-slate-900">
+                              {row.school?.name || "--"}
+                            </p>
+                          </td>
+                          <td className="border-r border-slate-200 px-3 py-2.5 font-semibold text-slate-600">
+                            {periodLabel(row.period)}
+                          </td>
+                          <td
+                            className="max-w-[240px] truncate border-r border-slate-200 px-3 py-2.5 font-bold text-slate-700"
+                            title={row.subjectName}
+                          >
+                            {row.subjectName}
+                          </td>
+                          <NumberCells row={row} />
+                        </tr>
+                      </Fragment>
+                    );
+                  })}
                 </tbody>
                 {all && (
                   <tfoot>

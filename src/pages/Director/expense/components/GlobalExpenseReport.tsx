@@ -1,5 +1,5 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
-import { Building2, Loader2, RefreshCw } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Loader2, RefreshCw } from "lucide-react";
 
 import { schoolApi } from "@/service/school.api";
 import { schoolExpenseApi } from "@/service/schoolExpense";
@@ -48,18 +48,6 @@ const roleLabel = (role: string) => {
     director_la: "Giám đốc LA",
   };
   return labels[role] || role;
-};
-
-const roleColor = (role: string) => {
-  if (role === "sales" || role === "employee")
-    return "bg-blue-100 text-blue-600";
-  if (role === "probation") return "bg-yellow-100 text-yellow-700";
-  if (role === "employee_la") return "bg-green-100 text-green-600";
-  if (role === "director" || role === "director_la")
-    return "bg-purple-100 text-purple-700";
-  if (role === "saleadmin" || role === "salesadmin_la")
-    return "bg-indigo-100 text-indigo-700";
-  return "bg-gray-100 text-gray-600";
 };
 
 /** Các số của một dòng môn học — cũng dùng cho header/footer tổng. */
@@ -156,7 +144,7 @@ function MoneyCell({
 }) {
   return (
     <td
-      className={`px-3 py-2.5 text-right tabular-nums ${
+      className={`border border-slate-300 px-2 py-1.5 text-right tabular-nums ${
         value ? className : "text-slate-300"
       }`}
     >
@@ -177,14 +165,14 @@ function NumberCells({
   return (
     <>
       <td
-        className={`px-3 py-2.5 text-right tabular-nums ${bold} text-slate-700`}
+        className={`border border-slate-300 px-2 py-1.5 text-right tabular-nums ${bold} text-slate-700`}
       >
         {quantity(row)}
       </td>
       <MoneyCell value={row.revenue} className={`${bold} text-slate-900`} />
       <MoneyCell
         value={row.schoolExpense}
-        className={`border-l border-sky-100 ${bold} text-slate-800`}
+        className={`${bold} text-slate-800`}
       />
       <MoneyCell
         value={row.schoolPaid}
@@ -192,14 +180,12 @@ function NumberCells({
       />
       <MoneyCell
         value={row.invoice}
-        className={`border-l border-amber-100 ${
-          bold || "font-bold"
-        } text-amber-800`}
+        className={`${bold || "font-bold"} text-amber-800`}
       />
       <MoneyCell value={row.collected} className={`${bold} text-emerald-700`} />
       <MoneyCell
         value={row.outsideExpense}
-        className={`border-l border-sky-100 ${bold} text-slate-800`}
+        className={`${bold} text-slate-800`}
       />
       <MoneyCell
         value={row.outsidePaid}
@@ -223,7 +209,7 @@ function NumberCells({
       />
       <MoneyCell
         value={row.profit}
-        className={`border-l border-blue-100 ${bold || "font-bold"} ${
+        className={`${bold || "font-bold"} ${
           row.profit < 0 ? "text-rose-700" : "text-blue-700"
         }`}
       />
@@ -265,64 +251,19 @@ const COLUMN_HEADERS: { label: string; title?: string }[] = [
   },
 ];
 
-const HEADER_TOTALS: {
-  label: string;
-  value: (row: ReportNumbers) => number | string;
-  tone?: string;
-}[] = [
-  { label: "Số HS / số tiết", value: quantity },
-  { label: "Doanh thu", value: (row) => row.revenue },
-  { label: "Chi trường", value: (row) => row.schoolExpense },
-  {
-    label: "Đã chi trường",
-    value: (row) => row.schoolPaid,
-    tone: "text-emerald-700",
-  },
-  { label: "Hóa đơn", value: (row) => row.invoice, tone: "text-amber-800" },
-  { label: "Đã thu", value: (row) => row.collected, tone: "text-emerald-700" },
-  { label: "Chi ngoài", value: (row) => row.outsideExpense },
-  {
-    label: "Đã chi ngoài",
-    value: (row) => row.outsidePaid,
-    tone: "text-emerald-700",
-  },
-  { label: "GV trường", value: (row) => row.schoolTeacher },
-  { label: "GV Cty", value: (row) => row.companyTeacher },
-  { label: "CS năm", value: (row) => row.annualPolicy },
-  { label: "Chi khác", value: (row) => row.otherExpense },
-  { label: "Lợi nhuận", value: (row) => row.profit, tone: "text-blue-700" },
-];
-
-function HeaderTotals({ total }: { total: ReportNumbers }) {
-  return (
-    <div className="border-b border-slate-200 bg-slate-50 p-3">
-      <div
-        className="grid gap-2"
-        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))" }}
-      >
-        {HEADER_TOTALS.map((item) => (
-          <div
-            key={item.label}
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left shadow-sm"
-          >
-            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-              {item.label}
-            </p>
-            <p
-              className={`mt-0.5 text-xs font-black tabular-nums ${
-                item.tone ?? "text-slate-800"
-              }`}
-            >
-              {typeof item.value(total) === "number"
-                ? money(item.value(total) as number)
-                : item.value(total)}
-            </p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+const rowGroupSpan = (
+  rows: ReportRow[],
+  index: number,
+  getKey: (row: ReportRow) => string
+) => {
+  const key = getKey(rows[index]);
+  if (index > 0 && getKey(rows[index - 1]) === key) return 0;
+  let span = 1;
+  while (index + span < rows.length && getKey(rows[index + span]) === key) {
+    span += 1;
+  }
+  return span;
+};
 
 /**
  * Báo cáo tổng hợp thu chi theo môn, nhóm theo nhân viên kinh doanh. Header và
@@ -641,15 +582,33 @@ export default function GlobalExpenseReport() {
         </div>
       )}
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-        {cards.map((card) => (
-          <div key={card.label} className="rounded-2xl bg-white p-4 shadow-sm">
-            <p className="text-sm font-bold text-slate-500">{card.label}</p>
-            <p className={`mt-2 text-xl font-black tabular-nums ${card.tone}`}>
-              {money(card.value)}
-            </p>
-          </div>
-        ))}
+      <section className="overflow-auto border border-slate-300 bg-white">
+        <table className="w-full min-w-[900px] border-collapse text-sm">
+          <thead>
+            <tr className="bg-slate-100">
+              {cards.map((card) => (
+                <th
+                  key={card.label}
+                  className="border border-slate-300 px-3 py-2 text-left font-bold text-slate-600"
+                >
+                  {card.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              {cards.map((card) => (
+                <td
+                  key={card.label}
+                  className={`border border-slate-300 px-3 py-2 text-right font-black tabular-nums ${card.tone}`}
+                >
+                  {money(card.value)}
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
       </section>
 
       {groups.map(([employeeName, employeeRows]) => {
@@ -657,95 +616,58 @@ export default function GlobalExpenseReport() {
         const roles = Array.isArray(employee.roles) ? employee.roles : [];
         const all = employeeTotals.get(employeeName);
         const schoolOrder = new Map<string, number>();
-        const schoolRowCounts = new Map<string, number>();
         employeeRows.forEach((row) => {
           const key = String(row.school?.id || row.school?.name || "unknown");
           if (!schoolOrder.has(key)) schoolOrder.set(key, schoolOrder.size);
-          schoolRowCounts.set(key, (schoolRowCounts.get(key) || 0) + 1);
         });
 
         return (
           <section
             key={employeeName}
-            className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
+            className="overflow-hidden border border-slate-300 bg-white"
           >
-            <div className="flex flex-col items-center gap-2 border-b border-slate-100 bg-white px-5 py-4 sm:flex-row sm:items-center">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-50 text-2xl">
-                👤
-              </div>
-              <div className="min-w-0 flex-1 text-center sm:text-left">
-                <p className="text-lg font-black text-slate-800">
-                  {employeeName}
-                </p>
-                <p className="mt-0.5 text-sm text-slate-400">
-                  {employee.phone ||
-                    employee.email ||
-                    "Chưa có thông tin liên hệ"}
-                </p>
-                <div className="mt-2 flex flex-wrap justify-center gap-1 sm:justify-start">
-                  {roles.length ? (
-                    roles.map((role: string) => (
-                      <span
-                        key={role}
-                        className={`rounded-full px-2 py-1 text-xs font-semibold ${roleColor(
-                          role
-                        )}`}
-                      >
-                        {roleLabel(role)}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-xs italic text-slate-300">
-                      Chưa có vai trò
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <div className="rounded-xl bg-slate-100 px-4 py-2 text-center">
-                  <p className="text-xs font-semibold uppercase text-slate-400">
-                    Trường
-                  </p>
-                  <p className="mt-1 text-xl font-black text-slate-800">
-                    {new Set(all?.rows.map((row) => row.school?.id)).size}
-                  </p>
-                </div>
-                <div className="rounded-xl bg-amber-50 px-4 py-2 text-center">
-                  <p className="text-xs font-semibold uppercase text-amber-600">
-                    Lợi nhuận
-                  </p>
-                  <p
-                    className={`mt-1 text-base font-black tabular-nums ${
-                      (all?.total.profit ?? 0) < 0
-                        ? "text-rose-700"
-                        : "text-blue-700"
-                    }`}
-                  >
-                    {money(all?.total.profit ?? 0)}
-                  </p>
-                </div>
-              </div>
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-slate-300 bg-slate-100 px-3 py-2 text-sm">
+              <strong className="text-slate-900">{employeeName}</strong>
+              <span className="text-slate-500">
+                {employee.phone || employee.email || "Chưa có liên hệ"}
+              </span>
+              <span className="text-slate-500">
+                {roles.length
+                  ? roles.map(roleLabel).join(", ")
+                  : "Chưa có vai trò"}
+              </span>
+              <span className="ml-auto font-semibold text-slate-700">
+                {new Set(all?.rows.map((row) => row.school?.id)).size} trường
+              </span>
+              <span
+                className={`font-black tabular-nums ${
+                  (all?.total.profit ?? 0) < 0
+                    ? "text-rose-700"
+                    : "text-blue-700"
+                }`}
+              >
+                Lợi nhuận: {money(all?.total.profit ?? 0)}
+              </span>
             </div>
-            {all && <HeaderTotals total={all.total} />}
             <div className="overflow-auto">
-              <table className="w-full min-w-[2200px] whitespace-nowrap text-sm">
+              <table className="w-full min-w-[2200px] border-collapse whitespace-nowrap text-xs">
                 <thead>
-                  <tr className="text-xs font-black uppercase tracking-wide">
+                  <tr className="font-black uppercase tracking-wide">
                     <th
                       rowSpan={2}
-                      className="sticky left-0 z-10 min-w-[260px] border-r border-slate-300 bg-slate-100 px-3 py-2 text-left text-slate-700"
+                      className="sticky left-0 z-10 min-w-[260px] border border-slate-400 bg-slate-200 px-2 py-1.5 text-left text-slate-700"
                     >
                       Trường
                     </th>
                     <th
                       rowSpan={2}
-                      className="min-w-[130px] border-r border-slate-300 bg-slate-100 px-3 py-2 text-left text-slate-700"
+                      className="min-w-[130px] border border-slate-400 bg-slate-200 px-2 py-1.5 text-left text-slate-700"
                     >
                       Kỳ
                     </th>
                     <th
                       rowSpan={2}
-                      className="min-w-[220px] border-r border-slate-300 bg-slate-100 px-3 py-2 text-left text-slate-700"
+                      className="min-w-[220px] border border-slate-400 bg-slate-200 px-2 py-1.5 text-left text-slate-700"
                     >
                       Môn học
                     </th>
@@ -753,106 +675,96 @@ export default function GlobalExpenseReport() {
                       <th
                         key={index}
                         colSpan={group.span}
-                        className={`px-3 py-2 text-center ${group.className}`}
+                        className={`border border-slate-400 px-2 py-1.5 text-center ${group.className}`}
                       >
                         {group.label}
                       </th>
                     ))}
                   </tr>
-                  <tr className="bg-slate-50 text-xs font-bold text-slate-600">
+                  <tr className="bg-slate-100 font-bold text-slate-600">
                     {COLUMN_HEADERS.map((column, index) => (
                       <th
                         key={`${column.label}-${index}`}
                         title={column.title}
-                        className="px-3 py-2 text-right"
+                        className="border border-slate-400 px-2 py-1.5 text-right"
                       >
                         {column.label}
                       </th>
                     ))}
                   </tr>
+                  {all && (
+                    <tr className="bg-yellow-50">
+                      <th
+                        colSpan={3}
+                        className="sticky left-0 z-10 border border-slate-400 bg-yellow-50 px-2 py-1.5 text-left font-black text-slate-800"
+                      >
+                        TỔNG {employeeName.toLocaleUpperCase("vi")}
+                      </th>
+                      <NumberCells row={all.total} strong />
+                    </tr>
+                  )}
                 </thead>
                 <tbody>
                   {employeeRows.map((row, index) => {
-                    const schoolKey = String(
-                      row.school?.id || row.school?.name || "unknown"
+                    const schoolKeyOf = (item: ReportRow) =>
+                      String(item.school?.id || item.school?.name || "unknown");
+                    const periodKeyOf = (item: ReportRow) =>
+                      `${schoolKeyOf(item)}-${String(item.period?.id || "")}`;
+                    const schoolKey = schoolKeyOf(row);
+                    const schoolSpan = rowGroupSpan(
+                      employeeRows,
+                      index,
+                      schoolKeyOf
                     );
-                    const previous = employeeRows[index - 1];
-                    const previousSchoolKey = previous
-                      ? String(
-                          previous.school?.id ||
-                            previous.school?.name ||
-                            "unknown"
-                        )
-                      : "";
-                    const startsSchool = schoolKey !== previousSchoolKey;
-                    const startsPeriod =
-                      startsSchool ||
-                      String(row.period?.id) !== String(previous?.period?.id);
+                    const periodSpan = rowGroupSpan(
+                      employeeRows,
+                      index,
+                      periodKeyOf
+                    );
                     const order = schoolOrder.get(schoolKey) || 0;
                     const rowBackground =
-                      order % 2 === 0 ? "bg-white" : "bg-sky-50/50";
-                    const schoolRowCount = schoolRowCounts.get(schoolKey) || 0;
+                      order % 2 === 0 ? "bg-white" : "bg-slate-50";
 
                     return (
-                      <Fragment key={row.key}>
-                        {startsSchool && (
-                          <tr
-                            className={
-                              order % 2 === 0
-                                ? "border-y-2 border-blue-200 bg-blue-50"
-                                : "border-y-2 border-cyan-200 bg-cyan-50"
-                            }
-                          >
-                            <td colSpan={16} className="px-4 py-3">
-                              <div className="sticky left-4 flex w-fit items-center gap-3">
-                                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-blue-600 shadow-sm">
-                                  <Building2 size={17} />
-                                </span>
-                                <span className="font-black text-slate-900">
-                                  {row.school?.name || "Chưa đặt tên trường"}
-                                </span>
-                                <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-slate-500 shadow-sm">
-                                  {schoolRowCount} dòng môn học
-                                </span>
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                        <tr
-                          className={`${rowBackground} ${
-                            startsPeriod
-                              ? "border-t-2 border-slate-300"
-                              : "border-t border-slate-100"
-                          } transition-colors hover:bg-amber-50/70`}
-                        >
+                      <tr
+                        key={row.key}
+                        className={`${rowBackground} hover:bg-yellow-50`}
+                      >
+                        {schoolSpan > 0 && (
                           <td
-                            className={`sticky left-0 z-[1] max-w-[280px] border-l-4 border-blue-400 px-3 py-2.5 ${rowBackground}`}
+                            rowSpan={schoolSpan}
+                            className={`sticky left-0 z-[1] max-w-[280px] border border-slate-400 px-2 py-1.5 align-top font-bold text-slate-900 ${rowBackground}`}
                           >
-                            <p className="truncate font-bold text-slate-900">
+                            <p className="whitespace-normal leading-5">
                               {row.school?.name || "--"}
                             </p>
                           </td>
-                          <td className="border-r border-slate-200 px-3 py-2.5 font-semibold text-slate-600">
+                        )}
+                        {periodSpan > 0 && (
+                          <td
+                            rowSpan={periodSpan}
+                            className={`border border-slate-300 px-2 py-1.5 align-top font-semibold text-slate-600 ${rowBackground}`}
+                          >
                             {periodLabel(row.period)}
                           </td>
-                          <td
-                            className="max-w-[240px] truncate border-r border-slate-200 px-3 py-2.5 font-bold text-slate-700"
-                            title={row.subjectName}
-                          >
-                            {row.subjectName}
-                          </td>
-                          <NumberCells row={row} />
-                        </tr>
-                      </Fragment>
+                        )}
+                        <td
+                          className="max-w-[240px] truncate border border-slate-300 px-2 py-1.5 font-semibold text-slate-700"
+                          title={row.subjectName}
+                        >
+                          {row.subjectName}
+                        </td>
+                        <NumberCells row={row} />
+                      </tr>
                     );
                   })}
                 </tbody>
                 {all && (
                   <tfoot>
-                    <tr className="border-t-2 border-slate-300 bg-slate-50">
+                    <tr className="bg-yellow-50">
                       <td
                         colSpan={3}
-                        className="sticky left-0 z-[1] bg-slate-50 px-3 py-3 font-black text-slate-800"
+                        className="sticky left-0 z-[1] border border-slate-400 bg-yellow-50 px-2 py-1.5 font-black text-slate-800"
                       >
                         Tổng {employeeName}
                         <span className="ml-1 text-xs font-semibold text-slate-400">

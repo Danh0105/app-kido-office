@@ -62,19 +62,22 @@ const roleColor = (role: string) => {
   return "bg-gray-100 text-gray-600";
 };
 
-/** Các số của một dòng (trường × kỳ) — cũng dùng cho dòng tổng. */
+/** Các số của một dòng môn học — cũng dùng cho header/footer tổng. */
 type ReportNumbers = {
+  students: number;
+  periods: number;
   revenue: number;
-  invoiceTotal: number;
-  invoiceIssued: number;
-  invoiceNotIssued: number;
-  invoiceNone: number;
   schoolExpense: number;
-  managementExpense: number;
-  totalExpense: number;
-  paid: number;
-  remaining: number;
-  cashPolicy: number;
+  schoolPaid: number;
+  invoice: number;
+  collected: number;
+  outsideExpense: number;
+  outsidePaid: number;
+  schoolTeacher: number;
+  companyTeacher: number;
+  annualPolicy: number;
+  otherExpense: number;
+  profit: number;
 };
 
 type ReportRow = ReportNumbers & {
@@ -86,17 +89,20 @@ type ReportRow = ReportNumbers & {
 };
 
 const EMPTY_NUMBERS: ReportNumbers = {
+  students: 0,
+  periods: 0,
   revenue: 0,
-  invoiceTotal: 0,
-  invoiceIssued: 0,
-  invoiceNotIssued: 0,
-  invoiceNone: 0,
   schoolExpense: 0,
-  managementExpense: 0,
-  totalExpense: 0,
-  paid: 0,
-  remaining: 0,
-  cashPolicy: 0,
+  schoolPaid: 0,
+  invoice: 0,
+  collected: 0,
+  outsideExpense: 0,
+  outsidePaid: 0,
+  schoolTeacher: 0,
+  companyTeacher: 0,
+  annualPolicy: 0,
+  otherExpense: 0,
+  profit: 0,
 };
 
 const sumRows = (rows: ReportNumbers[]): ReportNumbers =>
@@ -111,44 +117,34 @@ const sumRows = (rows: ReportNumbers[]): ReportNumbers =>
     { ...EMPTY_NUMBERS }
   );
 
-const subtractNumbers = (
-  total: ReportNumbers,
-  detail: ReportNumbers
-): ReportNumbers =>
-  Object.fromEntries(
-    (Object.keys(EMPTY_NUMBERS) as (keyof ReportNumbers)[]).map((key) => [
-      key,
-      Math.round((total[key] - detail[key]) * 100) / 100,
-    ])
-  ) as ReportNumbers;
-
-const hasMoney = (row: ReportNumbers) =>
-  (Object.keys(EMPTY_NUMBERS) as (keyof ReportNumbers)[]).some(
-    (key) => Math.abs(row[key]) >= 0.01
-  );
-
-const numbersFrom = (item: any, cashPolicy = 0): ReportNumbers => ({
+const numbersFrom = (item: any): ReportNumbers => ({
+  students: Number(item.quantity?.students || 0),
+  periods: Number(item.quantity?.periods || 0),
   revenue: Number(item.revenue?.expected || 0),
-  invoiceTotal: Number(item.invoice?.total || 0),
-  invoiceIssued: Number(item.invoice?.issued || 0),
-  invoiceNotIssued: Number(item.invoice?.notIssued || 0),
-  invoiceNone: Number(item.invoice?.noInvoice || 0),
-  schoolExpense: Number(item.expense?.school?.expected || 0),
-  managementExpense: Number(item.expense?.management?.expected || 0),
-  totalExpense: Number(item.expense?.expected || 0),
-  paid: Number(item.expense?.paid || 0),
-  remaining: Number(item.expense?.payable || 0),
-  cashPolicy,
+  schoolExpense: Number(item.breakdown?.school?.expected || 0),
+  schoolPaid: Number(item.breakdown?.school?.paid || 0),
+  invoice: Number(item.invoice?.total || 0),
+  collected: Number(item.revenue?.collected || 0),
+  outsideExpense: Number(item.breakdown?.outside?.expected || 0),
+  outsidePaid: Number(item.breakdown?.outside?.paid || 0),
+  schoolTeacher: Number(item.breakdown?.schoolTeacher || 0),
+  companyTeacher: Number(item.breakdown?.companyTeacher || 0),
+  annualPolicy: Number(item.breakdown?.annualPolicy || 0),
+  otherExpense: Number(item.breakdown?.other || 0),
+  profit: Number(item.breakdown?.profit || 0),
 });
-
-/** Doanh thu − Tổng chi − Chính sách tiền mặt (như trước). */
-const differenceOf = (row: ReportNumbers) =>
-  row.revenue - row.totalExpense - row.cashPolicy;
 
 const periodLabel = (period: any) =>
   period?.name || `${period?.month || "--"}/${period?.year || "--"}`;
 
 const money = (value: number) => formatCurrency(value);
+
+const quantity = (row: Pick<ReportNumbers, "students" | "periods">) =>
+  `${new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 }).format(
+    row.students
+  )} HS / ${new Intl.NumberFormat("vi-VN", {
+    maximumFractionDigits: 2,
+  }).format(row.periods)} tiết`;
 
 /** Ô số: số 0 hiện nhạt để mắt dừng ở ô có tiền. */
 function MoneyCell({
@@ -180,93 +176,127 @@ function NumberCells({
   const bold = strong ? "font-black" : "";
   return (
     <>
+      <td
+        className={`px-3 py-2.5 text-right tabular-nums ${bold} text-slate-700`}
+      >
+        {quantity(row)}
+      </td>
       <MoneyCell value={row.revenue} className={`${bold} text-slate-900`} />
-      <MoneyCell
-        value={row.invoiceTotal}
-        className={`border-l border-amber-100 ${
-          bold || "font-bold"
-        } text-amber-800`}
-      />
-      <MoneyCell value={row.invoiceNone} className={`${bold} text-slate-500`} />
       <MoneyCell
         value={row.schoolExpense}
         className={`border-l border-sky-100 ${bold} text-slate-800`}
       />
       <MoneyCell
-        value={row.managementExpense}
+        value={row.schoolPaid}
+        className={`${bold} text-emerald-700`}
+      />
+      <MoneyCell
+        value={row.invoice}
+        className={`border-l border-amber-100 ${
+          bold || "font-bold"
+        } text-amber-800`}
+      />
+      <MoneyCell value={row.collected} className={`${bold} text-emerald-700`} />
+      <MoneyCell
+        value={row.outsideExpense}
+        className={`border-l border-sky-100 ${bold} text-slate-800`}
+      />
+      <MoneyCell
+        value={row.outsidePaid}
+        className={`${bold} text-emerald-700`}
+      />
+      <MoneyCell
+        value={row.schoolTeacher}
         className={`${bold} text-slate-800`}
       />
-      <MoneyCell value={row.paid} className={`${bold} text-emerald-700`} />
       <MoneyCell
-        value={row.remaining}
-        className={`${bold || "font-bold"} text-orange-700`}
+        value={row.companyTeacher}
+        className={`${bold} text-slate-800`}
       />
       <MoneyCell
-        value={row.cashPolicy}
-        className={`border-l border-slate-100 ${bold} text-slate-700`}
+        value={row.annualPolicy}
+        className={`${bold} text-slate-800`}
       />
       <MoneyCell
-        value={differenceOf(row)}
-        className={`${bold || "font-bold"} text-blue-700`}
+        value={row.otherExpense}
+        className={`${bold} text-slate-800`}
+      />
+      <MoneyCell
+        value={row.profit}
+        className={`border-l border-blue-100 ${bold || "font-bold"} ${
+          row.profit < 0 ? "text-rose-700" : "text-blue-700"
+        }`}
       />
     </>
   );
 }
 
 const GROUP_HEADERS = [
+  { label: "Số lượng", span: 1, className: "bg-slate-100 text-slate-700" },
   { label: "Doanh thu", span: 1, className: "bg-slate-200 text-slate-700" },
-  { label: "Hóa đơn", span: 2, className: "bg-amber-100 text-amber-800" },
-  { label: "Chi", span: 4, className: "bg-sky-100 text-sky-800" },
-  { label: "", span: 2, className: "bg-slate-100" },
+  { label: "Chi trường", span: 2, className: "bg-sky-100 text-sky-800" },
+  { label: "Hóa đơn / Thu", span: 2, className: "bg-amber-100 text-amber-800" },
+  { label: "Chi ngoài", span: 2, className: "bg-cyan-100 text-cyan-800" },
+  {
+    label: "Chi phí khác",
+    span: 4,
+    className: "bg-violet-100 text-violet-800",
+  },
+  { label: "Kết quả", span: 1, className: "bg-blue-100 text-blue-800" },
 ];
 
 const COLUMN_HEADERS: { label: string; title?: string }[] = [
+  { label: "Số HS / số tiết" },
   { label: "Doanh thu", title: "Thành tiền bảng Doanh Thu" },
-  {
-    label: "Tổng tiền HĐ",
-    title:
-      "Tổng thanh toán công ty của bảng Hóa Đơn = Số lượng × (Đơn giá − GV − Thuế − CSVC)",
-  },
-  {
-    label: "Tiền không xuất HĐ",
-    title: "Số tiền của các dòng chọn loại Không xuất HĐ",
-  },
-  { label: "Chi trường", title: "Chi Trường + Giáo viên trường" },
+  { label: "Chi trường", title: "Chi trường, không gồm Giáo viên trường" },
+  { label: "Đã chi", title: "Đã chi trường" },
+  { label: "Hóa đơn", title: "Tổng thanh toán công ty của bảng Hóa Đơn" },
+  { label: "Đã thu" },
   { label: "Chi ngoài", title: "Chi Ngoài" },
-  { label: "Đã chi" },
-  { label: "Còn phải chi" },
-  { label: "CS tiền mặt", title: "Chính sách tiền mặt" },
-  { label: "Chênh lệch", title: "Doanh thu − Tổng chi − CS tiền mặt" },
+  { label: "Đã chi", title: "Đã chi ngoài" },
+  { label: "Giáo viên trường" },
+  { label: "Giáo viên Cty" },
+  { label: "CS năm", title: "Phần chi chính sách năm của tháng, đã trừ thuế" },
+  { label: "Chi khác" },
+  {
+    label: "Lợi nhuận",
+    title:
+      "Doanh thu − Chi trường − Chi ngoài − Giáo viên trường − Giáo viên Cty − CS năm − Chi khác",
+  },
 ];
 
 const HEADER_TOTALS: {
   label: string;
-  value: (row: ReportNumbers) => number;
+  value: (row: ReportNumbers) => number | string;
   tone?: string;
 }[] = [
+  { label: "Số HS / số tiết", value: quantity },
   { label: "Doanh thu", value: (row) => row.revenue },
-  {
-    label: "Tổng tiền HĐ",
-    value: (row) => row.invoiceTotal,
-    tone: "text-amber-800",
-  },
-  { label: "Tiền không xuất HĐ", value: (row) => row.invoiceNone },
   { label: "Chi trường", value: (row) => row.schoolExpense },
-  { label: "Chi ngoài", value: (row) => row.managementExpense },
-  { label: "Đã chi", value: (row) => row.paid, tone: "text-emerald-700" },
   {
-    label: "Còn phải chi",
-    value: (row) => row.remaining,
-    tone: "text-orange-700",
+    label: "Đã chi trường",
+    value: (row) => row.schoolPaid,
+    tone: "text-emerald-700",
   },
-  { label: "CS tiền mặt", value: (row) => row.cashPolicy },
-  { label: "Chênh lệch", value: differenceOf, tone: "text-blue-700" },
+  { label: "Hóa đơn", value: (row) => row.invoice, tone: "text-amber-800" },
+  { label: "Đã thu", value: (row) => row.collected, tone: "text-emerald-700" },
+  { label: "Chi ngoài", value: (row) => row.outsideExpense },
+  {
+    label: "Đã chi ngoài",
+    value: (row) => row.outsidePaid,
+    tone: "text-emerald-700",
+  },
+  { label: "GV trường", value: (row) => row.schoolTeacher },
+  { label: "GV Cty", value: (row) => row.companyTeacher },
+  { label: "CS năm", value: (row) => row.annualPolicy },
+  { label: "Chi khác", value: (row) => row.otherExpense },
+  { label: "Lợi nhuận", value: (row) => row.profit, tone: "text-blue-700" },
 ];
 
 function HeaderTotals({ total }: { total: ReportNumbers }) {
   return (
     <div className="overflow-x-auto border-b border-slate-100 bg-slate-50/70">
-      <div className="grid min-w-[1260px] grid-cols-9 divide-x divide-slate-200">
+      <div className="grid min-w-[1800px] grid-cols-13 divide-x divide-slate-200">
         {HEADER_TOTALS.map((item) => (
           <div key={item.label} className="px-3 py-2 text-right">
             <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
@@ -277,7 +307,9 @@ function HeaderTotals({ total }: { total: ReportNumbers }) {
                 item.tone ?? "text-slate-800"
               }`}
             >
-              {money(item.value(total))}
+              {typeof item.value(total) === "number"
+                ? money(item.value(total) as number)
+                : item.value(total)}
             </p>
           </div>
         ))}
@@ -287,10 +319,8 @@ function HeaderTotals({ total }: { total: ReportNumbers }) {
 }
 
 /**
- * Báo cáo tổng hợp thu chi: mỗi dòng là một trường trong một kỳ, nhóm theo nhân
- * viên kinh doanh; cột chia ba nhóm Doanh thu | Hóa đơn | Chi, có dòng tổng của
- * từng nhân viên (tính trên mọi dòng khớp lọc, không chỉ trang đang xem) và
- * tổng chung ở các thẻ phía trên.
+ * Báo cáo tổng hợp thu chi theo môn, nhóm theo nhân viên kinh doanh. Header và
+ * footer của mỗi bảng cùng dùng một phép cộng để luôn khớp nhau.
  */
 export default function GlobalExpenseReport() {
   const [rows, setRows] = useState<ReportRow[]>([]);
@@ -301,7 +331,6 @@ export default function GlobalExpenseReport() {
   const [schoolId, setSchoolId] = useState("");
   const [year, setYear] = useState(DEFAULT_SCHOOL_YEAR);
   const [month, setMonth] = useState("");
-  const [onlyRemaining, setOnlyRemaining] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 30;
 
@@ -342,37 +371,12 @@ export default function GlobalExpenseReport() {
           school,
           period: item.period,
         };
-        const total = numbersFrom(item, Number(item.cashPolicy || 0));
-        const subjectRows: ReportRow[] = (item.subjects || []).map(
-          (subjectItem: any) => ({
-            ...base,
-            ...numbersFrom(subjectItem),
-            key: `${item.schoolExpenseId}-subject-${subjectItem.subject?.id}`,
-            subjectName: subjectItem.subject?.name || "Chưa đặt tên môn",
-          })
-        );
-
-        if (!subjectRows.length) {
-          return [
-            {
-              ...base,
-              ...total,
-              key: `${item.schoolExpenseId}-common`,
-              subjectName: "Khoản chung / chưa phân môn",
-            },
-          ];
-        }
-
-        const remainder = subtractNumbers(total, sumRows(subjectRows));
-        if (hasMoney(remainder)) {
-          subjectRows.push({
-            ...base,
-            ...remainder,
-            key: `${item.schoolExpenseId}-common`,
-            subjectName: "Khoản chung / chưa phân môn",
-          });
-        }
-        return subjectRows;
+        return (item.subjects || []).map((subjectItem: any) => ({
+          ...base,
+          ...numbersFrom(subjectItem),
+          key: `${item.schoolExpenseId}-subject-${subjectItem.subject?.id}`,
+          subjectName: subjectItem.subject?.name || "Chưa đặt tên môn",
+        }));
       });
       setRows(results);
     } catch (loadError: any) {
@@ -452,9 +456,9 @@ export default function GlobalExpenseReport() {
         ) {
           return false;
         }
-        return !onlyRemaining || row.remaining > 0;
+        return true;
       }),
-    [rows, keyword, employeeId, schoolId, year, month, onlyRemaining]
+    [rows, keyword, employeeId, schoolId, year, month]
   );
 
   // Sắp theo nhân viên → trường → kỳ (mới nhất trước) để một nhân viên nằm liền nhau qua các trang.
@@ -482,7 +486,7 @@ export default function GlobalExpenseReport() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [keyword, employeeId, schoolId, year, month, onlyRemaining]);
+  }, [keyword, employeeId, schoolId, year, month]);
 
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
@@ -522,48 +526,26 @@ export default function GlobalExpenseReport() {
     );
   }
 
-  const cards: { label: string; value: number; note?: string; tone: string }[] =
-    [
-      { label: "Doanh thu", value: totals.revenue, tone: "text-slate-900" },
-      {
-        label: "Tổng tiền hóa đơn",
-        value: totals.invoiceTotal,
-        note: "Đã xuất + Chưa xuất + Không xuất HĐ",
-        tone: "text-amber-800",
-      },
-      {
-        label: "Hóa đơn đã xuất",
-        value: totals.invoiceIssued,
-        tone: "text-emerald-700",
-      },
-      {
-        label: "Hóa đơn chưa xuất",
-        value: totals.invoiceNotIssued,
-        tone: "text-rose-700",
-      },
-      {
-        label: "Tiền không xuất hóa đơn",
-        value: totals.invoiceNone,
-        tone: "text-slate-700",
-      },
-      {
-        label: "Tổng chi",
-        value: totals.totalExpense,
-        note: `Đã chi ${money(totals.paid)}`,
-        tone: "text-slate-900",
-      },
-      {
-        label: "Còn phải chi",
-        value: totals.remaining,
-        tone: "text-orange-700",
-      },
-      {
-        label: "Chênh lệch",
-        value: differenceOf(totals),
-        note: `CS tiền mặt ${money(totals.cashPolicy)}`,
-        tone: "text-blue-700",
-      },
-    ];
+  const cards: { label: string; value: number; tone: string }[] = [
+    { label: "Doanh thu", value: totals.revenue, tone: "text-slate-900" },
+    { label: "Hóa đơn", value: totals.invoice, tone: "text-amber-800" },
+    { label: "Đã thu", value: totals.collected, tone: "text-emerald-700" },
+    {
+      label: "Chi trường",
+      value: totals.schoolExpense,
+      tone: "text-slate-900",
+    },
+    {
+      label: "Chi ngoài",
+      value: totals.outsideExpense,
+      tone: "text-slate-900",
+    },
+    {
+      label: "Lợi nhuận",
+      value: totals.profit,
+      tone: totals.profit < 0 ? "text-rose-700" : "text-blue-700",
+    },
+  ];
 
   return (
     <div className="space-y-5">
@@ -574,8 +556,8 @@ export default function GlobalExpenseReport() {
               Báo cáo tổng hợp thu chi
             </h2>
             <p className="mt-1 text-base text-slate-500">
-              Mỗi dòng là một trường trong một kỳ, nhóm theo nhân viên kinh
-              doanh — Doanh thu, Hóa đơn và Chi
+              Mỗi dòng là một môn trong một kỳ; lợi nhuận tính theo đúng các
+              khoản chi hiển thị trên bảng
             </p>
           </div>
           <button
@@ -644,14 +626,6 @@ export default function GlobalExpenseReport() {
               </option>
             ))}
           </select>
-          <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-base font-bold">
-            <input
-              type="checkbox"
-              checked={onlyRemaining}
-              onChange={(e) => setOnlyRemaining(e.target.checked)}
-            />
-            Còn phải chi
-          </label>
         </div>
       </section>
 
@@ -661,18 +635,13 @@ export default function GlobalExpenseReport() {
         </div>
       )}
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         {cards.map((card) => (
           <div key={card.label} className="rounded-2xl bg-white p-4 shadow-sm">
             <p className="text-sm font-bold text-slate-500">{card.label}</p>
             <p className={`mt-2 text-xl font-black tabular-nums ${card.tone}`}>
               {money(card.value)}
             </p>
-            {card.note && (
-              <p className="mt-1 text-xs font-semibold text-slate-500">
-                {card.note}
-              </p>
-            )}
           </div>
         ))}
       </section>
@@ -730,17 +699,17 @@ export default function GlobalExpenseReport() {
                 </div>
                 <div className="rounded-xl bg-amber-50 px-4 py-2 text-center">
                   <p className="text-xs font-semibold uppercase text-amber-600">
-                    HĐ chưa xuất
+                    Lợi nhuận
                   </p>
                   <p className="mt-1 text-base font-black tabular-nums text-rose-700">
-                    {money(all?.total.invoiceNotIssued ?? 0)}
+                    {money(all?.total.profit ?? 0)}
                   </p>
                 </div>
               </div>
             </div>
             {all && <HeaderTotals total={all.total} />}
             <div className="overflow-auto">
-              <table className="w-full min-w-[1500px] whitespace-nowrap text-sm">
+              <table className="w-full min-w-[2200px] whitespace-nowrap text-sm">
                 <thead>
                   <tr className="text-xs font-black uppercase tracking-wide">
                     <th

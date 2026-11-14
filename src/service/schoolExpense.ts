@@ -330,6 +330,7 @@ export type AccountingCashflowSummaryItem = {
   /** Số liệu theo môn; khoản không có subject_id vẫn nằm ở tổng cấp phiếu. */
   subjects?: Array<{
     subject: { id: number; name: string };
+    quantity: { students: number; periods: number };
     revenue: { expected: number; collected: number; receivable: number };
     expense: {
       expected: number;
@@ -343,6 +344,15 @@ export type AccountingCashflowSummaryItem = {
       issued: number;
       notIssued: number;
       noInvoice: number;
+    };
+    breakdown: {
+      school: { expected: number; paid: number };
+      outside: { expected: number; paid: number };
+      schoolTeacher: number;
+      companyTeacher: number;
+      annualPolicy: number;
+      other: number;
+      profit: number;
     };
   }>;
   projectedBalance: number;

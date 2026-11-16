@@ -258,6 +258,8 @@ export type ExpenseCashflowItem = {
   /** Phần đề xuất này đã ghi vào bảng nguồn. */
   paidBySuggest: number;
   status: CashflowItemStatus;
+  /** Chi Trường: phần các dòng "Có trong HĐ" (tính đã chi, không đề xuất). */
+  inContractAmount?: number;
   /** Xem trước: khoản đang nằm trong đề xuất khác (sẽ bỏ qua khi gửi). */
   openRequest?: { id: number; code: string | null; status: ExpenseStatus } | null;
 };
@@ -271,6 +273,80 @@ export type ExpenseCashflowItemsResponse = {
   preview?: boolean;
   /** Bảng Giáo viên trường: dòng chưa chọn giáo viên (phải chọn trước khi gửi). */
   unassigned?: { rowCount: number; amount: number }[];
+};
+
+/** Một dòng bảng Chi Trường Kế toán đã nhập (màn tạo đề xuất). */
+export type SchoolExpenseSheetRow = {
+  id: number;
+  rowIndex: number;
+  subjectId: number;
+  subjectName: string | null;
+  totalPeriods: number;
+  studentCount: number;
+  monthsCount: number;
+  teacherUnitPrice: number;
+  taxUnitPrice: number;
+  csvcUnitPrice: number;
+  teacherAmount: number;
+  taxAmount: number;
+  csvcAmount: number;
+  schoolExpenseAmount: number;
+  paymentType: string | null;
+  inContract: boolean;
+  expenseDate: string | null;
+  cashAccount: string | null;
+  paidAmount: number;
+  remaining: number;
+  proposableAmount: number;
+  payer: string | null;
+  note: string | null;
+  suggestCodes: string | null;
+};
+
+/** Một dòng bảng Giáo viên trường Kế toán đã nhập (màn tạo đề xuất). */
+export type SchoolTeacherSheetRow = {
+  id: number;
+  rowIndex: number;
+  subjectId: number | null;
+  subjectName: string | null;
+  schoolTeacherId: number | null;
+  teacherName: string | null;
+  content: string | null;
+  totalPeriods: number;
+  studentCount: number;
+  monthsCount: number;
+  unitPrice: number;
+  amount: number;
+  pitRate: number;
+  pitAmount: number;
+  netAmount: number;
+  expenseDate: string | null;
+  cashAccount: string | null;
+  paid: boolean;
+  note: string | null;
+  suggestCodes: string | null;
+};
+
+/** Toàn bộ số liệu bảng nguồn của một trường trong một kỳ (màn tạo đề xuất). */
+export type CashflowSheetResponse = {
+  source: CashflowSource;
+  table: string;
+  school: { id: number; name: string | null };
+  period: { id: number; month: number; year: number; name: string | null };
+  /** Bảng đã có số liệu chưa. */
+  hasData: boolean;
+  /** Còn đề xuất được (bỏ dòng "Có trong HĐ", đã chi, khoản đang trong đề xuất khác). */
+  proposableTotal: number;
+  /** Chi Trường: tổng các dòng "Có trong HĐ". */
+  inContractTotal: number;
+  /** Đề xuất khác đang chạy cho cùng bảng (không tạo thêm được). */
+  openSheetRequest: { id: number; code: string | null } | null;
+  groups: (CashflowItem & { inContractAmount: number })[];
+  /** Chi Ngoài: bảng dựng như QL thu chi. */
+  sections: ManagementExpenseSection[];
+  /** Chi Trường / Giáo viên trường: từng dòng. */
+  rows: (SchoolExpenseSheetRow | SchoolTeacherSheetRow)[];
+  unassigned: CashflowItemsResponse["unassigned"];
 };
 
 /** Hỗ trợ tiền mặt / thiết bị trong chính sách đã duyệt của trường (Chi Năm). */

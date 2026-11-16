@@ -145,6 +145,11 @@ export default function CashflowItemsPanel({
                     >
                       {status.label}
                     </span>
+                    {!!item.inContractAmount && item.inContractAmount > 0 && (
+                      <span className="rounded-full bg-emerald-50 px-1.5 py-[1px] text-[10px] text-emerald-700">
+                        Có trong HĐ {money(item.inContractAmount)} — tính đã chi
+                      </span>
+                    )}
                     {data.preview && item.openRequest && (
                       <span className="rounded-full bg-amber-50 px-1.5 py-[1px] text-[10px] text-amber-700">
                         Đang trong {item.openRequest.code || `#${item.openRequest.id}`} — sẽ bỏ qua

@@ -1,6 +1,7 @@
 import api from "./api";
 import type {
   CashflowItemsResponse,
+  CashflowSheetResponse,
   CashflowSource,
   ExpenseCashflowItemsResponse,
   ManagementExpenseSection,
@@ -71,11 +72,8 @@ export type CreateExpensePayload = {
   /** Bảng nguồn: Chi Ngoài (mặc định) / Chi Trường / GV trường. */
   cashflowSource?: CashflowSource;
   subjectId?: number;
-  /** Chi Ngoài / Chi Trường / Chi GV trường: kỳ đã có của trường... */
+  /** Chi Ngoài / Chi Trường / Chi GV trường: kỳ kế toán (Kế toán đã tạo) của trường. */
   expensePeriodId?: number;
-  /** ...hoặc tạo kỳ tháng mới (1–12) + năm cho trường. */
-  periodMonth?: number;
-  periodYear?: number;
   monthlyItems?: {
     schoolId: number;
     schoolYear?: string;
@@ -458,6 +456,17 @@ export const expenseRequestApi = {
   },
 
   /** Khoản của một đề xuất chi tháng với số hiện tại ở QL thu chi. */
+  /** Màn tạo đề xuất: toàn bộ số liệu bảng nguồn của trường trong kỳ. */
+  getCashflowSheet: async (params: {
+    source: CashflowSource;
+    schoolId: number;
+    expensePeriodId: number;
+    excludeSuggestId?: number;
+  }): Promise<CashflowSheetResponse> => {
+    const res = await api.get(`${BASE}/cashflow-sheet`, { params });
+    return res.data;
+  },
+
   getCashflowItems: async (id: number): Promise<ExpenseCashflowItemsResponse> => {
     const res = await api.get(`${BASE}/${id}/cashflow-items`);
     return res.data;

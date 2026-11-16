@@ -244,6 +244,8 @@ export default function MonthlyApproveModal({
               ? "Đang duyệt…"
               : excluded > 0
               ? `Duyệt ${checked.size}/${items.length} ${unit}`
+              : chain
+              ? "Duyệt và chuyển Kế toán công nợ"
               : "Duyệt và chuyển Thủ quỹ"}
           </button>
         </div>

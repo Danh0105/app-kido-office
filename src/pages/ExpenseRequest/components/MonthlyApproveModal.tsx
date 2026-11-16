@@ -23,7 +23,13 @@ export default function MonthlyApproveModal({
   onSubmit,
   tableLabel = "Chi Ngoài",
   title = "Duyệt đề xuất chi tháng",
+  chain = false,
 }: {
+  /**
+   * Quy trình Kế toán: số tiền là số Kế toán chốt lúc gửi; duyệt xong chuyển
+   * Kế toán công nợ lập lệnh chi (không lập lệnh chi ngay).
+   */
+  chain?: boolean;
   /** Bảng nguồn ở QL thu chi: Chi Ngoài / Chi Trường / Giáo viên trường. */
   tableLabel?: string;
   title?: string;
@@ -114,8 +120,10 @@ export default function MonthlyApproveModal({
               {selectable && (
                 <>
                   <p className="text-sm text-gray-600">
-                    Bỏ tích trường <b>không duyệt</b>. Lệnh chi chỉ tính Còn chi
-                    của các trường được duyệt.
+                    Bỏ tích {unit} <b>không duyệt</b>.{" "}
+                    {chain
+                      ? "Số duyệt chỉ tính các khoản được duyệt."
+                      : "Lệnh chi chỉ tính Còn chi của các trường được duyệt."}
                   </p>
                   <ul className="space-y-2">
                     {items.map((item) => {
@@ -174,6 +182,14 @@ export default function MonthlyApproveModal({
                     : `Lệnh chi sẽ được lập bằng tổng cột Còn chi của bảng ${tableLabel} các trường được duyệt.`
                 ) : total <= 0 ? (
                   "Các trường được chọn không còn khoản nào cần chi (Còn chi = 0) nên chưa duyệt được."
+                ) : chain ? (
+                  <>
+                    Duyệt <b>{money(total)}</b> (số Kế toán chốt
+                    {excluded > 0
+                      ? ` của ${checked.size}/${items.length} ${unit} được duyệt`
+                      : ` của bảng ${tableLabel}`}
+                    ), chuyển Kế toán công nợ lập lệnh chi.
+                  </>
                 ) : (
                   <>
                     Lệnh chi sẽ được lập với số tiền <b>{money(total)}</b>{" "}

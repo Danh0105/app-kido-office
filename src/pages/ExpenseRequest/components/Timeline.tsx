@@ -19,6 +19,7 @@ import LogDetails, { hasLogDetails } from "./LogDetails";
 const APPROVAL_ACTIONS = new Set([
   "APPROVE",
   "APPROVE_MONTHLY",
+  "APPROVE_MONTHLY_CHAIN",
   "APPROVED",
   "APPROVE_EXPENSE_REQUEST",
 ]);
@@ -26,6 +27,7 @@ const APPROVAL_ACTIONS = new Set([
 const DECISION_ACTIONS = new Set([
   "APPROVE",
   "APPROVE_MONTHLY",
+  "APPROVE_MONTHLY_CHAIN",
   "REJECT",
   "REJECT_MONTHLY",
 ]);

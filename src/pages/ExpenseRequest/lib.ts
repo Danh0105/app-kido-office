@@ -64,6 +64,15 @@ export const monthlyRemainder = (req: ExpenseRequest): number | null => {
  * Bảng nguồn của đề xuất chi tháng: Chi Ngoài (đề xuất chi tháng cũ để trống),
  * Chi Trường, Chi GV trường. Chi Năm trả null.
  */
+/**
+ * Quy trình Kế toán (Chi Ngoài / Chi Trường / Chi GV trường từ 16/11/2026):
+ * Kế toán nhập số liệu → Kế toán trưởng → Giám đốc → Kế toán công nợ lập lệnh
+ * chi → Thủ quỹ → kinh doanh.
+ */
+export const isAccountantChain = (
+  req: Pick<ExpenseRequest, "isMonthlyExpense" | "approvalFlow">
+) => Boolean(req.isMonthlyExpense) && req.approvalFlow === "ACCOUNTANT_CHAIN";
+
 export const cashflowSourceOf = (
   req: Pick<ExpenseRequest, "isMonthlyExpense" | "cashflowSource">
 ): CashflowSource | null =>
@@ -220,6 +229,8 @@ export const isSupplierEquipment = (req?: {
 export const KIND_STATUSES: Record<ExpenseRequestKind, ExpenseStatus[]> = {
   CASH: [
     "PENDING_ACCOUNTING",
+    "PENDING_ACCOUNTANT",
+    "PENDING_CHIEF_APPROVAL",
     "PENDING_APPROVAL",
     "APPROVED",
     "PAYMENT_ORDERED",
@@ -296,6 +307,10 @@ export const isOwner = (req?: ExpenseCreatorFields) => {
 };
 
 export type ActionKey =
+  // --- quy trình Kế toán ---
+  | "submitToChief"
+  | "chiefApprove"
+  | "chiefReject"
   | "approve"
   | "reject"
   | "withdraw"
@@ -354,6 +369,27 @@ type ExpenseStepDefinition = {
 };
 
 export const EXPENSE_STEPS: Record<ActionKey, ExpenseStepDefinition> = {
+  // --- quy trình Kế toán (khớp EXPENSE_TRANSITIONS bên BE) ---
+  // Kế toán nhập số liệu bảng ở QL thu chi rồi gửi; Kế toán trưởng làm được
+  // thay Kế toán nhưng không tự duyệt tiếp bước của mình.
+  submitToChief: {
+    roles: ["accountant", "ketoan_truong"],
+    from: ["PENDING_ACCOUNTANT"],
+    owner: false,
+    kinds: ["CASH"],
+  },
+  chiefApprove: {
+    roles: ["ketoan_truong"],
+    from: ["PENDING_CHIEF_APPROVAL"],
+    owner: false,
+    kinds: ["CASH"],
+  },
+  chiefReject: {
+    roles: ["ketoan_truong"],
+    from: ["PENDING_CHIEF_APPROVAL"],
+    owner: false,
+    kinds: ["CASH"],
+  },
   // Sales Admin duyệt/từ chối ngang quyền Giám đốc — cùng một chốt quyết định,
   // ai xử lý trước cũng được (khớp EXPENSE_TRANSITIONS bên BE).
   approve: {
@@ -370,7 +406,12 @@ export const EXPENSE_STEPS: Record<ActionKey, ExpenseStepDefinition> = {
   // machine WITHDRAW). Giám đốc rút hộ được đơn của bất kỳ ai (overrideRoles).
   withdraw: {
     roles: ["sales", "giaovien_congty", "director", "director_la"],
-    from: ["PENDING_ACCOUNTING", "PENDING_APPROVAL"],
+    from: [
+      "PENDING_ACCOUNTING",
+      "PENDING_ACCOUNTANT",
+      "PENDING_CHIEF_APPROVAL",
+      "PENDING_APPROVAL",
+    ],
     owner: true,
     overrideRoles: ["director", "director_la"],
   },
@@ -387,6 +428,8 @@ export const EXPENSE_STEPS: Record<ActionKey, ExpenseStepDefinition> = {
     roles: ["director", "director_la"],
     from: [
       "PENDING_ACCOUNTING",
+      "PENDING_ACCOUNTANT",
+      "PENDING_CHIEF_APPROVAL",
       "PENDING_APPROVAL",
       "APPROVED",
       "REJECTED",
@@ -574,6 +617,21 @@ export const canDoStep = (
     ) {
       return false;
     }
+    // Quy trình Kế toán: lệnh chi do Kế toán công nợ lập sau khi Giám đốc
+    // duyệt; đã chi thì QL thu chi đã ghi theo lệnh chi nên không sửa nữa.
+    if (
+      isAccountantChain(req) &&
+      step === "editPaymentOrder" &&
+      ["PENDING_APPROVAL", "SPENT"].includes(req.status)
+    ) {
+      return false;
+    }
+  } else if (
+    step === "submitToChief" ||
+    step === "chiefApprove" ||
+    step === "chiefReject"
+  ) {
+    return false;
   } else if (step === "editPaymentOrder" && req.status === "PENDING_APPROVAL") {
     return false;
   }
@@ -627,6 +685,8 @@ export const availableActions = (req: ExpenseRequest): ActionKey[] => {
   // Kế toán trưởng không thao tác ở màn này — trừ khi được Giám đốc chỉ định
   // xử lý/nghiệm thu thiết bị mua từ nhà cung cấp.
   const readOnly = hasRole("ketoan_truong");
+  // ...nhưng giữ bước của quy trình Kế toán (nhập số liệu thay Kế toán, duyệt).
+  const chiefSteps: ActionKey[] = ["submitToChief", "chiefApprove", "chiefReject"];
   // Người bàn giao đã từ chối thì không làm bước kỹ thuật nữa (BE chặn), chờ
   // Giám đốc chọn người thay thế.
   const me = Number(getEmployeeId());
@@ -635,7 +695,9 @@ export const availableActions = (req: ExpenseRequest): ActionKey[] => {
       a.role === "HANDOVER" && a.status === "DECLINED" && a.employeeId === me
   );
   return (Object.keys(EXPENSE_STEPS) as ActionKey[]).filter((step) => {
-    if (readOnly && !EXPENSE_STEPS[step].assignee) return false;
+    if (readOnly && !EXPENSE_STEPS[step].assignee && !chiefSteps.includes(step)) {
+      return false;
+    }
     if (
       declinedHandover &&
       (step === "stockIssueOrder" || step === "repairAccept")
@@ -731,6 +793,10 @@ export const waitingMessage = (req: ExpenseRequest): string | null => {
   switch (req.status) {
     case "PENDING_ACCOUNTING":
       return "Chờ Kế toán công nợ nhập số tiền…";
+    case "PENDING_ACCOUNTANT":
+      return "Chờ Kế toán nhập số liệu ở QL thu chi rồi gửi Kế toán trưởng…";
+    case "PENDING_CHIEF_APPROVAL":
+      return "Chờ Kế toán trưởng duyệt…";
     case "PENDING_APPROVAL":
       return "Chờ giám đốc duyệt…";
     case "APPROVED":

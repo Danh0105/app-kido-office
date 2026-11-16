@@ -252,6 +252,42 @@ function StepDetails({ log, kind: requestKind }: { log: ExpenseLog; kind?: Expen
       );
     }
 
+    // Quy trình Kế toán: số Kế toán chốt từ QL thu chi / Giám đốc duyệt.
+    case "SUBMIT_TO_CHIEF_ACCOUNTANT":
+    case "APPROVE_MONTHLY_CHAIN": {
+      if (d.amount == null && !d.items?.length) return null;
+      const submit = log.action === "SUBMIT_TO_CHIEF_ACCOUNTANT";
+      return (
+        <Box tone="border-indigo-100 bg-indigo-50">
+          {d.amount != null && (
+            <Row label={submit ? "Số tiền chốt" : "Số tiền duyệt"}>
+              {money(d.amount)}
+              {submit && d.cashflowTable && ` (Còn lại bảng ${d.cashflowTable})`}
+            </Row>
+          )}
+          {!!d.items?.length && (
+            <ul className="mt-1 space-y-0.5">
+              {d.items.map((item, index) => (
+                <li key={item.id ?? index} className="text-xs text-gray-700">
+                  {item.approved === false ? "⛔" : "✅"} {item.label} · {money(item.amount)}
+                  {item.approved === false && " (không duyệt)"}
+                </li>
+              ))}
+            </ul>
+          )}
+          {!!d.skippedItems?.length && (
+            <ul className="mt-1 space-y-0.5">
+              {d.skippedItems.map((item, index) => (
+                <li key={index} className="text-xs text-amber-700">
+                  ⏭️ {item.label} · {money(item.amount)} (đang trong {item.code}, bỏ qua)
+                </li>
+              ))}
+            </ul>
+          )}
+        </Box>
+      );
+    }
+
     case "CONFIRM_SPENT": {
       const sync = d.cashflowPayment ?? d.chiNgoai;
       return sync ? (

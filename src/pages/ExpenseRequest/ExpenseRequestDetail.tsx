@@ -71,6 +71,7 @@ import {
   expenseEditPath,
   canReadManagementExpense,
   cashflowSourceOf,
+  isAccountantChain,
   monthlyItemLabel,
   monthlyItemsOf,
   monthlyRemainder,
@@ -78,6 +79,9 @@ import {
 } from "./lib";
 
 type ModalKind =
+  | "submitToChief"
+  | "chiefApprove"
+  | "chiefReject"
   | "approve"
   | "reject"
   | "withdraw"
@@ -396,6 +400,24 @@ export default function ExpenseRequestDetail({
 
   const onModalSubmit = (payload: ActionPayload) => {
     switch (modal) {
+      case "submitToChief":
+        run(
+          () => expenseRequestApi.submitToChief(reqId, payload.note),
+          "Đã gửi Kế toán trưởng duyệt"
+        );
+        break;
+      case "chiefApprove":
+        run(
+          () => expenseRequestApi.chiefApprove(reqId, payload.note),
+          "Đã duyệt, chuyển Giám đốc"
+        );
+        break;
+      case "chiefReject":
+        run(
+          () => expenseRequestApi.chiefReject(reqId, payload.reason || ""),
+          "Đã từ chối"
+        );
+        break;
       case "reject":
         run(
           () => expenseRequestApi.reject(reqId, payload.reason || ""),
@@ -639,8 +661,17 @@ export default function ExpenseRequestDetail({
   const monthlyItems = monthlyItemsOf(data);
   const source = cashflowSourceOf(data);
   const sourceMeta = source ? CASHFLOW_SOURCE_META[source] : null;
-  // Số cho hộp duyệt: Chi Ngoài lấy từ bảng Chi Ngoài như trước.
-  const approvalView = source === "MANAGEMENT" ? monthlyView : cashflowView;
+  const chain = isAccountantChain(data);
+  // Số cho hộp duyệt: Chi Ngoài luồng cũ lấy từ bảng Chi Ngoài như trước;
+  // quy trình Kế toán lấy số Kế toán chốt (khoản chi của đề xuất).
+  const approvalView =
+    source === "MANAGEMENT" && !chain ? monthlyView : cashflowView;
+  // Kế toán / Kế toán trưởng nhập số liệu: mở QL thu chi của trường.
+  const sheetSchoolId = Number(data.schoolId || data.school?.id || 0);
+  const sheetLink =
+    chain && sheetSchoolId && canDoStep("submitToChief", data)
+      ? `/director/real-expense/${sheetSchoolId}`
+      : null;
   const directorApprovedAmount =
     hasRole("thuquy") &&
     !equipment &&
@@ -892,13 +923,17 @@ export default function ExpenseRequestDetail({
             source={source}
             reloadKey={data.status}
             onLoaded={setCashflowView}
+            chain={chain}
+            sheetLink={sheetLink}
           />
         )}
 
         {/* ===== Chi Ngoài cho người duyệt ===== */}
         {(data.school?.id || (data as any).schoolId) &&
           (!source || source === "MANAGEMENT") &&
-          canDoStep("approve", data) &&
+          (canDoStep("approve", data) ||
+            canDoStep("submitToChief", data) ||
+            canDoStep("chiefApprove", data)) &&
           canReadManagementExpense() && (
             <ManagementExpensePanel
               requestId={data.id}
@@ -1129,7 +1164,8 @@ export default function ExpenseRequestDetail({
               ? Number(data.paymentOrder.amount)
               : null
           }
-          canSeeTable={source !== "MANAGEMENT" || canReadManagementExpense()}
+          canSeeTable={source !== "MANAGEMENT" || chain || canReadManagementExpense()}
+          chain={chain}
           loading={submitting}
           onClose={() => setModal(null)}
           onSubmit={(payload) => onApproveSubmit(payload)}
@@ -1142,6 +1178,62 @@ export default function ExpenseRequestDetail({
           loading={submitting}
           onClose={() => setModal(null)}
           onSubmit={onApproveSubmit}
+        />
+      )}
+      {modal === "submitToChief" && (
+        <ActionModal
+          title="Gửi Kế toán trưởng duyệt"
+          description={
+            <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-sm text-indigo-800">
+              Hệ thống chốt số tiền đề xuất = Còn lại của các khoản ở bảng{" "}
+              {sourceMeta?.table ?? "QL thu chi"} lúc bấm gửi
+              {cashflowView ? (
+                <>
+                  : <b>{formatVnd(cashflowView.remainingTotal) || "0"} đ</b>
+                </>
+              ) : null}
+              . Kiểm số liệu ở QL thu chi trước khi gửi.
+            </div>
+          }
+          submitLabel="Gửi Kế toán trưởng"
+          submitColor="bg-indigo-600"
+          showNote
+          noteLabel="Ghi chú (không bắt buộc)"
+          loading={submitting}
+          onClose={() => setModal(null)}
+          onSubmit={onModalSubmit}
+        />
+      )}
+      {modal === "chiefApprove" && (
+        <ActionModal
+          title="Kế toán trưởng duyệt"
+          description={
+            data.amount != null ? (
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-800">
+                Số tiền Kế toán chốt: <b>{formatVnd(data.amount) || "0"} đ</b>.
+                Duyệt xong chuyển Giám đốc duyệt.
+              </div>
+            ) : undefined
+          }
+          submitLabel="Duyệt"
+          submitColor="bg-blue-500"
+          showNote
+          noteLabel="Ghi chú (không bắt buộc)"
+          loading={submitting}
+          onClose={() => setModal(null)}
+          onSubmit={onModalSubmit}
+        />
+      )}
+      {modal === "chiefReject" && (
+        <ActionModal
+          title="Kế toán trưởng từ chối"
+          submitLabel="Từ chối"
+          submitColor="bg-red-500"
+          requireReason
+          reasonLabel="Lý do từ chối"
+          loading={submitting}
+          onClose={() => setModal(null)}
+          onSubmit={onModalSubmit}
         />
       )}
       {modal === "reject" && (
@@ -1383,7 +1475,8 @@ export default function ExpenseRequestDetail({
       {modal === "paymentOrder" && (
         <PaymentOrderModal
           defaultAmount={0}
-          monthly={data.isMonthlyExpense}
+          monthly={data.isMonthlyExpense && !chain}
+          lockedAmount={chain && data.amount != null ? Number(data.amount) : null}
           retry={data.status === "FUND_RETURNED"}
           loading={submitting}
           onClose={() => setModal(null)}
@@ -1393,7 +1486,8 @@ export default function ExpenseRequestDetail({
       {modal === "editPaymentOrder" && po && (
         <PaymentOrderModal
           edit
-          monthly={data.isMonthlyExpense}
+          monthly={data.isMonthlyExpense && !chain}
+          lockedAmount={chain && data.amount != null ? Number(data.amount) : null}
           defaultAmount={po.amount}
           defaultPaymentMethod={po.paymentMethod}
           defaultNote={po.note || ""}
@@ -2100,6 +2194,21 @@ function ActionButton({
     ActionKey,
     { label: string; color: string; onClick: () => void }
   > = {
+    submitToChief: {
+      label: "📤 Gửi Kế toán trưởng",
+      color: "bg-indigo-600",
+      onClick: () => onOpenModal("submitToChief"),
+    },
+    chiefApprove: {
+      label: "✔️ KTT duyệt",
+      color: "bg-blue-500",
+      onClick: () => onOpenModal("chiefApprove"),
+    },
+    chiefReject: {
+      label: "❌ Từ chối",
+      color: "bg-red-500",
+      onClick: () => onOpenModal("chiefReject"),
+    },
     approve: { label: "✔️ Duyệt", color: "bg-blue-500", onClick: onApprove },
     reject: {
       label: "❌ Từ chối",

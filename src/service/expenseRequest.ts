@@ -16,6 +16,7 @@ import type {
   ExpenseRequestKind,
   PaymentMethod,
   PaymentOrder,
+  PolicySupport,
   SaleAdminReviewStatus,
   StockInItem,
   StockInOrder,
@@ -70,7 +71,11 @@ export type CreateExpensePayload = {
   /** Bảng nguồn: Chi Ngoài (mặc định) / Chi Trường / GV trường. */
   cashflowSource?: CashflowSource;
   subjectId?: number;
+  /** Chi Ngoài / Chi Trường / Chi GV trường: kỳ đã có của trường... */
   expensePeriodId?: number;
+  /** ...hoặc tạo kỳ tháng mới (1–12) + năm cho trường. */
+  periodMonth?: number;
+  periodYear?: number;
   monthlyItems?: {
     schoolId: number;
     schoolYear?: string;
@@ -164,6 +169,34 @@ export const expenseRequestApi = {
     data?: ApproveExpensePayload
   ): Promise<ExpenseRequest> => {
     const res = await api.post(`${BASE}/${id}/approve`, data || {});
+    return res.data;
+  },
+
+  // ---- Quy trình Kế toán: Chi Ngoài / Chi Trường / Chi GV trường ----
+  /** Kế toán nhập xong số liệu bảng ở QL thu chi: chốt số tiền, gửi Kế toán trưởng. */
+  submitToChief: async (id: number, note?: string): Promise<ExpenseRequest> => {
+    const res = await api.post(`${BASE}/${id}/submit-to-chief`, { note });
+    return res.data;
+  },
+
+  chiefApprove: async (id: number, note?: string): Promise<ExpenseRequest> => {
+    const res = await api.post(`${BASE}/${id}/chief-approve`, { note });
+    return res.data;
+  },
+
+  chiefReject: async (id: number, reason: string): Promise<ExpenseRequest> => {
+    const res = await api.post(`${BASE}/${id}/chief-reject`, { reason });
+    return res.data;
+  },
+
+  /** Hỗ trợ tiền mặt / thiết bị trong chính sách đã duyệt của trường (Chi Năm). */
+  policySupport: async (
+    schoolId: number,
+    schoolYear: string
+  ): Promise<PolicySupport> => {
+    const res = await api.get(`${BASE}/policy-support`, {
+      params: { schoolId, schoolYear },
+    });
     return res.data;
   },
 

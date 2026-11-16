@@ -13,10 +13,16 @@ export default function PaymentOrderModal({
   retry = false,
   edit = false,
   monthly = false,
+  lockedAmount = null,
   loading,
   onClose,
   onSubmit,
 }: {
+  /**
+   * Quy trình Kế toán: lệnh chi đúng số Giám đốc đã duyệt, không sửa được
+   * (QL thu chi ghi ngược theo phần từng khoản lúc duyệt).
+   */
+  lockedAmount?: number | null;
   defaultAmount: number;
   defaultPaymentMethod?: PaymentMethod;
   defaultNote?: string;
@@ -29,7 +35,7 @@ export default function PaymentOrderModal({
   onClose: () => void;
   onSubmit: (payload: PaymentOrderPayload) => void;
 }) {
-  const [amount, setAmount] = useState<number>(defaultAmount);
+  const [amount, setAmount] = useState<number>(lockedAmount ?? defaultAmount);
   const [paymentMethod, setPaymentMethod] =
     useState<PaymentMethod>(defaultPaymentMethod);
   const [note, setNote] = useState(defaultNote);
@@ -83,13 +89,24 @@ export default function PaymentOrderModal({
             <label className="text-sm text-gray-600">
               Số tiền <span className="text-red-500">*</span>
             </label>
-            <DecimalInput
-              value={amount}
-              onValueChange={setAmount}
-              className="w-full mt-1 px-3 py-2 border rounded-lg text-sm"
-              placeholder="0"
-              allowDecimal={false}
-            />
+            {lockedAmount != null ? (
+              <>
+                <div className="w-full mt-1 px-3 py-2 border rounded-lg text-sm bg-gray-50 font-semibold">
+                  {Number(lockedAmount).toLocaleString("vi-VN")} đ
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  Đúng số Giám đốc đã duyệt (Kế toán chốt từ QL thu chi).
+                </p>
+              </>
+            ) : (
+              <DecimalInput
+                value={amount}
+                onValueChange={setAmount}
+                className="w-full mt-1 px-3 py-2 border rounded-lg text-sm"
+                placeholder="0"
+                allowDecimal={false}
+              />
+            )}
           </div>
 
           <div>

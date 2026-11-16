@@ -1,9 +1,13 @@
 // Types & metadata for the "Đề xuất chi" (expense request) module.
-// Chi Năm và chi tháng đều vào PENDING_APPROVAL (Giám đốc duyệt). PENDING_ACCOUNTING
+// Chi Năm vào PENDING_APPROVAL (Giám đốc duyệt). Chi Ngoài / Chi Trường / Chi GV
+// trường từ 16/11/2026 vào PENDING_ACCOUNTANT (quy trình Kế toán). PENDING_ACCOUNTING
 // chỉ còn ở đề xuất chi tháng tạo trước khi bỏ bước Kế toán nhập số tiền.
 
 export type ExpenseStatus =
   | "PENDING_ACCOUNTING"
+  // --- quy trình Kế toán (Chi Ngoài / Chi Trường / Chi GV trường từ 16/11/2026) ---
+  | "PENDING_ACCOUNTANT"
+  | "PENDING_CHIEF_APPROVAL"
   | "PENDING_APPROVAL"
   | "APPROVED"
   // --- nhánh đề xuất tiền ---
@@ -239,7 +243,8 @@ export type CashflowItemsResponse = {
 
 /** Khoản của một đề xuất với số hiện tại ở QL thu chi. */
 export type ExpenseCashflowItem = {
-  id: number;
+  /** Trống khi đang xem trước bảng (Kế toán chưa gửi số liệu). */
+  id: number | null;
   label: string;
   requestedAmount: number | null;
   approvedAmount: number | null;
@@ -253,6 +258,8 @@ export type ExpenseCashflowItem = {
   /** Phần đề xuất này đã ghi vào bảng nguồn. */
   paidBySuggest: number;
   status: CashflowItemStatus;
+  /** Xem trước: khoản đang nằm trong đề xuất khác (sẽ bỏ qua khi gửi). */
+  openRequest?: { id: number; code: string | null; status: ExpenseStatus } | null;
 };
 
 export type ExpenseCashflowItemsResponse = {
@@ -260,6 +267,46 @@ export type ExpenseCashflowItemsResponse = {
   table: string | null;
   items: ExpenseCashflowItem[];
   remainingTotal: number;
+  /** Kế toán chưa gửi: đang xem trước cả bảng của trường trong kỳ. */
+  preview?: boolean;
+  /** Bảng Giáo viên trường: dòng chưa chọn giáo viên (phải chọn trước khi gửi). */
+  unassigned?: { rowCount: number; amount: number }[];
+};
+
+/** Hỗ trợ tiền mặt / thiết bị trong chính sách đã duyệt của trường (Chi Năm). */
+export type PolicySupport = {
+  schoolId: number;
+  schoolYear: string;
+  cash: {
+    policyId: number;
+    subjectId: number;
+    subjectName: string | null;
+    type: string | null;
+    money: number;
+    depreciationYears: number;
+    months: number;
+    periods: number;
+    students: number;
+    realStudents: number;
+    realPeriods: number;
+    actualAmount: number;
+  }[];
+  equipment: {
+    policyId: number;
+    subjectId: number;
+    subjectName: string | null;
+    category: string | null;
+    qty: number;
+    price: number;
+    amount: number;
+    months: number;
+    depreciationYears: number;
+  }[];
+  cashTotal: number;
+  cashActualTotal: number;
+  equipmentTotal: number;
+  hasCash: boolean;
+  hasEquipment: boolean;
 };
 
 export type ExpenseMonthlyItem = {
@@ -355,8 +402,14 @@ export type ExpenseLogDetails = {
   /** CONFIRM_SPENT / CONFIRM_PARTIALLY_SPENT: phần ghi ngược về bảng nguồn. */
   chiNgoai?: CashflowPaymentLog | null;
   cashflowPayment?: CashflowPaymentLog | null;
-  /** APPROVE_MONTHLY: trường nào được duyệt / không duyệt. */
-  items?: { id: number; label: string; amount: number; approved: boolean }[];
+  /**
+   * APPROVE_MONTHLY / APPROVE_MONTHLY_CHAIN: khoản nào được duyệt / không duyệt.
+   * SUBMIT_TO_CHIEF_ACCOUNTANT: khoản Kế toán chốt (không có id/approved).
+   */
+  items?: { id?: number; label: string; amount: number; approved?: boolean }[];
+  /** SUBMIT_TO_CHIEF_ACCOUNTANT: khoản đang nằm trong đề xuất khác nên bỏ qua. */
+  skippedItems?: { label: string; amount: number; code: string | null }[];
+  cashflowTable?: string;
   equipmentSource?: "STOCK" | "SUPPLIER" | null;
   handover?: ExpenseLogPerson | null;
   supporters?: ExpenseLogPerson[];
@@ -588,6 +641,12 @@ export type ExpenseRequest = {
   isMonthlyExpense?: boolean;
   /** Bảng nguồn của đề xuất chi tháng; trống = Chi Ngoài. */
   cashflowSource?: CashflowSource | null;
+  /**
+   * `ACCOUNTANT_CHAIN` = quy trình Kế toán (từ 16/11/2026): Kế toán nhập số
+   * liệu → Kế toán trưởng → Giám đốc → Kế toán công nợ → Thủ quỹ → kinh doanh.
+   * Trống = chi tháng luồng cũ hoặc Chi Năm.
+   */
+  approvalFlow?: string | null;
   monthlyItems?: ExpenseMonthlyItem[];
   subjectId?: number;
   subject?: {
@@ -791,6 +850,14 @@ export const STATUS_META: Record<
     label: "Chờ Kế toán nhập số tiền",
     badge: "bg-cyan-100 text-cyan-700",
   },
+  PENDING_ACCOUNTANT: {
+    label: "Chờ Kế toán nhập số liệu",
+    badge: "bg-cyan-100 text-cyan-700",
+  },
+  PENDING_CHIEF_APPROVAL: {
+    label: "Chờ Kế toán trưởng duyệt",
+    badge: "bg-sky-100 text-sky-700",
+  },
   APPROVED: { label: "Đã duyệt", badge: "bg-blue-100 text-blue-700" },
   PAYMENT_ORDERED: {
     label: "Đã lên lệnh chi",
@@ -917,6 +984,12 @@ export const ACTION_LABEL: Record<string, string> = {
   SUBMIT: "Gửi duyệt",
   APPROVE: "Duyệt",
   APPROVE_MONTHLY: "Giám đốc duyệt chi tháng",
+  // --- quy trình Kế toán ---
+  SUBMIT_TO_CHIEF_ACCOUNTANT: "Kế toán nhập số liệu, gửi Kế toán trưởng",
+  CHIEF_APPROVE: "Kế toán trưởng duyệt",
+  CHIEF_REJECT: "Kế toán trưởng từ chối",
+  APPROVE_MONTHLY_CHAIN: "Giám đốc duyệt",
+  MOVE_TO_ACCOUNTANT_FLOW: "Chuyển sang quy trình Kế toán",
   APPROVED: "Duyệt",
   APPROVE_EXPENSE_REQUEST: "Duyệt đề xuất",
   REJECT: "Từ chối",

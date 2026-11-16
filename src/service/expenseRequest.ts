@@ -84,6 +84,13 @@ export type CreateExpensePayload = {
     schoolTeacherId?: number;
   }[];
   wardId?: number;
+  /** Chi Năm cho trường: dòng hỗ trợ trong chính sách đã tích + số tiền (gửi dạng JSON). */
+  policySupportItems?: {
+    policyId: number;
+    supportType: "CASH" | "EQUIPMENT";
+    itemIndex: number;
+    amount: number;
+  }[];
   /** Kinh doanh tự đánh dấu: đề xuất này nên trừ vào chính sách liên quan (chỉ để hiển thị). */
   deductPolicy?: boolean;
   file?: File; // đề xuất chỉ đính kèm 1 file
@@ -190,10 +197,11 @@ export const expenseRequestApi = {
   /** Hỗ trợ tiền mặt / thiết bị trong chính sách đã duyệt của trường (Chi Năm). */
   policySupport: async (
     schoolId: number,
-    schoolYear: string
+    schoolYear: string,
+    excludeSuggestId?: number
   ): Promise<PolicySupport> => {
     const res = await api.get(`${BASE}/policy-support`, {
-      params: { schoolId, schoolYear },
+      params: { schoolId, schoolYear, excludeSuggestId },
     });
     return res.data;
   },

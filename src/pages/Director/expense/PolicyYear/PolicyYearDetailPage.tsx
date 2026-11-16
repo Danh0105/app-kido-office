@@ -26,6 +26,7 @@ import PolicyMonthlyFormModal from "./components/PolicyMonthlyFormModal";
 import PolicySubjectFormModal from "./components/PolicySubjectFormModal";
 import StatusBadge from "./components/StatusBadge";
 import SpentExpenseRequestsSection from "./components/SpentExpenseRequestsSection";
+import PolicySupportUsageSection from "./components/PolicySupportUsageSection";
 import SearchableSelect from "@/components/SearchableSelect";
 import { annualPolicyApi } from "@/service/annualPolicy";
 import { policiesApi } from "@/service/policy";
@@ -537,6 +538,10 @@ export default function PolicyYearDetailPage({
             </label>
           </div>
         </section>
+      )}
+
+      {schoolId && (
+        <PolicySupportUsageSection schoolId={schoolId} schoolYear={draft.schoolYear} />
       )}
 
       {schoolId && (

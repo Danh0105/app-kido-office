@@ -349,11 +349,41 @@ export type CashflowSheetResponse = {
   unassigned: CashflowItemsResponse["unassigned"];
 };
 
+/** Đã chi / đang đề xuất / còn lại của một dòng hỗ trợ trong chính sách. */
+export type PolicySupportRowUsage = {
+  /** `policyId:CASH|EQUIPMENT:itemIndex`. */
+  rowKey: string;
+  itemIndex: number;
+  /** Mốc: tiền mặt = Thành tiền thực tế, thiết bị = Thành tiền. */
+  capAmount: number;
+  spentAmount: number;
+  heldAmount: number;
+  remainingAmount: number;
+};
+
+/** Dòng chính sách kinh doanh đã tích ở Đề xuất chi Năm cho trường. */
+export type ExpensePolicySupportItem = {
+  id: number;
+  policyId: number;
+  subjectId: number;
+  subjectName: string | null;
+  supportType: "CASH" | "EQUIPMENT";
+  itemIndex: number;
+  label: string | null;
+  policyAmount: number;
+  amount: number;
+  /** Ghi khi đề xuất hoàn thành; trống = chưa chi. */
+  spentAmount: number | null;
+  spentAt: string | null;
+};
+
 /** Hỗ trợ tiền mặt / thiết bị trong chính sách đã duyệt của trường (Chi Năm). */
 export type PolicySupport = {
   schoolId: number;
   schoolYear: string;
-  cash: {
+  spentTotal: number;
+  remainingTotal: number;
+  cash: (PolicySupportRowUsage & {
     policyId: number;
     subjectId: number;
     subjectName: string | null;
@@ -366,8 +396,8 @@ export type PolicySupport = {
     realStudents: number;
     realPeriods: number;
     actualAmount: number;
-  }[];
-  equipment: {
+  })[];
+  equipment: (PolicySupportRowUsage & {
     policyId: number;
     subjectId: number;
     subjectName: string | null;
@@ -377,7 +407,7 @@ export type PolicySupport = {
     amount: number;
     months: number;
     depreciationYears: number;
-  }[];
+  })[];
   cashTotal: number;
   cashActualTotal: number;
   equipmentTotal: number;
@@ -717,6 +747,8 @@ export type ExpenseRequest = {
   isMonthlyExpense?: boolean;
   /** Bảng nguồn của đề xuất chi tháng; trống = Chi Ngoài. */
   cashflowSource?: CashflowSource | null;
+  /** Đề xuất chi Năm cho trường: dòng hỗ trợ trong chính sách đã tích + số tiền. */
+  policySupportItems?: ExpensePolicySupportItem[];
   /**
    * `ACCOUNTANT_CHAIN` = quy trình Kế toán (từ 16/11/2026): Kế toán nhập số
    * liệu → Kế toán trưởng → Giám đốc → Kế toán công nợ → Thủ quỹ → kinh doanh.

@@ -662,6 +662,11 @@ export default function ExpenseRequestDetail({
   const source = cashflowSourceOf(data);
   const sourceMeta = source ? CASHFLOW_SOURCE_META[source] : null;
   const chain = isAccountantChain(data);
+  // Chi Năm cho trường: tổng số kinh doanh nhập ở các dòng chính sách đã tích.
+  const policySupportTotal = (data.policySupportItems ?? []).reduce(
+    (sum, item) => sum + (Number(item.amount) || 0),
+    0
+  );
   // Số cho hộp duyệt: Chi Ngoài luồng cũ lấy từ bảng Chi Ngoài như trước;
   // quy trình Kế toán lấy số Kế toán chốt (khoản chi của đề xuất).
   const approvalView =
@@ -903,6 +908,43 @@ export default function ExpenseRequestDetail({
               )}
           </div>
         </div>
+
+        {/* ===== Chi Năm cho trường: dòng hỗ trợ trong chính sách đã tích ===== */}
+        {!!data.policySupportItems?.length && (
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-emerald-100">
+            <h3 className="font-semibold text-emerald-700 text-sm mb-2">
+              📑 Dòng chính sách đề xuất
+            </h3>
+            <ul className="space-y-1.5">
+              {data.policySupportItems.map((item) => (
+                <li
+                  key={item.id}
+                  className="flex flex-wrap items-center justify-between gap-1 rounded-lg bg-emerald-50/50 px-2.5 py-1.5 text-xs"
+                >
+                  <span className="text-gray-800">
+                    {[item.subjectName, item.label].filter(Boolean).join(" · ")}
+                    <span className="text-gray-400">
+                      {" "}
+                      (chính sách {formatVnd(item.policyAmount) || "0"} đ)
+                    </span>
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <b className="tabular-nums">{formatVnd(item.amount) || "0"} đ</b>
+                    {item.spentAmount != null && (
+                      <span className="rounded-full bg-green-100 px-1.5 py-[1px] text-[10px] text-green-700">
+                        Đã chi
+                      </span>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-2 flex justify-between text-xs text-emerald-800">
+              <span>Tổng đề xuất theo chính sách</span>
+              <b>{formatVnd(policySupportTotal) || "0"} đ</b>
+            </div>
+          </div>
+        )}
 
         {/* ===== School and policies (chi tháng nhiều trường: xem bảng Chi Ngoài) ===== */}
         {(data.school?.id || (data as any).schoolId) &&
@@ -1474,7 +1516,7 @@ export default function ExpenseRequestDetail({
       )}
       {modal === "paymentOrder" && (
         <PaymentOrderModal
-          defaultAmount={0}
+          defaultAmount={data.isMonthlyExpense ? 0 : policySupportTotal}
           monthly={data.isMonthlyExpense && !chain}
           lockedAmount={chain && data.amount != null ? Number(data.amount) : null}
           retry={data.status === "FUND_RETURNED"}

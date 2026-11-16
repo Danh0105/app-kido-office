@@ -21,7 +21,9 @@ import {
   type PolicySupport,
 } from "@/types/expenseRequest";
 import { canDoStep, cashflowSourceOf, expenseBasePath, todayISO } from "./lib";
-import PolicySupportTables from "./components/PolicySupportTables";
+import PolicySupportTables, {
+  type PolicySupportSelection,
+} from "./components/PolicySupportTables";
 import CashflowSheetPreview from "./components/CashflowSheetPreview";
 import {
   DEFAULT_SCHOOL_YEAR,
@@ -112,6 +114,8 @@ export default function ExpenseRequestForm() {
   const [policySupport, setPolicySupport] = useState<PolicySupport | null>(null);
   const [policySupportLoading, setPolicySupportLoading] = useState(false);
   const [policySupportError, setPolicySupportError] = useState("");
+  // Dòng hỗ trợ đã tích + số tiền (theo rowKey `policyId:CASH|EQUIPMENT:itemIndex`).
+  const [policySelection, setPolicySelection] = useState<PolicySupportSelection>({});
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -138,6 +142,15 @@ export default function ExpenseRequestForm() {
         setDescription(req.description ?? "");
         setParticipants(req.participants ?? "");
         setExpectedPaymentDate((req.expectedPaymentDate ?? "").slice(0, 10));
+        // Chi Năm cho trường: chọn sẵn các dòng chính sách đã tích.
+        setPolicySelection(
+          Object.fromEntries(
+            (req.policySupportItems ?? []).map((item) => [
+              `${item.policyId}:${item.supportType}:${item.itemIndex}`,
+              Number(item.amount) || 0,
+            ])
+          )
+        );
         setDeductPolicy(Boolean(req.deductPolicy));
         if (source) {
           // Một trường + một kỳ (đề xuất cũ nhiều trường: lấy trường đầu).
@@ -466,9 +479,23 @@ export default function ExpenseRequestForm() {
     let active = true;
     setPolicySupportLoading(true);
     expenseRequestApi
-      .policySupport(Number(selectedSchool), String(selectedSchoolYear))
+      .policySupport(
+        Number(selectedSchool),
+        String(selectedSchoolYear),
+        isEdit ? editId : undefined
+      )
       .then((support) => {
-        if (active) setPolicySupport(support);
+        if (!active) return;
+        setPolicySupport(support);
+        // Bỏ các dòng không thuộc chính sách của trường / năm học đang chọn.
+        const keys = new Set(
+          [...support.cash, ...support.equipment].map((row) => row.rowKey)
+        );
+        setPolicySelection((current) =>
+          Object.fromEntries(
+            Object.entries(current).filter(([key]) => keys.has(key))
+          )
+        );
       })
       .catch((err) => {
         if (active) {
@@ -483,7 +510,7 @@ export default function ExpenseRequestForm() {
     return () => {
       active = false;
     };
-  }, [isMonthlyExpense, proposalTarget, selectedSchool, selectedSchoolYear]);
+  }, [isMonthlyExpense, proposalTarget, selectedSchool, selectedSchoolYear, isEdit, editId]);
 
   const yearPeriods = periods
     .filter((period) => periodInSchoolYear(period, selectedSchoolYear))
@@ -544,6 +571,24 @@ export default function ExpenseRequestForm() {
       if (policySupportLoading) return "Đang tải chính sách của trường";
       if (policySupport && !policySupport.hasCash && !policySupport.hasEquipment)
         return "Chính sách đã duyệt của trường không có hỗ trợ tiền mặt hoặc thiết bị";
+      if (policySupport) {
+        const rows = new Map(
+          [...policySupport.cash, ...policySupport.equipment].map((row) => [
+            row.rowKey,
+            row,
+          ])
+        );
+        const picked = Object.entries(policySelection);
+        if (picked.length === 0)
+          return "Tích ít nhất một dòng tiền mặt hoặc thiết bị trong chính sách và nhập số tiền";
+        for (const [key, amount] of picked) {
+          const row = rows.get(key);
+          if (!row) return "Có dòng chính sách đã chọn không còn — chọn lại";
+          if (!(Number(amount) > 0)) return "Nhập số tiền cho các dòng đã tích";
+          if (Number(amount) > row.remainingAmount)
+            return "Số tiền vượt phần còn lại của dòng chính sách";
+        }
+      }
     }
     return "";
   };
@@ -575,6 +620,17 @@ export default function ExpenseRequestForm() {
         }
       : {};
     const singleSchool = !isMonthlyExpense && proposalTarget === "SCHOOL";
+    const policySupportItems = singleSchool
+      ? Object.entries(policySelection).map(([key, amount]) => {
+          const [policyId, supportType, itemIndex] = key.split(":");
+          return {
+            policyId: Number(policyId),
+            supportType: supportType as "CASH" | "EQUIPMENT",
+            itemIndex: Number(itemIndex),
+            amount: Number(amount),
+          };
+        })
+      : undefined;
     try {
       if (isEdit) {
         await expenseRequestApi.update(editId, {
@@ -592,6 +648,7 @@ export default function ExpenseRequestForm() {
               ? String(selectedSchoolYear)
               : undefined,
           ...monthlySheet,
+          policySupportItems,
           wardId:
             !isMonthlyExpense && proposalTarget === "WARD" && selectedWard
               ? Number(selectedWard)
@@ -625,6 +682,7 @@ export default function ExpenseRequestForm() {
             ? String(selectedSchoolYear)
             : undefined,
         ...monthlySheet,
+        policySupportItems,
         file: file || undefined,
       });
       toast.success(
@@ -874,6 +932,7 @@ export default function ExpenseRequestForm() {
                   setSelectedSchool(value ? Number(value) : null);
                   setSelectedSchoolYear(null);
                   setSelectedPeriodId(null);
+                  setPolicySelection({});
                 }}
                 disabled={schoolsLoading}
               />
@@ -908,6 +967,8 @@ export default function ExpenseRequestForm() {
                   support={policySupport}
                   loading={policySupportLoading}
                   error={policySupportError}
+                  selection={policySelection}
+                  onSelectionChange={setPolicySelection}
                 />
               )}
 

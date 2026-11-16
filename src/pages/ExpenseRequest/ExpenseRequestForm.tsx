@@ -25,6 +25,7 @@ import PolicySupportTables, {
   type PolicySupportSelection,
 } from "./components/PolicySupportTables";
 import CashflowSheetPreview from "./components/CashflowSheetPreview";
+import ExpenseFlowSteps from "./components/ExpenseFlowSteps";
 import {
   DEFAULT_SCHOOL_YEAR,
   includeDefaultSchoolYear,
@@ -779,15 +780,13 @@ export default function ExpenseRequestForm() {
               </div>
               {cashflowSource && (
                 <p className="mt-1 text-xs text-blue-600">
-                  Chọn trường và kỳ kế toán; form hiện toàn bộ số liệu bảng ở
-                  QL thu chi. Đề xuất gửi Kế toán nhập số liệu bảng{" "}
-                  {CASHFLOW_SOURCE_META[cashflowSource].table} ở QL thu chi →
-                  Kế toán trưởng duyệt → Giám đốc duyệt → Kế toán công nợ lập
-                  lệnh chi → Thủ quỹ xuất tiền → bạn nhận tiền và xác nhận đã
-                  chi. Số tiền = Còn lại của bảng lúc Kế toán gửi.
+                  Chọn trường và kỳ kế toán; form hiện toàn bộ số liệu bảng{" "}
+                  {CASHFLOW_SOURCE_META[cashflowSource].table} ở QL thu chi.
                 </p>
               )}
             </div>
+
+            <ExpenseFlowSteps source={cashflowSource} />
 
             {!isMonthlyExpense && (
               <div>

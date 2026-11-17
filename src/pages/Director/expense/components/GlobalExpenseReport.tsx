@@ -141,12 +141,21 @@ const periodLabel = (period: any) =>
 
 const money = (value: number) => formatCurrency(value);
 
-const quantity = (row: Pick<ReportNumbers, "students" | "periods">) =>
-  `${new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 }).format(
-    row.students
-  )} HS / ${new Intl.NumberFormat("vi-VN", {
-    maximumFractionDigits: 2,
-  }).format(row.periods)} tiết`;
+const count = (value: number) =>
+  new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 }).format(value);
+
+/** Ô số lượng (Số HS / Số tiết): số 0 hiện nhạt như ô tiền. */
+function CountCell({ value, className }: { value: number; className: string }) {
+  return (
+    <td
+      className={`border border-slate-300 px-2 py-1.5 text-right tabular-nums ${
+        value ? className : "text-slate-300"
+      }`}
+    >
+      {count(value)}
+    </td>
+  );
+}
 
 /** Ô số: số 0 hiện nhạt để mắt dừng ở ô có tiền. */
 function MoneyCell({
@@ -178,11 +187,8 @@ function NumberCells({
   const bold = strong ? "font-black" : "";
   return (
     <>
-      <td
-        className={`border border-slate-300 px-2 py-1.5 text-right tabular-nums ${bold} text-slate-700`}
-      >
-        {quantity(row)}
-      </td>
+      <CountCell value={row.students} className={`${bold} text-slate-700`} />
+      <CountCell value={row.periods} className={`${bold} text-slate-700`} />
       <MoneyCell value={row.revenue} className={`${bold} text-slate-900`} />
       <MoneyCell
         value={row.schoolExpense}
@@ -232,7 +238,7 @@ function NumberCells({
 }
 
 const GROUP_HEADERS = [
-  { label: "Số lượng", span: 1, className: "bg-slate-100 text-slate-700" },
+  { label: "Số lượng", span: 2, className: "bg-slate-100 text-slate-700" },
   { label: "Doanh thu", span: 1, className: "bg-slate-200 text-slate-700" },
   { label: "Chi trường", span: 2, className: "bg-sky-100 text-sky-800" },
   { label: "Hóa đơn / Thu", span: 2, className: "bg-amber-100 text-amber-800" },
@@ -246,7 +252,8 @@ const GROUP_HEADERS = [
 ];
 
 const COLUMN_HEADERS: { label: string; title?: string }[] = [
-  { label: "Số HS / số tiết" },
+  { label: "Số HS" },
+  { label: "Số tiết" },
   { label: "Doanh thu", title: "Thành tiền bảng Doanh Thu" },
   { label: "Chi trường", title: "Chi trường, không gồm Giáo viên trường" },
   { label: "Đã chi", title: "Đã chi trường" },

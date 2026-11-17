@@ -51,9 +51,7 @@ export default function RevenueExpenseTable({
       const inputData = inputRows[index] || fallbackInputData;
       const students = Number(inputData.studentCount || 0);
       const months = Number(inputData.monthsCount || 0);
-      const teacherUnitPrice = teacherSplit
-        ? 0
-        : getPolicyTeacherUnitPrice(policyData);
+      const teacherUnitPrice = getPolicyTeacherUnitPrice(policyData);
       const taxUnitPrice = Number(
         row.taxUnitPrice ??
           row.thue ??
@@ -65,7 +63,9 @@ export default function RevenueExpenseTable({
       const csvcUnitPrice = Number(
         row.csvcUnitPrice ?? row.csvc ?? policyData?.csvc ?? 0,
       );
-      const teacherAmount = students * months * teacherUnitPrice;
+      const teacherAmount = teacherSplit
+        ? 0
+        : students * months * teacherUnitPrice;
       const taxAmount = students * months * taxUnitPrice;
       const csvcAmount = csvcUnitPrice * months * students;
       const totalSchoolExpense = teacherAmount + taxAmount + csvcAmount;

@@ -1174,9 +1174,8 @@ export default function RealExpenseDetail({
 
       const loadedPolicyData =
         subjects.find((s: any) => s.id === subId)?.policies?.[0]?.data || {};
-      const policyTeacherUnitPrice = schoolTeacherApplies
-        ? 0
-        : getPolicyTeacherUnitPrice(loadedPolicyData);
+      const policyTeacherUnitPrice =
+        getPolicyTeacherUnitPrice(loadedPolicyData);
       const loadedSubject = subjects.find((s: any) => s.id === subId);
       const policyOtherCosts = getPolicyOtherCosts(loadedSubject);
       const fee = Number(loadedPolicyData?.fee || 0);
@@ -1419,10 +1418,9 @@ export default function RealExpenseDetail({
           totalPeriods: Number(inputRow.totalPeriods || 0),
           studentCount: Number(inputRow.studentCount || 0),
           monthsCount: Number(inputRow.monthsCount ?? 0),
-          // Kỳ từ 11/2026: tiền Giáo viên trường ở bảng riêng dưới Chi Ngoài.
-          teacherUnitPrice: schoolTeacherApplies
-            ? 0
-            : getPolicyTeacherUnitPrice(policyData),
+          // Luôn lưu đúng ĐG giáo viên trong Thông tin cơ sở vật chất. Backend
+          // tự loại phần tiền giáo viên khỏi tổng Chi Trường khi bảng riêng áp dụng.
+          teacherUnitPrice: getPolicyTeacherUnitPrice(policyData),
           taxUnitPrice: Number(
             row.taxUnitPrice ?? policyData.thue ?? policyData.tax ?? 0,
           ),

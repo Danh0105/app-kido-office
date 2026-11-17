@@ -42,9 +42,7 @@ export default function RevenueExpenseRow({
   const months = Number(inputData.monthsCount || 0);
 
   const policyData = subjects?.policies?.[0]?.data || {};
-  const teacherUnitPrice = teacherSplit
-    ? 0
-    : getPolicyTeacherUnitPrice(policyData);
+  const teacherUnitPrice = getPolicyTeacherUnitPrice(policyData);
   const taxUnitPrice = Number(
     row.taxUnitPrice ??
       row.thue ??
@@ -61,7 +59,9 @@ export default function RevenueExpenseRow({
 
   const calculations = useMemo(() => {
     const invoiceAmount = students * months * unitPrice;
-    const teacherAmount = students * months * teacherUnitPrice;
+    const teacherAmount = teacherSplit
+      ? 0
+      : students * months * teacherUnitPrice;
     const csvcAmount = csvcUnitPrice * months * students;
     const taxAmount = students * months * taxUnitPrice;
 
@@ -79,6 +79,7 @@ export default function RevenueExpenseRow({
     months,
     unitPrice,
     teacherUnitPrice,
+    teacherSplit,
     csvcUnitPrice,
     taxUnitPrice,
   ]);
@@ -228,7 +229,7 @@ export default function RevenueExpenseRow({
       {/* ĐƠN GIÁ GIÁO VIÊN — lấy từ Thông tin cơ sở vật chất */}
       <div
         className="p-2 border-r border-slate-200"
-        title={teacherSplit ? "Từ kỳ 11/2026 nhập ở bảng Giáo viên trường (dưới Chi Ngoài)" : undefined}
+        title={teacherSplit ? "Đơn giá theo Thông tin cơ sở vật chất; tiền giáo viên được theo dõi ở bảng riêng" : undefined}
       >
         <DecimalInput
           value={teacherUnitPrice}

@@ -291,9 +291,7 @@ function schoolSection(
     const input = inputRows[index] || fallbackInput;
     const students = Number(input.studentCount || 0);
     const months = Number(input.monthsCount || 0);
-    const teacherUnitPrice = teacherSplit
-      ? 0
-      : getPolicyTeacherUnitPrice(policyData);
+    const teacherUnitPrice = getPolicyTeacherUnitPrice(policyData);
     const taxUnitPrice = Number(
       row.taxUnitPrice ??
         row.thue ??
@@ -306,7 +304,9 @@ function schoolSection(
       row.csvcUnitPrice ?? row.csvc ?? policyData?.csvc ?? 0,
     );
     const csvcAmount = csvcUnitPrice * months * students;
-    const teacherAmount = students * months * teacherUnitPrice;
+    const teacherAmount = teacherSplit
+      ? 0
+      : students * months * teacherUnitPrice;
     const taxAmount = students * months * taxUnitPrice;
     const total = csvcAmount + teacherAmount + taxAmount;
     const paid = Number(row.paidAmount || 0);

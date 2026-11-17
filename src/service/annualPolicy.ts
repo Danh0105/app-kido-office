@@ -24,16 +24,17 @@ export const annualPolicyApi = {
 
   uploadContract: async (
     annualPolicyId: number,
-    file: File,
+    file: File
   ): Promise<AnnualPolicyContract> => {
     const formData = new FormData();
     formData.append("file", file);
 
     const res = await api.post(
       `/annual-policies/${annualPolicyId}/contract`,
-      formData,
+      formData
     );
 
     return res.data;
   },
+
 };

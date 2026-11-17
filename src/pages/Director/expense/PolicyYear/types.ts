@@ -64,6 +64,9 @@ export type PolicyYear = {
   contractFileName?: string | null;
   contractUploadedByName?: string | null;
   contractUploadedAt?: string | null;
+  giftFlowersCompleted?: boolean;
+  openingCeremonyCompleted?: boolean;
+  teachersDayCompleted?: boolean;
 };
 
 export type PolicySummary = {

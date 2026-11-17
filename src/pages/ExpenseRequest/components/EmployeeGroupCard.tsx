@@ -4,7 +4,7 @@ import { ChevronDown, Search } from "lucide-react";
 import type { ExpenseEmployeeGroup, ExpenseStatus } from "@/types/expenseRequest";
 import { statusLabel } from "@/types/expenseRequest";
 
-import ExpenseCard from "./ExpenseCard";
+import ExpenseRequestProgressRow from "./ExpenseRequestProgressRow";
 import { resolveExpenseRequestId } from "../lib";
 
 const normalize = (value?: string) =>
@@ -39,6 +39,17 @@ export default function EmployeeGroupCard({
       );
     });
   }, [group.requests, search, statusFilter]);
+
+  const closePanel = () => {
+    setOpen(false);
+    setSearch("");
+    setStatusFilter("");
+  };
+
+  const handleItemClick = (requestId: number) => {
+    closePanel();
+    onItemClick(requestId);
+  };
 
   return (
     <>
@@ -81,14 +92,10 @@ export default function EmployeeGroupCard({
       {open && (
         <div
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
-          onClick={() => {
-            setOpen(false);
-            setSearch("");
-            setStatusFilter("");
-          }}
+          onClick={closePanel}
         >
           <div
-            className="flex max-h-[85vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white sm:max-w-md sm:rounded-3xl"
+            className="flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white sm:rounded-3xl lg:h-[calc(100vh-3rem)] lg:max-w-7xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-100 px-4 py-3">
@@ -99,21 +106,21 @@ export default function EmployeeGroupCard({
                 {group.employee?.phone && (
                   <p className="text-[11px] text-gray-400">{group.employee.phone}</p>
                 )}
+                <p className="mt-1 text-xs text-slate-500">
+                  Tiến trình của {filteredRequests.length} đề xuất · Chạm vào thẻ để xem chi tiết
+                </p>
               </div>
-
               <button
-                onClick={() => {
-                  setOpen(false);
-                  setSearch("");
-                  setStatusFilter("");
-                }}
+                type="button"
+                onClick={closePanel}
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-500 hover:bg-gray-200"
+                aria-label="Đóng danh sách đề xuất"
               >
                 ✕
               </button>
             </div>
 
-            <div className="shrink-0 space-y-2 border-b border-gray-100 px-3 py-2">
+            <div className="shrink-0 space-y-2 border-b border-gray-100 px-3 py-2 sm:grid sm:grid-cols-2 sm:gap-2 sm:space-y-0">
               <div className="relative">
                 <Search
                   size={14}
@@ -129,7 +136,7 @@ export default function EmployeeGroupCard({
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as ExpenseStatus | "")}
-                className="w-full rounded-lg border border-gray-200 py-1.5 px-2 text-xs"
+                className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs"
               >
                 <option value="">Tất cả trạng thái</option>
                 {statusOptions.map((s) => (
@@ -140,7 +147,7 @@ export default function EmployeeGroupCard({
               </select>
             </div>
 
-            <div className="space-y-2 overflow-y-auto bg-gray-50 p-3">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-gray-50 p-3">
               {filteredRequests.length === 0 && (
                 <div className="py-10 text-center text-xs text-gray-400">
                   Không có đề xuất phù hợp
@@ -149,11 +156,11 @@ export default function EmployeeGroupCard({
               {filteredRequests.map((item, index) => {
                 const requestId = resolveExpenseRequestId(item);
                 return (
-                  <ExpenseCard
+                  <ExpenseRequestProgressRow
                     key={requestId ?? `invalid-${index}`}
                     item={item}
                     showCreator={false}
-                    onClick={() => requestId && onItemClick(requestId)}
+                    onClick={() => requestId && handleItemClick(requestId)}
                   />
                 );
               })}

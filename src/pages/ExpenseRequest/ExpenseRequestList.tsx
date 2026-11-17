@@ -16,7 +16,7 @@ import {
   type ExpenseStatus,
 } from "@/types/expenseRequest";
 
-import ExpenseCard from "./components/ExpenseCard";
+import ExpenseRequestProgressRow from "./components/ExpenseRequestProgressRow";
 import EmployeeGroupCard from "./components/EmployeeGroupCard";
 import ActionModal, { type ActionPayload } from "./components/ActionModal";
 import ExpenseRequestDetail from "./ExpenseRequestDetail";
@@ -24,10 +24,10 @@ import { enrichExpenseRequestsWithCreators } from "./creatorProfiles";
 import { useExpenseSocket } from "./useExpenseSocket";
 import {
   expenseBasePath,
+  canCreateExpenseRequest,
   expenseCreatePath,
   expenseEditPath,
   expenseTasksPath,
-  canCreateExpenseRequest,
   isApproverSide,
   isEquipmentOnlyUser,
   isTechnical,
@@ -228,13 +228,12 @@ export default function ExpenseRequestList() {
         setGroups(groupExpenseRequestsByEmployeeName(enrichedGroups));
         setTotalPages(res.totalPages || 1);
       } else {
-        // Sales chỉ xem đề xuất của mình; các role duyệt xem theo scope backend.
-        const ownOnly = viewMode === "mine" || !approverSide;
         const res = await expenseRequestApi.list({
-          createdBy: ownOnly ? Number(getEmployeeId()) || undefined : undefined,
-          // "Của tôi" gồm cả đề xuất mình được Giám đốc chỉ định (bàn giao,
-          // hỗ trợ, xử lý nhập kho, nghiệm thu).
-          includeAssigned: ownOnly || undefined,
+          // Sales chỉ xem đề xuất của mình; các role duyệt xem theo scope backend.
+          createdBy:
+            viewMode === "mine" || !approverSide
+              ? Number(getEmployeeId()) || undefined
+              : undefined,
           ...filters,
         });
         const enrichedItems = await enrichExpenseRequestsWithCreators(res.data || []);
@@ -396,7 +395,7 @@ export default function ExpenseRequestList() {
             [
               { value: "", label: "Tất cả hình thức" },
               { value: "REGULAR", label: "Chi Năm" },
-              { value: "MONTHLY", label: "Chi từ QL thu chi" },
+              { value: "MONTHLY", label: "Chi tháng" },
             ] as { value: MonthlyFilter; label: string }[]
           ).map((tab) => (
             <button
@@ -483,7 +482,7 @@ export default function ExpenseRequestList() {
           items.map((item, index) => {
             const requestId = resolveExpenseRequestId(item);
             return (
-              <ExpenseCard
+              <ExpenseRequestProgressRow
                 key={requestId ?? `invalid-${index}`}
                 item={item}
                 onClick={() => requestId && openRequestDetail(requestId)}

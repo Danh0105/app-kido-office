@@ -143,6 +143,12 @@ const TECHNICAL_MENUS = [
 
 const CHIEF_ACCOUNTANT_MENUS = [
   {
+    title: "Nhân viên",
+    icon: team,
+    path: "employee-management",
+    from: "management",
+  },
+  {
     title: "Quản lý thu chi",
     icon: expense,
     path: "expense-management",

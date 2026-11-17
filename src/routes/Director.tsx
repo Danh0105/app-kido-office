@@ -206,7 +206,11 @@ export default function DirectorRoutes() {
           path="employee-management"
           element={
             <HrFeatureGuard>
-              {directorOnly(<EmployeeManagement />)}
+              {isChiefAccountant() ? (
+                <EmployeeManagement />
+              ) : (
+                directorOnly(<EmployeeManagement />)
+              )}
             </HrFeatureGuard>
           }
         />

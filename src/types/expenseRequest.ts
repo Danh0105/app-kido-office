@@ -139,7 +139,7 @@ export type ManagementExpenseRow = {
 /** Một trường của đề xuất chi tháng. */
 /**
  * Bảng nguồn ở QL thu chi của đề xuất chi tháng (từ 13/11/2026):
- * MANAGEMENT = "Đề xuất Chi Ngoài (Chi chính sách tháng)" — đề xuất chi tháng
+ * MANAGEMENT = "Chi chính sách tháng" — đề xuất chi tháng
  * cũ (trống) cũng là loại này; SCHOOL_EXPENSE = "Đề xuất Chi Trường";
  * SCHOOL_TEACHER = "Đề xuất Chi GV trường".
  */
@@ -150,8 +150,8 @@ export const CASHFLOW_SOURCE_META: Record<
   { label: string; short: string; table: string; icon: string }
 > = {
   MANAGEMENT: {
-    label: "Đề xuất Chi Ngoài (Chi chính sách tháng)",
-    short: "Chi Ngoài",
+    label: "Chi chính sách tháng",
+    short: "Chi chính sách tháng",
     table: "Chi Ngoài",
     icon: "🗓️",
   },

@@ -39,6 +39,7 @@ import {
   getOtherCostKey,
   getOtherCostTax,
   getPolicyOtherCosts,
+  getPolicyTeacherUnitPrice,
 } from "../utils/policyOtherCosts";
 import {
   getManagementRowInput,
@@ -1173,6 +1174,9 @@ export default function RealExpenseDetail({
 
       const loadedPolicyData =
         subjects.find((s: any) => s.id === subId)?.policies?.[0]?.data || {};
+      const policyTeacherUnitPrice = schoolTeacherApplies
+        ? 0
+        : getPolicyTeacherUnitPrice(loadedPolicyData);
       const loadedSubject = subjects.find((s: any) => s.id === subId);
       const policyOtherCosts = getPolicyOtherCosts(loadedSubject);
       const fee = Number(loadedPolicyData?.fee || 0);
@@ -1233,8 +1237,7 @@ export default function RealExpenseDetail({
               id: r.id,
               subjectId: r.subjectId || subId,
               invoiceAmount: r.schoolExpenseAmount || 0,
-              teacherUnitPrice:
-                r.teacherUnitPrice ?? r.giaovien ?? loadedPolicyData.giaovien,
+              teacherUnitPrice: policyTeacherUnitPrice,
               taxUnitPrice:
                 r.taxUnitPrice ??
                 r.thue ??
@@ -1419,7 +1422,7 @@ export default function RealExpenseDetail({
           // Kỳ từ 11/2026: tiền Giáo viên trường ở bảng riêng dưới Chi Ngoài.
           teacherUnitPrice: schoolTeacherApplies
             ? 0
-            : Number(row.teacherUnitPrice ?? policyData.giaovien ?? 0),
+            : getPolicyTeacherUnitPrice(policyData),
           taxUnitPrice: Number(
             row.taxUnitPrice ?? policyData.thue ?? policyData.tax ?? 0,
           ),
@@ -2178,6 +2181,7 @@ export default function RealExpenseDetail({
                 savedMgmtItems={savedMgmtItems}
                 otherCosts={activeOtherCosts}
                 ttcs={activeTtcs}
+                teacherSplit={schoolTeacherApplies}
               />
             </div>
 

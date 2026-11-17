@@ -5,6 +5,7 @@ import {
   getOtherCostKey,
   getOtherCostTax,
   getPolicyOtherCosts,
+  getPolicyTeacherUnitPrice,
 } from "../../utils/policyOtherCosts";
 import {
   getManagementRowInput,
@@ -36,6 +37,7 @@ export type ExpensePrintData = {
   subject: any;
   schoolName?: string;
   schoolYear?: string;
+  teacherSplit?: boolean;
 };
 
 /**
@@ -280,6 +282,7 @@ function schoolSection(
   revenueRows: any[],
   inputRows: InputExpenseRow[],
   subject: any,
+  teacherSplit = false,
 ) {
   const policyData = subject?.policies?.[0]?.data || {};
   const fallbackInput = inputRows[0] || ({} as InputExpenseRow);
@@ -288,9 +291,9 @@ function schoolSection(
     const input = inputRows[index] || fallbackInput;
     const students = Number(input.studentCount || 0);
     const months = Number(input.monthsCount || 0);
-    const teacherUnitPrice = Number(
-      row.teacherUnitPrice ?? row.giaovien ?? policyData?.giaovien ?? 0,
-    );
+    const teacherUnitPrice = teacherSplit
+      ? 0
+      : getPolicyTeacherUnitPrice(policyData);
     const taxUnitPrice = Number(
       row.taxUnitPrice ??
         row.thue ??
@@ -536,7 +539,8 @@ export function buildExpenseTables(data: ExpensePrintData): ExpenseTable[] {
     () => Omit<ExpenseTable, "key" | "label">
   > = {
     revenue: () => revenueSection(inputRows),
-    school: () => schoolSection(revenueRows, inputRows, subject),
+    school: () =>
+      schoolSection(revenueRows, inputRows, subject, data.teacherSplit),
     management: () => managementSection(managementRows, inputRows, subject),
   };
 

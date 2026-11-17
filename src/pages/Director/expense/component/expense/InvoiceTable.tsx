@@ -8,6 +8,7 @@ import type {
   RevenueEInvoiceLine,
 } from "@/service/schoolExpense";
 import { calculateRevenueQuantity, companyPaymentOf } from "@/utils/revenueAmount";
+import { getPolicyTeacherUnitPrice } from "../../utils/policyOtherCosts";
 
 type Props = {
   inputRows: InputExpenseRow[];
@@ -33,6 +34,8 @@ type Props = {
   onUnlinkEInvoice?: (einvoice: RevenueEInvoice) => void;
   /** Hóa đơn đang được bỏ liên kết. */
   unlinkingEInvoiceId?: number | null;
+  /** Môn đã có tiền ở bảng Giáo viên trường thì Chi Trường không tính lại GV. */
+  teacherSplit?: boolean;
 };
 
 const invoiceTypeOf = (row: InputExpenseRow) =>
@@ -156,14 +159,22 @@ export default function InvoiceTable({
   loading = false,
   onUnlinkEInvoice,
   unlinkingEInvoiceId = null,
+  teacherSplit = false,
 }: Props) {
   const [confirmExport, setConfirmExport] = useState(false);
   const policyData = subjects?.policies?.[0]?.data || {};
   const einvoiceByRow = einvoiceLinesByRow(einvoices);
 
+  const schoolRowOf = (idx: number) => ({
+    ...(revenueRows[idx] || {}),
+    teacherUnitPrice: teacherSplit
+      ? 0
+      : getPolicyTeacherUnitPrice(policyData),
+  });
+
   const rowAmountOf = (row: InputExpenseRow, idx: number) =>
     calculateRevenueQuantity(row) *
-    companyPaymentOf(Number(row.unitPrice || 0), revenueRows[idx], policyData);
+    companyPaymentOf(Number(row.unitPrice || 0), schoolRowOf(idx), policyData);
 
   const totalCompanyPayment = inputRows.reduce(
     (sum, row, idx) => sum + rowAmountOf(row, idx),
@@ -356,7 +367,7 @@ export default function InvoiceTable({
               const revenueUnitPrice = Number(row.unitPrice || 0);
               const companyPayment = companyPaymentOf(
                 revenueUnitPrice,
-                revenueRows[idx],
+                schoolRowOf(idx),
                 policyData,
               );
               const invoiceQuantity = calculateRevenueQuantity(row);

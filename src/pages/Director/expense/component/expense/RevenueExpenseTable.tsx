@@ -3,6 +3,7 @@
 import { Building2, CalendarDays, Receipt, Wallet } from "lucide-react";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
 import RevenueExpenseRow from "./RevenueExpenseRow";
+import { getPolicyTeacherUnitPrice } from "../../utils/policyOtherCosts";
 import CollaboratorPayrollRow, {
   type CollaboratorPayrollScope,
 } from "./CollaboratorPayrollRow";
@@ -52,7 +53,7 @@ export default function RevenueExpenseTable({
       const months = Number(inputData.monthsCount || 0);
       const teacherUnitPrice = teacherSplit
         ? 0
-        : Number(row.teacherUnitPrice ?? row.giaovien ?? policyData?.giaovien ?? 0);
+        : getPolicyTeacherUnitPrice(policyData);
       const taxUnitPrice = Number(
         row.taxUnitPrice ??
           row.thue ??

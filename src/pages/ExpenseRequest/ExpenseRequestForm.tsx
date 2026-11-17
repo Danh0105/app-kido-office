@@ -80,7 +80,9 @@ export default function ExpenseRequestForm() {
   const [description, setDescription] = useState("");
   const [participants, setParticipants] = useState("");
   const [expectedPaymentDate, setExpectedPaymentDate] = useState("");
-  const [deductPolicy, setDeductPolicy] = useState(false);
+  // Form mở ở Chi Năm nên mặc định trừ chính sách; người dùng có thể bỏ chọn
+  // để đề xuất không phụ thuộc chính sách hỗ trợ tiền mặt/thiết bị.
+  const [deductPolicy, setDeductPolicy] = useState(true);
   // null = Chi Năm; còn lại = bảng nguồn ở QL thu chi.
   const [cashflowSource, setCashflowSource] = useState<CashflowSource | null>(
     null
@@ -471,6 +473,7 @@ export default function ExpenseRequestForm() {
     setPolicySupportError("");
     if (
       isMonthlyExpense ||
+      !deductPolicy ||
       proposalTarget !== "SCHOOL" ||
       !selectedSchool ||
       !selectedSchoolYear
@@ -511,7 +514,15 @@ export default function ExpenseRequestForm() {
     return () => {
       active = false;
     };
-  }, [isMonthlyExpense, proposalTarget, selectedSchool, selectedSchoolYear, isEdit, editId]);
+  }, [
+    isMonthlyExpense,
+    deductPolicy,
+    proposalTarget,
+    selectedSchool,
+    selectedSchoolYear,
+    isEdit,
+    editId,
+  ]);
 
   const yearPeriods = periods
     .filter((period) => periodInSchoolYear(period, selectedSchoolYear))
@@ -569,10 +580,16 @@ export default function ExpenseRequestForm() {
       if (schoolYearsLoading) return "Đang tải danh sách năm học";
       if (schoolYears.length === 0) return "Trường chưa có dữ liệu năm học";
       if (!selectedSchoolYear) return "Vui lòng chọn năm học";
-      if (policySupportLoading) return "Đang tải chính sách của trường";
-      if (policySupport && !policySupport.hasCash && !policySupport.hasEquipment)
+      if (deductPolicy && policySupportLoading)
+        return "Đang tải chính sách của trường";
+      if (
+        deductPolicy &&
+        policySupport &&
+        !policySupport.hasCash &&
+        !policySupport.hasEquipment
+      )
         return "Chính sách đã duyệt của trường không có hỗ trợ tiền mặt hoặc thiết bị";
-      if (policySupport) {
+      if (deductPolicy && policySupport) {
         const rows = new Map(
           [...policySupport.cash, ...policySupport.equipment].map((row) => [
             row.rowKey,
@@ -621,7 +638,7 @@ export default function ExpenseRequestForm() {
         }
       : {};
     const singleSchool = !isMonthlyExpense && proposalTarget === "SCHOOL";
-    const policySupportItems = singleSchool
+    const policySupportItems = singleSchool && deductPolicy
       ? Object.entries(policySelection).map(([key, amount]) => {
           const [policyId, supportType, itemIndex] = key.split(":");
           return {
@@ -760,6 +777,7 @@ export default function ExpenseRequestForm() {
                     onClick={() => {
                       if (tab.value === cashflowSource) return;
                       setCashflowSource(tab.value);
+                      setDeductPolicy(tab.value === null);
                       if (tab.value) {
                         setProposalTarget("SCHOOL");
                         setSelectedRegion(null);
@@ -878,6 +896,12 @@ export default function ExpenseRequestForm() {
               />
               Trừ chính sách
             </label>
+            {!isMonthlyExpense && (
+              <p className="-mt-2 text-xs text-gray-500">
+                Bỏ chọn nếu khoản chi không phụ thuộc chính sách hỗ trợ tiền mặt
+                hoặc thiết bị.
+              </p>
+            )}
 
             <div>
               <label className="text-sm text-gray-600">
@@ -959,6 +983,7 @@ export default function ExpenseRequestForm() {
             )}
 
             {!isMonthlyExpense &&
+              deductPolicy &&
               proposalTarget === "SCHOOL" &&
               selectedSchool &&
               selectedSchoolYear && (

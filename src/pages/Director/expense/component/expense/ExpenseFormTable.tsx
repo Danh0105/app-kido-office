@@ -238,6 +238,7 @@ export default function ExpenseFormTable({
                 loading={loading}
                 onUnlinkEInvoice={onUnlinkEInvoice}
                 unlinkingEInvoiceId={unlinkingEInvoiceId}
+                teacherSplit={teacherSplit}
               />
             </fieldset>
           </>
@@ -496,6 +497,7 @@ export default function ExpenseFormTable({
             subject={subjects}
             schoolName={schoolName}
             schoolYear={schoolYear}
+            teacherSplit={teacherSplit}
           />
 
           {handleViewHistory && (

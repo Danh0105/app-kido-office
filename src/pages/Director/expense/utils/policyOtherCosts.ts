@@ -65,6 +65,12 @@ export const getOtherCostTax = (item: PolicyOtherCost) => Number(item.tax ?? 0);
 export const getOtherCostsTotal = (items: PolicyOtherCost[]) =>
   items.reduce((total, item) => total + getOtherCostUnitPrice(item), 0);
 
+/** Đơn giá giáo viên của Bảng chi trường lấy từ ttcs[0].teacher. */
+export const getPolicyTeacherUnitPrice = (policyData: any) => {
+  const value = Number(policyData?.ttcs?.[0]?.teacher ?? 0);
+  return Number.isFinite(value) && value >= 0 ? value : 0;
+};
+
 /**
  * Thành tiền thực chi của một nguồn Chi khác.
  * `quantity` đã bao gồm số tháng và ưu tiên số HS, nếu không có

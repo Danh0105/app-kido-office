@@ -6,6 +6,7 @@ import {
   getOtherCostGrossPrice,
   getOtherCostKey,
   getOtherCostTax,
+  getPolicyTeacherUnitPrice,
   type PolicyOtherCost,
 } from "../../utils/policyOtherCosts";
 import { invoiceCashAccountLabel } from "../utils/invoiceCashAccounts";
@@ -170,6 +171,7 @@ type Props = {
   otherCosts: PolicyOtherCost[];
   /** ttcs[0] của chính sách — giá trị mặc định QL1/QL2. */
   ttcs: any;
+  teacherSplit?: boolean;
 };
 
 export default function SavedDataSection({
@@ -178,6 +180,7 @@ export default function SavedDataSection({
   savedMgmtItems,
   otherCosts,
   ttcs,
+  teacherSplit = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -299,17 +302,19 @@ export default function SavedDataSection({
   ];
 
   // ===== CHI TRƯỜNG =====
+  const policyTeacherUnitPrice = teacherSplit
+    ? 0
+    : getPolicyTeacherUnitPrice({ ttcs: [ttcs] });
   const schoolRows = savedSchoolItems.map((r: any) => {
     const students = Number(r.studentCount || 0);
     const months = Number(r.monthsCount || 0);
-    const teacherUP = Number(r.teacherUnitPrice ?? r.giaovien ?? 0);
+    const teacherUP = policyTeacherUnitPrice;
     const taxUP = Number(r.taxUnitPrice ?? r.thue ?? r.tax ?? 0);
     const csvcUP = Number(r.csvcUnitPrice ?? r.csvc ?? 0);
     const teacherAmt = students * months * teacherUP;
     const taxAmt = students * months * taxUP;
     const csvcAmt = students * months * csvcUP;
-    const totalSchool =
-      Number(r.schoolExpenseAmount || 0) || teacherAmt + taxAmt + csvcAmt;
+    const totalSchool = teacherAmt + taxAmt + csvcAmt;
     return {
       ...r,
       teacherUP,
@@ -440,7 +445,7 @@ export default function SavedDataSection({
       savedSchoolItems.find((x: any) => x.rowIndex === r.rowIndex) ||
       savedSchoolItems[idx];
     const schoolUnitPrice = sc
-      ? Number(sc.teacherUnitPrice ?? sc.giaovien ?? 0) +
+      ? policyTeacherUnitPrice +
         Number(sc.taxUnitPrice ?? sc.thue ?? sc.tax ?? 0) +
         Number(sc.csvcUnitPrice ?? sc.csvc ?? 0)
       : 0;

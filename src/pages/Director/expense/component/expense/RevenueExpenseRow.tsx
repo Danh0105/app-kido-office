@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
 import { formatDecimal, roundDecimal } from "@/utils/decimal";
 import DecimalInput from "@/components/DecimalInput";
+import { getPolicyTeacherUnitPrice } from "../../utils/policyOtherCosts";
 import CashAccountSelect from "./CashAccountSelect";
 
 type Props = {
@@ -43,7 +44,7 @@ export default function RevenueExpenseRow({
   const policyData = subjects?.policies?.[0]?.data || {};
   const teacherUnitPrice = teacherSplit
     ? 0
-    : Number(row.teacherUnitPrice ?? row.giaovien ?? policyData?.giaovien ?? 0);
+    : getPolicyTeacherUnitPrice(policyData);
   const taxUnitPrice = Number(
     row.taxUnitPrice ??
       row.thue ??
@@ -224,17 +225,15 @@ export default function RevenueExpenseRow({
           {calculations.csvcAmount.toLocaleString("vi-VN")}
         </span>
       </div>
-      {/* ĐƠN GIÁ GIÁO VIÊN (= đơn giá × tháng) */}
+      {/* ĐƠN GIÁ GIÁO VIÊN — lấy từ Thông tin cơ sở vật chất */}
       <div
         className="p-2 border-r border-slate-200"
         title={teacherSplit ? "Từ kỳ 11/2026 nhập ở bảng Giáo viên trường (dưới Chi Ngoài)" : undefined}
       >
         <DecimalInput
           value={teacherUnitPrice}
-          disabled={locked || teacherSplit}
-          onValueChange={(value) =>
-            updateRow(index, "teacherUnitPrice", value)
-          }
+          disabled
+          onValueChange={() => undefined}
           fractionDigits={2}
           commitOnBlur
           className={`${metricInputClass} text-amber-700`}

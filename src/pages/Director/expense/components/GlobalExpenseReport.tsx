@@ -255,8 +255,8 @@ const COLUMN_HEADERS: { label: string; title?: string }[] = [
   { label: "Số HS" },
   { label: "Số tiết" },
   { label: "Doanh thu", title: "Thành tiền bảng Doanh Thu" },
-  { label: "Chi trường", title: "Chi trường, không gồm Giáo viên trường" },
-  { label: "Đã chi", title: "Đã chi trường" },
+  { label: "Chi trường", title: "Tổng chi trường (Bảng Chi Trường)" },
+  { label: "Đã chi", title: "Đã chi (Bảng Chi Trường)" },
   { label: "Hóa đơn", title: "Tổng thanh toán công ty của bảng Hóa Đơn" },
   {
     label: "Đã thu",

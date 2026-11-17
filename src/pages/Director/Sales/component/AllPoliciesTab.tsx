@@ -10,6 +10,10 @@ import { toast } from "react-hot-toast";
 import { PolicyStatus } from "../../enum/PolicyStatus";
 import { policiesApi } from "@/service/policy";
 import {
+  policyYearApi,
+  type PolicyYearChecklist,
+} from "@/service/policyYear";
+import {
   subjectCatalogApi,
   type SubjectCatalog,
 } from "@/service/subjectCatalog.api";
@@ -37,6 +41,23 @@ type Props = {
 };
 
 const PAGE_SIZE = 12;
+
+type ChecklistField = keyof PolicyYearChecklist;
+
+const EMPTY_CHECKLIST: PolicyYearChecklist = {
+  giftFlowersCompleted: false,
+  openingCeremonyCompleted: false,
+  teachersDayCompleted: false,
+};
+
+const CHECKLIST_ITEMS: Array<{ field: ChecklistField; label: string }> = [
+  { field: "giftFlowersCompleted", label: "Tặng hoa" },
+  { field: "openingCeremonyCompleted", label: "Khai giảng" },
+  { field: "teachersDayCompleted", label: "20-11" },
+];
+
+const getChecklistKey = (schoolId: number, schoolYear: string) =>
+  `${schoolId}-${schoolYear}`;
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   [PolicyStatus.DRAFT]: {
@@ -127,6 +148,16 @@ export default function AllPoliciesTab({ employees }: Props) {
   const uploadCategoryRef = useRef<PolicyContractCategory>("CONTRACT");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canUploadContract = hasRole("saleadmin", "salesadmin", "salesadmin_la");
+  const canManageChecklist = hasRole(
+    "saleadmin",
+    "salesadmin",
+    "salesadmin_la",
+  );
+  const [checklists, setChecklists] = useState<
+    Record<string, PolicyYearChecklist>
+  >({});
+  const [checklistLoadingKeys, setChecklistLoadingKeys] = useState<string[]>([]);
+  const [checklistSaving, setChecklistSaving] = useState<string | null>(null);
   const [filters, setFilters] = useState({
     policyCode: "",
     status: "",
@@ -296,6 +327,61 @@ export default function AllPoliciesTab({ employees }: Props) {
     [filteredPolicies, currentPage],
   );
 
+  const visibleChecklistScopes = useMemo(() => {
+    const scopes = new Map<
+      string,
+      { key: string; schoolId: number; schoolYear: string }
+    >();
+
+    paginatedPolicies.forEach((item) => {
+      const schoolId = Number(item.schoolId || 0);
+      const schoolYear = String(item.schoolYear || "");
+      if (!schoolId || !schoolYear) return;
+      const key = getChecklistKey(schoolId, schoolYear);
+      scopes.set(key, { key, schoolId, schoolYear });
+    });
+
+    return [...scopes.values()];
+  }, [paginatedPolicies]);
+
+  useEffect(() => {
+    if (!canManageChecklist || visibleChecklistScopes.length === 0) return;
+    let active = true;
+    const keys = visibleChecklistScopes.map((scope) => scope.key);
+    setChecklistLoadingKeys(keys);
+
+    Promise.allSettled(
+      visibleChecklistScopes.map(async (scope) => ({
+        key: scope.key,
+        checklist:
+          (await policyYearApi.getBySchoolYear(
+            scope.schoolId,
+            scope.schoolYear,
+          )) || EMPTY_CHECKLIST,
+      })),
+    ).then((results) => {
+      if (!active) return;
+      let failed = false;
+      setChecklists((current) => {
+        const next = { ...current };
+        results.forEach((result) => {
+          if (result.status === "fulfilled") {
+            next[result.value.key] = result.value.checklist;
+          } else {
+            failed = true;
+          }
+        });
+        return next;
+      });
+      setChecklistLoadingKeys([]);
+      if (failed) toast.error("Không thể tải một số checklist chính sách");
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [canManageChecklist, visibleChecklistScopes]);
+
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
   }, [currentPage, totalPages]);
@@ -303,6 +389,41 @@ export default function AllPoliciesTab({ employees }: Props) {
   const updateFilter = (key: keyof typeof filters, value: string) => {
     setCurrentPage(1);
     setFilters((current) => ({ ...current, [key]: value }));
+  };
+
+  const updateChecklist = async (
+    item: any,
+    field: ChecklistField,
+    checked: boolean,
+  ) => {
+    const schoolId = Number(item.schoolId || 0);
+    const schoolYear = String(item.schoolYear || "");
+    if (!schoolId || !schoolYear) {
+      toast.error("Chính sách chưa có đủ trường và năm học");
+      return;
+    }
+
+    const key = getChecklistKey(schoolId, schoolYear);
+    const previous = checklists[key] || EMPTY_CHECKLIST;
+    setChecklists((current) => ({
+      ...current,
+      [key]: { ...(current[key] || EMPTY_CHECKLIST), [field]: checked },
+    }));
+    setChecklistSaving(`${key}:${field}`);
+
+    try {
+      const saved = await policyYearApi.updateChecklist({
+        schoolId,
+        schoolYear,
+        [field]: checked,
+      });
+      setChecklists((current) => ({ ...current, [key]: saved }));
+    } catch (error) {
+      setChecklists((current) => ({ ...current, [key]: previous }));
+      toast.error(getApiErrorMessage(error, "Không thể lưu checklist"));
+    } finally {
+      setChecklistSaving(null);
+    }
   };
 
   // Giống hệt cách bấm vào thông báo chính sách (Director/Home.tsx): lấy đầy đủ
@@ -600,6 +721,12 @@ export default function AllPoliciesTab({ employees }: Props) {
             };
             const createdAt = getCreatedAt(item);
             const updatedAt = getUpdatedAt(item);
+            const schoolId = Number(item.schoolId || 0);
+            const schoolYear = String(item.schoolYear || "");
+            const checklistKey = getChecklistKey(schoolId, schoolYear);
+            const checklist = checklists[checklistKey] || EMPTY_CHECKLIST;
+            const checklistLoading =
+              checklistLoadingKeys.includes(checklistKey);
 
             const canUploadForStatus = [
               PolicyStatus.PENDING,
@@ -625,8 +752,69 @@ export default function AllPoliciesTab({ employees }: Props) {
             return (
               <div
                 key={`${policyId}-${item.employeeId}`}
-                className={`bg-white rounded-2xl p-4 shadow-sm text-left hover:shadow-md transition ${isBrand ? "border border-blue-900/10" : ""}`}
+                className="space-y-2"
               >
+                {canManageChecklist && (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 shadow-sm">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <p className="text-xs font-bold text-emerald-800">
+                        Checklist biên bản chính sách • {schoolYear || "Chưa có năm học"}
+                      </p>
+                      {checklistLoading && (
+                        <Loader2
+                          size={14}
+                          className="animate-spin text-emerald-600"
+                        />
+                      )}
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {CHECKLIST_ITEMS.map(({ field, label }) => {
+                        const savingKey = `${checklistKey}:${field}`;
+                        const disabled =
+                          checklistLoading ||
+                          checklistSaving !== null ||
+                          !schoolId ||
+                          !schoolYear;
+
+                        return (
+                          <label
+                            key={field}
+                            className={`flex min-w-0 items-center gap-1.5 rounded-lg border bg-white px-2 py-2 text-xs font-semibold ${
+                              checklist[field]
+                                ? "border-emerald-300 text-emerald-800"
+                                : "border-gray-200 text-gray-600"
+                            } ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checklist[field]}
+                              disabled={disabled}
+                              onChange={(event) =>
+                                void updateChecklist(
+                                  item,
+                                  field,
+                                  event.target.checked,
+                                )
+                              }
+                              className="h-4 w-4 shrink-0 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                            />
+                            <span className="truncate">{label}</span>
+                            {checklistSaving === savingKey && (
+                              <Loader2
+                                size={12}
+                                className="ml-auto shrink-0 animate-spin text-emerald-600"
+                              />
+                            )}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div
+                  className={`bg-white rounded-2xl p-4 shadow-sm text-left hover:shadow-md transition ${isBrand ? "border border-blue-900/10" : ""}`}
+                >
                 <button
                   type="button"
                   onClick={() => openPolicy(policyId, item.employeeId)}
@@ -667,6 +855,7 @@ export default function AllPoliciesTab({ employees }: Props) {
                     </button>
                   </div>
                 )}
+                </div>
               </div>
             );
           })}

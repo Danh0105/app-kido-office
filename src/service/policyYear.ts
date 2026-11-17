@@ -16,7 +16,7 @@ export const policyYearApi = {
     schoolId: number,
     schoolYear: string
   ): Promise<PolicyYearChecklist | null> => {
-    const res = await api.get("/policy-years", {
+    const res = await api.get("/policy-years/checklist", {
       params: { schoolId, schoolYear },
     });
     return res.data || null;

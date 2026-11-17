@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
-  ClipboardCheck,
   Download,
   ExternalLink,
   Filter,
@@ -30,7 +29,6 @@ import SpentExpenseRequestsSection from "./components/SpentExpenseRequestsSectio
 import PolicySupportUsageSection from "./components/PolicySupportUsageSection";
 import SearchableSelect from "@/components/SearchableSelect";
 import { annualPolicyApi } from "@/service/annualPolicy";
-import { policyYearApi } from "@/service/policyYear";
 import { policiesApi } from "@/service/policy";
 import { getApiErrorMessage } from "@/utils/apiError";
 import { hasRole } from "@/utils/auth";
@@ -101,12 +99,6 @@ export default function PolicyYearDetailPage({
   );
   const [contractLoading, setContractLoading] = useState(false);
   const [contractUploading, setContractUploading] = useState(false);
-  const [checklistSaving, setChecklistSaving] = useState<
-    | "giftFlowersCompleted"
-    | "openingCeremonyCompleted"
-    | "teachersDayCompleted"
-    | null
-  >(null);
   const [subjectContracts, setSubjectContracts] = useState<
     Array<{
       policyId: number;
@@ -217,34 +209,6 @@ export default function PolicyYearDetailPage({
   }, [schoolId, draft.schoolYear]);
 
   useEffect(() => {
-    if (!schoolId || !draft.schoolYear) return;
-    let active = true;
-
-    policyYearApi
-      .getBySchoolYear(schoolId, draft.schoolYear)
-      .then((checklist) => {
-        if (!active) return;
-        setDraft((current) => ({
-          ...current,
-          giftFlowersCompleted: Boolean(checklist?.giftFlowersCompleted),
-          openingCeremonyCompleted: Boolean(
-            checklist?.openingCeremonyCompleted
-          ),
-          teachersDayCompleted: Boolean(checklist?.teachersDayCompleted),
-        }));
-      })
-      .catch((error) => {
-        if (active) {
-          toast.error(getApiErrorMessage(error, "Không thể tải checklist"));
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [schoolId, draft.schoolYear]);
-
-  useEffect(() => {
     setSubjectContracts([]);
     if (!schoolId || !draft.schoolYear) return;
     let active = true;
@@ -327,40 +291,6 @@ export default function PolicyYearDetailPage({
     setDraft(saved);
     onSave(saved, buildPolicyYearSavePayload(saved));
     toast.success("Đã lưu chính sách năm");
-  };
-
-  const updateChecklist = async (
-    field:
-      | "giftFlowersCompleted"
-      | "openingCeremonyCompleted"
-      | "teachersDayCompleted",
-    checked: boolean
-  ) => {
-    if (!schoolId) {
-      toast.error("Chưa xác định trường để lưu checklist");
-      return;
-    }
-
-    const previousValue = Boolean(draft[field]);
-    setDraft((current) => ({ ...current, [field]: checked }));
-    setChecklistSaving(field);
-
-    try {
-      await policyYearApi.updateChecklist({
-        schoolId,
-        schoolYear: draft.schoolYear,
-        [field]: checked,
-      });
-    } catch (error) {
-      setDraft((current) =>
-        current[field] === checked
-          ? { ...current, [field]: previousValue }
-          : current
-      );
-      toast.error(getApiErrorMessage(error, "Không thể lưu checklist"));
-    } finally {
-      setChecklistSaving(null);
-    }
   };
 
   const exportRows = () => {
@@ -590,76 +520,6 @@ export default function PolicyYearDetailPage({
               ))}
             </div>
           </div>
-        )}
-      </section>
-
-      <section className="rounded-3xl border border-emerald-200 bg-emerald-50/50 p-5 shadow-sm">
-        <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
-            <ClipboardCheck size={20} />
-          </div>
-          <div>
-            <h3 className="font-black text-slate-900">
-              Checklist biên bản chính sách
-            </h3>
-            <p className="mt-1 text-sm font-semibold text-slate-500">
-              Theo trường {draft.schoolName} • năm học {draft.schoolYear}
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
-          {[
-            ["giftFlowersCompleted", "Tặng hoa"],
-            ["openingCeremonyCompleted", "Khai giảng"],
-            ["teachersDayCompleted", "20-11"],
-          ].map(([field, label]) => {
-            const checklistField = field as
-              | "giftFlowersCompleted"
-              | "openingCeremonyCompleted"
-              | "teachersDayCompleted";
-            const checked = Boolean(draft[checklistField]);
-            const disabled =
-              readOnly || !schoolId || checklistSaving !== null;
-
-            return (
-              <label
-                key={field}
-                className={`flex min-h-14 items-center gap-3 rounded-2xl border px-4 py-3 transition ${
-                  checked
-                    ? "border-emerald-300 bg-white text-emerald-800"
-                    : "border-slate-200 bg-white text-slate-700"
-                } ${
-                  disabled
-                    ? "cursor-not-allowed opacity-70"
-                    : "cursor-pointer hover:border-emerald-300"
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  disabled={disabled}
-                  onChange={(event) =>
-                    void updateChecklist(checklistField, event.target.checked)
-                  }
-                  className="h-5 w-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                />
-                <span className="text-sm font-black">{label}</span>
-                {checklistSaving === checklistField && (
-                  <Loader2
-                    size={16}
-                    className="ml-auto animate-spin text-emerald-600"
-                  />
-                )}
-              </label>
-            );
-          })}
-        </div>
-
-        {!schoolId && (
-          <p className="mt-3 text-xs font-semibold text-amber-700">
-            Chưa xác định trường nên checklist đang tạm khóa.
-          </p>
         )}
       </section>
 

@@ -251,7 +251,11 @@ const COLUMN_HEADERS: { label: string; title?: string }[] = [
   { label: "Đã chi", title: "Đã chi ngoài" },
   { label: "Giáo viên trường" },
   { label: "Giáo viên Cty" },
-  { label: "CS năm", title: "Phần chi chính sách năm của tháng, đã trừ thuế" },
+  {
+    label: "CS năm",
+    title:
+      "Tổng đề xuất đã chi của trường trong năm học (chỉ hiển thị một lần để không cộng trùng)",
+  },
   { label: "Chi khác" },
   {
     label: "Lợi nhuận",

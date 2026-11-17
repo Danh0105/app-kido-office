@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, RefreshCw } from "lucide-react";
+import { FileSpreadsheet, Loader2, RefreshCw } from "lucide-react";
+import toast from "react-hot-toast";
 
 import { schoolApi } from "@/service/school.api";
 import { schoolExpenseApi } from "@/service/schoolExpense";
@@ -10,6 +11,13 @@ import {
   DEFAULT_SCHOOL_YEAR,
   includeDefaultSchoolYear,
 } from "@/constants/schoolYear";
+import { EXCEL_FILE_TYPE, saveBlob } from "@/utils/saveBlob";
+import {
+  buildGlobalExpenseReportExcel,
+  globalExpenseReportFileName,
+  type GlobalExpenseExcelFilters,
+  type GlobalExpenseExcelRow,
+} from "./globalExpenseReportExcel";
 
 const listFrom = (value: any) =>
   Array.isArray(value) ? value : Array.isArray(value?.data) ? value.data : [];
@@ -291,6 +299,7 @@ export default function GlobalExpenseReport() {
   const [schoolId, setSchoolId] = useState("");
   const [year, setYear] = useState(DEFAULT_SCHOOL_YEAR);
   const [month, setMonth] = useState("");
+  const [exporting, setExporting] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 30;
 
@@ -478,6 +487,81 @@ export default function GlobalExpenseReport() {
 
   const totals = useMemo(() => sumRows(filteredRows), [filteredRows]);
 
+  const excelFilters = useMemo<GlobalExpenseExcelFilters>(() => {
+    const monthItem = schoolYearMonths.find(
+      (item) => `${item.year}-${item.month}` === month,
+    );
+    return {
+      keyword,
+      employeeName: employees.find(([value]) => value === employeeId)?.[1],
+      schoolName: schools.find(([value]) => value === schoolId)?.[1],
+      schoolYear: year,
+      monthLabel: monthItem
+        ? `${String(monthItem.month).padStart(2, "0")}/${monthItem.year}`
+        : undefined,
+    };
+  }, [
+    employeeId,
+    employees,
+    keyword,
+    month,
+    schoolId,
+    schools,
+    schoolYearMonths,
+    year,
+  ]);
+
+  const handleExportExcel = async () => {
+    if (!filteredRows.length || exporting) return;
+    setExporting(true);
+    try {
+      const excelRows: GlobalExpenseExcelRow[] = filteredRows.map((row) => ({
+        employeeName: row.employee?.name || "Chưa phân công",
+        employeeRoles: Array.isArray(row.employee?.roles)
+          ? row.employee.roles.map(roleLabel).join(", ")
+          : "",
+        employeeContact: row.employee?.phone || row.employee?.email || "",
+        schoolName: row.school?.name || "",
+        schoolTaxCode: row.school?.taxCode || "",
+        periodName: periodLabel(row.period),
+        schoolYear: getSchoolYear(
+          Number(row.period?.month),
+          Number(row.period?.year),
+        ),
+        subjectName: row.subjectName,
+        students: row.students,
+        periods: row.periods,
+        revenue: row.revenue,
+        schoolExpense: row.schoolExpense,
+        schoolPaid: row.schoolPaid,
+        invoice: row.invoice,
+        collected: row.collected,
+        outsideExpense: row.outsideExpense,
+        outsidePaid: row.outsidePaid,
+        schoolTeacher: row.schoolTeacher,
+        companyTeacher: row.companyTeacher,
+        annualPolicy: row.annualPolicy,
+        otherExpense: row.otherExpense,
+        profit: row.profit,
+      }));
+      const blob = await buildGlobalExpenseReportExcel(
+        excelRows,
+        excelFilters,
+      );
+      await saveBlob(
+        blob,
+        globalExpenseReportFileName(excelFilters),
+        EXCEL_FILE_TYPE,
+      );
+      toast.success(`Đã xuất ${excelRows.length} dòng báo cáo thu chi`);
+    } catch (exportError) {
+      console.error("Failed to export cashflow report", exportError);
+      toast.error("Không thể xuất file Excel báo cáo tổng hợp thu chi");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-[360px] items-center justify-center rounded-3xl bg-white text-lg font-bold text-slate-500">
@@ -520,12 +604,28 @@ export default function GlobalExpenseReport() {
               khoản chi hiển thị trên bảng
             </p>
           </div>
-          <button
-            onClick={load}
-            className="flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 font-bold text-white"
-          >
-            <RefreshCw size={18} /> Làm mới
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              disabled={!filteredRows.length || exporting}
+              className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {exporting ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <FileSpreadsheet size={18} />
+              )}
+              {exporting ? "Đang xuất..." : "Xuất Excel"}
+            </button>
+            <button
+              type="button"
+              onClick={load}
+              className="flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 font-bold text-white"
+            >
+              <RefreshCw size={18} /> Làm mới
+            </button>
+          </div>
         </div>
         <div className="mt-5 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
           <input

@@ -1,8 +1,16 @@
 import api from "./api";
 
+export type ExpensePeriod = {
+    id: number;
+    month: number;
+    year: number;
+    name?: string;
+    status: number;
+};
+
 export const expensePeriodApi = {
     // GET ALL
-    getAll: async (params?: any) => {
+    getAll: async (params?: { schoolId?: number; status?: number }): Promise<ExpensePeriod[]> => {
         const res = await api.get(
             `/expense-periods`,
             {

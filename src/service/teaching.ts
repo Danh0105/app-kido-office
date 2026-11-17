@@ -10,6 +10,7 @@ import type {
   BulkSessionResult,
   DraftView,
   AttendanceSummary,
+  MyAttendanceSummary,
   TravelReview,
   BulkAttendanceItem,
   BulkAttendanceResult,
@@ -20,6 +21,8 @@ import type {
   NotifySchedulePayload,
   NotifyScheduleResult,
   GenerateSessionsResult,
+  LessonImageLibraryItem,
+  LessonImageQuery,
   Paged,
   SchedulePayload,
   ScheduleQuery,
@@ -61,6 +64,38 @@ const clean = (params: Record<string, any> = {}) => {
     if (value !== undefined && value !== null && value !== "") out[key] = value;
   });
   return out;
+};
+
+/** Bộ lọc bảng tổng hợp chấm công — dùng chung cho bảng và các file Excel. */
+export type AttendanceSummaryQuery = {
+  fromDate: string;
+  toDate: string;
+  /** Role tài khoản giáo viên: giáo viên công ty hoặc cộng tác viên. */
+  teacherRole?: "giaovien_congty" | "giaovien_ctv";
+  teacherId?: number;
+  schoolId?: number;
+  classId?: number;
+};
+
+/**
+ * Tải file (responseType "blob"). Body lỗi khi đó cũng là Blob — đọc lại JSON
+ * để getApiErrorMessage hiện đúng thông báo của backend.
+ */
+const getBlob = async (url: string, params: Record<string, any>): Promise<Blob> => {
+  try {
+    const res = await api.get(url, { params: clean(params), responseType: "blob" });
+    return res.data;
+  } catch (error: any) {
+    const data = error?.response?.data;
+    if (data instanceof Blob) {
+      try {
+        error.response.data = JSON.parse(await data.text());
+      } catch {
+        // Không phải JSON thì giữ nguyên.
+      }
+    }
+    throw error;
+  }
 };
 
 /** Nguồn danh sách giáo viên duy nhất cho cả công ty và cộng tác viên. */
@@ -324,6 +359,19 @@ export const teachingSessionApi = {
     return res.data;
   },
 
+  /**
+   * Thư viện phân trang theo từng ảnh. Backend tự giới hạn role sales theo
+   * trường/khu vực gắn với tài khoản trong JWT.
+   */
+  lessonImages: async (
+    params: LessonImageQuery & { page: number; limit: number },
+  ): Promise<Paged<LessonImageLibraryItem>> => {
+    const res = await api.get(`${SESSIONS}/lesson-images`, {
+      params: clean(params),
+    });
+    return res.data;
+  },
+
   findOne: async (id: number): Promise<TeachingSession> => {
     const res = await api.get(`${SESSIONS}/${id}`);
     return res.data;
@@ -376,8 +424,8 @@ export const teachingSessionApi = {
   },
 
   /**
-   * Check-out khi dạy xong: vị trí GPS + nội dung bài dạy (bắt buộc) + ảnh.
-   * Multipart — BE validate `lessonName`/`lessonEvaluation` không rỗng.
+   * Check-out khi dạy xong: chỉ gửi vị trí GPS. Báo giảng là
+   * request `/lesson` riêng, được `useLessonSubmit` gọi ngay sau đó.
    *
    * 400 nếu bản thân buổi chưa check-in VÀ không có buổi nào khác cùng block
    * (tiết liên tiếp cùng trường hôm đó) đã check-in — tiết cuối một block
@@ -397,9 +445,8 @@ export const teachingSessionApi = {
   },
 
   /**
-   * Nộp nội dung bài dạy không cần GPS — cho tiết giữa/đầu một block nhiều
-   * tiết liên tiếp cùng trường (`session.checkoutRequired === false`).
-   * Vẫn yêu cầu block đó đã có ai check-in (400 nếu chưa).
+   * Báo giảng cho một tiết đã check-out. Backend yêu cầu tên bài,
+   * đánh giá, sĩ số thực tế và ít nhất một ảnh minh chứng.
    */
   submitLesson: async (
     id: number,
@@ -408,7 +455,8 @@ export const teachingSessionApi = {
     const form = new FormData();
     form.append("lessonName", data.lessonName);
     form.append("lessonEvaluation", data.lessonEvaluation);
-    (data.images ?? []).forEach((file) => form.append("images", file));
+    form.append("actualStudentCount", String(data.actualStudentCount));
+    data.images.forEach((file) => form.append("images", file));
     const res = await api.post(`${SESSIONS}/${id}/lesson`, form);
     return res.data;
   },
@@ -485,20 +533,20 @@ export const teachingSessionApi = {
     return res.data;
   },
 
-  summary: async (params: {
-    fromDate: string;
-    toDate: string;
-    /** Role tài khoản giáo viên: giáo viên công ty hoặc cộng tác viên. */
-    teacherRole?: "giaovien_congty" | "giaovien_ctv";
-    teacherId?: number;
-    schoolId?: number;
-    classId?: number;
-  }): Promise<AttendanceSummary> => {
+  summary: async (params: AttendanceSummaryQuery): Promise<AttendanceSummary> => {
     const res = await api.get(`${SESSIONS}/attendance/summary`, {
       params: clean(params),
     });
     return res.data;
   },
+
+  /** File Excel của bảng tổng hợp: sheet tổng hợp + sheet số tiết theo ngày. */
+  exportSummary: (params: AttendanceSummaryQuery): Promise<Blob> =>
+    getBlob(`${SESSIONS}/attendance/summary/export`, params),
+
+  /** File Excel chỉ có bảng số tiết dạy theo ngày (không kèm tiền). */
+  exportDailyPeriods: (params: AttendanceSummaryQuery): Promise<Blob> =>
+    getBlob(`${SESSIONS}/attendance/daily-periods/export`, params),
 
   /** Lộ trình di chuyển từng ngày của giáo viên công ty, kèm điểm cần kiểm tra. */
   travelReview: async (params: {
@@ -509,6 +557,15 @@ export const teachingSessionApi = {
     const res = await api.get(`${SESSIONS}/attendance/travel-review`, {
       params: clean(params),
     });
+    return res.data;
+  },
+
+  /** Tổng hợp chấm công + quãng đường của chính giáo viên — BE lấy giáo viên từ JWT. */
+  mySummary: async (params: {
+    fromDate: string;
+    toDate: string;
+  }): Promise<MyAttendanceSummary> => {
+    const res = await api.get(`${SESSIONS}/me/attendance-summary`, { params });
     return res.data;
   },
 };

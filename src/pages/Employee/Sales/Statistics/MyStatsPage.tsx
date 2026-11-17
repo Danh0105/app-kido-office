@@ -1,4 +1,4 @@
-import DirectorPolicyStatsPage from "@/pages/Director/Sales/Statistics/PolicyStatsPage";
+import StatisticsDashboardPage from "@/pages/Director/Sales/Statistics/StatisticsDashboardPage";
 import { getEmployeeId } from "@/utils/auth";
 
 /**
@@ -14,5 +14,5 @@ import { getEmployeeId } from "@/utils/auth";
 export default function MyStatsPage() {
   const employeeId = Number(getEmployeeId()) || 0;
 
-  return <DirectorPolicyStatsPage employeeId={employeeId} showExpenses={false} />;
+  return <StatisticsDashboardPage employeeId={employeeId} showExpenses={false} />;
 }

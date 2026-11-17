@@ -4,7 +4,7 @@ import { Plus, Pencil } from "lucide-react";
 
 import HeaderWithBack from "@/components/HeaderWithBack";
 import BottomNav from "@/layout/BottomNav";
-import { hasRole } from "@/utils/auth";
+import { hasRole, isDirectorAssistantViewer } from "@/utils/auth";
 import { getApiErrorMessage } from "@/utils/apiError";
 import { warehouseApi } from "@/service/warehouse";
 import type { WarehouseItem, WarehouseReceipt } from "@/types/warehouse";
@@ -19,6 +19,8 @@ const fmtDate = (value?: string) =>
 
 export default function WarehousePage() {
   const canManage = hasRole("ky_thuat", "director", "director_la", "saleadmin", "salesadmin_la");
+  // Trợ lý GĐ xem cả lịch sử phiếu nhập/xuất nhưng không lập phiếu.
+  const canViewReceipts = canManage || isDirectorAssistantViewer();
 
   const [tab, setTab] = useState<Tab>("items");
   const [items, setItems] = useState<WarehouseItem[]>([]);
@@ -32,7 +34,7 @@ export default function WarehousePage() {
     try {
       const [itemList, receiptList] = await Promise.all([
         warehouseApi.listItems(),
-        canManage ? warehouseApi.listReceipts() : Promise.resolve([]),
+        canViewReceipts ? warehouseApi.listReceipts() : Promise.resolve([]),
       ]);
       setItems(itemList);
       setReceipts(receiptList);
@@ -41,7 +43,7 @@ export default function WarehousePage() {
     } finally {
       setLoading(false);
     }
-  }, [canManage]);
+  }, [canViewReceipts]);
 
   useEffect(() => {
     load();
@@ -63,7 +65,7 @@ export default function WarehousePage() {
           >
             Tồn kho
           </button>
-          {canManage && (
+          {canViewReceipts && (
             <button
               onClick={() => setTab("receipts")}
               className={`py-2 text-sm rounded-lg border font-medium ${
@@ -134,12 +136,14 @@ export default function WarehousePage() {
           </>
         ) : (
           <>
-            <button
-              onClick={() => setReceiptModalOpen(true)}
-              className="w-full py-2 rounded-lg border border-dashed border-blue-300 text-sm font-medium text-blue-600 active:scale-95 flex items-center justify-center gap-1"
-            >
-              <Plus size={16} /> Lập phiếu kho
-            </button>
+            {canManage && (
+              <button
+                onClick={() => setReceiptModalOpen(true)}
+                className="w-full py-2 rounded-lg border border-dashed border-blue-300 text-sm font-medium text-blue-600 active:scale-95 flex items-center justify-center gap-1"
+              >
+                <Plus size={16} /> Lập phiếu kho
+              </button>
+            )}
             {receipts.length === 0 ? (
               <p className="text-center text-sm text-gray-400 py-8">
                 Chưa có phiếu nhập/xuất kho

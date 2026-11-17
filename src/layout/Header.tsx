@@ -26,9 +26,15 @@ type Props = {
     REPORT: { unread: boolean; read: boolean };
     WEEKLY_PLAN: { unread: boolean; read: boolean };
     TEACHING: { unread: boolean; read: boolean };
+    FINANCIAL_REQUEST: { unread: boolean; read: boolean };
   };
   notificationStats: Record<
-    "POLICY" | "SUGGEST" | "REPORT" | "WEEKLY_PLAN" | "TEACHING",
+    | "POLICY"
+    | "SUGGEST"
+    | "REPORT"
+    | "WEEKLY_PLAN"
+    | "TEACHING"
+    | "FINANCIAL_REQUEST",
     {
       unread: number;
       read: number;

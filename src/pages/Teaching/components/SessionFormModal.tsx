@@ -18,6 +18,7 @@ import {
   dayOfWeekOf,
   formatDate,
   formatMoney,
+  formatTeacherLabel,
   formatTime,
   isTimeOrderValid,
   isValidPeriods,
@@ -261,7 +262,7 @@ export default function SessionFormModal({
             onChange={setTeacherId}
             options={teachers.map((teacher) => ({
               id: teacher.id,
-              name: `${teacher.name}${teacher.isActive ? "" : " (ngừng)"}`,
+              name: `${formatTeacherLabel(teacher.name, teacher.phone)}${teacher.isActive ? "" : " (ngừng)"}`,
             }))}
             placeholder="— Chọn giáo viên —"
             searchPlaceholder="Tìm giáo viên…"

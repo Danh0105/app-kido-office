@@ -132,12 +132,11 @@ export const policiesApi = {
         return res.data;
     },
     getStatsAdvanced: async (params: {
-        employeeId: number;
+        employeeId?: number;
         fromDate?: string;
         toDate?: string;
         allStatuses?: boolean;
     }) => {
-        console.log("Fetching policy stats with params:", params); // Debug log
         const res = await api.get(`/policies/stats`, { params });
         return res.data;
     },

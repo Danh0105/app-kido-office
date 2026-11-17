@@ -1,5 +1,10 @@
-import { FUND_SOURCE_LABEL, type ExpenseRequest } from "@/types/expenseRequest";
+import {
+  CASHFLOW_SOURCE_META,
+  FUND_SOURCE_LABEL,
+  type ExpenseRequest,
+} from "@/types/expenseRequest";
 import { hasRole } from "@/utils/auth";
+import { invoiceCashAccountLabel } from "@/pages/Director/expense/RealExpenseDetail/utils/invoiceCashAccounts";
 import StatusBadge from "./StatusBadge";
 import KindBadge from "./KindBadge";
 import {
@@ -10,6 +15,8 @@ import {
   isEquipmentRequest,
   requestKindOf,
   isSupplierEquipment,
+  cashflowSourceOf,
+  monthlyItemsOf,
 } from "../lib";
 
 export default function ExpenseCard({
@@ -25,7 +32,7 @@ export default function ExpenseCard({
   showCreator?: boolean;
   /** Có truyền thì hiện nút sửa cho chính người gửi khi workflow còn cho phép. */
   onEdit?: (item: ExpenseRequest) => void;
-  /** Có truyền thì hiện nút "Rút đề xuất" khi chủ đơn còn rút được (PENDING_APPROVAL). */
+  /** Có truyền thì hiện nút "Rút đề xuất" khi đơn còn chờ kế toán/chờ duyệt. */
   onWithdraw?: (item: ExpenseRequest) => void;
   /** Có truyền thì hiện nút "Xoá đề xuất" khi giám đốc còn xoá được (chưa phát sinh dòng tiền). */
   onDelete?: (item: ExpenseRequest) => void;
@@ -35,17 +42,30 @@ export default function ExpenseCard({
   const equipment = isEquipmentRequest(item);
   // Khi chủ đơn sửa và gửi duyệt lại, chứng từ vòng cũ vẫn được backend giữ
   // để audit nhưng không còn là chứng từ đang hiệu lực của vòng mới.
-  const hasActiveOrder = ![
-    "PENDING_APPROVAL",
-    "APPROVED",
-    "REJECTED",
-    "WITHDRAWN",
-  ].includes(item.status);
+  const hasActiveOrder = item.isMonthlyExpense
+    ? !["PENDING_ACCOUNTING", "REJECTED", "WITHDRAWN"].includes(item.status)
+    : !["PENDING_APPROVAL", "APPROVED", "REJECTED", "WITHDRAWN"].includes(
+        item.status
+      );
   const money =
     (hasActiveOrder ? item.paymentOrder?.amount : undefined) ??
     item.amount ??
     null;
-  const fundSource = hasActiveOrder ? item.paymentOrder?.fundSource ?? null : null;
+  const fundSource = hasActiveOrder
+    ? item.paymentOrder?.fundSource ?? null
+    : null;
+  const cashAccount = hasActiveOrder
+    ? item.paymentOrder?.cashAccount ?? null
+    : null;
+  // Chi tháng nhiều trường: danh sách chỉ có tên trường (môn/kỳ xem ở chi tiết).
+  const source = cashflowSourceOf(item);
+  const monthlyItems = monthlyItemsOf(item);
+  const multiSchool = monthlyItems.length > 1;
+  const schoolNames = [
+    ...new Set(
+      monthlyItems.map((entry) => entry.school?.name || `#${entry.schoolId}`)
+    ),
+  ];
   const directorApprovedAmount =
     hasRole("thuquy") &&
     !equipment &&
@@ -62,7 +82,9 @@ export default function ExpenseCard({
     <div
       onClick={onClick}
       className={`bg-white rounded-2xl p-4 shadow-sm border active:scale-[0.98] transition cursor-pointer ${
-        item.isOverdue ? "border-red-300 ring-1 ring-red-200" : "border-gray-100"
+        item.isOverdue
+          ? "border-red-300 ring-1 ring-red-200"
+          : "border-gray-100"
       }`}
     >
       <div className="flex items-center justify-between gap-2">
@@ -77,9 +99,14 @@ export default function ExpenseCard({
           ) : (
             <KindBadge kind={kind} />
           )}
-          {item.schoolId ? (
+          {source ? (
+            <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-indigo-100 text-indigo-700">
+              {CASHFLOW_SOURCE_META[source].icon}{" "}
+              {CASHFLOW_SOURCE_META[source].short}
+            </span>
+          ) : item.schoolId ? (
             <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-purple-100 text-purple-700">
-              🏫 Đề xuất cho trường
+              🏫 Đề xuất ngoài chính sách
             </span>
           ) : item.wardId ? (
             <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-teal-100 text-teal-700">
@@ -107,12 +134,15 @@ export default function ExpenseCard({
       <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-gray-500">
         {item.expectedPaymentDate && (
           <span className={item.isOverdue ? "text-red-600 font-medium" : ""}>
-            📅 {!item.requestKind
+            📅{" "}
+            {item.isMonthlyExpense
+              ? "Ngày chi"
+              : !item.requestKind
               ? "Ngày mong muốn"
               : equipment
-                ? "Cần có thiết bị"
-                : "Ngày dự kiến"}:{" "}
-            {formatDate(item.expectedPaymentDate)}
+              ? "Cần có thiết bị"
+              : "Ngày dự kiến"}
+            : {formatDate(item.expectedPaymentDate)}
           </span>
         )}
         {/*
@@ -126,26 +156,54 @@ export default function ExpenseCard({
         {equipment && !isSupplierEquipment(item) ? (
           <span>💵 Số tiền: —</span>
         ) : (
-          directorApprovedAmount == null && money != null && (
+          directorApprovedAmount == null &&
+          money != null && (
             <span>💵 Số tiền: {Number(money).toLocaleString("vi-VN")} đ</span>
           )
         )}
         {directorApprovedAmount != null && (
           <span className="font-semibold text-emerald-700">
-            💵 Số tiền giám đốc duyệt: {Number(directorApprovedAmount).toLocaleString("vi-VN")} đ
+            💵 Số tiền giám đốc duyệt:{" "}
+            {Number(directorApprovedAmount).toLocaleString("vi-VN")} đ
           </span>
         )}
-        {directorApprovedAmount != null && item.paymentOrder?.amount != null && (
-          <span>
-            🧾 Số tiền lệnh chi: {Number(item.paymentOrder.amount).toLocaleString("vi-VN")} đ
-          </span>
-        )}
+        {directorApprovedAmount != null &&
+          item.paymentOrder?.amount != null && (
+            <span>
+              🧾 Số tiền lệnh chi:{" "}
+              {Number(item.paymentOrder.amount).toLocaleString("vi-VN")} đ
+            </span>
+          )}
         {/* Thủ quỹ cần biết xuất tiền từ quỹ tiền mặt hay tài khoản ngân hàng */}
-        {fundSource && (
-          <span>🏦 Nguồn tiền: {FUND_SOURCE_LABEL[fundSource] ?? fundSource}</span>
+        {cashAccount ? (
+          <span>🏦 Nguồn chi: {invoiceCashAccountLabel(cashAccount)}</span>
+        ) : (
+          fundSource && (
+            <span>
+              🏦 Nguồn tiền: {FUND_SOURCE_LABEL[fundSource] ?? fundSource}
+            </span>
+          )
         )}
-        {item.school?.name && <span>🏫 {item.school.name}</span>}
-        {item.schoolYear && <span>🎓 {item.schoolYear}</span>}
+        {multiSchool ? (
+          <span>
+            🏫 {schoolNames.length} trường
+            {monthlyItems.length > schoolNames.length
+              ? ` · ${monthlyItems.length} môn`
+              : ""}
+            : {schoolNames.join(", ")}
+          </span>
+        ) : (
+          item.school?.name && <span>🏫 {item.school.name}</span>
+        )}
+        {!multiSchool && item.schoolYear && <span>🎓 {item.schoolYear}</span>}
+        {!multiSchool && item.subject?.name && <span>📘 {item.subject.name}</span>}
+        {!multiSchool && item.expensePeriod && (
+          <span>
+            🧾{" "}
+            {item.expensePeriod.name ||
+              `Tháng ${item.expensePeriod.month}/${item.expensePeriod.year}`}
+          </span>
+        )}
       </div>
 
       {showCreator && (

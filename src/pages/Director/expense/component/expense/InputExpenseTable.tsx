@@ -1,7 +1,11 @@
 import { useMemo } from "react";
 import { Trash2 } from "lucide-react";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
-import { formatDecimal } from "@/utils/decimal";
+import { formatDecimal, roundDecimal } from "@/utils/decimal";
+import {
+  applyPeriodsInput,
+  calculateRevenueAmount,
+} from "@/utils/revenueAmount";
 import DecimalInput from "@/components/DecimalInput";
 
 type Props = {
@@ -10,7 +14,6 @@ type Props = {
   onAdd: () => void;
   onRemove: (index: number) => void;
   defaultFee?: number;
-  classCount: number;
 };
 
 export default function InputExpenseTable({
@@ -18,17 +21,13 @@ export default function InputExpenseTable({
   onUpdate,
   onAdd,
   onRemove,
-  classCount,
 }: Props) {
   const totals = useMemo(() => {
     let totalInvoice = 0;
     let totalPaid = 0;
 
     rows.forEach((row) => {
-      const students = Number(row.studentCount || 0);
-      const months = Number(row.monthsCount || 0);
-      const price = Number(row.unitPrice || 0);
-      totalInvoice += students * months * price;
+      totalInvoice += calculateRevenueAmount(row);
       totalPaid += Number(row.paidAmount || 0);
     });
 
@@ -93,10 +92,7 @@ export default function InputExpenseTable({
 
           <tbody>
             {rows.map((row, idx) => {
-              const students = Number(row.studentCount || 0);
-              const months = Number(row.monthsCount || 0);
-              const price = Number(row.unitPrice || 0);
-              const invoiceAmount = students * months * price;
+              const invoiceAmount = calculateRevenueAmount(row);
               const remaining = invoiceAmount - Number(row.paidAmount || 0);
               const locked = !!row.invoiceLocked;
 
@@ -117,56 +113,39 @@ export default function InputExpenseTable({
                   </td>
 
                   <td className="border p-3">
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
+                    <DecimalInput
                       value={Number(row.totalPeriods) || ""}
                       disabled={locked}
-                      onChange={(e) => {
-                        const periods = Number(e.target.value || 0);
-
-                        onUpdate(idx, "totalPeriods", periods);
-                        onUpdate(
-                          idx,
-                          "studentCount",
-                          classCount > 0
-                            ? Math.round((periods / 4) * classCount)
-                            : 0,
-                        );
+                      commitOnBlur
+                      onValueChange={(value) => {
+                        // Chỉ đổi số tiết — không tự sinh, ghi đè hay xoá HS.
+                        const next = applyPeriodsInput(row, value);
+                        onUpdate(idx, "totalPeriods", next.totalPeriods);
                       }}
                       className="w-full h-16 text-center border rounded-lg text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-400"
                     />
                   </td>
 
                   <td className="border p-3">
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
+                    <DecimalInput
                       value={Number(row.studentCount) || ""}
                       disabled={locked}
-                      onChange={(e) => {
-                        onUpdate(idx, "studentCount", Number(e.target.value || 0));
-                      }}
+                      commitOnBlur
+                      onValueChange={(value) =>
+                        onUpdate(idx, "studentCount", value)
+                      }
                       className="w-full h-16 text-center border rounded-lg text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-400"
                     />
                   </td>
                   <td className="border p-3">
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
+                    <DecimalInput
                       value={Number(row.monthsCount) || ""}
                       disabled={locked}
-                      onChange={(e) => {
-                        const value = e.target.value;
-
-                        onUpdate(
-                          idx,
-                          "monthsCount",
-                          value === "" ? 0 : Number(value),
-                        );
+                      commitOnBlur
+                      fractionDigits={4}
+                      onValueChange={(value) => {
+                        // Tối đa 4 chữ số thập phân, khớp numeric(15,4) ở DB.
+                        onUpdate(idx, "monthsCount", roundDecimal(value, 4));
                       }}
                       className="w-full h-16 text-center border rounded-lg text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-400"
                     />
@@ -180,7 +159,8 @@ export default function InputExpenseTable({
                         onUpdate(idx, "unitPrice", value)
                       }
                       placeholder="0"
-                      allowDecimal={false}
+                      fractionDigits={2}
+                      commitOnBlur
                       className="w-full h-14 text-center font-bold text-emerald-700 border rounded-lg text-sm disabled:bg-slate-100 disabled:text-slate-400"
                     />
                   </td>
@@ -201,6 +181,7 @@ export default function InputExpenseTable({
                       }
                       placeholder="0"
                       allowDecimal={false}
+                      commitOnBlur
                       className="w-full h-16 text-center font-bold text-sm text-green-700 border rounded-lg"
                     />
                   </td>

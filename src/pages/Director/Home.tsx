@@ -16,6 +16,7 @@ import HDKH2 from "./static/HDKH2.png";
 import HDKH3 from "./static/HDKH3.png";
 import report from "./static/report.png";
 import {
+  financialNotificationApi,
   notificationApi,
   policyNotificationApi,
   reportNotificationApi,
@@ -55,6 +56,7 @@ import {
 } from "@/utils/directorUi";
 
 import { brandMenusForUser } from "@/utils/brandMenu";
+import { otherCashflowPath } from "@/pages/OtherCashflow/lib";
 
 const menuPath = (item: any) => item.to || `/director/${item.path}`;
 
@@ -68,6 +70,7 @@ type Notification = {
     | "WEEKLY_PLAN"
     | "TEACHING_SCHEDULE"
     | "SYSTEM"
+    | "FINANCIAL_REQUEST"
     | TeachingAlertType;
   entityId?: number;
   message: string;
@@ -80,6 +83,8 @@ type Notification = {
     suggestType?: string;
     suggestId?: number;
     kind?: string;
+    /** Thu Chi ngoài (`kind: "other_cashflow"`). */
+    contractId?: number;
     type?: string;
     category?: string;
     module?: string;
@@ -113,7 +118,8 @@ type NotificationCategory =
   | "SUGGEST"
   | "REPORT"
   | "WEEKLY_PLAN"
-  | "TEACHING";
+  | "TEACHING"
+  | "FINANCIAL_REQUEST";
 
 type PageState = Record<
   NotificationCategory,
@@ -145,6 +151,7 @@ export default function Home() {
       REPORT: { unread: 0, read: 0 },
       WEEKLY_PLAN: { unread: 0, read: 0 },
       TEACHING: { unread: 0, read: 0 },
+      FINANCIAL_REQUEST: { unread: 0, read: 0 },
     },
   );
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -177,6 +184,7 @@ export default function Home() {
     REPORT: { unread: 1, read: 1 },
     WEEKLY_PLAN: { unread: 1, read: 1 },
     TEACHING: { unread: 1, read: 1 },
+    FINANCIAL_REQUEST: { unread: 1, read: 1 },
   });
 
   const [hasMore, setHasMore] = useState({
@@ -204,13 +212,30 @@ export default function Home() {
       unread: true,
       read: true,
     },
+
+    FINANCIAL_REQUEST: {
+      unread: true,
+      read: true,
+    },
   });
 
   const [loadingMore, setLoadingMore] = useState(false);
 
   // ================= INIT =================
   const loadNotificationStats = useCallback(async () => {
-    if (teachingNotificationsOnly) return;
+    if (teachingNotificationsOnly) {
+      // Lịch dạy của giáo viên đếm trên danh sách đã tải; riêng đề nghị tài
+      // chính (giáo viên cũng lập được) lấy đúng số chưa đọc từ server.
+      const statsRes = await notificationApi.getStats();
+      const financial = (statsRes.types || statsRes).FINANCIAL_REQUEST;
+      if (financial) {
+        setNotificationStats((prev) => ({
+          ...prev,
+          FINANCIAL_REQUEST: financial,
+        }));
+      }
+      return;
+    }
     const [statsRes, expenseSummary] = await Promise.all([
       notificationApi.getStats(),
       expenseNotificationApi.getSummary().catch(() => null),
@@ -266,7 +291,9 @@ export default function Home() {
    */
   const statsKeyOf = useCallback(
     (type: string): NotificationCategory | null => {
-      if (["POLICY", "SUGGEST", "REPORT", "WEEKLY_PLAN"].includes(type)) {
+      if (
+        ["POLICY", "SUGGEST", "REPORT", "WEEKLY_PLAN", "FINANCIAL_REQUEST"].includes(type)
+      ) {
         return type as NotificationCategory;
       }
       if (isTeachingAlertType(type)) {
@@ -283,11 +310,16 @@ export default function Home() {
       if (teachingNotificationsOnly) {
         // Endpoint riêng đã trả đúng thông báo lịch dạy (kể cả bản cũ lưu kiểu
         // SYSTEM); lọc thêm ở FE chỉ để chắc chắn với dữ liệu quá cũ.
-        const response = await teachingScheduleNotificationApi.getAll(1, 100, tab);
+        const [response, financial] = await Promise.all([
+          teachingScheduleNotificationApi.getAll(1, 100, tab),
+          financialNotificationApi
+            .getAll(1, LIMIT, tab)
+            .catch(() => ({ data: [] })),
+        ]);
         const teachingItems = (response.data || []).filter(
           isTeachingScheduleNotification,
         );
-        setNotifications(teachingItems);
+        setNotifications([...teachingItems, ...(financial.data || [])]);
         setNotificationStats((prev) => ({
           ...prev,
           POLICY: {
@@ -310,6 +342,9 @@ export default function Home() {
             policyNotificationApi.getAll(1, LIMIT, tab),
             expenseNotificationApi.getAll(1, LIMIT, tab, { scope: "all" }),
           ];
+      // Đề nghị tài chính: mọi tài khoản đều lập/duyệt/chi được nên vai trò nào
+      // cũng có tab này (kể cả kế toán chỉ xem Đề xuất, Nhân sự/Giáo vụ).
+      requests.push(financialNotificationApi.getAll(1, LIMIT, tab));
       if (!isSuggestOnlyRole && !hasRole("employee")) {
         requests.push(
           reportNotificationApi.getAll(1, LIMIT, tab),
@@ -334,6 +369,7 @@ export default function Home() {
         REPORT: { unread: 1, read: 1 },
         WEEKLY_PLAN: { unread: 1, read: 1 },
         TEACHING: { unread: 1, read: 1 },
+        FINANCIAL_REQUEST: { unread: 1, read: 1 },
       });
     };
     loadNotifications();
@@ -369,8 +405,13 @@ export default function Home() {
       // là bản ghi đã tồn tại cho đúng người nhận, kể cả khi bị các bộ lọc bên
       // dưới loại khỏi danh sách hiển thị của vai trò này.
       loadUnreadCount();
-      if (teachingNotificationsOnly && !isTeachingScheduleNotification(data)) return;
-      if (isSuggestOnlyRole && data.type !== "SUGGEST") return;
+      const isFinancial = data.type === "FINANCIAL_REQUEST";
+      if (
+        teachingNotificationsOnly &&
+        !isFinancial &&
+        !isTeachingScheduleNotification(data)
+      ) return;
+      if (isSuggestOnlyRole && !isFinancial && data.type !== "SUGGEST") return;
       if (realtimeNotificationIdsRef.current.has(data.id)) return;
       realtimeNotificationIdsRef.current.add(data.id);
       if (realtimeNotificationIdsRef.current.size > 500) {
@@ -428,6 +469,9 @@ export default function Home() {
 
     socket.on("teacher-location-change-request:new", handleNew);
 
+    // Đề nghị tài chính nội bộ: chờ duyệt, đã duyệt/từ chối, chờ chi, nhắc hạn.
+    socket.on("financial-request-notification:new", handleNew);
+
     return () => {
       socket.off("policy-notification:new", handleNew);
 
@@ -450,6 +494,8 @@ export default function Home() {
       socket.off("teaching-replacement-request:new", handleNew);
 
       socket.off("teacher-location-change-request:new", handleNew);
+
+      socket.off("financial-request-notification:new", handleNew);
     };
   }, [
     isSuggestOnlyRole,
@@ -460,9 +506,7 @@ export default function Home() {
   ]);
 
   // ================= LOAD MORE =================
-  const loadMore = async (
-    type: "POLICY" | "SUGGEST" | "REPORT" | "WEEKLY_PLAN" | "TEACHING",
-  ) => {
+  const loadMore = async (type: NotificationCategory) => {
     if (loadingMore) return;
 
     const currentPage = page[type][tab];
@@ -517,12 +561,19 @@ export default function Home() {
           exhausted = responses.every((res) => (res.data || []).length < LIMIT);
           break;
         }
+        case "FINANCIAL_REQUEST": {
+          const res = await financialNotificationApi.getAll(nextPage, LIMIT, tab);
+          newData = res.data || [];
+          exhausted = newData.length < LIMIT;
+          break;
+        }
         default:
           return;
       }
-      const visibleData = teachingNotificationsOnly
-        ? newData.filter(isTeachingScheduleNotification)
-        : newData;
+      const visibleData =
+        teachingNotificationsOnly && type !== "FINANCIAL_REQUEST"
+          ? newData.filter(isTeachingScheduleNotification)
+          : newData;
 
       setNotifications((prev) => {
         const ids = new Set(prev.map((n) => n.id));
@@ -623,6 +674,10 @@ export default function Home() {
       navigate(noti.meta?.route || "/nhan-su/cham-cong");
       return;
     }
+    if (noti.meta?.kind === "other_cashflow" && noti.meta?.contractId) {
+      navigate(otherCashflowPath("/director", Number(noti.meta.contractId)));
+      return;
+    }
     if (!targetEntityId) return;
     switch (noti.type) {
       case "POLICY": {
@@ -650,6 +705,10 @@ export default function Home() {
 
       case "WEEKLY_PLAN":
         navigate(`/director/daily-report/${noti.senderId}`);
+        break;
+
+      case "FINANCIAL_REQUEST":
+        navigate(`/director/finance/requests/${targetEntityId}`);
         break;
     }
   };

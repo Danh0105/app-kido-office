@@ -1,4 +1,4 @@
-import { Navigate, Routes, Route } from "react-router-dom";
+import { Navigate, Routes, Route, useLocation } from "react-router-dom";
 import EmployeeRoutes from "./Employee";
 import DirectorRoutes from "./Director";
 import Login from "../pages/Auth/Login";
@@ -10,6 +10,8 @@ import { GiaoVienRoutes, NhanSuRoutes } from "./Teaching";
 import VirtualTryOnPage from "@/pages/VirtualTryOn/VirtualTryOnPage";
 import HrRoutes from "./Hr";
 import { isAccountantOnly, isChiefAccountant } from "@/utils/auth";
+import { getHomePath } from "@/utils/nav";
+import { isRestrictedLongAnDirector } from "@/utils/longAnDirector";
 /* import TabletPage from "@/pages/Display/TabletPage";
  */ /* import Display from "@/pages/Display/Display";
  */ /* import INTRO from "@/pages/Display"; */
@@ -20,6 +22,22 @@ function BlockAccountingRolesOutsideDirector({ children }: any) {
   }
 
   return children;
+}
+
+/** Giám đốc Long An chỉ làm việc trong trang /director. */
+function BlockLongAnDirectorOutsideDirector({ children }: any) {
+  if (isRestrictedLongAnDirector()) {
+    return <Navigate to="/director" replace />;
+  }
+
+  return children;
+}
+
+/** Link trung lập `/finance/...` (thông báo, mã QR trên PDF) → đúng workspace của người mở. */
+function FinanceRedirect() {
+  const { pathname, search } = useLocation();
+  const workspace = getHomePath().startsWith("/employee") ? "/employee" : "/director";
+  return <Navigate to={`${workspace}${pathname}${search}`} replace />;
 }
 
 export default function AppRoutes() {
@@ -49,9 +67,19 @@ export default function AppRoutes() {
         path="/employee/*"
         element={
           <ProtectedRoute>
-            <BlockAccountingRolesOutsideDirector>
-              <EmployeeRoutes />
-            </BlockAccountingRolesOutsideDirector>
+            <BlockLongAnDirectorOutsideDirector>
+              <BlockAccountingRolesOutsideDirector>
+                <EmployeeRoutes />
+              </BlockAccountingRolesOutsideDirector>
+            </BlockLongAnDirectorOutsideDirector>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/finance/*"
+        element={
+          <ProtectedRoute>
+            <FinanceRedirect />
           </ProtectedRoute>
         }
       />
@@ -68,7 +96,9 @@ export default function AppRoutes() {
         path="/nhan-su/*"
         element={
           <ProtectedRoute>
-            <NhanSuRoutes />
+            <BlockLongAnDirectorOutsideDirector>
+              <NhanSuRoutes />
+            </BlockLongAnDirectorOutsideDirector>
           </ProtectedRoute>
         }
       />
@@ -86,7 +116,9 @@ export default function AppRoutes() {
         path="/giao-vien/*"
         element={
           <ProtectedRoute>
-            <GiaoVienRoutes />
+            <BlockLongAnDirectorOutsideDirector>
+              <GiaoVienRoutes />
+            </BlockLongAnDirectorOutsideDirector>
           </ProtectedRoute>
         }
       />

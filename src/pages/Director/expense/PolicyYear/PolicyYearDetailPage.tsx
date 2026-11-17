@@ -26,6 +26,7 @@ import PolicyMonthlyFormModal from "./components/PolicyMonthlyFormModal";
 import PolicySubjectFormModal from "./components/PolicySubjectFormModal";
 import StatusBadge from "./components/StatusBadge";
 import SpentExpenseRequestsSection from "./components/SpentExpenseRequestsSection";
+import PolicySupportUsageSection from "./components/PolicySupportUsageSection";
 import SearchableSelect from "@/components/SearchableSelect";
 import { annualPolicyApi } from "@/service/annualPolicy";
 import { policiesApi } from "@/service/policy";
@@ -39,13 +40,17 @@ type PolicyYearDetailPageProps = {
   databaseFieldsReadonly?: boolean;
   readOnly?: boolean;
   onBack: () => void;
-  onSave: (policy: PolicyYear, payload: ReturnType<typeof buildPolicyYearSavePayload>) => void;
+  onSave: (
+    policy: PolicyYear,
+    payload: ReturnType<typeof buildPolicyYearSavePayload>
+  ) => void;
   onContractUpdated?: (policy: PolicyYear) => void;
 };
 
 const getSubjectEquipmentPolicyAmount = (rows: PolicyMonthlyInput[]) => {
-  const amount = rows.find((row) => Number(row.equipmentPolicyAmount || 0) > 0)
-    ?.equipmentPolicyAmount;
+  const amount = rows.find(
+    (row) => Number(row.equipmentPolicyAmount || 0) > 0
+  )?.equipmentPolicyAmount;
 
   return Number(amount || rows[0]?.equipmentPolicyAmount || 0);
 };
@@ -59,13 +64,13 @@ const getEquipmentPolicyTotal = (rows: PolicyMonthlyInput[]) => {
 
       return map;
     },
-    new Map(),
+    new Map()
   );
 
   return [...rowsBySubject.values()].reduce(
     (total, subjectRows) =>
       total + getSubjectEquipmentPolicyAmount(subjectRows),
-    0,
+    0
   );
 };
 
@@ -90,16 +95,18 @@ export default function PolicyYearDetailPage({
   const [editingRow, setEditingRow] = useState<PolicyMonthlyInput | null>(null);
   const [subjectModalOpen, setSubjectModalOpen] = useState(false);
   const [editingSubject, setEditingSubject] = useState<PolicySubject | null>(
-    null,
+    null
   );
   const [contractLoading, setContractLoading] = useState(false);
   const [contractUploading, setContractUploading] = useState(false);
-  const [subjectContracts, setSubjectContracts] = useState<Array<{
-    policyId: number;
-    subjectName: string;
-    fileUrl: string;
-    fileName: string;
-  }>>([]);
+  const [subjectContracts, setSubjectContracts] = useState<
+    Array<{
+      policyId: number;
+      subjectName: string;
+      fileUrl: string;
+      fileName: string;
+    }>
+  >([]);
   const contractInputRef = useRef<HTMLInputElement>(null);
 
   const locked = draft.status === "LOCKED";
@@ -109,20 +116,22 @@ export default function PolicyYearDetailPage({
     : "";
   const summary = useMemo(
     () => calculatePolicySummary(draft.monthlyRows, draft.subjects),
-    [draft.monthlyRows, draft.subjects],
+    [draft.monthlyRows, draft.subjects]
   );
   const equipmentPolicyTotal = useMemo(
     () => getEquipmentPolicyTotal(draft.monthlyRows),
-    [draft.monthlyRows],
+    [draft.monthlyRows]
   );
 
-  const months = useMemo(
-    () =>
-      [...new Set(draft.monthlyRows.map((row) => row.month))].sort((a, b) =>
-        a.localeCompare(b),
-      ),
-    [draft.monthlyRows],
-  );
+  const months = useMemo(() => {
+    const labels = new Map<string, string | undefined>();
+    draft.monthlyRows.forEach((row) => {
+      if (!labels.get(row.month)) labels.set(row.month, row.monthLabel);
+    });
+    return [...labels.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, label]) => ({ month, label }));
+  }, [draft.monthlyRows]);
 
   const filteredRows = useMemo(() => {
     return draft.monthlyRows.filter((row) => {
@@ -136,7 +145,7 @@ export default function PolicyYearDetailPage({
 
   const filteredSummary = useMemo(
     () => calculatePolicySummary(filteredRows, draft.subjects),
-    [filteredRows, draft.subjects],
+    [filteredRows, draft.subjects]
   );
   const tableSummary = useMemo(
     () =>
@@ -146,7 +155,7 @@ export default function PolicyYearDetailPage({
             totalPaid: spentExpenseTotal,
           }
         : filteredSummary,
-    [filteredSummary, schoolId, spentExpenseTotal],
+    [filteredSummary, schoolId, spentExpenseTotal]
   );
 
   const nextRowId = Math.max(0, ...draft.monthlyRows.map((row) => row.id)) + 1;
@@ -204,28 +213,40 @@ export default function PolicyYearDetailPage({
     if (!schoolId || !draft.schoolYear) return;
     let active = true;
 
-    policiesApi.getStatsBySchool({ schoolId, schoolYear: draft.schoolYear })
+    policiesApi
+      .getStatsBySchool({ schoolId, schoolYear: draft.schoolYear })
       .then((rows) => {
         if (!active) return;
-        setSubjectContracts((Array.isArray(rows) ? rows : []).flatMap((row: any) =>
-          row.contractFileUrl ? [{
-            policyId: Number(row.policyId),
-            subjectName: String(row.subjectName || "Môn học"),
-            fileUrl: String(row.contractFileUrl),
-            fileName: String(row.contractFileName || "Hợp đồng PDF"),
-          }] : [],
-        ));
+        setSubjectContracts(
+          (Array.isArray(rows) ? rows : []).flatMap((row: any) =>
+            row.contractFileUrl
+              ? [
+                  {
+                    policyId: Number(row.policyId),
+                    subjectName: String(row.subjectName || "Môn học"),
+                    fileUrl: String(row.contractFileUrl),
+                    fileName: String(row.contractFileName || "Hợp đồng PDF"),
+                  },
+                ]
+              : []
+          )
+        );
       })
       .catch(() => {
         if (active) setSubjectContracts([]);
       });
 
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [schoolId, draft.schoolYear]);
 
   const uploadContract = async (file?: File) => {
     if (!file) return;
-    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+    if (
+      file.type !== "application/pdf" &&
+      !file.name.toLowerCase().endsWith(".pdf")
+    ) {
       toast.error("Vui lòng chọn file PDF");
       return;
     }
@@ -236,7 +257,10 @@ export default function PolicyYearDetailPage({
 
     try {
       setContractUploading(true);
-      const updated = await annualPolicyApi.uploadContract(draft.annualPolicyId, file);
+      const updated = await annualPolicyApi.uploadContract(
+        draft.annualPolicyId,
+        file
+      );
       setDraft((current) => {
         const next = {
           ...current,
@@ -271,7 +295,7 @@ export default function PolicyYearDetailPage({
 
   const exportRows = () => {
     const subjectMap = new Map(
-      draft.subjects.map((subject) => [subject.id, subject]),
+      draft.subjects.map((subject) => [subject.id, subject])
     );
     const calculatedRows = draft.monthlyRows.flatMap((row) => {
       const subject = subjectMap.get(row.subjectId);
@@ -302,7 +326,7 @@ export default function PolicyYearDetailPage({
         ...current,
         subjects: exists
           ? current.subjects.map((item) =>
-              item.id === subject.id ? subject : item,
+              item.id === subject.id ? subject : item
             )
           : [...current.subjects, subject],
       };
@@ -391,7 +415,7 @@ export default function PolicyYearDetailPage({
                     onClick={() => {
                       if (
                         !window.confirm(
-                          "Khóa chính sách sẽ không cho phép sửa dữ liệu. Bạn tiếp tục?",
+                          "Khóa chính sách sẽ không cho phép sửa dữ liệu. Bạn tiếp tục?"
                         )
                       ) {
                         return;
@@ -474,7 +498,9 @@ export default function PolicyYearDetailPage({
         </div>
         {subjectContracts.length > 0 && (
           <div className="mt-4 border-t border-slate-100 pt-3">
-            <p className="mb-2 text-sm font-semibold text-slate-700">Hợp đồng theo môn học</p>
+            <p className="mb-2 text-sm font-semibold text-slate-700">
+              Hợp đồng theo môn học
+            </p>
             <div className="flex flex-wrap gap-2">
               {subjectContracts.map((contract) => (
                 <a
@@ -486,7 +512,9 @@ export default function PolicyYearDetailPage({
                   className="inline-flex max-w-full items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm text-blue-700 hover:bg-blue-50"
                 >
                   <FileText size={16} className="shrink-0" />
-                  <span className="truncate">{contract.subjectName}: {contract.fileName}</span>
+                  <span className="truncate">
+                    {contract.subjectName}: {contract.fileName}
+                  </span>
                   <ExternalLink size={14} className="shrink-0" />
                 </a>
               ))}
@@ -538,6 +566,13 @@ export default function PolicyYearDetailPage({
       )}
 
       {schoolId && (
+        <PolicySupportUsageSection
+          schoolId={schoolId}
+          schoolYear={draft.schoolYear}
+        />
+      )}
+
+      {schoolId && (
         <SpentExpenseRequestsSection
           schoolId={schoolId}
           schoolYear={draft.schoolYear}
@@ -555,7 +590,8 @@ export default function PolicyYearDetailPage({
                 Chi tiết chính sách theo tháng
               </h3>
               <p className="mt-1 text-sm font-medium text-slate-400">
-                Dữ liệu được đồng bộ từ thông tin thu chi và cấu hình chính sách năm.
+                Dữ liệu được đồng bộ từ thông tin thu chi và cấu hình chính sách
+                năm.
               </p>
             </div>
           </div>
@@ -579,18 +615,20 @@ export default function PolicyYearDetailPage({
               className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 outline-none focus:border-blue-400"
             >
               <option value="">Tất cả tháng</option>
-              {months.map((month) => {
+              {months.map(({ month, label }) => {
                 const [year, number] = month.split("-");
                 return (
                   <option key={month} value={month}>
-                    Tháng {number}/{year}
+                    {label || `Tháng ${number}/${year}`}
                   </option>
                 );
               })}
             </select>
             <SearchableSelect
               value={subjectFilter === "all" ? "" : String(subjectFilter)}
-              onChange={(value) => setSubjectFilter(value ? Number(value) : "all")}
+              onChange={(value) =>
+                setSubjectFilter(value ? Number(value) : "all")
+              }
               options={draft.subjects}
               placeholder="Tất cả môn học"
               searchPlaceholder="Tìm môn học…"
@@ -611,7 +649,7 @@ export default function PolicyYearDetailPage({
             setDraft((current) => ({
               ...current,
               monthlyRows: current.monthlyRows.map((item) =>
-                item.id === row.id ? row : item,
+                item.id === row.id ? row : item
               ),
             }))
           }
@@ -624,36 +662,40 @@ export default function PolicyYearDetailPage({
             setDraft((current) => ({
               ...current,
               monthlyRows: current.monthlyRows.filter(
-                (row) => row.id !== rowId,
+                (row) => row.id !== rowId
               ),
             }));
           }}
         />
       </section>
 
-      {!readOnly && <PolicyMonthlyFormModal
-        open={rowModalOpen}
-        row={editingRow}
-        subjects={draft.subjects}
-        nextId={nextRowId}
-        databaseFieldsReadonly={databaseFieldsReadonly}
-        onClose={() => {
-          setRowModalOpen(false);
-          setEditingRow(null);
-        }}
-        onSubmit={handleRowSubmit}
-      />}
-      {!readOnly && <PolicySubjectFormModal
-        open={subjectModalOpen}
-        subject={editingSubject}
-        nextId={nextSubjectId}
-        databaseFieldsReadonly={databaseFieldsReadonly}
-        onClose={() => {
-          setSubjectModalOpen(false);
-          setEditingSubject(null);
-        }}
-        onSubmit={handleSubjectSubmit}
-      />}
+      {!readOnly && (
+        <PolicyMonthlyFormModal
+          open={rowModalOpen}
+          row={editingRow}
+          subjects={draft.subjects}
+          nextId={nextRowId}
+          databaseFieldsReadonly={databaseFieldsReadonly}
+          onClose={() => {
+            setRowModalOpen(false);
+            setEditingRow(null);
+          }}
+          onSubmit={handleRowSubmit}
+        />
+      )}
+      {!readOnly && (
+        <PolicySubjectFormModal
+          open={subjectModalOpen}
+          subject={editingSubject}
+          nextId={nextSubjectId}
+          databaseFieldsReadonly={databaseFieldsReadonly}
+          onClose={() => {
+            setSubjectModalOpen(false);
+            setEditingSubject(null);
+          }}
+          onSubmit={handleSubjectSubmit}
+        />
+      )}
     </div>
   );
 }

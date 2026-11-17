@@ -5,10 +5,13 @@ import {
   CheckSquare,
   ClipboardCheck,
   GraduationCap,
+  HandCoins,
+  Images,
   LayoutDashboard,
   MapPin,
   MapPinned,
   ReceiptText,
+  Route,
   Users,
 } from "lucide-react";
 
@@ -18,9 +21,9 @@ import reportIcon from "@/pages/Director/static/report.png";
 import statisticsIcon from "@/pages/Director/static/statistics.png";
 import suggestIcon from "@/pages/Director/static/suggest.png";
 import {
-  TEACHER_MENUS,
   canViewTeaching,
   isTeacher,
+  teacherMenusForUser,
   teachingMenusForUser,
 } from "@/pages/Teaching/lib";
 import { hasRole } from "./auth";
@@ -39,6 +42,8 @@ export type BrandMenuDefinition = {
 };
 
 export const iconForTeachingMenu = (title: string) => {
+  if (title.includes("Tổng hợp")) return Route;
+  if (title.includes("tài chính")) return ReceiptText;
   if (title.includes("Giáo viên")) return GraduationCap;
   if (title.includes("Điểm trường")) return MapPinned;
   if (title.includes("Lớp")) return Users;
@@ -72,6 +77,8 @@ const DIRECTOR_ACTIVE_PATHS: Record<string, string[]> = {
   "expense-request": ["/director/expense-requests"],
   warehouse: ["/director/warehouse"],
   payroll: ["/director/payrolls"],
+  finance: ["/director/finance"],
+  recruitment: ["/director/recruitment"],
 };
 
 const directorMenus = (): BrandMenuDefinition[] =>
@@ -100,6 +107,14 @@ const employeeMenus = (): BrandMenuDefinition[] => {
 
   const canViewPayroll = !hasRole("giaovien_ctv");
 
+  const finance: BrandMenuDefinition = {
+    key: "employee-finance",
+    title: "Đề nghị tài chính nội bộ",
+    to: "/employee/finance",
+    from: "finance",
+    lucideIcon: HandCoins,
+  };
+
   if (hasRole("probation")) {
     return [
       {
@@ -115,13 +130,18 @@ const employeeMenus = (): BrandMenuDefinition[] => {
 
   return [
     ...(canViewPayroll ? [payroll] : []),
+    finance,
     {
       key: "employee-policy",
       title: "Chính sách",
       to: "/employee/policy-select",
       from: "policy",
       icon: policyIcon,
-      activePaths: ["/employee/policy", "/employee/region", "/employee/school-list"],
+      activePaths: [
+        "/employee/policy",
+        "/employee/region",
+        "/employee/school-list",
+      ],
     },
     {
       key: "employee-report",
@@ -153,6 +173,13 @@ const employeeMenus = (): BrandMenuDefinition[] => {
             from: "school-timetable",
             lucideIcon: CalendarDays,
           },
+          {
+            key: "employee-teacher-images",
+            title: "Hình ảnh giáo viên",
+            to: "/employee/teacher-images",
+            from: "teacher-images",
+            lucideIcon: Images,
+          },
         ]
       : []),
   ];
@@ -162,8 +189,8 @@ const teachingMenus = (): BrandMenuDefinition[] => {
   const source = canViewTeaching()
     ? teachingMenusForUser()
     : isTeacher()
-      ? TEACHER_MENUS
-      : [];
+    ? teacherMenusForUser()
+    : [];
 
   return source.map((item) => ({
     key: `teaching-${item.path}`,
@@ -178,7 +205,7 @@ const teachingMenus = (): BrandMenuDefinition[] => {
  * này để chuyển route không làm sidebar đổi hoặc mất mục.
  */
 export const brandMenusForUser = (
-  workspace: BrandMenuWorkspace = "auto",
+  workspace: BrandMenuWorkspace = "auto"
 ): BrandMenuDefinition[] => {
   const resolvedWorkspace =
     workspace === "auto"
@@ -196,7 +223,7 @@ export const brandMenusForUser = (
 export const isBrandMenuActive = (
   item: BrandMenuDefinition,
   pathname: string,
-  locationState?: { from?: string } | null,
+  locationState?: { from?: string } | null
 ) => {
   // Ba mục dùng chung /director/nhan-vien, nên phải dựa thêm state.from.
   if (pathname === "/director/nhan-vien" && item.from) {
@@ -204,6 +231,6 @@ export const isBrandMenuActive = (
   }
 
   return (item.activePaths ?? [item.to]).some((path) =>
-    pathname.startsWith(path),
+    pathname.startsWith(path)
   );
 };

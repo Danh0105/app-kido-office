@@ -310,3 +310,30 @@ export const teachingAlertNotificationApi = {
         return res.data;
     },
 };
+
+// ==========================================================
+// ĐỀ NGHỊ TÀI CHÍNH NỘI BỘ — chờ duyệt, đã duyệt, chờ chi, nhắc hoàn ứng…
+// ==========================================================
+// Dùng endpoint chung như nhóm Giảng dạy; người nhận do phân hệ tài chính chọn.
+
+export const financialNotificationApi = {
+    getAll: async (
+        page = 1,
+        limit = 10,
+        tab?: 'unread' | 'read',
+    ) => {
+        const res = await api.get(
+            '/notifications',
+            {
+                params: {
+                    type: 'FINANCIAL_REQUEST',
+                    page,
+                    limit,
+                    tab,
+                },
+            },
+        );
+
+        return res.data;
+    },
+};

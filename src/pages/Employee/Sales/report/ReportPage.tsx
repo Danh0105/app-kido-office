@@ -4,6 +4,7 @@ import ReportDay from "./Report/ReportDay";
 import { getEmployeeId } from "@/utils/auth";
 import { dailyReportApi } from "@/service/report";
 import { weeklyPlanApi } from "@/service/plan";
+import { schoolApi } from "@/service/school.api";
 
 
 
@@ -27,6 +28,8 @@ export default function ReportForm({
     const [loading, setLoading] = useState(false);
     const [editingReport, setEditingReport] = useState<any | null>(null);
     const [historyWeeks, setHistoryWeeks] = useState<any[]>([]);
+    const [schools, setSchools] = useState<any[]>([]);
+    const [selectedSchoolId, setSelectedSchoolId] = useState("");
 
     const [loadingLocationIndex, setLoadingLocationIndex] = useState<number | null>(null);
 
@@ -83,16 +86,19 @@ export default function ReportForm({
                 await dailyReportApi.update(editingReport.id, {
                     date: report.date,
                     tasks,
+                    schoolId: selectedSchoolId ? Number(selectedSchoolId) : null,
                 });
             } else {
                 await dailyReportApi.create({
                     ...report,
                     employeeId,
                     tasks,
+                    schoolId: selectedSchoolId ? Number(selectedSchoolId) : undefined,
                 });
             }
             alert("Lưu thành công");
             setEditingReport(null);
+            setSelectedSchoolId("");
             setTasks([{ title: "", content: "", location: "" }]);
             fetchReports();
             onSaved?.();
@@ -109,6 +115,7 @@ export default function ReportForm({
         setEditingReport(report);
 
         setReport({ date: report.date });
+        setSelectedSchoolId(report.schoolId ? String(report.schoolId) : "");
 
         setTasks(
             report.tasks.map((t: any) => ({
@@ -184,6 +191,12 @@ export default function ReportForm({
     };
     useEffect(() => {
         fetchReports();
+        const employeeId = getEmployeeId();
+        if (employeeId) {
+            void schoolApi.getByEmployee(employeeId)
+                .then((data) => setSchools(Array.isArray(data) ? data : data?.data ?? []))
+                .catch((error) => console.error("Không tải được trường phụ trách", error));
+        }
     }, []);
     return (
         <div className="px-4 pt-6 pb-6 space-y-5 max-w-xl md:max-w-2xl lg:max-w-3xl mx-auto mt-5">
@@ -196,6 +209,25 @@ export default function ReportForm({
                     onChange={(e) => setReport({ ...report, date: e.target.value })}
                     className="w-full mt-1 p-3 rounded-xl bg-gray-100 focus:ring-2 focus:ring-orange-400 outline-none"
                 />
+            </div>
+
+            <div className="bg-white rounded-2xl p-4 shadow-sm">
+                <label className="text-sm text-gray-500">Trường / địa bàn báo cáo</label>
+                <select
+                    value={selectedSchoolId}
+                    onChange={(event) => setSelectedSchoolId(event.target.value)}
+                    className="w-full mt-1 p-3 rounded-xl bg-gray-100 focus:ring-2 focus:ring-orange-400 outline-none"
+                >
+                    <option value="">Tự xác định từ GPS hoặc tỉnh phụ trách</option>
+                    {schools.map((school) => (
+                        <option key={school.id} value={school.id}>
+                            {school.name}
+                        </option>
+                    ))}
+                </select>
+                <p className="mt-2 text-xs text-gray-400">
+                    Nhân viên phụ trách nhiều tỉnh nên chọn trường để báo cáo vào đúng tỉnh.
+                </p>
             </div>
 
             {/* TASK LIST */}

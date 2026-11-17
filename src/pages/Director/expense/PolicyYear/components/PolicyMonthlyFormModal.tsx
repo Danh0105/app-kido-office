@@ -22,6 +22,7 @@ const createEmptyRow = (
   id: nextId,
   subjectId: subject?.id || 0,
   month: "2025-09",
+  totalPeriods: 0,
   studentCount: subject?.policyStudentBase || 0,
   unitPrice: subject?.tuitionPrice || 0,
   monthsCount: 1,
@@ -153,6 +154,18 @@ export default function PolicyMonthlyFormModal({
                 disabled={databaseFieldsReadonly}
                 onChange={(event) => setField("month", event.target.value)}
                 className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-500"
+              />
+            </label>
+
+            <label>
+              <span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-slate-500">
+                Số tiết
+              </span>
+              <NumberInput
+                value={draft.totalPeriods}
+                disabled={databaseFieldsReadonly}
+                onChange={(value) => setField("totalPeriods", value)}
+                className="h-11 w-full"
               />
             </label>
 

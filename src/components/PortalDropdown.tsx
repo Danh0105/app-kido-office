@@ -20,6 +20,7 @@ import {
   MapPin,
   Maximize2,
   Minimize2,
+  HandCoins,
 } from "lucide-react";
 
 import { hasRole } from "@/utils/auth";
@@ -51,7 +52,8 @@ type NotificationType =
   | "SUGGEST"
   | "REPORT"
   | "WEEKLY_PLAN"
-  | "TEACHING";
+  | "TEACHING"
+  | "FINANCIAL_REQUEST";
 type TabType = "unread" | "read";
 type TeachingTypeTab = "ALL" | TeachingAlertType;
 
@@ -97,7 +99,7 @@ type SenderGroup = {
 
 type Props = {
   teachingNotificationsOnly?: boolean;
-  /** Mở từ trong module Giảng dạy — chỉ giữ tab "Giảng dạy", ẩn 4 tab còn lại vốn không liên quan. */
+  /** Mở từ trong module Giảng dạy — chỉ giữ tab "Giảng dạy" + "Đề nghị tài chính", ẩn 4 tab còn lại vốn không liên quan. */
   onlyTeachingTab?: boolean;
   open: boolean;
   dropdownRef: React.RefObject<HTMLDivElement | null>;
@@ -183,6 +185,18 @@ export default function NotificationDropdown({
   const unreadReportCount = notificationStats?.REPORT?.unread ?? 0;
   const unreadPlanCount = notificationStats?.WEEKLY_PLAN?.unread ?? 0;
   const unreadTeachingCount = notificationStats?.TEACHING?.unread ?? 0;
+  const unreadFinancialCount =
+    notificationStats?.FINANCIAL_REQUEST?.unread ?? 0;
+
+  // Ai cũng lập được đề nghị tài chính (duyệt/chi do backend quyết) nên mọi
+  // biến thể menu bên dưới đều kèm tab này ở cuối.
+  const financialMenu = {
+    key: "FINANCIAL_REQUEST" as NotificationType,
+    icon: HandCoins,
+    count: unreadFinancialCount,
+    activeClass: "bg-amber-100 text-amber-600",
+    label: "Đề nghị tài chính nội bộ",
+  };
 
   const teachingIconMenus: {
     key: NotificationType;
@@ -263,10 +277,11 @@ export default function NotificationDropdown({
           count: unreadPolicyCount,
           activeClass: "bg-blue-100 text-blue-600",
         },
+        financialMenu,
       ]
     : onlyTeachingTab
     ? isTeachingManager
-      ? teachingIconMenus
+      ? [...teachingIconMenus, financialMenu]
       : [
           {
             key: "TEACHING",
@@ -274,6 +289,7 @@ export default function NotificationDropdown({
             count: unreadTeachingCount,
             activeClass: "bg-teal-100 text-teal-600",
           },
+          financialMenu,
         ]
     : isSuggestOnlyRole
     ? [
@@ -283,9 +299,10 @@ export default function NotificationDropdown({
           count: unreadSuggestCount,
           activeClass: "bg-green-100 text-green-600",
         },
+        financialMenu,
       ]
     : hideBusinessNotificationTabs
-    ? teachingIconMenus
+    ? [...teachingIconMenus, financialMenu]
     : [
         {
           key: "POLICY",
@@ -329,6 +346,7 @@ export default function NotificationDropdown({
                 },
               ]
           : []),
+        financialMenu,
       ];
 
   // =================== REPORT GROUPED (director) ===================
@@ -761,7 +779,9 @@ export default function NotificationDropdown({
     // vô hạn giữa 2 tab (vd hideBusinessNotificationTabs và isSuggestOnlyRole
     // cùng true cho một role).
     let target: NotificationType | null = null;
-    if (teachingNotificationsOnly) {
+    if (typeTab === "FINANCIAL_REQUEST") {
+      // Tab dùng chung cho mọi vai trò — không ép về tab mặc định của vai trò.
+    } else if (teachingNotificationsOnly) {
       target = "POLICY";
     } else if (hideBusinessNotificationTabs) {
       target = "TEACHING";
@@ -791,7 +811,10 @@ export default function NotificationDropdown({
   // Giáo viên chỉ có một tab "lịch dạy": thông báo loại này ở BE mang type riêng
   // TEACHING_SCHEDULE (bản cũ là SYSTEM) nên không so thẳng với typeTab được.
   // Tab "TEACHING" của Giáo vụ/Nhân sự cũng vậy — gộp 3 type con lại.
-  const categoryFiltered = teachingNotificationsOnly
+  const categoryFiltered =
+    typeTab === "FINANCIAL_REQUEST"
+    ? filtered.filter((n) => n.type === typeTab)
+    : teachingNotificationsOnly
     ? filtered.filter(isTeachingScheduleNotification)
     : typeTab === "TEACHING"
     ? filtered.filter(
@@ -847,6 +870,8 @@ export default function NotificationDropdown({
           ? "bg-green-50 border-green-100"
           : typeTab === "REPORT"
           ? "bg-orange-50 border-orange-100"
+          : typeTab === "FINANCIAL_REQUEST"
+          ? "bg-amber-50 border-amber-100"
           : "bg-purple-50 border-purple-100"
       } hover:shadow-md`}
     >

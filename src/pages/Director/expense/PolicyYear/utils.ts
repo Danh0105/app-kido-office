@@ -1,4 +1,4 @@
-import {
+import type {
   CalculatedPolicyRow,
   PolicyMonthlyInput,
   PolicySubject,
@@ -21,12 +21,65 @@ export const formatMonth = (value: string) => {
   return month && year ? `${month}/${year}` : value;
 };
 
+export const getMonthLabel = (
+  row: Pick<PolicyMonthlyInput, "month" | "monthLabel">,
+) => row.monthLabel || formatMonth(row.month);
+
 export const getSchoolYearFromMonth = (value: string) => {
   const [yearPart, monthPart] = value.split("-").map(Number);
   if (!yearPart || !monthPart) return "";
   return monthPart >= 8
     ? `${yearPart}-${yearPart + 1}`
     : `${yearPart - 1}-${yearPart}`;
+};
+
+export type PolicyYearQuantitySource = {
+  billingMode?: "HS" | "TIET";
+  totalPeriods?: number | string | null;
+  studentCount?: number | string | null;
+  declaredPeriods?: number | string | null;
+  declaredStudentCount?: number | string | null;
+  classCount?: number | string | null;
+};
+
+/**
+ * Bóc số lượng cho Chính sách năm theo loại chính sách:
+ * - HP/HS: lấy số học sinh thực tế, thiếu thì lấy số đã khai ở môn;
+ * - HP/TIẾT: lấy số tiết thực tế, thiếu thì lấy số tiết chính sách, sau đó
+ *   quy đổi HS = số tiết / 4 × số lớp.
+ */
+export const resolvePolicyYearQuantities = (
+  source: PolicyYearQuantitySource,
+) => {
+  const actualStudents = Number(source.studentCount || 0);
+  const actualPeriods = Number(source.totalPeriods || 0);
+  const declaredPeriods = Number(source.declaredPeriods || 0);
+  const mode =
+    source.billingMode ||
+    (actualStudents > 0
+      ? "HS"
+      : actualPeriods > 0 || declaredPeriods > 0
+        ? "TIET"
+        : "HS");
+
+  if (mode === "TIET") {
+    const totalPeriods = actualPeriods || declaredPeriods;
+    const classCount = Number(source.classCount || 0);
+
+    return {
+      totalPeriods,
+      studentCount:
+        totalPeriods > 0 && classCount > 0
+          ? Math.round((totalPeriods / 4) * classCount)
+          : 0,
+    };
+  }
+
+  return {
+    totalPeriods: 0,
+    studentCount:
+      actualStudents || Number(source.declaredStudentCount || 0),
+  };
 };
 
 export const calculatePolicyRow = (
@@ -80,6 +133,7 @@ export const calculatePolicySummary = (
 
   return calculatedRows.reduce<PolicySummary>(
     (summary, row) => ({
+      totalPeriods: summary.totalPeriods + Number(row.totalPeriods || 0),
       totalStudents: summary.totalStudents + row.studentCount,
       totalRevenue: summary.totalRevenue + row.schoolRevenue,
       totalTkd: summary.totalTkd + row.tkdAmount,
@@ -94,6 +148,7 @@ export const calculatePolicySummary = (
       totalRemaining: summary.totalRemaining + row.remainingAmount,
     }),
     {
+      totalPeriods: 0,
       totalStudents: 0,
       totalRevenue: 0,
       totalTkd: 0,
@@ -129,6 +184,10 @@ export const buildPolicyYearSavePayload = (policy: PolicyYear) => {
       companyProfitPerHS: Number(subject.companyProfitPerHS || 0),
       cashSupportAmount: Number(subject.cashSupportAmount || 0),
       equipmentSupportAmount: Number(subject.equipmentSupportAmount || 0),
+      billingMode: subject.billingMode,
+      classCount: Number(subject.classCount || 0),
+      declaredStudentCount: Number(subject.declaredStudentCount || 0),
+      declaredPeriods: Number(subject.declaredPeriods || 0),
     })),
     monthlyRows: policy.monthlyRows.map((row, index) => {
       const subject = subjectMap.get(row.subjectId);
@@ -139,6 +198,7 @@ export const buildPolicyYearSavePayload = (policy: PolicyYear) => {
         rowIndex: index,
         subjectId: row.subjectId,
         month: row.month,
+        totalPeriods: Number(row.totalPeriods || 0),
         studentCount: Number(row.studentCount || 0),
         unitPrice: Number(row.unitPrice || 0),
         monthsCount: Number(row.monthsCount || 0),
@@ -153,6 +213,7 @@ export const buildPolicyYearSavePayload = (policy: PolicyYear) => {
       };
     }),
     summary: {
+      totalPeriods: Number(summary.totalPeriods || 0),
       totalStudents: Number(summary.totalStudents || 0),
       totalRevenue: Number(summary.totalRevenue || 0),
       totalTkd: Number(summary.totalTkd || 0),
@@ -179,6 +240,7 @@ export const exportPolicyYearCsv = (
     "Năm học",
     "Môn học",
     "Tháng",
+    "Số tiết",
     "SL HS",
     "Đơn giá",
     "Số tháng",
@@ -195,7 +257,8 @@ export const exportPolicyYearCsv = (
     schoolName,
     schoolYear,
     row.subject.name,
-    formatMonth(row.month),
+    getMonthLabel(row),
+    row.totalPeriods,
     row.studentCount,
     row.unitPrice,
     row.monthsCount,
@@ -238,7 +301,8 @@ export const exportPolicyYearsCsv = (policies: PolicyYear[]) => {
           policy.schoolName,
           policy.schoolYear,
           calculated.subject.name,
-          formatMonth(calculated.month),
+          getMonthLabel(calculated),
+          calculated.totalPeriods,
           calculated.studentCount,
           calculated.schoolRevenue,
           calculated.schoolRetainAmount,
@@ -255,6 +319,7 @@ export const exportPolicyYearsCsv = (policies: PolicyYear[]) => {
     "Năm học",
     "Môn học",
     "Tháng",
+    "Số tiết",
     "SL HS",
     "Doanh thu",
     "Để lại trường",

@@ -27,6 +27,7 @@ import {
   expenseCreatePath,
   expenseEditPath,
   expenseTasksPath,
+  canCreateExpenseRequest,
   isApproverSide,
   isEquipmentOnlyUser,
   isTechnical,
@@ -36,6 +37,7 @@ import {
 
 /** Tab loại đề xuất; "" = tất cả. */
 type KindFilter = ExpenseRequestKind | "";
+type MonthlyFilter = "" | "REGULAR" | "MONTHLY";
 
 const KIND_TABS: { value: KindFilter; label: string }[] = [
   { value: "", label: "Tất cả" },
@@ -103,7 +105,7 @@ export default function ExpenseRequestList() {
   const navigate = useNavigate();
   const base = expenseBasePath();
   const approverSide = isApproverSide();
-  const canCreate = hasRole("sales");
+  const canCreate = canCreateExpenseRequest();
   const isMultiRoleSales = canCreate && approverSide;
 
   // Tài khoản chỉ thuộc phòng kỹ thuật: backend giới hạn về thiết bị/sửa chữa.
@@ -115,7 +117,9 @@ export default function ExpenseRequestList() {
       ? hasRole("saleadmin", "salesadmin_la")
         ? "Tất cả đề xuất chi"
         : "Đề xuất chi"
-      : "Đề xuất chi của tôi";
+      : hasRole("giaovien_congty") && !hasRole("sales")
+        ? "Đề nghị tài chính"
+        : "Đề xuất chi của tôi";
 
   const [items, setItems] = useState<ExpenseRequest[]>([]);
   const [groups, setGroups] = useState<ExpenseEmployeeGroup[]>([]);
@@ -137,6 +141,7 @@ export default function ExpenseRequestList() {
 
   const [requestKind, setRequestKind] = useState<KindFilter>("");
   const effectiveKind: KindFilter = requestKind;
+  const [monthlyFilter, setMonthlyFilter] = useState<MonthlyFilter>("");
   const [status, setStatus] = useState<ExpenseStatus | "">("");
   const [overdue, setOverdue] = useState(false);
   const [fromDate, setFromDate] = useState("");
@@ -200,6 +205,10 @@ export default function ExpenseRequestList() {
     try {
       const filters = {
         requestKind: effectiveKind || undefined,
+        isMonthlyExpense:
+          monthlyFilter === ""
+            ? undefined
+            : monthlyFilter === "MONTHLY",
         status: status || undefined,
         overdue: overdue || undefined,
         fromDate: fromDate || undefined,
@@ -219,12 +228,13 @@ export default function ExpenseRequestList() {
         setGroups(groupExpenseRequestsByEmployeeName(enrichedGroups));
         setTotalPages(res.totalPages || 1);
       } else {
+        // Sales chỉ xem đề xuất của mình; các role duyệt xem theo scope backend.
+        const ownOnly = viewMode === "mine" || !approverSide;
         const res = await expenseRequestApi.list({
-          // Sales chỉ xem đề xuất của mình; các role duyệt xem theo scope backend.
-          createdBy:
-            viewMode === "mine" || !approverSide
-              ? Number(getEmployeeId()) || undefined
-              : undefined,
+          createdBy: ownOnly ? Number(getEmployeeId()) || undefined : undefined,
+          // "Của tôi" gồm cả đề xuất mình được Giám đốc chỉ định (bàn giao,
+          // hỗ trợ, xử lý nhập kho, nghiệm thu).
+          includeAssigned: ownOnly || undefined,
           ...filters,
         });
         const enrichedItems = await enrichExpenseRequestsWithCreators(res.data || []);
@@ -237,7 +247,17 @@ export default function ExpenseRequestList() {
     } finally {
       setLoading(false);
     }
-  }, [approverSide, effectiveKind, status, overdue, fromDate, toDate, page, viewMode]);
+  }, [
+    approverSide,
+    effectiveKind,
+    monthlyFilter,
+    status,
+    overdue,
+    fromDate,
+    toDate,
+    page,
+    viewMode,
+  ]);
 
   useEffect(() => {
     load();
@@ -363,6 +383,31 @@ export default function ExpenseRequestList() {
               className={`py-1.5 text-xs font-medium rounded-lg transition ${
                 requestKind === tab.value
                   ? "bg-blue-500 text-white"
+                  : "text-gray-500"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-3 gap-1 rounded-xl border border-gray-100 bg-white p-1">
+          {(
+            [
+              { value: "", label: "Tất cả hình thức" },
+              { value: "REGULAR", label: "Chi Năm" },
+              { value: "MONTHLY", label: "Chi từ QL thu chi" },
+            ] as { value: MonthlyFilter; label: string }[]
+          ).map((tab) => (
+            <button
+              key={tab.value || "all-monthly"}
+              onClick={() => {
+                setPage(1);
+                setMonthlyFilter(tab.value);
+              }}
+              className={`rounded-lg py-1.5 text-xs font-medium transition ${
+                monthlyFilter === tab.value
+                  ? "bg-indigo-500 text-white"
                   : "text-gray-500"
               }`}
             >

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-hot-toast";
 
 import HeaderWithBack from "@/components/HeaderWithBack";
+import { DEFAULT_SCHOOL_YEAR } from "@/constants/schoolYear";
 import { formatVnd } from "@/utils/decimal";
 import { hasRole } from "@/utils/auth";
 import {
@@ -17,6 +18,7 @@ import { schoolApi } from "@/service/school.api";
 import { subjectApi } from "@/service/subject.api";
 import { policiesApi } from "@/service/policy";
 import {
+  CASHFLOW_SOURCE_META,
   EQUIPMENT_SOURCE_META,
   FUND_SOURCE_LABEL,
   PAYMENT_METHOD_LABEL,
@@ -37,14 +39,23 @@ import Timeline from "./components/Timeline";
 import ActionModal, { type ActionPayload } from "./components/ActionModal";
 import ApproveModal from "./components/ApproveModal";
 import PaymentOrderModal from "./components/PaymentOrderModal";
+import PartialSpentModal from "./components/PartialSpentModal";
+import {
+  ManagementExpensePanel,
+  type MonthlyApprovalView,
+} from "./components/ManagementExpenseView";
+import MonthlyApproveModal from "./components/MonthlyApproveModal";
+import CashflowItemsPanel from "./components/CashflowItemsPanel";
 import ReassignRepairModal from "./components/ReassignRepairModal";
 import StockIssueOrderModal from "./components/StockIssueOrderModal";
 import StockInReceiptModal from "./components/StockInReceiptModal";
 import { enrichExpenseRequestWithCreator } from "./creatorProfiles";
 import { useExpenseSocket } from "./useExpenseSocket";
+import { invoiceCashAccountLabel } from "@/pages/Director/expense/RealExpenseDetail/utils/invoiceCashAccounts";
 import {
   activeAssignments,
   availableActions,
+  canDoStep,
   canReplaceAssignment,
   myDeclinableAssignment,
   creatorDetails,
@@ -58,10 +69,19 @@ import {
   waitingMessage,
   expenseBasePath,
   expenseEditPath,
+  canReadManagementExpense,
+  cashflowSourceOf,
+  isAccountantChain,
+  monthlyItemLabel,
+  monthlyItemsOf,
+  monthlyRemainder,
   type ActionKey,
 } from "./lib";
 
 type ModalKind =
+  | "submitToChief"
+  | "chiefApprove"
+  | "chiefReject"
   | "approve"
   | "reject"
   | "withdraw"
@@ -70,8 +90,10 @@ type ModalKind =
   | "cashReleased"
   | "cashReceived"
   | "confirmSpent"
+  | "partialSpent"
   | "confirmNotSpent"
   | "fundReturned"
+  | "remainderReturned"
   | "paymentOrder"
   | "editPaymentOrder"
   | "stockIssueOrder"
@@ -101,8 +123,8 @@ type SchoolDetails = {
   appendixYears?: number | string;
   appendix?: string;
   startDate?: string;
-  ward?: { id?: number; name?: string };
-  province?: { id?: number; name?: string };
+  ward?: { id?: number; name?: string } | null;
+  province?: { id?: number; name?: string } | null;
 };
 
 type SchoolSubject = {
@@ -151,15 +173,27 @@ export default function ExpenseRequestDetail({
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<ModalKind>(null);
   // Người đã từ chối mà Giám đốc đang chọn người thay thế.
-  const [replaceTarget, setReplaceTarget] = useState<ExpenseAssignment | null>(null);
+  const [replaceTarget, setReplaceTarget] = useState<ExpenseAssignment | null>(
+    null
+  );
   const [submitting, setSubmitting] = useState(false);
   const [school, setSchool] = useState<SchoolDetails | null>(null);
   const [schoolSubjects, setSchoolSubjects] = useState<SchoolSubject[]>([]);
   const [schoolContextLoading, setSchoolContextLoading] = useState(false);
   const [schoolContextError, setSchoolContextError] = useState("");
+  // Chi tháng: tổng Còn chi của bảng Chi Ngoài = số tiền lệnh chi khi duyệt.
+  const [monthlyView, setMonthlyView] = useState<MonthlyApprovalView | null>(
+    null
+  );
+  // Chi Trường / GV trường: Còn lại từng khoản = số tiền lệnh chi khi duyệt.
+  const [cashflowView, setCashflowView] = useState<MonthlyApprovalView | null>(
+    null
+  );
 
   const loadSchoolContext = useCallback(async (request: ExpenseRequest) => {
-    const schoolId = Number(request.school?.id || (request as any).schoolId || 0);
+    const schoolId = Number(
+      request.school?.id || (request as any).schoolId || 0
+    );
 
     if (!schoolId) {
       setSchool(null);
@@ -177,7 +211,7 @@ export default function ExpenseRequestDetail({
         try {
           const searchResponse = await schoolApi.search(request.school.name);
           const matchedSchool = normalizeList<SchoolDetails>(
-            searchResponse,
+            searchResponse
           ).find((item) => Number(item.id) === schoolId);
           if (matchedSchool) return matchedSchool;
         } catch (error) {
@@ -191,7 +225,7 @@ export default function ExpenseRequestDetail({
         limit: 1000,
       });
       return normalizeList<SchoolDetails>(listResponse).find(
-        (item) => Number(item.id) === schoolId,
+        (item) => Number(item.id) === schoolId
       );
     };
 
@@ -199,7 +233,7 @@ export default function ExpenseRequestDetail({
       const filterByRequestSchoolYear = (subjects: SchoolSubject[]) =>
         request.schoolYear
           ? subjects.filter(
-              (subject) => subject.schoolYear === request.schoolYear,
+              (subject) => subject.schoolYear === request.schoolYear
             )
           : subjects;
       const attachPolicies = (subjects: SchoolSubject[]) =>
@@ -215,31 +249,34 @@ export default function ExpenseRequestDetail({
             } catch (error) {
               console.warn(
                 `Policies for subject ${subject.id} are unavailable:`,
-                error,
+                error
               );
               return { ...subject, policies: [] };
             }
-          }),
+          })
         );
 
       try {
         const financeResponse = await subjectApi.getFinanceBySchool(
           schoolId,
-          request.schoolYear,
+          request.schoolYear
         );
         const financeSubjects = filterByRequestSchoolYear(
-          normalizeList<SchoolSubject>(financeResponse),
+          normalizeList<SchoolSubject>(financeResponse)
         );
         if (financeSubjects.length) return attachPolicies(financeSubjects);
       } catch (error) {
-        console.warn("Finance subjects are unavailable, using fallback:", error);
+        console.warn(
+          "Finance subjects are unavailable, using fallback:",
+          error
+        );
       }
 
       const subjectResponse = request.schoolYear
         ? await subjectApi.getBySchoolYear(request.schoolYear, schoolId)
         : await subjectApi.getBySchool(schoolId);
       const subjects = filterByRequestSchoolYear(
-        normalizeList<SchoolSubject>(subjectResponse),
+        normalizeList<SchoolSubject>(subjectResponse)
       );
       return attachPolicies(subjects);
     };
@@ -315,7 +352,7 @@ export default function ExpenseRequestDetail({
         // 409 còn được backend trả khi action không thuộc luồng của loại đề
         // xuất này (VD kế toán bấm lên lệnh chi cho đề xuất thiết bị).
         toast.error(
-          "Trạng thái đã thay đổi hoặc thao tác không thuộc loại đề xuất này, vui lòng tải lại",
+          "Trạng thái đã thay đổi hoặc thao tác không thuộc loại đề xuất này, vui lòng tải lại"
         );
         await load();
       } else if (s === 403) {
@@ -337,7 +374,9 @@ export default function ExpenseRequestDetail({
   const handleDelete = async () => {
     if (
       !window.confirm(
-        `Xoá vĩnh viễn đề xuất ${data?.code || ""}? Người tạo sẽ được thông báo. Hành động này không thể hoàn tác.`,
+        `Xoá vĩnh viễn đề xuất ${
+          data?.code || ""
+        }? Người tạo sẽ được thông báo. Hành động này không thể hoàn tác.`
       )
     )
       return;
@@ -361,11 +400,35 @@ export default function ExpenseRequestDetail({
 
   const onModalSubmit = (payload: ActionPayload) => {
     switch (modal) {
+      case "submitToChief":
+        run(
+          () => expenseRequestApi.submitToChief(reqId, payload.note),
+          "Đã gửi Kế toán trưởng duyệt"
+        );
+        break;
+      case "chiefApprove":
+        run(
+          () => expenseRequestApi.chiefApprove(reqId, payload.note),
+          "Đã duyệt, chuyển Giám đốc"
+        );
+        break;
+      case "chiefReject":
+        run(
+          () => expenseRequestApi.chiefReject(reqId, payload.reason || ""),
+          "Đã từ chối"
+        );
+        break;
       case "reject":
-        run(() => expenseRequestApi.reject(reqId, payload.reason || ""), "Đã từ chối");
+        run(
+          () => expenseRequestApi.reject(reqId, payload.reason || ""),
+          "Đã từ chối"
+        );
         break;
       case "withdraw":
-        run(() => expenseRequestApi.withdraw(reqId, payload.note), "Đã rút đề xuất");
+        run(
+          () => expenseRequestApi.withdraw(reqId, payload.note),
+          "Đã rút đề xuất"
+        );
         break;
       case "saleadminReview":
         run(
@@ -374,7 +437,7 @@ export default function ExpenseRequestDetail({
               status: "REVIEWED",
               note: payload.note,
             }),
-          "Đã kiểm duyệt",
+          "Đã kiểm duyệt"
         );
         break;
       case "saleadminReject":
@@ -384,66 +447,83 @@ export default function ExpenseRequestDetail({
               status: "REJECTED",
               note: payload.reason || "",
             }),
-          "Đã từ chối chính sách",
+          "Đã từ chối chính sách"
         );
         break;
       case "cashReleased":
         run(
           () =>
             expenseRequestApi.cashReleased(reqId, {
-              fundSource: payload.fundSource!,
+              cashAccount: payload.cashAccount!,
               note: payload.note,
               files: payload.files,
             }),
-          "Đã xuất tiền",
+          "Đã xuất tiền"
         );
         break;
       case "cashReceived":
-        run(() => expenseRequestApi.cashReceived(reqId, payload.note), "Đã xác nhận nhận tiền");
+        run(
+          () => expenseRequestApi.cashReceived(reqId, payload.note),
+          "Đã xác nhận nhận tiền"
+        );
         break;
       case "confirmSpent":
         run(
-          () => expenseRequestApi.confirmSpent(reqId, { note: payload.note, files: payload.files }),
-          "Đã xác nhận đã chi",
+          () =>
+            expenseRequestApi.confirmSpent(reqId, {
+              note: payload.note,
+              files: payload.files,
+            }),
+          "Đã xác nhận đã chi"
         );
         break;
       case "confirmNotSpent":
         run(
           () => expenseRequestApi.confirmNotSpent(reqId, payload.reason || ""),
-          "Đã xác nhận chưa chi",
+          "Đã xác nhận chưa chi"
         );
         break;
       case "fundReturned":
-        run(() => expenseRequestApi.fundReturned(reqId, payload.note), "Đã nhận lại quỹ");
+        run(
+          () => expenseRequestApi.fundReturned(reqId, payload.note),
+          "Đã nhận lại quỹ"
+        );
+        break;
+      case "remainderReturned":
+        run(
+          () => expenseRequestApi.remainderReturned(reqId, payload.note),
+          "Đã nhận lại phần dư"
+        );
         break;
       case "equipmentReceived":
         run(
           () => expenseRequestApi.equipmentReceived(reqId, payload.note),
-          "Đã xác nhận nhận thiết bị",
+          "Đã xác nhận nhận thiết bị"
         );
         break;
       case "equipmentReturned":
         run(
           () => expenseRequestApi.equipmentReturned(reqId, payload.note),
-          "Đã xác nhận nhập lại kho",
+          "Đã xác nhận nhập lại kho"
         );
         break;
       case "repairAccept":
         run(
           () => expenseRequestApi.repairAccept(reqId),
-          "Đã xác nhận nhận việc sửa chữa",
+          "Đã xác nhận nhận việc sửa chữa"
         );
         break;
       case "repairReject":
         run(
           () => expenseRequestApi.repairReject(reqId, payload.reason || ""),
-          "Đã từ chối việc sửa chữa",
+          "Đã từ chối việc sửa chữa"
         );
         break;
       case "declineAssignment":
         run(
-          () => expenseRequestApi.declineAssignment(reqId, payload.reason || ""),
-          "Đã từ chối — lý do đã gửi về giám đốc",
+          () =>
+            expenseRequestApi.declineAssignment(reqId, payload.reason || ""),
+          "Đã từ chối — lý do đã gửi về giám đốc"
         );
         break;
       case "stockInAccept":
@@ -453,7 +533,7 @@ export default function ExpenseRequestDetail({
               note: payload.note,
               files: payload.files,
             }),
-          "Đã nghiệm thu — đề xuất đã chuyển về Quản lý thu chi",
+          "Đã nghiệm thu — đề xuất đã chuyển về Quản lý thu chi"
         );
         break;
     }
@@ -464,14 +544,14 @@ export default function ExpenseRequestDetail({
       () => expenseRequestApi.createPaymentOrder(reqId, payload),
       data?.status === "FUND_RETURNED"
         ? "Đã lên lại lệnh chi"
-        : "Đã lên lệnh chi",
+        : "Đã lên lệnh chi"
     );
   };
 
   const onReassignRepair = (assignedTechnicianId: number) => {
     run(
       () => expenseRequestApi.repairReassign(reqId, assignedTechnicianId),
-      "Đã chỉ định nhân viên kỹ thuật khác",
+      "Đã chỉ định nhân viên kỹ thuật khác"
     );
   };
 
@@ -488,7 +568,7 @@ export default function ExpenseRequestDetail({
   const onEditPaymentOrder = (payload: PaymentOrderPayload) => {
     run(
       () => expenseRequestApi.editPaymentOrder(reqId, payload),
-      "Đã sửa lệnh chi",
+      "Đã sửa lệnh chi"
     );
   };
 
@@ -497,22 +577,27 @@ export default function ExpenseRequestDetail({
       () => expenseRequestApi.createStockIssueOrder(reqId, payload),
       data?.status === "EQUIPMENT_RETURNED"
         ? "Đã lên lại lệnh xuất kho"
-        : "Đã lên lệnh xuất kho",
+        : "Đã lên lệnh xuất kho"
     );
   };
 
   const onReplaceAssignment = (employeeId: number) => {
     if (!replaceTarget) return;
     run(
-      () => expenseRequestApi.replaceAssignment(reqId, replaceTarget.id, employeeId),
-      "Đã chọn người thay thế",
+      () =>
+        expenseRequestApi.replaceAssignment(
+          reqId,
+          replaceTarget.id,
+          employeeId
+        ),
+      "Đã chọn người thay thế"
     );
   };
 
   const onStockInReceipt = (payload: StockInReceiptPayload) => {
     run(
       () => expenseRequestApi.createStockInReceipt(reqId, payload),
-      "Đã lập phiếu nhập kho",
+      "Đã lập phiếu nhập kho"
     );
   };
 
@@ -527,7 +612,9 @@ export default function ExpenseRequestDetail({
     return (
       <div className="bg-gray-100 min-h-screen">
         <HeaderWithBack title="Chi tiết đề xuất" />
-        <div className="text-center text-gray-400 text-sm py-10 mt-[60px]">Đang tải…</div>
+        <div className="text-center text-gray-400 text-sm py-10 mt-[60px]">
+          Đang tải…
+        </div>
       </div>
     );
   }
@@ -556,12 +643,11 @@ export default function ExpenseRequestDetail({
   const equipment = isEquipmentRequest(data);
   // Chứng từ của vòng xử lý cũ được giữ để audit ở backend. Trong lúc đề xuất
   // đang duyệt lại, không hiển thị chúng như chứng từ đang có hiệu lực.
-  const hasActiveOrder = ![
-    "PENDING_APPROVAL",
-    "APPROVED",
-    "REJECTED",
-    "WITHDRAWN",
-  ].includes(data.status);
+  const hasActiveOrder = data.isMonthlyExpense
+    ? !["PENDING_ACCOUNTING", "REJECTED", "WITHDRAWN"].includes(data.status)
+    : !["PENDING_APPROVAL", "APPROVED", "REJECTED", "WITHDRAWN"].includes(
+        data.status
+      );
   const po = hasActiveOrder ? data.paymentOrder : null;
   const sio = hasActiveOrder ? data.stockIssueOrder : null;
   // `action` chỉ có ở tệp up từ khi thêm trường này; tệp cũ hơn không lọc
@@ -569,9 +655,28 @@ export default function ExpenseRequestDetail({
   // tệp có `action` đã hiện đúng bước của chúng trong Timeline (kể cả file
   // kinh doanh up khi tạo/sửa đề xuất hoặc xác nhận đã chi).
   const releasedAttachments = (data.attachments || []).filter(
-    (a) => a.action === "CONFIRM_CASH_RELEASED",
+    (a) => a.action === "CONFIRM_CASH_RELEASED"
   );
   const otherAttachments = (data.attachments || []).filter((a) => !a.action);
+  const monthlyItems = monthlyItemsOf(data);
+  const source = cashflowSourceOf(data);
+  const sourceMeta = source ? CASHFLOW_SOURCE_META[source] : null;
+  const chain = isAccountantChain(data);
+  // Chi Năm cho trường: tổng số kinh doanh nhập ở các dòng chính sách đã tích.
+  const policySupportTotal = (data.policySupportItems ?? []).reduce(
+    (sum, item) => sum + (Number(item.amount) || 0),
+    0
+  );
+  // Số cho hộp duyệt: Chi Ngoài luồng cũ lấy từ bảng Chi Ngoài như trước;
+  // quy trình Kế toán lấy số Kế toán chốt (khoản chi của đề xuất).
+  const approvalView =
+    source === "MANAGEMENT" && !chain ? monthlyView : cashflowView;
+  // Kế toán / Kế toán trưởng nhập số liệu: mở QL thu chi của trường.
+  const sheetSchoolId = Number(data.schoolId || data.school?.id || 0);
+  const sheetLink =
+    chain && sheetSchoolId && canDoStep("submitToChief", data)
+      ? `/director/real-expense/${sheetSchoolId}`
+      : null;
   const directorApprovedAmount =
     hasRole("thuquy") &&
     !equipment &&
@@ -590,141 +695,260 @@ export default function ExpenseRequestDetail({
 
       <div
         className={`flex-1 px-3 space-y-3 ${
-          embedded
-            ? "min-h-0 overflow-y-auto py-3 pb-6"
-            : "mt-[60px] pb-32"
+          embedded ? "min-h-0 overflow-y-auto py-3 pb-6" : "mt-[60px] pb-32"
         }`}
       >
-        {/* ===== Header card (sticky khi scroll) ===== */}
+        {/* ===== Header card: chỉ dính khi màn hình đủ rộng và đủ cao, điện thoại
+            mà dính thì thẻ này che hơn nửa màn hình, không còn chỗ đọc nội dung ===== */}
         <div
-          className={`sticky z-40 -mx-3 px-3 pb-1 bg-gray-100 ${
-            embedded ? "-top-3 -mt-3 pt-3" : "top-[60px]"
+          className={`z-40 -mx-3 px-3 pb-1 bg-gray-100 ${
+            embedded
+              ? "sticky -top-3 -mt-3 pt-3"
+              : "top-[60px] [@media(min-width:768px)_and_(min-height:600px)]:sticky"
           }`}
         >
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-2 max-h-[55vh] overflow-y-auto">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 flex-wrap">
-              <StatusBadge status={data.status} kind={kind} />
-              {!data.requestKind ? (
-                <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-slate-100 text-slate-600">
-                  {data.status === "PENDING_APPROVAL"
-                    ? "Chờ Giám đốc phân loại"
-                    : "Chưa phân loại"}
-                </span>
-              ) : (
-                <KindBadge kind={kind} />
-              )}
-              {equipment && data.status !== "PENDING_APPROVAL" && (
-                <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-cyan-100 text-cyan-700">
-                  {EQUIPMENT_SOURCE_META[equipmentSourceOf(data)].icon}{" "}
-                  {EQUIPMENT_SOURCE_META[equipmentSourceOf(data)].label}
-                </span>
-              )}
-              {data.schoolId ? (
-                <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-purple-100 text-purple-700">
-                  🏫 Đề xuất cho trường
-                </span>
-              ) : data.wardId ? (
-                <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-teal-100 text-teal-700">
-                  🏘️ Đề xuất cho phường/xã
-                </span>
-              ) : null}
-              {data.deductPolicy && (
-                <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-orange-100 text-orange-700">
-                  📉 Trừ chính sách
-                </span>
-              )}
-              {data.isOverdue && (
-                <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-red-100 text-red-700">
-                  ⚠️ Quá hạn
-                </span>
-              )}
-              {data.saleadminReviewStatus === "REVIEWED" && (
-                <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-green-100 text-green-700">
-                  ✅ Sales Admin đã kiểm duyệt
-                </span>
-              )}
-              {data.saleadminReviewStatus === "REJECTED" && (
-                <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-red-100 text-red-700">
-                  ⚠️ Sales Admin từ chối chính sách
-                </span>
-              )}
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-2 max-h-[55vh] overflow-y-auto">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <StatusBadge status={data.status} kind={kind} />
+                {!data.requestKind ? (
+                  <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-slate-100 text-slate-600">
+                    {data.status === "PENDING_APPROVAL"
+                      ? "Chờ Giám đốc phân loại"
+                      : "Chưa phân loại"}
+                  </span>
+                ) : (
+                  <KindBadge kind={kind} />
+                )}
+                {equipment && data.status !== "PENDING_APPROVAL" && (
+                  <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-cyan-100 text-cyan-700">
+                    {EQUIPMENT_SOURCE_META[equipmentSourceOf(data)].icon}{" "}
+                    {EQUIPMENT_SOURCE_META[equipmentSourceOf(data)].label}
+                  </span>
+                )}
+                {sourceMeta ? (
+                  <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-indigo-100 text-indigo-700">
+                    {sourceMeta.icon} {sourceMeta.label}
+                  </span>
+                ) : data.schoolId ? (
+                  <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-purple-100 text-purple-700">
+                    🏫 Đề xuất ngoài chính sách
+                  </span>
+                ) : data.wardId ? (
+                  <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-teal-100 text-teal-700">
+                    🏘️ Đề xuất cho phường/xã
+                  </span>
+                ) : null}
+                {data.deductPolicy && (
+                  <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-orange-100 text-orange-700">
+                    📉 Trừ chính sách
+                  </span>
+                )}
+                {data.isOverdue && (
+                  <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-red-100 text-red-700">
+                    ⚠️ Quá hạn
+                  </span>
+                )}
+                {data.saleadminReviewStatus === "REVIEWED" && (
+                  <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-green-100 text-green-700">
+                    ✅ Sales Admin đã kiểm duyệt
+                  </span>
+                )}
+                {data.saleadminReviewStatus === "REJECTED" && (
+                  <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-red-100 text-red-700">
+                    ⚠️ Sales Admin từ chối chính sách
+                  </span>
+                )}
+              </div>
+              <span className="text-xs text-gray-400">{data.code}</span>
             </div>
-            <span className="text-xs text-gray-400">{data.code}</span>
-          </div>
 
-          <h1 className="text-lg font-bold text-gray-900">{data.content}</h1>
-          {data.description && (
-            <p className="text-sm text-gray-600 whitespace-pre-wrap">{data.description}</p>
-          )}
+            <h1 className="text-lg font-bold text-gray-900">{data.content}</h1>
+            {data.description && (
+              <p className="text-sm text-gray-600 whitespace-pre-wrap">
+                {data.description}
+              </p>
+            )}
 
-          <RequesterInfo request={data} />
+            <RequesterInfo request={data} />
 
-          <div className="grid grid-cols-2 gap-y-2 gap-x-3 pt-1 text-sm">
-            <Field
-              label={
-                !data.requestKind
-                  ? "Ngày mong muốn"
-                  : equipment
+            <div className="grid grid-cols-2 gap-y-2 gap-x-3 pt-1 text-sm">
+              <Field
+                label={
+                  data.isMonthlyExpense
+                    ? "Ngày chi"
+                    : !data.requestKind
+                    ? "Ngày mong muốn"
+                    : equipment
                     ? "Ngày cần có thiết bị"
                     : "Ngày dự kiến"
-              }
-              value={formatDate(data.expectedPaymentDate)}
-            />
-            {directorApprovedAmount != null && (
-              <Field
-                label="Số tiền giám đốc duyệt"
-                value={`${formatVnd(directorApprovedAmount)} đ`}
-                strong
+                }
+                value={formatDate(data.expectedPaymentDate)}
               />
+              {directorApprovedAmount != null && (
+                <Field
+                  label="Số tiền giám đốc duyệt"
+                  value={`${formatVnd(directorApprovedAmount)} đ`}
+                  strong
+                />
+              )}
+              {data.isMonthlyExpense && monthlyItems.length > 0 ? (
+                <div className="col-span-2">
+                  <div className="text-xs text-gray-400">
+                    {source === "SCHOOL_TEACHER"
+                      ? "Trường · giáo viên · kỳ kế toán"
+                      : "Trường · môn · kỳ kế toán"}{" "}
+                    (
+                    {new Set(monthlyItems.map((item) => item.schoolId)).size} trường
+                    {monthlyItems.length >
+                    new Set(monthlyItems.map((item) => item.schoolId)).size
+                      ? `, ${monthlyItems.length} môn`
+                      : ""}
+                    )
+                  </div>
+                  <ul className="mt-0.5 space-y-0.5">
+                    {monthlyItems.map((item, index) => (
+                      <li key={item.id ?? index} className="text-gray-800">
+                        <span className="font-medium">
+                          {item.school?.name || `Trường #${item.schoolId}`}
+                        </span>
+                        {monthlyItemLabel(item) && (
+                          <span className="text-gray-500">
+                            {" "}
+                            · {monthlyItemLabel(item)}
+                          </span>
+                        )}
+                        {item.approvedAmount != null && (
+                          <span className="text-gray-700">
+                            {" "}
+                            · {formatVnd(item.approvedAmount) || "0"} đ
+                          </span>
+                        )}
+                        {item.excluded && (
+                          <span className="ml-1 text-[10px] px-1.5 py-[1px] rounded-full bg-red-100 text-red-700">
+                            Giám đốc không duyệt
+                          </span>
+                        )}
+                        {item.spent === true && (
+                          <span className="ml-1 text-[10px] px-1.5 py-[1px] rounded-full bg-teal-100 text-teal-700">
+                            Đã chi
+                          </span>
+                        )}
+                        {item.spent === false && (
+                          <span className="ml-1 text-[10px] px-1.5 py-[1px] rounded-full bg-amber-100 text-amber-700">
+                            Không chi · hoàn quỹ
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <>
+                  {data.school?.name && (
+                    <Field label="Trường" value={data.school.name} />
+                  )}
+                  {data.schoolYear && (
+                    <Field label="Năm học" value={data.schoolYear} />
+                  )}
+                </>
+              )}
+              {data.participants && (
+                <Field
+                  label="Thành phần tham gia"
+                  value={data.participants}
+                  span
+                />
+              )}
+            </div>
+
+            {data.approveNote && (
+              <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+                <span className="font-medium">Ghi chú của người duyệt: </span>
+                {data.approveNote}
+              </div>
             )}
-            {data.school?.name && <Field label="Trường" value={data.school.name} />}
-            {data.schoolYear && (
-              <Field label="Năm học" value={data.schoolYear} />
+
+            {data.saleadminReviewStatus === "REJECTED" && (
+              <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                <span className="font-semibold">
+                  ⚠️ Sales Admin từ chối chính sách
+                </span>
+                {data.saleadminNote && (
+                  <p className="mt-1">{data.saleadminNote}</p>
+                )}
+              </div>
             )}
-            {data.participants && (
-              <Field label="Thành phần tham gia" value={data.participants} span />
+            {data.status === "REJECTED" && data.rejectReason && (
+              <div className="mt-2 p-3 bg-red-50 rounded-lg text-sm text-red-700">
+                <span className="font-medium">Lý do từ chối: </span>
+                {data.rejectReason}
+              </div>
             )}
+            {data.notSpentReason && (
+              <div className="mt-2 p-3 bg-amber-50 rounded-lg text-sm text-amber-700">
+                <span className="font-medium">
+                  {equipment
+                    ? "Lý do chưa dùng: "
+                    : monthlyItems.some((item) => item.spent === false)
+                    ? "Lý do các trường không chi: "
+                    : "Lý do chưa chi: "}
+                </span>
+                {data.notSpentReason}
+              </div>
+            )}
+            {data.status === "REPAIR_REJECTED" &&
+              data.technicalRejectReason && (
+                <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                  <span className="font-medium">
+                    Lý do phòng kỹ thuật từ chối:{" "}
+                  </span>
+                  {data.technicalRejectReason}
+                </div>
+              )}
           </div>
-
-          {data.approveNote && (
-            <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
-              <span className="font-medium">Ghi chú của người duyệt: </span>
-              {data.approveNote}
-            </div>
-          )}
-
-          {data.saleadminReviewStatus === "REJECTED" && (
-            <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-              <span className="font-semibold">⚠️ Sales Admin từ chối chính sách</span>
-              {data.saleadminNote && <p className="mt-1">{data.saleadminNote}</p>}
-            </div>
-          )}
-          {data.status === "REJECTED" && data.rejectReason && (
-            <div className="mt-2 p-3 bg-red-50 rounded-lg text-sm text-red-700">
-              <span className="font-medium">Lý do từ chối: </span>
-              {data.rejectReason}
-            </div>
-          )}
-          {data.notSpentReason && (
-            <div className="mt-2 p-3 bg-amber-50 rounded-lg text-sm text-amber-700">
-              <span className="font-medium">
-                {equipment ? "Lý do chưa dùng: " : "Lý do chưa chi: "}
-              </span>
-              {data.notSpentReason}
-            </div>
-          )}
-          {data.status === "REPAIR_REJECTED" && data.technicalRejectReason && (
-            <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-              <span className="font-medium">Lý do phòng kỹ thuật từ chối: </span>
-              {data.technicalRejectReason}
-            </div>
-          )}
-        </div>
         </div>
 
-        {/* ===== School and policies ===== */}
-        {(data.school?.id || (data as any).schoolId) && (
+        {/* ===== Chi Năm cho trường: dòng hỗ trợ trong chính sách đã tích ===== */}
+        {!!data.policySupportItems?.length && (
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-emerald-100">
+            <h3 className="font-semibold text-emerald-700 text-sm mb-2">
+              📑 Dòng chính sách đề xuất
+            </h3>
+            <ul className="space-y-1.5">
+              {data.policySupportItems.map((item) => (
+                <li
+                  key={item.id}
+                  className="flex flex-wrap items-center justify-between gap-1 rounded-lg bg-emerald-50/50 px-2.5 py-1.5 text-xs"
+                >
+                  <span className="text-gray-800">
+                    {[item.subjectName, item.label].filter(Boolean).join(" · ")}
+                    <span className="text-gray-400">
+                      {" "}
+                      (chính sách {formatVnd(item.policyAmount) || "0"} đ)
+                    </span>
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <b className="tabular-nums">{formatVnd(item.amount) || "0"} đ</b>
+                    {item.spentAmount != null && (
+                      <span className="rounded-full bg-green-100 px-1.5 py-[1px] text-[10px] text-green-700">
+                        Đã chi
+                      </span>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-2 flex justify-between text-xs text-emerald-800">
+              <span>Tổng đề xuất theo chính sách</span>
+              <b>{formatVnd(policySupportTotal) || "0"} đ</b>
+            </div>
+          </div>
+        )}
+
+        {/* ===== School and policies (chi tháng nhiều trường: xem bảng Chi Ngoài) ===== */}
+        {(data.school?.id || (data as any).schoolId) &&
+          monthlyItems.length <= 1 && (
           <SchoolPolicyDetails
             school={school || data.school || null}
             subjects={schoolSubjects}
@@ -734,22 +958,67 @@ export default function ExpenseRequestDetail({
           />
         )}
 
+        {/* ===== Khoản chi ở QL thu chi (Chi Ngoài / Chi Trường / GV trường) ===== */}
+        {source && (
+          <CashflowItemsPanel
+            requestId={data.id}
+            source={source}
+            reloadKey={data.status}
+            onLoaded={setCashflowView}
+            chain={chain}
+            sheetLink={sheetLink}
+          />
+        )}
+
+        {/* ===== Chi Ngoài cho người duyệt ===== */}
+        {(data.school?.id || (data as any).schoolId) &&
+          (!source || source === "MANAGEMENT") &&
+          (canDoStep("approve", data) ||
+            canDoStep("submitToChief", data) ||
+            canDoStep("chiefApprove", data)) &&
+          canReadManagementExpense() && (
+            <ManagementExpensePanel
+              requestId={data.id}
+              monthly={Boolean(data.isMonthlyExpense)}
+              onLoaded={setMonthlyView}
+            />
+          )}
+
         {/* ===== Payment order ===== */}
         {po && (
           <div className="bg-white rounded-2xl p-4 shadow-sm border border-purple-100">
-            <h3 className="font-semibold text-purple-700 text-sm mb-2">🧾 Lệnh chi</h3>
+            <h3 className="font-semibold text-purple-700 text-sm mb-2">
+              🧾 Lệnh chi
+            </h3>
             <div className="grid grid-cols-2 gap-y-2 gap-x-3 text-sm">
               <Field label="Mã lệnh chi" value={po.code} />
-              <Field label="Số tiền" value={`${formatVnd(po.amount)} đ`} strong />
+              <Field
+                label="Số tiền"
+                value={`${formatVnd(po.amount)} đ`}
+                strong
+              />
               <Field
                 label="Hình thức"
-                value={PAYMENT_METHOD_LABEL[po.paymentMethod] || po.paymentMethod}
+                value={
+                  // Chi tháng: hình thức đi theo tài khoản Thủ quỹ chọn khi
+                  // xuất tiền, trước đó chỉ là giá trị ghi tạm.
+                  data.isMonthlyExpense && !po.cashAccount && !po.fundSource
+                    ? "Theo nguồn chi Thủ quỹ chọn"
+                    : PAYMENT_METHOD_LABEL[po.paymentMethod] || po.paymentMethod
+                }
               />
-              {po.fundSource && (
+              {po.cashAccount ? (
                 <Field
-                  label="Nguồn tiền"
-                  value={FUND_SOURCE_LABEL[po.fundSource] || po.fundSource}
+                  label="Nguồn chi"
+                  value={invoiceCashAccountLabel(po.cashAccount)}
                 />
+              ) : (
+                po.fundSource && (
+                  <Field
+                    label="Nguồn tiền"
+                    value={FUND_SOURCE_LABEL[po.fundSource] || po.fundSource}
+                  />
+                )
               )}
               {po.note && <Field label="Ghi chú" value={po.note} span />}
             </div>
@@ -764,7 +1033,9 @@ export default function ExpenseRequestDetail({
             </h3>
             <div className="grid grid-cols-2 gap-y-2 gap-x-3 text-sm">
               <Field label="Mã lệnh xuất kho" value={sio.code} strong />
-              {sio.warehouse && <Field label="Kho xuất" value={sio.warehouse} />}
+              {sio.warehouse && (
+                <Field label="Kho xuất" value={sio.warehouse} />
+              )}
               {sio.expectedDeliveryDate && (
                 <Field
                   label="Ngày giao dự kiến"
@@ -831,14 +1102,18 @@ export default function ExpenseRequestDetail({
         )}
 
         {/* ===== Phiếu nhập kho (thiết bị từ nhà cung cấp) ===== */}
-        {isSupplierEquipment(data) && data.stockInOrder && data.status !== "PENDING_APPROVAL" && (
-          <StockInOrderCard request={data} />
-        )}
+        {isSupplierEquipment(data) &&
+          data.stockInOrder &&
+          data.status !== "PENDING_APPROVAL" && (
+            <StockInOrderCard request={data} />
+          )}
 
         {/* ===== Attachments ===== */}
         {otherAttachments.length > 0 && (
           <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-            <h3 className="font-semibold text-gray-700 text-sm mb-2">📎 Tệp đính kèm</h3>
+            <h3 className="font-semibold text-gray-700 text-sm mb-2">
+              📎 Tệp đính kèm
+            </h3>
             <ul className="space-y-1">
               {otherAttachments.map((a) => (
                 <li key={a.id}>
@@ -858,7 +1133,9 @@ export default function ExpenseRequestDetail({
 
         {/* ===== Timeline ===== */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-          <h3 className="font-semibold text-gray-700 text-sm mb-3">🕓 Lịch sử</h3>
+          <h3 className="font-semibold text-gray-700 text-sm mb-3">
+            🕓 Lịch sử
+          </h3>
           <Timeline
             logs={data.logs}
             kind={kind}
@@ -875,7 +1152,9 @@ export default function ExpenseRequestDetail({
           </div>
         )}
         {STATUS_META[data.status].done && (
-          <div className="text-center text-sm text-gray-500 py-2">— Kết thúc —</div>
+          <div className="text-center text-sm text-gray-500 py-2">
+            — Kết thúc —
+          </div>
         )}
       </div>
 
@@ -888,12 +1167,15 @@ export default function ExpenseRequestDetail({
               : "fixed bottom-0 left-0 w-full bg-white border-t px-3 py-2 z-40 md:max-w-6xl md:mx-auto md:left-1/2 md:-translate-x-1/2"
           }
         >
-          {actions.includes("approve") && data.saleadminReviewStatus === "REJECTED" && (
-            <div className="mb-2 p-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">
-              <span className="font-semibold">⚠️ Sales Admin từ chối chính sách: </span>
-              {data.saleadminNote || "Không có ghi chú"}
-            </div>
-          )}
+          {actions.includes("approve") &&
+            data.saleadminReviewStatus === "REJECTED" && (
+              <div className="mb-2 p-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">
+                <span className="font-semibold">
+                  ⚠️ Sales Admin từ chối chính sách:{" "}
+                </span>
+                {data.saleadminNote || "Không có ghi chú"}
+              </div>
+            )}
           <div className="flex gap-2">
             {actions.map((a) => (
               <ActionButton
@@ -912,13 +1194,88 @@ export default function ExpenseRequestDetail({
       )}
 
       {/* ===== Modals ===== */}
-      {modal === "approve" && (
+      {modal === "approve" && data.isMonthlyExpense && (
+        <MonthlyApproveModal
+          items={monthlyItems.filter((item) => item.id != null)}
+          itemAmounts={approvalView?.itemAmounts ?? null}
+          remainingTotal={approvalView?.remainingTotal ?? null}
+          tableLabel={sourceMeta?.table}
+          title={sourceMeta ? `Duyệt ${sourceMeta.label}` : undefined}
+          existingAmount={
+            data.paymentOrder?.amount != null
+              ? Number(data.paymentOrder.amount)
+              : null
+          }
+          canSeeTable={source !== "MANAGEMENT" || chain || canReadManagementExpense()}
+          chain={chain}
+          loading={submitting}
+          onClose={() => setModal(null)}
+          onSubmit={(payload) => onApproveSubmit(payload)}
+        />
+      )}
+      {modal === "approve" && !data.isMonthlyExpense && (
         <ApproveModal
           defaultAmount={data.amount}
           requestedItems={data.requestedItems}
           loading={submitting}
           onClose={() => setModal(null)}
           onSubmit={onApproveSubmit}
+        />
+      )}
+      {modal === "submitToChief" && (
+        <ActionModal
+          title="Gửi Kế toán trưởng duyệt"
+          description={
+            <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-sm text-indigo-800">
+              Hệ thống chốt số tiền đề xuất = Còn lại của các khoản ở bảng{" "}
+              {sourceMeta?.table ?? "QL thu chi"} lúc bấm gửi
+              {cashflowView ? (
+                <>
+                  : <b>{formatVnd(cashflowView.remainingTotal) || "0"} đ</b>
+                </>
+              ) : null}
+              . Kiểm số liệu ở QL thu chi trước khi gửi.
+            </div>
+          }
+          submitLabel="Gửi Kế toán trưởng"
+          submitColor="bg-indigo-600"
+          showNote
+          noteLabel="Ghi chú (không bắt buộc)"
+          loading={submitting}
+          onClose={() => setModal(null)}
+          onSubmit={onModalSubmit}
+        />
+      )}
+      {modal === "chiefApprove" && (
+        <ActionModal
+          title="Kế toán trưởng duyệt"
+          description={
+            data.amount != null ? (
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-800">
+                Số tiền Kế toán chốt: <b>{formatVnd(data.amount) || "0"} đ</b>.
+                Duyệt xong chuyển Giám đốc duyệt.
+              </div>
+            ) : undefined
+          }
+          submitLabel="Duyệt"
+          submitColor="bg-blue-500"
+          showNote
+          noteLabel="Ghi chú (không bắt buộc)"
+          loading={submitting}
+          onClose={() => setModal(null)}
+          onSubmit={onModalSubmit}
+        />
+      )}
+      {modal === "chiefReject" && (
+        <ActionModal
+          title="Kế toán trưởng từ chối"
+          submitLabel="Từ chối"
+          submitColor="bg-red-500"
+          requireReason
+          reasonLabel="Lý do từ chối"
+          loading={submitting}
+          onClose={() => setModal(null)}
+          onSubmit={onModalSubmit}
         />
       )}
       {modal === "reject" && (
@@ -974,7 +1331,7 @@ export default function ExpenseRequestDetail({
           title="Xác nhận xuất tiền"
           submitLabel="Xuất tiền"
           submitColor="bg-orange-500"
-          showFundSource
+          showCashAccount
           showNote
           showFiles
           existingAttachments={releasedAttachments}
@@ -997,7 +1354,9 @@ export default function ExpenseRequestDetail({
       )}
       {modal === "confirmSpent" && (
         <ActionModal
-          title={equipment ? "Xác nhận đã bàn giao / lắp đặt" : "Xác nhận đã chi"}
+          title={
+            equipment ? "Xác nhận đã bàn giao / lắp đặt" : "Xác nhận đã chi"
+          }
           submitLabel={equipment ? "Đã bàn giao" : "Đã chi"}
           submitColor="bg-green-500"
           showNote
@@ -1014,6 +1373,41 @@ export default function ExpenseRequestDetail({
           submitColor="bg-amber-500"
           requireReason
           reasonLabel={equipment ? "Lý do chưa dùng" : "Lý do chưa chi"}
+          loading={submitting}
+          onClose={() => setModal(null)}
+          onSubmit={onModalSubmit}
+        />
+      )}
+      {modal === "partialSpent" && (
+        <PartialSpentModal
+          items={monthlyItems.filter((item) => !item.excluded)}
+          orderAmount={Number(data.paymentOrder?.amount ?? data.amount ?? 0)}
+          loading={submitting}
+          onClose={() => setModal(null)}
+          onSubmit={(payload) =>
+            run(
+              () => expenseRequestApi.confirmPartiallySpent(reqId, payload),
+              "Đã xác nhận chi một phần, chờ thủ quỹ nhận lại phần dư"
+            )
+          }
+        />
+      )}
+      {modal === "remainderReturned" && (
+        <ActionModal
+          title="Nhận lại phần dư"
+          description={
+            <div className="rounded-xl border border-teal-100 bg-teal-50 p-3 text-sm text-teal-800">
+              Kinh doanh đã chi một phần. Nhận lại phần dư{" "}
+              <b>{formatVnd(monthlyRemainder(data) ?? 0) || "0"} đ</b>
+              {po?.cashAccount
+                ? ` về ${invoiceCashAccountLabel(po.cashAccount)}`
+                : ""}
+              .
+            </div>
+          }
+          submitLabel="Đã nhận phần dư"
+          submitColor="bg-green-600"
+          showNote
           loading={submitting}
           onClose={() => setModal(null)}
           onSubmit={onModalSubmit}
@@ -1080,8 +1474,8 @@ export default function ExpenseRequestDetail({
             myDeclinableAssignment(data)?.role === "SUPPORT"
               ? "Từ chối hỗ trợ"
               : kind === "REPAIR"
-                ? "Từ chối đảm nhận"
-                : "Từ chối bàn giao"
+              ? "Từ chối đảm nhận"
+              : "Từ chối bàn giao"
           }
           submitLabel="Từ chối"
           submitColor="bg-red-500"
@@ -1094,7 +1488,11 @@ export default function ExpenseRequestDetail({
       )}
       {modal === "replaceAssignment" && replaceTarget && (
         <ReassignRepairModal
-          label={replaceTarget.role === "HANDOVER" ? mainAssigneeLabel(kind) : "Người hỗ trợ"}
+          label={
+            replaceTarget.role === "HANDOVER"
+              ? mainAssigneeLabel(kind)
+              : "Người hỗ trợ"
+          }
           technicalOnly={replaceTarget.role === "HANDOVER"}
           declinedName={replaceTarget.employee?.name}
           rejectReason={replaceTarget.declineReason}
@@ -1118,7 +1516,9 @@ export default function ExpenseRequestDetail({
       )}
       {modal === "paymentOrder" && (
         <PaymentOrderModal
-          defaultAmount={0}
+          defaultAmount={data.isMonthlyExpense ? 0 : policySupportTotal}
+          monthly={data.isMonthlyExpense && !chain}
+          lockedAmount={chain && data.amount != null ? Number(data.amount) : null}
           retry={data.status === "FUND_RETURNED"}
           loading={submitting}
           onClose={() => setModal(null)}
@@ -1128,6 +1528,8 @@ export default function ExpenseRequestDetail({
       {modal === "editPaymentOrder" && po && (
         <PaymentOrderModal
           edit
+          monthly={data.isMonthlyExpense && !chain}
+          lockedAmount={chain && data.amount != null ? Number(data.amount) : null}
           defaultAmount={po.amount}
           defaultPaymentMethod={po.paymentMethod}
           defaultNote={po.note || ""}
@@ -1192,7 +1594,7 @@ function AssignmentsCard({
   const mine = myDeclinableAssignment(request);
   const rows = [...(request.assignments || [])].sort(
     (a, b) =>
-      Number(a.role === "SUPPORT") - Number(b.role === "SUPPORT") || a.id - b.id,
+      Number(a.role === "SUPPORT") - Number(b.role === "SUPPORT") || a.id - b.id
   );
 
   return (
@@ -1215,12 +1617,16 @@ function AssignmentsCard({
                 </span>
                 <span
                   className={`text-sm font-medium ${
-                    a.status === "REPLACED" ? "text-gray-400 line-through" : "text-gray-800"
+                    a.status === "REPLACED"
+                      ? "text-gray-400 line-through"
+                      : "text-gray-800"
                   }`}
                 >
                   {a.employee?.name || `NV #${a.employeeId}`}
                 </span>
-                <span className={`text-[10px] px-2 py-[2px] rounded-full font-medium ${meta.badge}`}>
+                <span
+                  className={`text-[10px] px-2 py-[2px] rounded-full font-medium ${meta.badge}`}
+                >
                   {meta.label}
                 </span>
                 {canReplaceAssignment(request, a) && (
@@ -1252,8 +1658,8 @@ function AssignmentsCard({
           {mine.role === "SUPPORT"
             ? "Từ chối hỗ trợ"
             : request.requestKind === "REPAIR"
-              ? "Từ chối đảm nhận"
-              : "Từ chối bàn giao"}
+            ? "Từ chối đảm nhận"
+            : "Từ chối bàn giao"}
         </button>
       )}
     </div>
@@ -1267,7 +1673,7 @@ function StockInOrderCard({ request }: { request: ExpenseRequest }) {
   const items: StockInItem[] = (stocked ? order.items : order.draftItems) || [];
   const total = items.reduce(
     (sum, it) => sum + (Number(it.unitPrice) || 0) * it.quantity,
-    0,
+    0
   );
 
   return (
@@ -1278,7 +1684,9 @@ function StockInOrderCard({ request }: { request: ExpenseRequest }) {
         </h3>
         <span
           className={`text-[10px] px-2 py-[2px] rounded-full font-medium ${
-            stocked ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+            stocked
+              ? "bg-green-100 text-green-700"
+              : "bg-amber-100 text-amber-700"
           }`}
         >
           {stocked ? "Đã nhập kho" : "Chờ người xử lý nhập kho"}
@@ -1290,31 +1698,53 @@ function StockInOrderCard({ request }: { request: ExpenseRequest }) {
         {order.warehouseReceipt?.code && (
           <Field label="Phiếu kho" value={order.warehouseReceipt.code} strong />
         )}
-        {order.creator?.name && <Field label="Giám đốc lập" value={order.creator.name} />}
+        {order.creator?.name && (
+          <Field label="Giám đốc lập" value={order.creator.name} />
+        )}
         <Field
           label="Người xử lý"
-          value={request.stockInHandler?.name || (request.stockInHandlerId ? `NV #${request.stockInHandlerId}` : "—")}
+          value={
+            request.stockInHandler?.name ||
+            (request.stockInHandlerId ? `NV #${request.stockInHandlerId}` : "—")
+          }
         />
         <Field
           label="Người nghiệm thu"
-          value={request.acceptor?.name || (request.acceptorId ? `NV #${request.acceptorId}` : "—")}
+          value={
+            request.acceptor?.name ||
+            (request.acceptorId ? `NV #${request.acceptorId}` : "—")
+          }
         />
         {stocked && order.stockedAt && (
           <Field label="Ngày nhập kho" value={formatDate(order.stockedAt)} />
         )}
-        {order.draftNote && <Field label="Ghi chú của Giám đốc" value={order.draftNote} span />}
-        {order.note && <Field label="Ghi chú nhập kho" value={order.note} span />}
+        {order.draftNote && (
+          <Field label="Ghi chú của Giám đốc" value={order.draftNote} span />
+        )}
+        {order.note && (
+          <Field label="Ghi chú nhập kho" value={order.note} span />
+        )}
       </div>
 
       <div className="mt-3 overflow-x-auto">
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="bg-cyan-50 text-cyan-800">
-              <th className="border border-cyan-100 px-2 py-1.5 text-left font-semibold">Thiết bị</th>
-              <th className="border border-cyan-100 px-2 py-1.5 text-right font-semibold w-12">SL</th>
-              <th className="border border-cyan-100 px-2 py-1.5 text-left font-semibold w-16">ĐVT</th>
-              <th className="border border-cyan-100 px-2 py-1.5 text-right font-semibold">Đơn giá</th>
-              <th className="border border-cyan-100 px-2 py-1.5 text-right font-semibold">Thành tiền</th>
+              <th className="border border-cyan-100 px-2 py-1.5 text-left font-semibold">
+                Thiết bị
+              </th>
+              <th className="border border-cyan-100 px-2 py-1.5 text-right font-semibold w-12">
+                SL
+              </th>
+              <th className="border border-cyan-100 px-2 py-1.5 text-left font-semibold w-16">
+                ĐVT
+              </th>
+              <th className="border border-cyan-100 px-2 py-1.5 text-right font-semibold">
+                Đơn giá
+              </th>
+              <th className="border border-cyan-100 px-2 py-1.5 text-right font-semibold">
+                Thành tiền
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -1326,13 +1756,19 @@ function StockInOrderCard({ request }: { request: ExpenseRequest }) {
                     <span className="ml-1 text-[10px] text-cyan-600">🆕</span>
                   )}
                 </td>
-                <td className="border border-gray-200 px-2 py-1.5 text-right">{item.quantity}</td>
-                <td className="border border-gray-200 px-2 py-1.5 text-gray-600">{item.unit || "—"}</td>
+                <td className="border border-gray-200 px-2 py-1.5 text-right">
+                  {item.quantity}
+                </td>
+                <td className="border border-gray-200 px-2 py-1.5 text-gray-600">
+                  {item.unit || "—"}
+                </td>
                 <td className="border border-gray-200 px-2 py-1.5 text-right text-gray-600">
                   {item.unitPrice ? formatVnd(item.unitPrice) : "—"}
                 </td>
                 <td className="border border-gray-200 px-2 py-1.5 text-right">
-                  {item.unitPrice ? formatVnd(Number(item.unitPrice) * item.quantity) : "—"}
+                  {item.unitPrice
+                    ? formatVnd(Number(item.unitPrice) * item.quantity)
+                    : "—"}
                 </td>
               </tr>
             ))}
@@ -1340,7 +1776,10 @@ function StockInOrderCard({ request }: { request: ExpenseRequest }) {
           {total > 0 && (
             <tfoot>
               <tr>
-                <td colSpan={4} className="border border-gray-200 px-2 py-1.5 text-right font-semibold">
+                <td
+                  colSpan={4}
+                  className="border border-gray-200 px-2 py-1.5 text-right font-semibold"
+                >
                   Tổng
                 </td>
                 <td className="border border-gray-200 px-2 py-1.5 text-right font-semibold">
@@ -1368,9 +1807,11 @@ function SchoolPolicyDetails({
   loading: boolean;
   error: string;
 }) {
-  const [selectedSchoolYear, setSelectedSchoolYear] = useState("");
+  const [selectedSchoolYear, setSelectedSchoolYear] = useState(
+    DEFAULT_SCHOOL_YEAR,
+  );
   const [selectedSubjectId, setSelectedSubjectId] = useState<number | null>(
-    null,
+    null
   );
 
   const schoolYears = useMemo(() => {
@@ -1383,7 +1824,7 @@ function SchoolPolicyDetails({
     ];
 
     return years.sort(
-      (first, second) => getSchoolYearStart(second) - getSchoolYearStart(first),
+      (first, second) => getSchoolYearStart(second) - getSchoolYearStart(first)
     );
   }, [subjects]);
 
@@ -1402,26 +1843,21 @@ function SchoolPolicyDetails({
 
     if (schoolYears.includes(selectedSchoolYear)) return;
 
-    const today = new Date();
-    const currentStartYear =
-      today.getMonth() + 1 >= 8
-        ? today.getFullYear()
-        : today.getFullYear() - 1;
-    const currentSchoolYear = schoolYears.find(
-      (schoolYear) => getSchoolYearStart(schoolYear) === currentStartYear,
+    setSelectedSchoolYear(
+      schoolYears.includes(DEFAULT_SCHOOL_YEAR)
+        ? DEFAULT_SCHOOL_YEAR
+        : schoolYears[0],
     );
-
-    setSelectedSchoolYear(currentSchoolYear || schoolYears[0]);
   }, [schoolYear, schoolYears, selectedSchoolYear]);
 
   const filteredSubjects = useMemo(
     () =>
       selectedSchoolYear
         ? subjects.filter(
-            (subject) => subject.schoolYear === selectedSchoolYear,
+            (subject) => subject.schoolYear === selectedSchoolYear
           )
         : subjects,
-    [selectedSchoolYear, subjects],
+    [selectedSchoolYear, subjects]
   );
 
   useEffect(() => {
@@ -1481,12 +1917,20 @@ function SchoolPolicyDetails({
               label="Mã hợp đồng"
               value={school.contractCode || school.contractNumber}
             />
-            <DetailField label="Thời hạn hợp đồng" value={school.contractYears} />
+            <DetailField
+              label="Thời hạn hợp đồng"
+              value={school.contractYears}
+            />
             <DetailField label="Phụ lục" value={school.appendix} />
-            <DetailField label="Thời hạn phụ lục" value={school.appendixYears} />
+            <DetailField
+              label="Thời hạn phụ lục"
+              value={school.appendixYears}
+            />
             <DetailField
               label="Ngày bắt đầu"
-              value={school.startDate ? formatDate(school.startDate) : undefined}
+              value={
+                school.startDate ? formatDate(school.startDate) : undefined
+              }
             />
           </div>
         )}
@@ -1646,10 +2090,7 @@ function SchoolPolicyDetails({
                     className="space-y-4"
                   >
                     <div className="bg-white rounded-xl border border-slate-200 p-3 grid grid-cols-2 md:grid-cols-4 gap-3">
-                      <DetailField
-                        label="Mã chính sách"
-                        value={policy?.id}
-                      />
+                      <DetailField label="Mã chính sách" value={policy?.id} />
                       <DetailField label="Trạng thái" value={policy?.status} />
                       <DetailField
                         label="Thời hạn (tháng)"
@@ -1765,7 +2206,9 @@ function Field({
   return (
     <div className={span ? "col-span-2" : ""}>
       <div className="text-xs text-gray-400">{label}</div>
-      <div className={`text-gray-800 ${strong ? "font-semibold" : ""}`}>{value}</div>
+      <div className={`text-gray-800 ${strong ? "font-semibold" : ""}`}>
+        {value}
+      </div>
     </div>
   );
 }
@@ -1789,10 +2232,36 @@ function ActionButton({
   onOpenModal: (m: ModalKind) => void;
 }) {
   const equipment = kind === "EQUIPMENT";
-  const cfg: Record<ActionKey, { label: string; color: string; onClick: () => void }> = {
+  const cfg: Record<
+    ActionKey,
+    { label: string; color: string; onClick: () => void }
+  > = {
+    submitToChief: {
+      label: "📤 Gửi Kế toán trưởng",
+      color: "bg-indigo-600",
+      onClick: () => onOpenModal("submitToChief"),
+    },
+    chiefApprove: {
+      label: "✔️ KTT duyệt",
+      color: "bg-blue-500",
+      onClick: () => onOpenModal("chiefApprove"),
+    },
+    chiefReject: {
+      label: "❌ Từ chối",
+      color: "bg-red-500",
+      onClick: () => onOpenModal("chiefReject"),
+    },
     approve: { label: "✔️ Duyệt", color: "bg-blue-500", onClick: onApprove },
-    reject: { label: "❌ Từ chối", color: "bg-red-500", onClick: () => onOpenModal("reject") },
-    withdraw: { label: "🗑️ Rút đề xuất", color: "bg-gray-500", onClick: () => onOpenModal("withdraw") },
+    reject: {
+      label: "❌ Từ chối",
+      color: "bg-red-500",
+      onClick: () => onOpenModal("reject"),
+    },
+    withdraw: {
+      label: "🗑️ Rút đề xuất",
+      color: "bg-gray-500",
+      onClick: () => onOpenModal("withdraw"),
+    },
     edit: {
       label: status === "APPROVED" ? "✏️ Sửa (duyệt lại)" : "✏️ Sửa đề xuất",
       color: "bg-indigo-500",
@@ -1811,7 +2280,9 @@ function ActionButton({
     },
     paymentOrder: {
       label:
-        status === "FUND_RETURNED"
+        status === "PENDING_ACCOUNTING"
+          ? "💵 Nhập số tiền"
+          : status === "FUND_RETURNED"
           ? "🧾 Lên lại lệnh chi"
           : "🧾 Lên lệnh chi",
       color: "bg-purple-500",
@@ -1836,6 +2307,16 @@ function ActionButton({
       label: equipment ? "✅ Đã bàn giao" : "✅ Đã chi",
       color: "bg-green-500",
       onClick: () => onOpenModal("confirmSpent"),
+    },
+    partialSpent: {
+      label: "🧩 Đã chi một phần",
+      color: "bg-teal-600",
+      onClick: () => onOpenModal("partialSpent"),
+    },
+    remainderReturned: {
+      label: "🏦 Nhận lại phần dư",
+      color: "bg-green-600",
+      onClick: () => onOpenModal("remainderReturned"),
     },
     confirmNotSpent: {
       label: equipment ? "↩️ Chưa dùng" : "↩️ Chưa chi",

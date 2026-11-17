@@ -3,6 +3,10 @@ import { toast } from "react-hot-toast";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 
 import { getApiErrorMessage } from "@/utils/apiError";
+import {
+  DEFAULT_SCHOOL_YEAR,
+  includeDefaultSchoolYear,
+} from "@/constants/schoolYear";
 import { subjectApi, type Subject } from "@/service/subject.api";
 import SubjectFormModal, {
   type EditableSubject,
@@ -48,7 +52,7 @@ export default function SubjectManagePage() {
   const { schools } = useTeachingRefData();
 
   const [schoolId, setSchoolId] = useState("");
-  const [schoolYear, setSchoolYear] = useState("");
+  const [schoolYear, setSchoolYear] = useState(DEFAULT_SCHOOL_YEAR);
 
   const { subjects, loading, reload } = useSubjectsOfSchool(schoolId);
 
@@ -62,7 +66,9 @@ export default function SubjectManagePage() {
 
   const schoolYearOptions = useMemo(
     () =>
-      Array.from(new Set(subjects.map((item) => item.schoolYear).filter(Boolean)))
+      includeDefaultSchoolYear(
+        subjects.map((item) => item.schoolYear).filter(Boolean) as string[],
+      )
         .sort((a, b) => (b as string).localeCompare(a as string, "vi")),
     [subjects],
   );
@@ -77,7 +83,7 @@ export default function SubjectManagePage() {
 
   const changeSchool = (value: string) => {
     setSchoolId(value);
-    setSchoolYear("");
+    setSchoolYear(DEFAULT_SCHOOL_YEAR);
   };
 
   const handleDelete = async () => {

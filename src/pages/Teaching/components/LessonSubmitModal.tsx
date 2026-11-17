@@ -1,14 +1,16 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { TeachingSession } from "@/types/teaching";
 import Modal, { Field, inputClass } from "./Modal";
 import { classNameOf, formatTime } from "../lib";
 
 const MAX_IMAGES = 10;
+const MAX_FILE_BYTES = 50 * 1024 * 1024;
 
 export type LessonSubmitContent = {
   lessonName: string;
   lessonEvaluation: string;
+  actualStudentCount: number;
   images: File[];
 };
 
@@ -35,16 +37,30 @@ export default function LessonSubmitModal({
 }: Props) {
   const [lessonName, setLessonName] = useState("");
   const [lessonEvaluation, setLessonEvaluation] = useState("");
+  const [actualStudentCount, setActualStudentCount] = useState("");
   const [images, setImages] = useState<File[]>([]);
+  const [fileError, setFileError] = useState("");
 
   const previews = useMemo(
     () => images.map((file) => ({ file, url: URL.createObjectURL(file) })),
     [images],
   );
 
+  useEffect(
+    () => () => previews.forEach((preview) => URL.revokeObjectURL(preview.url)),
+    [previews],
+  );
+
   const addFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    setImages((prev) => [...prev, ...Array.from(files)].slice(0, MAX_IMAGES));
+    const selected = Array.from(files);
+    const oversized = selected.find((file) => file.size > MAX_FILE_BYTES);
+    if (oversized) {
+      setFileError(`Tệp ${oversized.name} vượt quá 50 MB.`);
+      return;
+    }
+    setFileError("");
+    setImages((prev) => [...prev, ...selected].slice(0, MAX_IMAGES));
   };
 
   const removeImage = (index: number) =>
@@ -52,12 +68,22 @@ export default function LessonSubmitModal({
 
   const trimmedName = lessonName.trim();
   const trimmedEvaluation = lessonEvaluation.trim();
-  const disabled = !trimmedName || !trimmedEvaluation;
+  const parsedStudentCount = Number(actualStudentCount);
+  const validStudentCount =
+    actualStudentCount.trim() !== "" &&
+    Number.isInteger(parsedStudentCount) &&
+    parsedStudentCount >= 0;
+  const disabled =
+    !trimmedName ||
+    !trimmedEvaluation ||
+    !validStudentCount ||
+    images.length === 0 ||
+    !!fileError;
 
   return (
     <Modal
-      title={mode === "checkout" ? "Check-out & nội dung bài dạy" : "Nộp nội dung bài dạy"}
-      submitLabel={mode === "checkout" ? "Check-out" : "Gửi"}
+      title={mode === "checkout" ? "Check-out & báo giảng" : "Báo giảng"}
+      submitLabel={mode === "checkout" ? "Check-out & báo giảng" : "Gửi báo giảng"}
       loading={loading}
       disabled={disabled}
       onClose={onClose}
@@ -65,6 +91,7 @@ export default function LessonSubmitModal({
         onSubmit({
           lessonName: trimmedName,
           lessonEvaluation: trimmedEvaluation,
+          actualStudentCount: parsedStudentCount,
           images,
         })
       }
@@ -96,7 +123,37 @@ export default function LessonSubmitModal({
         />
       </Field>
 
-      <Field label="Ảnh minh chứng" hint={`Tối đa ${MAX_IMAGES} ảnh`}>
+      <Field
+        label="Sĩ số thực tế"
+        required
+        error={
+          actualStudentCount && !validStudentCount
+            ? "Sĩ số phải là số nguyên từ 0 trở lên."
+            : undefined
+        }
+      >
+        <input
+          className={inputClass}
+          type="number"
+          inputMode="numeric"
+          min={0}
+          step={1}
+          value={actualStudentCount}
+          onChange={(e) => setActualStudentCount(e.target.value)}
+          placeholder={
+            session.classStudentCount != null
+              ? `Sĩ số lớp: ${session.classStudentCount}`
+              : "Nhập số học sinh có mặt"
+          }
+        />
+      </Field>
+
+      <Field
+        label="Ảnh minh chứng"
+        required
+        error={fileError || undefined}
+        hint={`Bắt buộc ít nhất 1 ảnh, tối đa ${MAX_IMAGES} ảnh; mỗi ảnh không quá 50 MB`}
+      >
         <input
           type="file"
           accept="image/*"
@@ -132,6 +189,13 @@ export default function LessonSubmitModal({
           </div>
         )}
       </Field>
+
+      {mode === "lesson-only" && session.checkoutAt && (
+        <p className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
+          Check-out đã được lưu. Báo giảng chỉ hoàn tất khi màn hình
+          hiển thị “Đã báo giảng thành công”.
+        </p>
+      )}
     </Modal>
   );
 }

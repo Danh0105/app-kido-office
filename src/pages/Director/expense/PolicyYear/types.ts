@@ -13,12 +13,20 @@ export type PolicySubject = {
   companyProfitPerHS?: number;
   cashSupportAmount?: number;
   equipmentSupportAmount?: number;
+  /** Loại tính học phí của chính sách được duyệt. */
+  billingMode?: "HS" | "TIET";
+  classCount?: number;
+  declaredStudentCount?: number;
+  declaredPeriods?: number;
 };
 
 export type PolicyMonthlyInput = {
   id: number;
   subjectId: number;
   month: string;
+  /** Tên kỳ kế toán đã đổi (vd. "Lần 1 năm 2026") — hiển thị thay cho MM/YYYY */
+  monthLabel?: string;
+  totalPeriods: number;
   studentCount: number;
   unitPrice: number;
   monthsCount: number;
@@ -59,6 +67,7 @@ export type PolicyYear = {
 };
 
 export type PolicySummary = {
+  totalPeriods: number;
   totalStudents: number;
   totalRevenue: number;
   totalTkd: number;

@@ -6,7 +6,7 @@ import type { BulkScheduleResult, SchoolClassWithSubject, Teacher } from "@/type
 import { getApiErrorMessage } from "@/utils/apiError";
 import Modal, { Field, inputClass } from "./Modal";
 import { DAY_OF_WEEK_OPTIONS } from "@/types/teaching";
-import { currentSchoolYear, endOfMonth, startOfMonth, todayISO } from "../lib";
+import { currentSchoolYear, defaultScheduleEffectiveTo, endOfMonth, startOfMonth, todayISO } from "../lib";
 import SearchableSelect from "@/components/SearchableSelect";
 
 type Props = { teachers: Teacher[]; onClose: () => void; onCreated: () => void };
@@ -23,7 +23,7 @@ export default function BulkScheduleWizard({ teachers, onClose, onCreated }: Pro
   const [startTime, setStartTime] = useState("07:30");
   const [endTime, setEndTime] = useState("09:00");
   const [from, setFrom] = useState(startOfMonth(todayISO()));
-  const [to, setTo] = useState(endOfMonth(todayISO()));
+  const [to, setTo] = useState(defaultScheduleEffectiveTo());
   const [generate, setGenerate] = useState(true);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<BulkScheduleResult | null>(null);

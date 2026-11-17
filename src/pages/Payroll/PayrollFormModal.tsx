@@ -22,6 +22,19 @@ import {
 /** Hai khoản phát sinh riêng theo từng tháng — không tự mang sang tháng kế tiếp. */
 const NON_RECURRING_FIELDS: PayrollNumberField[] = ["adjustmentAmount", "advancePayment"];
 
+/** Các trường ngày/công có thể nhập lẻ; các trường còn lại là tiền VND nguyên. */
+const DECIMAL_NUMBER_FIELDS = new Set<PayrollNumberField>([
+  "standardWorkingDays",
+  "probationWorkingDays",
+  "officialWorkingDays",
+  "annualLeaveDays",
+  "holidayDays",
+  "unpaidLeaveDays",
+  "excessPeriods",
+  "remainingLeavePreviousYear",
+  "remainingLeaveCurrentYear",
+]);
+
 const FIELD_GROUPS: {
   title: string;
   hint?: string;
@@ -353,6 +366,7 @@ export default function PayrollFormModal({
                       <DecimalInput
                         value={numbers[field.key]}
                         min={field.allowNegative ? -999_999_999_999 : 0}
+                        allowDecimal={DECIMAL_NUMBER_FIELDS.has(field.key)}
                         disabled={isAutoFuelAllowance && fuelAllowanceLoading}
                         onValueChange={(value) =>
                           setNumbers((current) => ({ ...current, [field.key]: value }))

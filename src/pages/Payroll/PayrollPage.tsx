@@ -46,7 +46,8 @@ const emptyResult = (): PayrollListResponse => ({
 });
 
 export default function PayrollPage() {
-  const canViewAll = hasRole("nhansu", "ketoan_truong", "director", "director_la");
+  // Khớp PAYROLL_VIEW_ALL_ROLES ở backend; trợ lý GĐ chỉ xem.
+  const canViewAll = hasRole("nhansu", "ketoan_truong", "director", "director_la", "troly_gd");
   const canManage = hasRole("nhansu", "ketoan_truong");
   const currentPeriod = currentPayrollPeriod();
   const requestId = useRef(0);

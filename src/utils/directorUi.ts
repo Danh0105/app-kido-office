@@ -73,6 +73,14 @@ export const brandHomeCopy = () => {
         "Theo dõi chính sách, trường học, thống kê và đề xuất chi trong giao diện đồng bộ với nhận diện Kido.",
     };
   }
+  if (hasRole("troly_gd")) {
+    return {
+      label: "Trợ lý giám đốc",
+      title: "Không gian hỗ trợ quản lý hôm nay",
+      description:
+        "Theo dõi chính sách, trường học, thống kê và các nghiệp vụ được phân công trong giao diện quản lý Kido.",
+    };
+  }
   if (hasRole(...ACCOUNTING_ROLES)) {
     return {
       label: "Kế toán - tài chính",

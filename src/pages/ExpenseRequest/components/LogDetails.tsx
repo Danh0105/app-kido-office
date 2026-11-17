@@ -1,13 +1,16 @@
 import {
+  CASHFLOW_SOURCE_META,
   EQUIPMENT_SOURCE_META,
   FUND_SOURCE_LABEL,
   KIND_META,
   PAYMENT_METHOD_LABEL,
+  type CashflowPaymentLog,
   type ExpenseLog,
   type ExpenseLogDetails,
   type ExpenseLogPerson,
 } from "@/types/expenseRequest";
 import { formatVnd } from "@/utils/decimal";
+import { invoiceCashAccountLabel } from "@/pages/Director/expense/RealExpenseDetail/utils/invoiceCashAccounts";
 import { formatDate, mainAssigneeLabel } from "../lib";
 import type { ExpenseRequestKind } from "@/types/expenseRequest";
 
@@ -20,8 +23,41 @@ const money = (value?: number | null) =>
 /** Có dữ liệu chi tiết thật không — log cũ lưu `{}`. */
 export const hasLogDetails = (log: ExpenseLog) => {
   const d = log.data;
-  return !!d && typeof d === "object" && Object.keys(d).length > 0;
+  // Ảnh chụp Bảng Chi Ngoài có khung riêng, không tính là chi tiết của bước.
+  return (
+    !!d &&
+    typeof d === "object" &&
+    Object.keys(d).some((key) => key !== "managementExpense")
+  );
 };
+
+/** Phần đề xuất đã ghi ngược về bảng nguồn ở QL thu chi khi kinh doanh xác nhận chi. */
+function CashflowSync({ log }: { log?: CashflowPaymentLog | null }) {
+  if (!log) return null;
+  const table = log.table || "Chi Ngoài";
+  if (log.skipped) {
+    return <p className="mt-1 text-xs text-amber-700">⚠️ {log.skipped}</p>;
+  }
+  const rows = (log.items ?? []).flatMap((item) => item.rows ?? []);
+  const total = rows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  const unallocated = (log.items ?? []).reduce(
+    (sum, item) => sum + Number(item.unallocated || 0),
+    0
+  );
+  return (
+    <div className="mt-1 text-xs text-gray-700">
+      Đã ghi {money(total)} vào {rows.length} dòng {table}
+      {log.paidDate ? ` · ngày chi ${formatDate(log.paidDate)}` : ""}
+      {log.cashAccount ? ` · nguồn ${invoiceCashAccountLabel(log.cashAccount)}` : ""}
+      {unallocated > 0 && (
+        <span className="text-amber-700">
+          {" "}
+          · {money(unallocated)} không còn dòng nào để ghi (bảng đổi sau khi duyệt)
+        </span>
+      )}
+    </div>
+  );
+}
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -180,21 +216,127 @@ function StepDetails({ log, kind: requestKind }: { log: ExpenseLog; kind?: Expen
     }
 
     case "CREATE_PAYMENT_ORDER":
-    case "EDIT_PAYMENT_ORDER": {
+    case "EDIT_PAYMENT_ORDER":
+    case "CREATE_MONTHLY_PAYMENT_ORDER":
+    case "EDIT_MONTHLY_PAYMENT_ORDER":
+    case "APPROVE_MONTHLY": {
       const po = d.paymentOrder;
       if (!po) return null;
+      // Lệnh chi hệ thống lập lúc Giám đốc duyệt: hình thức chỉ là ghi tạm,
+      // đổi theo tài khoản Thủ quỹ chọn khi xuất tiền nên không hiện ở đây.
+      const fromTable = log.action === "APPROVE_MONTHLY" && d.amountFromManagementExpense;
       return (
         <Box tone="border-purple-100 bg-purple-50">
           {po.code && <Row label="Mã lệnh chi">{po.code}</Row>}
-          {po.amount != null && <Row label="Số tiền">{money(po.amount)}</Row>}
-          {po.paymentMethod && (
+          {po.amount != null && (
+            <Row label="Số tiền">
+              {money(po.amount)}
+              {fromTable &&
+                ` (tổng Còn chi bảng ${CASHFLOW_SOURCE_META[d.cashflowSource ?? "MANAGEMENT"].table})`}
+            </Row>
+          )}
+          {po.paymentMethod && !fromTable && (
             <Row label="Hình thức">{PAYMENT_METHOD_LABEL[po.paymentMethod] || po.paymentMethod}</Row>
+          )}
+          {log.action === "APPROVE_MONTHLY" && d.items?.some((item) => !item.approved) && (
+            <ul className="mt-1 space-y-0.5">
+              {d.items.map((item) => (
+                <li key={item.id} className="text-xs text-gray-700">
+                  {item.approved ? "✅" : "⛔"} {item.label} · {money(item.amount)}
+                  {!item.approved && " (không duyệt)"}
+                </li>
+              ))}
+            </ul>
           )}
         </Box>
       );
     }
 
+    // Quy trình Kế toán: số Kế toán chốt từ QL thu chi / Giám đốc duyệt.
+    case "SUBMIT_TO_CHIEF_ACCOUNTANT":
+    case "APPROVE_MONTHLY_CHAIN": {
+      if (d.amount == null && !d.items?.length) return null;
+      const submit = log.action === "SUBMIT_TO_CHIEF_ACCOUNTANT";
+      return (
+        <Box tone="border-indigo-100 bg-indigo-50">
+          {d.amount != null && (
+            <Row label={submit ? "Số tiền chốt" : "Số tiền duyệt"}>
+              {money(d.amount)}
+              {submit && d.cashflowTable && ` (Còn lại bảng ${d.cashflowTable})`}
+            </Row>
+          )}
+          {!!d.items?.length && (
+            <ul className="mt-1 space-y-0.5">
+              {d.items.map((item, index) => (
+                <li key={item.id ?? index} className="text-xs text-gray-700">
+                  {item.approved === false ? "⛔" : "✅"} {item.label} · {money(item.amount)}
+                  {item.approved === false && " (không duyệt)"}
+                </li>
+              ))}
+            </ul>
+          )}
+          {!!d.skippedItems?.length && (
+            <ul className="mt-1 space-y-0.5">
+              {d.skippedItems.map((item, index) => (
+                <li key={index} className="text-xs text-amber-700">
+                  ⏭️ {item.label} · {money(item.amount)} (đang trong {item.code}, bỏ qua)
+                </li>
+              ))}
+            </ul>
+          )}
+        </Box>
+      );
+    }
+
+    case "CONFIRM_SPENT": {
+      const sync = d.cashflowPayment ?? d.chiNgoai;
+      return sync ? (
+        <Box tone="border-teal-100 bg-teal-50">
+          <CashflowSync log={sync} />
+        </Box>
+      ) : null;
+    }
+
+    case "CONFIRM_PARTIALLY_SPENT": {
+      const partial = d.partialSpend;
+      if (!partial) return null;
+      return (
+        <Box tone="border-teal-100 bg-teal-50">
+          <Row label="Đã chi">{money(partial.spentAmount)}</Row>
+          <Row label="Hoàn quỹ">{money(partial.returnAmount)}</Row>
+          <ul className="mt-1 space-y-0.5">
+            {partial.items.map((item) => (
+              <li key={item.id} className="text-xs text-gray-700">
+                {item.spent ? "✅" : "↩️"} {item.label}
+                {item.amount != null && ` · ${money(item.amount)}`}
+                {!item.spent && " (không chi)"}
+              </li>
+            ))}
+          </ul>
+          <CashflowSync log={d.cashflowPayment ?? d.chiNgoai} />
+        </Box>
+      );
+    }
+
+    case "CONFIRM_REMAINDER_RETURNED":
+      return d.returnAmount != null ? (
+        <Box tone="border-green-100 bg-green-50">
+          <Row label="Phần dư nhận lại">{money(d.returnAmount)}</Row>
+          {d.cashAccount && (
+            <Row label="Về tài khoản">{invoiceCashAccountLabel(d.cashAccount)}</Row>
+          )}
+        </Box>
+      ) : null;
+
     case "CONFIRM_CASH_RELEASED":
+      // Log mới lưu tài khoản (Nguồn chi); log cũ chỉ có nhóm (Nguồn tiền).
+      if (d.cashAccount) {
+        return (
+          <Box tone="border-orange-100 bg-orange-50">
+            <Row label="Nguồn chi">{invoiceCashAccountLabel(d.cashAccount)}</Row>
+          </Box>
+        );
+      }
       return d.fundSource ? (
         <Box tone="border-orange-100 bg-orange-50">
           <Row label="Nguồn tiền">{FUND_SOURCE_LABEL[d.fundSource]}</Row>

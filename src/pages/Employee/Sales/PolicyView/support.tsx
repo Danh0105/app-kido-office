@@ -100,6 +100,7 @@ const DefaultVsActual = ({
     thanhTien,
     missingThanhTien,
     thanhTienFormula,
+    remaining,
 }: {
     isTiet: boolean;
     donGiaLabel: string;
@@ -113,6 +114,8 @@ const DefaultVsActual = ({
     thanhTien: number;
     missingThanhTien: boolean;
     thanhTienFormula: string;
+    /** Chỉ thiết bị: Thành tiền (thực tế nhập) − Số tiền khấu hao (null = chưa đủ số liệu). */
+    remaining?: number | null;
 }) => (
     <div className="grid grid-cols-2 gap-3">
         <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 space-y-1.5">
@@ -150,17 +153,38 @@ const DefaultVsActual = ({
                 </div>
             )}
             <div className="text-[10px] text-blue-500">{csKyHDFormula}</div>
-            <div className="text-xs text-blue-700 pt-1 border-t border-blue-200">
-                Thành tiền
-            </div>
-            {missingThanhTien ? (
-                <div className="text-[11px] italic text-red-500">Chưa nhập đủ số liệu</div>
-            ) : (
-                <div className="font-semibold text-blue-700">
-                    {thanhTien.toLocaleString()} đ
+            <div
+                className={`grid gap-3 pt-1 border-t border-blue-200 ${
+                    remaining === undefined ? "" : "sm:grid-cols-2"
+                }`}
+            >
+                <div className="space-y-1.5">
+                    <div className="text-xs text-blue-700">Thành tiền</div>
+                    {missingThanhTien ? (
+                        <div className="text-[11px] italic text-red-500">Chưa nhập đủ số liệu</div>
+                    ) : (
+                        <div className="font-semibold text-blue-700">
+                            {thanhTien.toLocaleString()} đ
+                        </div>
+                    )}
+                    <div className="text-[10px] text-blue-500">{thanhTienFormula}</div>
                 </div>
-            )}
-            <div className="text-[10px] text-blue-500">{thanhTienFormula}</div>
+                {remaining !== undefined && (
+                    <div className="space-y-1.5 border-t border-blue-200 pt-1 sm:border-t-0 sm:border-l sm:pl-3 sm:pt-0">
+                        <div className="text-xs text-blue-700">Còn khấu hao</div>
+                        {remaining === null ? (
+                            <div className="text-[11px] italic text-red-500">Chưa nhập đủ số liệu</div>
+                        ) : (
+                            <div className="font-semibold text-blue-700">
+                                {remaining.toLocaleString()} đ
+                            </div>
+                        )}
+                        <div className="text-[10px] text-blue-500">
+                            = Thành tiền − Số tiền khấu hao
+                        </div>
+                    </div>
+                )}
+            </div>
         </div>
     </div>
 );
@@ -411,6 +435,11 @@ export default function Support({ cdhd, data, studentPerClass, periods, mode }: 
                                     isTiet
                                         ? "= Đơn giá 1 tiết × Số học sinh thực × Số tiết thực"
                                         : "= Đơn giá × Số học sinh × Số tháng"
+                                }
+                                remaining={
+                                    thanhTienThucTe > 0 && depreciatedTotal > 0
+                                        ? Math.round(thanhTienThucTe - depreciatedTotal)
+                                        : null
                                 }
                             />
                         </div>

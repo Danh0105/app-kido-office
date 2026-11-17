@@ -57,8 +57,16 @@ const TEACHER_PAGE_SIZE = 100;
  */
 const MAX_TEACHER_PAGES = 10;
 
-/** Danh sách trường + xã/phường + giáo viên dùng cho thanh lọc và form của cả module. */
-export function useTeachingRefData() {
+/**
+ * Danh sách trường + xã/phường + giáo viên dùng cho thanh lọc và form của cả module.
+ *
+ * `schoolsOfEmployee`: chỉ nạp các trường nhân viên đó phụ trách
+ * (`/schools/by-employee/:id`) — màn chỉ-xem của kinh doanh không cần kéo về
+ * toàn bộ trường kèm chi phí, và chọn trường ngoài phạm vi cũng chỉ ra rỗng.
+ */
+export function useTeachingRefData({
+  schoolsOfEmployee,
+}: { schoolsOfEmployee?: number } = {}) {
   const [schools, setSchools] = useState<RefOption[]>([]);
   const [provinces, setProvinces] = useState<RefOption[]>([]);
   const [wards, setWards] = useState<RefOption[]>([]);
@@ -108,12 +116,15 @@ export function useTeachingRefData() {
     (async () => {
       setLoading(true);
       try {
-        const res = await schoolApi.getAll({ page: 1, limit: 1000 });
+        const res = schoolsOfEmployee
+          ? await schoolApi.getByEmployee(schoolsOfEmployee)
+          : await schoolApi.getAll({ page: 1, limit: 1000 });
         // `GET /schools` trả kèm `ward`, nên khu vực (tỉnh) của trường suy được
         // ngay ở đây — các màn lọc theo khu vực không phải gọi thêm API.
         if (alive) {
+          // `/schools/by-employee` trả mảng trần, `/schools` trả `{ data }`.
           setSchools(
-            (res?.data || []).map((school: any) => ({
+            (Array.isArray(res) ? res : res?.data || []).map((school: any) => ({
               ...school,
               provinceId:
                 Number(
@@ -164,7 +175,7 @@ export function useTeachingRefData() {
     return () => {
       alive = false;
     };
-  }, [loadTeachers]);
+  }, [loadTeachers, schoolsOfEmployee]);
 
   return { schools, provinces, wards, teachers, loading, reloadTeachers: loadTeachers };
 }

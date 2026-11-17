@@ -49,26 +49,65 @@ export function useLessonSubmit(onChanged: (session: TeachingSession) => void) {
   const submit = async (content: LessonSubmitContent) => {
     if (!pending) return;
     const { session, mode, position } = pending;
+    let checkoutCompleted = mode === "lesson-only" || !!session.checkoutAt;
     setBusyId(session.id);
     try {
       // Check-out (GPS) không nhận nội dung bài dạy — nộp bài là lệnh gọi
       // riêng ngay sau đó, chạy được cho mọi tiết (kể cả tiết giữa block vừa
       // tự check-out) vì lúc này tiết đã có checkoutAt của chính nó.
       if (mode === "checkout" && position) {
-        await teachingSessionApi.checkout(session.id, {
+        const checkedOut = await teachingSessionApi.checkout(session.id, {
           latitude: position.latitude,
           longitude: position.longitude,
           accuracy: position.accuracy,
         });
+        checkoutCompleted = true;
+        // `/checkout` và `/lesson` là hai request độc lập. Nếu upload
+        // bị ngắt sau bước này, lần bấm lại chỉ được gọi `/lesson`;
+        // gọi lại `/checkout` sẽ nhận 409 và khoá luôn đường retry.
+        setPending((current) =>
+          current?.session.id === session.id
+            ? {
+                session: checkedOut,
+                mode: "lesson-only",
+              }
+            : current,
+        );
       }
       const updated = await teachingSessionApi.submitLesson(session.id, content);
+      if (!updated.lessonSubmittedAt) {
+        throw new Error(
+          "Máy chủ chưa xác nhận đã lưu báo giảng. Vui lòng gửi lại.",
+        );
+      }
 
-      toast.success(mode === "checkout" ? "Đã check-out" : "Đã nộp nội dung bài dạy");
+      toast.success("Đã báo giảng thành công");
       onChanged(updated);
       setPending(null);
     } catch (error: any) {
+      // Có thể server đã commit nhưng kết nối mất trước khi client
+      // nhận response. GET lại là nguồn xác nhận duy nhất; không bao
+      // giờ hiển thị thành công chỉ vì request đã được bắt đầu.
+      try {
+        const latest = await teachingSessionApi.findOne(session.id);
+        if (latest.lessonSubmittedAt) {
+          toast.success("Đã báo giảng thành công");
+          onChanged(latest);
+          setPending(null);
+          return;
+        }
+      } catch {
+        // Giữ lỗi gốc; việc kiểm tra lại cũng có thể mất mạng.
+      }
+
       if (error?.response?.status !== 403) {
-        toast.error(getApiErrorMessage(error, "Gửi nội dung bài dạy thất bại"));
+        toast.error(
+          checkoutCompleted &&
+            (!error?.response || error?.response?.status === 499)
+            ? "Kết nối bị gián đoạn khi tải ảnh. Check-out đã lưu nhưng báo giảng chưa được xác nhận; giữ nguyên màn hình và bấm Gửi lại."
+            : getApiErrorMessage(error, "Gửi báo giảng thất bại"),
+          { duration: 8000 },
+        );
       }
     } finally {
       setBusyId(null);

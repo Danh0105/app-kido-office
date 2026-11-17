@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { suggestApi } from "@/service/suggest";
 import { schoolApi } from "@/service/school.api";
 import { subjectApi } from "@/service/subject.api";
 import { policiesApi } from "@/service/policy";
 import { getEmployeeId } from "@/utils/auth";
+import { DEFAULT_SCHOOL_YEAR } from "@/constants/schoolYear";
 import MobileSelect from "./MobileSelect";
 import "./css/suggest.css";
 import { provinceApi } from "@/service/province";
@@ -47,14 +48,15 @@ export default function SuggestPopup({
     const [wards, setWards] = useState<Option[]>([]);
     const [years, setYears] = useState<Option[]>([]);
     const [provinces, setpPovinces] = useState<Option[]>([]);
-    const [schools, setSchools] = useState<Option[]>([]);
+    // Toàn bộ trường của nhân viên (kèm xã/phường, tỉnh) — lọc theo địa bàn ở FE.
+    const [allSchools, setAllSchools] = useState<any[]>([]);
     const [subjects, setSubjects] = useState<Option[]>([]);
     const [policies, setPolicies] = useState<Option[]>([]);
 
     const [selectedRegion, setSelectedRegion] = useState<number | null>(null);
     const [selectedWard, setSelectedWard] = useState<number | null>(null);
     const [selectedSchool, setSelectedSchool] = useState<number | null>(null);
-    const [selectedYear, setSelectedYear] = useState<string | null>(null);
+    const [selectedYear, setSelectedYear] = useState<string | null>(DEFAULT_SCHOOL_YEAR);
     const [selectedSubject, setSelectedSubject] = useState<number | null>(null);
     const [selectedPolicy, setSelectedPolicy] = useState<number | null>(null);
 
@@ -69,6 +71,11 @@ export default function SuggestPopup({
             setpPovinces(mapped);
             if (mapped.length === 1) setSelectedRegion(Number(mapped[0].id));
         });
+
+        schoolApi
+            .getByEmployee(getEmployeeId())
+            .then((res) => setAllSchools(Array.isArray(res) ? res : []))
+            .catch(() => setAllSchools([]));
     }, []);
 
     // ===== fetch wards =====
@@ -91,43 +98,70 @@ export default function SuggestPopup({
         }
     };
 
-    // ===== fetch schools + wards =====
+    // ===== fetch wards =====
     useEffect(() => {
         if (!selectedRegion) return;
 
         setSelectedWard(null);
         setSelectedSchool(null);
-        setSelectedYear(null);
+        setSelectedYear(DEFAULT_SCHOOL_YEAR);
         setSelectedSubject(null);
         setSelectedPolicy(null);
-        setSchools([]);
         setSubjects([]);
         setPolicies([]);
-
-        schoolApi
-            .getByEmployeeRegion(selectedRegion)
-            .then((res) => {
-                setSchools(res);
-            });
 
         fetchWards(selectedRegion);
     }, [selectedRegion]);
 
-    // ===== fetch schools by ward =====
+    // ===== đổi xã/phường =====
     useEffect(() => {
         if (!selectedWard) return;
 
+        // Xã/phường vừa được tự điền theo trường đang chọn → giữ nguyên trường.
+        const school = allSchools.find((s) => Number(s.id) === Number(selectedSchool));
+        if (school && Number(school.ward?.id) === Number(selectedWard)) return;
+
         setSelectedSchool(null);
-        setSelectedYear(null);
+        setSelectedYear(DEFAULT_SCHOOL_YEAR);
         setSelectedSubject(null);
         setSelectedPolicy(null);
         setSubjects([]);
         setPolicies([]);
-
-        schoolApi.getByEmployeeAndWard(getEmployeeId(), selectedWard).then((res) => {
-            setSchools(res);
-        });
     }, [selectedWard]);
+
+    // ===== danh sách trường =====
+    // Chỉ trường thuộc xã/phường được phân công (tạo đề xuất ngoài địa bàn sẽ bị
+    // BE chặn). Chưa chọn xã/phường thì tìm trên cả tỉnh, chọn trường sẽ tự điền
+    // xã/phường.
+    const schools = useMemo<Option[]>(() => {
+        if (!selectedRegion) return [];
+        const wardIds = new Set(wards.map((w) => Number(w.id)));
+
+        return allSchools
+            .filter((s) => {
+                const wardId = Number(s.ward?.id);
+                if (!wardIds.has(wardId)) return false;
+                return !selectedWard || wardId === Number(selectedWard);
+            })
+            .map((s) => ({
+                id: Number(s.id),
+                name: s.name,
+                description: s.address?.trim() || s.ward?.name,
+                keywords: s.ward?.name,
+            }));
+    }, [allSchools, wards, selectedRegion, selectedWard]);
+
+    const handleSelectSchool = (value: number | string | null) => {
+        const schoolId = value ? Number(value) : null;
+        setSelectedSchool(schoolId);
+
+        const wardId = Number(allSchools.find((s) => Number(s.id) === schoolId)?.ward?.id);
+        if (wardId && wardId !== Number(selectedWard)) {
+            setSelectedWard(wardId);
+            setWardError("");
+            setPolicyError("");
+        }
+    };
 
     // ===== fetch subjects =====
     useEffect(() => {
@@ -190,7 +224,7 @@ export default function SuggestPopup({
     // ===== years =====
     useEffect(() => {
         const arr: Option[] = [];
-        const currentYear = new Date().getFullYear();
+        const currentYear = Math.max(new Date().getFullYear(), 2026);
 
         for (let y = 2021; y <= currentYear; y++) {
             arr.push({
@@ -493,10 +527,11 @@ export default function SuggestPopup({
                     {selectedRegion && (
                         <MobileSelect
                             label="Trường"
-                            placeholder="Chọn trường"
+                            placeholder={selectedWard ? "Chọn trường" : "Tìm trường trong tỉnh/thành phố"}
+                            searchPlaceholder="Tên trường, TH/THCS, địa chỉ..."
                             value={selectedSchool}
                             options={schools}
-                            onChange={setSelectedSchool}
+                            onChange={handleSelectSchool}
                         />
                     )}
 

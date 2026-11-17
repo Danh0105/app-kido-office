@@ -77,7 +77,10 @@ export const requestLogin = async (
   try {
     const res = await fetch(LOGIN_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Login-Notice-Version": "1",
+      },
       body: JSON.stringify(payload),
       signal: controller.signal,
     });

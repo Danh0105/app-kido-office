@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import * as faceapi from "face-api.js";
 import { faceApi } from "../../service/face";
+import type { LoginNotice } from "../Auth/LoginNoticeModal";
 type Props = {
-  onSuccess?: (user: any) => void;
+  onSuccess?: (user: any, notice?: LoginNotice) => void;
 };
 // 🎯 VẼ KHUNG GUIDE
 const drawGuideFrame = (
@@ -216,7 +217,7 @@ export default function FaceVerify({ onSuccess }: Props) {
 
             stopCamera();
 
-            onSuccess?.(res.user);
+            onSuccess?.(res.user, res.loginNotice);
           } catch (err) {
             updateStatus("❌ Không nhận diện");
 

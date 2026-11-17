@@ -3,67 +3,69 @@ import api from "./api";
 const BASE_URL = "https://sales.kidoedu.vn";
 
 export const schoolApi = {
-    getAll: async (params?: any) => {
-        const res = await api.get(`/schools`, {
-            params,
-        });
-    
-        return res.data;
-    },
+  getOne: async (id: number) => {
+    const res = await api.get(`/schools/${id}`);
+    return res.data;
+  },
 
-    // BE bỏ qua employeeId nếu gọi qua /schools (chỉ hỗ trợ hasRemainingExpense,
-    // employeeName + phân trang) — phải gọi route riêng /schools/by-employee/:id.
-    getByEmployee: async (employeeId: number) => {
-        const res = await api.get(`/schools/by-employee/${employeeId}`);
-        return res.data;
-    },
+  getAll: async (params?: any) => {
+    const res = await api.get(`/schools`, {
+      params,
+    });
 
-    // ✅ SEARCH SCHOOL
-    search: async (keyword: string) => {
-        const res = await api.get(`/schools/search/${keyword}`);
-        return res.data;
-    },
+    return res.data;
+  },
 
-    create: async (data: any) => {
-        const res = await api.post(`/schools`, data);
-        return res.data;
-    },
+  // BE bỏ qua employeeId nếu gọi qua /schools (chỉ hỗ trợ hasRemainingExpense,
+  // employeeName + phân trang) — phải gọi route riêng /schools/by-employee/:id.
+  getByEmployee: async (employeeId: number) => {
+    const res = await api.get(`/schools/by-employee/${employeeId}`);
+    return res.data;
+  },
 
-    update: async (id: number, data: any) => {
-        const res = await api.put(`/schools/${id}`, data);
-        return res.data;
-    },
+  // ✅ SEARCH SCHOOL
+  search: async (keyword: string) => {
+    const res = await api.get(`/schools/search/${keyword}`);
+    return res.data;
+  },
 
-    resolveGoogleMaps: async (url: string) => {
-        const res = await api.post(`/schools/resolve-google-maps`, { url });
-        return res.data as { latitude: number; longitude: number };
-    },
+  create: async (data: any) => {
+    const res = await api.post(`/schools`, data);
+    return res.data;
+  },
 
-    updateStatus: async (id: number, status: number) => {
-        const res = await api.patch(`/schools/${id}/status`, { status });
-        return res.data;
-    },
+  update: async (id: number, data: any) => {
+    const res = await api.put(`/schools/${id}`, data);
+    return res.data;
+  },
 
-    getByEmployeeRegion: async (employeeRegionId: number) => {
-        const res = await api.get(`/schools/employee-region/${employeeRegionId}`);
-        return res.data;
-    },
+  resolveGoogleMaps: async (url: string) => {
+    const res = await api.post(`/schools/resolve-google-maps`, { url });
+    return res.data as { latitude: number; longitude: number };
+  },
 
-    getWithoutEmployeeRegion: async () => {
-        const res = await api.get(`/schools/no-employee-region`);
-        return res.data;
-    },
+  updateStatus: async (id: number, status: number) => {
+    const res = await api.patch(`/schools/${id}/status`, { status });
+    return res.data;
+  },
 
-    getByEmployeeAndWard: async (
-        employeeId: number,
-        wardId: number
-    ) => {
-        const res = await api.get(`/schools/by-employee-ward`, {
-            params: { employeeId, wardId },
-        });
+  getByEmployeeRegion: async (employeeRegionId: number) => {
+    const res = await api.get(`/schools/employee-region/${employeeRegionId}`);
+    return res.data;
+  },
 
-        return res.data;
-    },
+  getWithoutEmployeeRegion: async () => {
+    const res = await api.get(`/schools/no-employee-region`);
+    return res.data;
+  },
+
+  getByEmployeeAndWard: async (employeeId: number, wardId: number) => {
+    const res = await api.get(`/schools/by-employee-ward`, {
+      params: { employeeId, wardId },
+    });
+
+    return res.data;
+  },
 };
 
 /**
@@ -94,36 +96,36 @@ export type SchoolLocationInput = {
 };
 
 export const schoolLocationApi = {
-    getBySchool: async (schoolId: number): Promise<SchoolLocation[]> => {
-        const res = await api.get(`/school-locations`, {
-            params: { schoolId },
-        });
-        return Array.isArray(res.data) ? res.data : res.data?.data || [];
-    },
+  getBySchool: async (schoolId: number): Promise<SchoolLocation[]> => {
+    const res = await api.get(`/school-locations`, {
+      params: { schoolId },
+    });
+    return Array.isArray(res.data) ? res.data : res.data?.data || [];
+  },
 
-    getOne: async (id: number): Promise<SchoolLocation> => {
-        const res = await api.get(`/school-locations/${id}`);
-        return res.data;
-    },
+  getOne: async (id: number): Promise<SchoolLocation> => {
+    const res = await api.get(`/school-locations/${id}`);
+    return res.data;
+  },
 
-    create: async (data: SchoolLocationInput) => {
-        const res = await api.post(`/school-locations`, data);
-        return res.data;
-    },
+  create: async (data: SchoolLocationInput) => {
+    const res = await api.post(`/school-locations`, data);
+    return res.data;
+  },
 
-    update: async (id: number, data: Partial<SchoolLocationInput>) => {
-        const res = await api.put(`/school-locations/${id}`, data);
-        return res.data;
-    },
+  update: async (id: number, data: Partial<SchoolLocationInput>) => {
+    const res = await api.put(`/school-locations/${id}`, data);
+    return res.data;
+  },
 
-    delete: async (id: number) => {
-        await api.delete(`/school-locations/${id}`);
-    },
+  delete: async (id: number) => {
+    await api.delete(`/school-locations/${id}`);
+  },
 
-    updateStatus: async (id: number, status: number) => {
-        const res = await api.patch(`/school-locations/${id}/status`, { status });
-        return res.data;
-    },
+  updateStatus: async (id: number, status: number) => {
+    const res = await api.patch(`/school-locations/${id}/status`, { status });
+    return res.data;
+  },
 };
 
 /** Giờ tiết học của một trường (Tiết 1 = 07:00–07:45...). */
@@ -161,7 +163,7 @@ export const schoolPeriodApi = {
    */
   replace: async (
     schoolId: number,
-    periods: SchoolPeriodInput[],
+    periods: SchoolPeriodInput[]
   ): Promise<{ periods: SchoolPeriod[]; warnings: string[] }> => {
     const res = await api.put(`/schools/${schoolId}/periods`, { periods });
     return res.data;

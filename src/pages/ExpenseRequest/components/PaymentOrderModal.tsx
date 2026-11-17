@@ -12,21 +12,30 @@ export default function PaymentOrderModal({
   defaultNote = "",
   retry = false,
   edit = false,
+  monthly = false,
+  lockedAmount = null,
   loading,
   onClose,
   onSubmit,
 }: {
+  /**
+   * Quy trình Kế toán: lệnh chi đúng số Giám đốc đã duyệt, không sửa được
+   * (QL thu chi ghi ngược theo phần từng khoản lúc duyệt).
+   */
+  lockedAmount?: number | null;
   defaultAmount: number;
   defaultPaymentMethod?: PaymentMethod;
   defaultNote?: string;
   retry?: boolean;
   /** Kế toán công nợ sửa lệnh chi đã lập — các bước sau phải làm lại. */
   edit?: boolean;
+  /** Chi tháng: đây là bước nhập số tiền trước khi chuyển Giám đốc duyệt. */
+  monthly?: boolean;
   loading?: boolean;
   onClose: () => void;
   onSubmit: (payload: PaymentOrderPayload) => void;
 }) {
-  const [amount, setAmount] = useState<number>(defaultAmount);
+  const [amount, setAmount] = useState<number>(lockedAmount ?? defaultAmount);
   const [paymentMethod, setPaymentMethod] =
     useState<PaymentMethod>(defaultPaymentMethod);
   const [note, setNote] = useState(defaultNote);
@@ -57,7 +66,15 @@ export default function PaymentOrderModal({
       >
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <h2 className="font-semibold">
-            {edit ? "Sửa lệnh chi" : retry ? "Lên lại lệnh chi" : "Lên lệnh chi"}
+            {monthly
+              ? edit
+                ? "Sửa số tiền chi tháng"
+                : "Nhập số tiền chi tháng"
+              : edit
+              ? "Sửa lệnh chi"
+              : retry
+              ? "Lên lại lệnh chi"
+              : "Lên lệnh chi"}
           </h2>
           <button
             onClick={onClose}
@@ -72,13 +89,24 @@ export default function PaymentOrderModal({
             <label className="text-sm text-gray-600">
               Số tiền <span className="text-red-500">*</span>
             </label>
-            <DecimalInput
-              value={amount}
-              onValueChange={setAmount}
-              className="w-full mt-1 px-3 py-2 border rounded-lg text-sm"
-              placeholder="0"
-              allowDecimal={false}
-            />
+            {lockedAmount != null ? (
+              <>
+                <div className="w-full mt-1 px-3 py-2 border rounded-lg text-sm bg-gray-50 font-semibold">
+                  {Number(lockedAmount).toLocaleString("vi-VN")} đ
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  Đúng số Giám đốc đã duyệt (Kế toán chốt từ QL thu chi).
+                </p>
+              </>
+            ) : (
+              <DecimalInput
+                value={amount}
+                onValueChange={setAmount}
+                className="w-full mt-1 px-3 py-2 border rounded-lg text-sm"
+                placeholder="0"
+                allowDecimal={false}
+              />
+            )}
           </div>
 
           <div>
@@ -137,11 +165,15 @@ export default function PaymentOrderModal({
           >
             {loading
               ? "Đang xử lý…"
+              : monthly
+              ? edit
+                ? "Lưu và gửi duyệt lại"
+                : "Lưu và gửi Giám đốc"
               : edit
-                ? "Lưu thay đổi"
-                : retry
-                  ? "Lên lại lệnh chi"
-                  : "Lên lệnh chi"}
+              ? "Lưu thay đổi"
+              : retry
+              ? "Lên lại lệnh chi"
+              : "Lên lệnh chi"}
           </button>
         </div>
       </div>

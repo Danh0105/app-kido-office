@@ -18,6 +18,7 @@ import {
   catalogLabel,
   DEFAULT_TEACHER_PASSWORD,
   canSetTeachingRates,
+  formatDate,
   isValidEmail,
   isValidGoogleMapsUrl,
   isValidPhone,
@@ -26,8 +27,10 @@ import {
   MAX_PERIODS_PER_WEEK,
   parseRate,
   rateToInput,
+  startOfMonth,
   TEACHER_COLLABORATOR_ROLE,
   TEACHER_STAFF_ROLE,
+  todayISO,
 } from "../lib";
 
 type Props = {
@@ -104,6 +107,8 @@ export default function TeacherFormModal({
   >(teacher?.teacherRole || (teacher ? "" : TEACHER_STAFF_ROLE));
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  /** Ngày áp đơn giá mới cho các buổi đã có — mặc định đầu tháng hiện tại. */
+  const [rateFrom, setRateFrom] = useState(() => startOfMonth(todayISO()));
   const [loading, setLoading] = useState(false);
   /** Để focus đúng ô vị trí khi backend trả 400 vì link sai. */
   const mapsRef = useRef<HTMLInputElement>(null);
@@ -177,6 +182,16 @@ export default function TeacherFormModal({
     [catalogs, teacher],
   );
 
+  // Sửa đơn giá của giáo viên CTV → hỏi ngày áp giá mới cho các buổi đã có.
+  // Giáo viên công ty không tính theo tiết nên không hỏi.
+  const newRate = isValidRate(defaultRate) ? parseRate(defaultRate) : null;
+  const rateChanged =
+    editing &&
+    canSetTeachingRates() &&
+    teacherRole !== TEACHER_STAFF_ROLE &&
+    newRate != null &&
+    newRate !== (teacher?.defaultRatePerPeriod ?? null);
+
   const validate = () => {
     const next: Record<string, string> = {};
     const trimmed = name.trim();
@@ -205,6 +220,10 @@ export default function TeacherFormModal({
 
     if (canSetTeachingRates() && !isValidRate(defaultRate)) {
       next.defaultRate = "Đơn giá phải từ 0 đến 100.000.000, tối đa 2 số lẻ";
+    }
+
+    if (rateChanged && !rateFrom) {
+      next.rateFrom = "Chọn ngày áp dụng giá mới";
     }
 
     if (!isValidGoogleMapsUrl(mapsUrl)) {
@@ -249,6 +268,7 @@ export default function TeacherFormModal({
         ...(canSetTeachingRates()
           ? { defaultRatePerPeriod: parseRate(defaultRate) }
           : {}),
+        ...(rateChanged ? { rateEffectiveFrom: rateFrom } : {}),
         // Luôn gửi cả 3 field: mảng rỗng / null là cách xoá lựa chọn đã khai.
         googleMapsUrl: mapsUrl.trim() || null,
         wardIds,
@@ -270,7 +290,21 @@ export default function TeacherFormModal({
             "Đã gửi Nhân sự duyệt. Tài khoản chỉ được tạo sau khi Nhân sự xác nhận.",
         );
       } else if (editing) {
-        toast.success("Đã cập nhật giáo viên");
+        const recompute = result.rateRecompute;
+        const recomputed = [
+          recompute?.repriced
+            ? `${recompute.repriced} buổi từ ${formatDate(recompute.fromDate)} theo giá mới`
+            : "",
+          recompute?.filledMissing
+            ? `điền giá cho ${recompute.filledMissing} buổi thiếu giá`
+            : "",
+        ].filter(Boolean);
+        toast.success(
+          recomputed.length
+            ? `Đã cập nhật giáo viên — tính lại tiền tiết dạy: ${recomputed.join(", ")}`
+            : "Đã cập nhật giáo viên",
+          recomputed.length ? { duration: 6000 } : undefined,
+        );
       } else {
         toast.success(
           `Đã thêm giáo viên. Đăng nhập bằng SĐT ${phone.trim()} / mật khẩu ${password.trim()}`,
@@ -442,7 +476,7 @@ export default function TeacherFormModal({
         <Field
           label="Đơn giá mặc định mỗi tiết"
           error={errors.defaultRate}
-          hint="Đơn giá mới chỉ áp dụng cho buổi dạy tạo về sau; các buổi đã tạo vẫn giữ giá cũ. Để trống = chưa khai giá, nhập 0 = dạy không công."
+          hint="Đổi giá sẽ hỏi ngày áp dụng để tính lại tiền tiết các buổi đã có; buổi chưa có giá được điền giá này khi lưu. Để trống = chưa khai giá, nhập 0 = dạy không công."
         >
           <input
             type="text"
@@ -456,6 +490,26 @@ export default function TeacherFormModal({
               }
             }}
             placeholder="Chưa khai giá"
+            className={inputClass}
+          />
+        </Field>
+      )}
+
+      {rateChanged && (
+        <Field
+          label="Áp dụng giá mới từ ngày"
+          error={errors.rateFrom}
+          hint="Mọi buổi từ ngày này (kể cả buổi đã có giá) tính theo giá mới; buổi trước ngày này giữ giá cũ."
+        >
+          <input
+            type="date"
+            value={rateFrom}
+            onChange={(event) => {
+              setRateFrom(event.target.value);
+              if (errors.rateFrom) {
+                setErrors((prev) => ({ ...prev, rateFrom: "" }));
+              }
+            }}
             className={inputClass}
           />
         </Field>

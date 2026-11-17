@@ -1,15 +1,24 @@
 // components/expense/ManagementExpenseTable.tsx
+import type { ReactNode } from "react";
 
-import { Building2, CalendarDays, Lock, ShieldCheck, Wallet, Receipt, Users } from "lucide-react";
+import { Building2, CalendarDays, Lock, Plus, ShieldCheck, Wallet, Receipt, Users } from "lucide-react";
 
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
 import {
+  calculateOtherCostExpense,
   getOtherCostGrossPrice,
   getOtherCostKey,
   getOtherCostTax,
   getPolicyOtherCosts,
 } from "../../utils/policyOtherCosts";
+import {
+  getManagementRowInput,
+  isStandaloneManagementRow,
+} from "../../utils/managementRows";
+import type { ManagementStatRow } from "../../utils/managementStats";
+import { calculateRevenueQuantity } from "@/utils/revenueAmount";
 import ManagementExpenseRow from "./ManagementExpenseRow";
+import ManagementExpenseStats from "./ManagementExpenseStats";
 
 type Props = {
   rows: any[];
@@ -22,18 +31,30 @@ type Props = {
   ) => void;
   updateRow: (index: number, field: any, value: any) => void;
   removeRow: (index: number) => void;
+  /** Thêm 1 dòng chỉ cho bảng Chi Ngoài (không thêm vào Doanh Thu, Chi Trường, Hóa Đơn). */
+  addRow?: () => void;
+  /** false → ẩn cột thao tác (xoá dòng), dùng cho sales admin. */
+  showActions?: boolean;
   /** Đã được sales admin xác nhận (khoá) chưa. */
   isConfirmed?: boolean;
-  /** true khi bảng bị khoá với người xem hiện tại (đã confirm và không phải kế toán trưởng). */
+  /** true khi bảng bị khoá hẳn với người xem hiện tại (đã confirm, không phải KTT / kế toán / thủ quỹ). */
   readOnly?: boolean;
   /** Có quyền bấm nút "Xác nhận" (sales admin) không. */
   canConfirm?: boolean;
+  /** Đã "Xác nhận đúng BBCS" → khoá phần chính sách, kể cả với KTT. */
+  policyLocked?: boolean;
+  /** Cột chi chỉ sửa được trên dòng đã lưu (đã khoá, người xem không phải KTT). */
+  savedRowsOnly?: boolean;
+  /** Chỉ còn sửa Ngày chi + Nguồn chi (Đã chi, Người chi, Ghi chú khoá). */
+  dateSourceOnly?: boolean;
   confirming?: boolean;
   onConfirm?: () => void;
   /** Tên sales admin đã xác nhận. */
   confirmedByName?: string | null;
   /** Thời điểm xác nhận. */
   confirmedAt?: string | Date | null;
+  /** Phần thêm trong thẻ Chi Ngoài, ngay dưới bảng (bảng Giáo viên trường). */
+  extraSection?: ReactNode;
 };
 
 export default function ManagementExpenseTable({
@@ -43,13 +64,19 @@ export default function ManagementExpenseTable({
   updateInputRow,
   updateRow,
   removeRow,
+  addRow,
+  showActions = true,
   isConfirmed = false,
   readOnly = false,
   canConfirm = false,
+  policyLocked = false,
+  savedRowsOnly = false,
+  dateSourceOnly = false,
   confirming = false,
   onConfirm,
   confirmedByName,
   confirmedAt,
+  extraSection,
 }: Props) {
   const ql1 = Number(subjects?.policies?.[0]?.data?.ttcs?.[0]?.ql1Percent || 0);
 
@@ -58,8 +85,10 @@ export default function ManagementExpenseTable({
   const ql1Tax = Number(subjects?.policies?.[0]?.data?.ttcs?.[0]?.ql1Tax || 0);
 
   const ql2Tax = Number(subjects?.policies?.[0]?.data?.ttcs?.[0]?.ql2Tax || 0);
-  const fallbackInputData = inputRows[0] || ({} as InputExpenseRow);
   const otherCosts = getPolicyOtherCosts(subjects);
+  // Đã khoá BBCS vẫn thêm được dòng chi; ai chỉ còn Ngày chi + Nguồn chi thì không
+  // (kể cả mọi người khi kỳ đã "Kết thúc").
+  const canAddRow = showActions && !!addRow && !readOnly && !dateSourceOnly;
   const gridTemplateColumns = [
     "200px",
     "120px",
@@ -74,34 +103,35 @@ export default function ManagementExpenseTable({
     ...otherCosts.flatMap(() => ["150px", "140px", "160px"]),
     "180px",
     "140px",
+    "230px",
     "140px",
     "140px",
     "160px",
     "200px",
-    "70px",
+    ...(showActions ? ["120px"] : []),
   ].join(" ");
-  const tableMinWidth = 2470 + otherCosts.length * 450;
+  const tableMinWidth =
+    (showActions ? 2770 : 2650) + otherCosts.length * 450;
 
   const totals = rows.reduce(
     (sum, row, index) => {
-      const inputData = inputRows[index] || fallbackInputData;
-      const students = Number(inputData.studentCount || 0);
-      const months = Number(inputData.monthsCount || 0);
+      const inputData = getManagementRowInput(row, index, inputRows);
+      const quantity = calculateRevenueQuantity(inputData);
       const ql1UnitPrice = Number(row.ql1UnitPrice ?? ql1);
       const ql2UnitPrice = Number(row.ql2UnitPrice ?? ql2);
       const rowQl1Tax = Number(row.ql1Tax ?? ql1Tax);
       const rowQl2Tax = Number(row.ql2Tax ?? ql2Tax);
       const totalQL1Expense =
-        Math.max(0, ql1UnitPrice - rowQl1Tax) * students * months;
+        Math.max(0, ql1UnitPrice - rowQl1Tax) * quantity;
       const totalQL2Expense =
-        Math.max(0, ql2UnitPrice - rowQl2Tax) * students * months;
+        Math.max(0, ql2UnitPrice - rowQl2Tax) * quantity;
       const otherCostExpenses = otherCosts.map((item, otherCostIndex) => {
         const key = getOtherCostKey(item, otherCostIndex);
         const grossPrice = Number(
           row.otherCostUnitPrices?.[key] ?? getOtherCostGrossPrice(item)
         );
         const tax = Number(row.otherCostTaxes?.[key] ?? getOtherCostTax(item));
-        return Math.max(0, grossPrice - tax);
+        return calculateOtherCostExpense(grossPrice, tax, quantity);
       });
       const totalOtherCostExpense = otherCostExpenses.reduce(
         (total, value) => total + value,
@@ -124,6 +154,10 @@ export default function ManagementExpenseTable({
         paidAmount: sum.paidAmount + paidAmount,
         remainingOutsideExpense:
           sum.remainingOutsideExpense + totalOutsideExpense - paidAmount,
+        rowStats: [
+          ...sum.rowStats,
+          { totalOutside: totalOutsideExpense, paidAmount },
+        ],
       };
     },
     {
@@ -135,6 +169,7 @@ export default function ManagementExpenseTable({
       totalOutsideExpense: 0,
       paidAmount: 0,
       remainingOutsideExpense: 0,
+      rowStats: [] as ManagementStatRow[],
     }
   );
 
@@ -168,6 +203,20 @@ export default function ManagementExpenseTable({
           </div>
         </div>
       </div>
+
+      <ManagementExpenseStats
+        ql1Expense={totals.ql1Expense}
+        ql2Expense={totals.ql2Expense}
+        otherCosts={otherCosts.map((item, index) => ({
+          key: getOtherCostKey(item, index),
+          name: item.name || `Chi khác ${index + 1}`,
+          expense: totals.otherCostExpenses[index] || 0,
+        }))}
+        totalOutside={totals.totalOutsideExpense}
+        paidAmount={totals.paidAmount}
+        remaining={totals.remainingOutsideExpense}
+        rows={totals.rowStats}
+      />
 
       <div className="overflow-x-auto">
         <div style={{ minWidth: `${tableMinWidth}px` }}>
@@ -259,6 +308,10 @@ export default function ManagementExpenseTable({
             </div>
 
             <div className="p-3 text-center border-r border-slate-700">
+              🏦 Nguồn chi
+            </div>
+
+            <div className="p-3 text-center border-r border-slate-700">
               <div className="flex items-center justify-center gap-2">
                 <Wallet size={14} />
                 Đã chi
@@ -277,7 +330,7 @@ export default function ManagementExpenseTable({
               📝 Ghi chú
             </div>
 
-            <div className="p-3 text-center">⚙️</div>
+            {showActions && <div className="p-3 text-center">⚙️</div>}
           </div>
 
           {/* BODY */}
@@ -288,13 +341,22 @@ export default function ManagementExpenseTable({
                 row={row}
                 subjects={subjects}
                 index={index}
-                inputData={inputRows[index] || fallbackInputData}
+                inputData={getManagementRowInput(row, index, inputRows)}
+                standalone={isStandaloneManagementRow(index, inputRows)}
                 otherCosts={otherCosts}
                 gridTemplateColumns={gridTemplateColumns}
                 updateInputRow={updateInputRow}
                 removeRow={removeRow}
+                showActions={showActions}
                 updateRow={updateRow}
                 readOnly={readOnly}
+                policyLocked={policyLocked}
+                savedRowsOnly={savedRowsOnly}
+                dateSourceOnly={dateSourceOnly}
+                paidMax={
+                  Number(row.paidAmount || 0) +
+                  Math.max(0, totals.remainingOutsideExpense)
+                }
               />
             ))}
           </div>
@@ -365,6 +427,9 @@ export default function ManagementExpenseTable({
             {/* Ngày chi */}
             <div className={footerCellClass} />
 
+            {/* Nguồn chi */}
+            <div className={footerCellClass} />
+
             {/* Đã chi */}
             <div className={`${footerCellClass} text-orange-600`}>
               <span className="text-lg">{formatVND(totals.paidAmount)}</span>
@@ -384,10 +449,36 @@ export default function ManagementExpenseTable({
             <div className={footerCellClass} />
 
             {/* Action */}
-            <div className="min-h-[72px]" />
+            {showActions && (
+              <div className="flex min-h-[72px] items-center justify-center">
+                {canAddRow && (
+                  <button
+                    type="button"
+                    onClick={addRow}
+                    title="Thêm dòng chỉ cho bảng Chi Ngoài"
+                    className="
+                      inline-flex items-center gap-1
+                      h-9 px-2
+                      whitespace-nowrap
+                      rounded-lg
+                      border border-emerald-200
+                      bg-white
+                      text-xs font-bold text-emerald-700
+                      hover:bg-emerald-50
+                      transition-colors
+                    "
+                  >
+                    <Plus size={14} />
+                    Thêm dòng
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      {extraSection}
 
       {/* XÁC NHẬN / TRẠNG THÁI KHOÁ */}
       <div className="border-t border-slate-200 bg-slate-50 px-6 py-4 flex items-center justify-between gap-3">
@@ -395,7 +486,7 @@ export default function ManagementExpenseTable({
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
               <Lock size={14} />
-              Đã xác nhận
+              Đã xác nhận đúng BBCS
               {confirmedByName ? ` — ${confirmedByName}` : ""}
             </span>
             <span className="text-sm text-slate-500">
@@ -408,12 +499,16 @@ export default function ManagementExpenseTable({
                     minute: "2-digit",
                   })} — `
                 : ""}
-              Bảng đã khoá, chỉ kế toán trưởng còn sửa được.
+              Bảng đã khoá. Kế toán trưởng, Kế toán, Kế toán công nợ và Thủ
+              quỹ chỉ còn sửa được Ngày chi, Nguồn chi, Đã chi, Người chi, Ghi
+              chú; Trợ lý GĐ và Giám đốc chỉ sửa được Ngày chi, Nguồn chi.
+              Kế toán trưởng, Kế toán, Kế toán công nợ, Thủ quỹ vẫn thêm được dòng chi mới
+              và sửa Nội dung của dòng thêm riêng; tổng Đã chi không được vượt tổng Chi ngoài.
             </span>
           </div>
         ) : (
           <div className="text-sm text-slate-500">
-            Bảng đang mở, có thể chỉnh sửa. Xác nhận để khoá lại.
+            Bảng đang mở, có thể chỉnh sửa. Tổng Đã chi không được vượt tổng Chi ngoài. Xác nhận để khoá lại.
           </div>
         )}
 
@@ -425,7 +520,7 @@ export default function ManagementExpenseTable({
             className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:opacity-60"
           >
             <ShieldCheck size={16} />
-            {confirming ? "Đang xác nhận…" : "Xác nhận Chi Ngoài"}
+            {confirming ? "Đang xác nhận…" : "Xác nhận đúng BBCS"}
           </button>
         )}
       </div>

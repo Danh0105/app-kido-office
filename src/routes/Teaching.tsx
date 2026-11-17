@@ -8,16 +8,22 @@ import AttendancePage from "@/pages/Teaching/AttendancePage";
 import MySchedulePage from "@/pages/Teaching/MySchedulePage";
 import TeacherAttendancePage from "@/pages/Teaching/TeacherAttendancePage";
 import OpenSessionsPage from "@/pages/Teaching/OpenSessionsPage";
+import MyAttendanceSummaryPage from "@/pages/Teaching/MyAttendanceSummaryPage";
 import SchoolLocationPage from "@/pages/Teaching/SchoolLocationPage";
 import SchoolBranchPage from "@/pages/Teaching/SchoolBranchPage";
 import FuelAllowanceTierPage from "@/pages/Teaching/FuelAllowanceTierPage";
 import ActivityLogPage from "@/pages/Teaching/ActivityLogPage";
 import ImageLibraryPage from "@/pages/Teaching/ImageLibraryPage";
+import ExpenseRequestList from "@/pages/ExpenseRequest/ExpenseRequestList";
+import ExpenseRequestDetail from "@/pages/ExpenseRequest/ExpenseRequestDetail";
+import ExpenseRequestForm from "@/pages/ExpenseRequest/ExpenseRequestForm";
+import ExpenseTasks from "@/pages/ExpenseRequest/ExpenseTasks";
 import {
   canSetTeachingRates,
   canViewActivityLog,
   canViewTeaching,
   canManageTeaching,
+  isCompanyTeacher,
   isTeacher,
   teachingHomePath,
   TEACHING_MONEY_FEATURES_ENABLED,
@@ -25,7 +31,7 @@ import {
 
 /**
  * Màn quản lý (Giáo viên / Lịch dạy / Chấm công): nhansu và giaovu được
- * thao tác; director / director_la / troly_gd / ketoan_truong chỉ xem.
+ * thao tác; director / troly_gd / ketoan_truong chỉ xem.
  * Role khác gõ URL tay → đẩy về màn đầu tiên được phép.
  */
 function ManageGuard({ children }: { children: React.ReactNode }) {
@@ -76,6 +82,13 @@ function TeacherGuard({ children }: { children: React.ReactNode }) {
     return <Navigate to={teachingHomePath()} replace />;
   }
   if (!isTeacher()) {
+    return <Navigate to={teachingHomePath()} replace />;
+  }
+  return <>{children}</>;
+}
+
+function StaffTeacherGuard({ children }: { children: React.ReactNode }) {
+  if (!isCompanyTeacher() || canViewTeaching()) {
     return <Navigate to={teachingHomePath()} replace />;
   }
   return <>{children}</>;
@@ -197,13 +210,71 @@ export function GiaoVienRoutes() {
           </TeacherGuard>
         }
       />
-      {/* Tiết Nhân sự mở, giáo viên tự đăng ký nhận. */}
+      {/* Tiết Nhân sự mở, giáo viên cộng tác viên tự đăng ký nhận — giáo
+          viên công ty được xếp lịch nên chuyển sang bản tổng hợp công. */}
       <Route
         path="dang-ky-tiet-day"
         element={
           <TeacherGuard>
-            <OpenSessionsPage />
+            {isCompanyTeacher() ? (
+              <Navigate to="/giao-vien/tong-hop-cong" replace />
+            ) : (
+              <OpenSessionsPage />
+            )}
           </TeacherGuard>
+        }
+      />
+      {/* Giáo viên công ty: tổng hợp chấm công + quãng đường, phụ cấp xăng. */}
+      <Route
+        path="tong-hop-cong"
+        element={
+          <TeacherGuard>
+            {isCompanyTeacher() ? (
+              <MyAttendanceSummaryPage />
+            ) : (
+              <Navigate to="/giao-vien/dang-ky-tiet-day" replace />
+            )}
+          </TeacherGuard>
+        }
+      />
+      <Route
+        path="de-nghi-tai-chinh"
+        element={
+          <StaffTeacherGuard>
+            <ExpenseRequestList />
+          </StaffTeacherGuard>
+        }
+      />
+      <Route
+        path="de-nghi-tai-chinh/new"
+        element={
+          <StaffTeacherGuard>
+            <ExpenseRequestForm />
+          </StaffTeacherGuard>
+        }
+      />
+      <Route
+        path="de-nghi-tai-chinh/viec-cua-toi"
+        element={
+          <StaffTeacherGuard>
+            <ExpenseTasks />
+          </StaffTeacherGuard>
+        }
+      />
+      <Route
+        path="de-nghi-tai-chinh/:id/edit"
+        element={
+          <StaffTeacherGuard>
+            <ExpenseRequestForm />
+          </StaffTeacherGuard>
+        }
+      />
+      <Route
+        path="de-nghi-tai-chinh/:id"
+        element={
+          <StaffTeacherGuard>
+            <ExpenseRequestDetail />
+          </StaffTeacherGuard>
         }
       />
       <Route path="*" element={<Navigate to={teachingHomePath()} replace />} />

@@ -36,12 +36,14 @@ export default function NotificationBell() {
     setSelectedReportId,
   } = useAppNotifications();
 
-  // Bell này luôn giới hạn 1 tab "Giảng dạy" (`onlyTeachingTab` bên dưới) nên
-  // badge phải đếm đúng tab đó — `unreadCount` của hook là tổng toàn tài
-  // khoản (Chính sách, Đề xuất…), hiện lên sẽ lệch với nội dung dropdown.
-  const teachingUnreadCount = teachingNotificationsOnly
-    ? notificationStats.POLICY?.unread ?? 0
-    : notificationStats.TEACHING?.unread ?? 0;
+  // Bell này chỉ có tab "Giảng dạy" + "Đề nghị tài chính" (`onlyTeachingTab`
+  // bên dưới) nên badge phải đếm đúng 2 tab đó — `unreadCount` của hook là
+  // tổng toàn tài khoản (Chính sách, Đề xuất…), hiện lên sẽ lệch với dropdown.
+  const teachingUnreadCount =
+    (teachingNotificationsOnly
+      ? notificationStats.POLICY?.unread ?? 0
+      : notificationStats.TEACHING?.unread ?? 0) +
+    (notificationStats.FINANCIAL_REQUEST?.unread ?? 0);
 
   useEffect(() => {
     if (!open || isExpanded) return;

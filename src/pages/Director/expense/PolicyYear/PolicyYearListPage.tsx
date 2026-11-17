@@ -15,14 +15,17 @@ import {
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { isChiefAccountant } from "@/utils/auth";
+import { DEFAULT_SCHOOL_YEAR } from "@/constants/schoolYear";
 import { MOCK_POLICY_SUBJECTS, MOCK_POLICY_YEARS } from "./mockData";
-import { PolicyYear, PolicyYearStatus } from "./types";
+import { PolicySubject, PolicyYear, PolicyYearStatus } from "./types";
 import {
   calculatePolicyRow,
   calculatePolicySummary,
   exportPolicyYearCsv,
   exportPolicyYearsCsv,
   formatCurrency,
+  formatMonth,
+  resolvePolicyYearQuantities,
 } from "./utils";
 import StatusBadge from "./components/StatusBadge";
 import PolicyYearDetailPage from "./PolicyYearDetailPage";
@@ -69,7 +72,7 @@ const getEquipmentSupportAmount = (policyData: any) => {
   }, 0);
 };
 
-const mapDatabaseSubjects = (subjects: any[]) =>
+const mapDatabaseSubjects = (subjects: any[]): PolicySubject[] =>
   subjects.map((subject, index) => {
     const policyData = subject?.policies?.[0]?.data || {};
     const fallback = MOCK_POLICY_SUBJECTS[index] || MOCK_POLICY_SUBJECTS[0];
@@ -97,6 +100,17 @@ const mapDatabaseSubjects = (subjects: any[]) =>
       companyProfitPerHS: Number(policyData.companyProfitPerHS || 0),
       cashSupportAmount: getCashSupportAmount(policyData),
       equipmentSupportAmount: getEquipmentSupportAmount(policyData),
+      billingMode:
+        policyData.mode === "TIET"
+          ? ("TIET" as const)
+          : policyData.mode === "HS"
+            ? ("HS" as const)
+            : undefined,
+      classCount: Number(subject.classCount || 0),
+      declaredStudentCount: Number(subject.studentCount || 0),
+      declaredPeriods: Number(
+        policyData.periods ?? subject.totalLessons ?? 0,
+      ),
     };
   });
 
@@ -117,12 +131,7 @@ const isPeriodInSchoolYear = (
 };
 
 const getCurrentSchoolYear = () => {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = today.getMonth() + 1;
-  const startYear = month >= 8 ? year : year - 1;
-
-  return `${startYear}-${startYear + 1}`;
+  return DEFAULT_SCHOOL_YEAR;
 };
 
 const clonePolicies = (
@@ -212,6 +221,13 @@ export default function PolicyYearListPage({
               const period = getRecordPeriod(record);
               const month = Number(period?.month || 0);
               const year = Number(period?.year || 0);
+              const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+              // Giống thanh chọn kỳ: tên mặc định "MM/YYYY" thì giữ hiển thị
+              // theo tháng, đã đổi tên (vd. "Lần 1 năm 2026") thì dùng tên kỳ.
+              const monthLabel =
+                period?.name && period.name !== formatMonth(monthKey)
+                  ? String(period.name)
+                  : undefined;
 
               if (
                 !record?.id ||
@@ -239,6 +255,14 @@ export default function PolicyYearListPage({
                 );
                 if (!subjectId) return [];
                 const mappedSubject = mappedSubjectMap.get(subjectId);
+                const quantities = resolvePolicyYearQuantities({
+                  billingMode: mappedSubject?.billingMode,
+                  totalPeriods: item?.totalPeriods,
+                  studentCount: item?.studentCount,
+                  declaredPeriods: mappedSubject?.declaredPeriods,
+                  declaredStudentCount: mappedSubject?.declaredStudentCount,
+                  classCount: mappedSubject?.classCount,
+                });
 
                 return [
                   {
@@ -246,8 +270,10 @@ export default function PolicyYearListPage({
                       Number(item?.id || 0) ||
                       (recordIndex + 1) * 1000 + itemIndex,
                     subjectId,
-                    month: `${year}-${String(month).padStart(2, "0")}`,
-                    studentCount: Number(item?.studentCount || 0),
+                    month: monthKey,
+                    monthLabel,
+                    totalPeriods: quantities.totalPeriods,
+                    studentCount: quantities.studentCount,
                     unitPrice: Number(item?.unitPrice || 0),
                     monthsCount: Number(item?.monthsCount ?? 1),
                     principalPolicyAmount: 0,

@@ -3,7 +3,7 @@ import { PolicyMonthlyInput, PolicySubject } from "../types";
 import {
   calculatePolicyRow,
   formatCurrency,
-  formatMonth,
+  getMonthLabel,
   getSchoolYearFromMonth,
 } from "../utils";
 import NumberInput from "./NumberInput";
@@ -47,7 +47,15 @@ export default function PolicyMonthlyRow({
         {getSchoolYearFromMonth(row.month) || "—"}
       </td>
       <td className="whitespace-nowrap px-3 py-2.5 text-sm font-bold text-slate-600">
-        {formatMonth(row.month)}
+        {getMonthLabel(row)}
+      </td>
+      <td className="bg-blue-50/60 px-2 py-2.5">
+        <NumberInput
+          ariaLabel="Số tiết"
+          value={row.totalPeriods}
+          disabled={disabled || databaseFieldsReadonly}
+          onChange={(value) => setField("totalPeriods", value)}
+        />
       </td>
       <td className="bg-slate-50/70 px-2 py-2.5">
         <NumberInput

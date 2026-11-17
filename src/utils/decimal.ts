@@ -37,12 +37,15 @@ export const parseLocalizedDecimal = (
   return Number.isFinite(parsed) ? roundDecimal(parsed, fractionDigits) : 0;
 };
 
-export const formatDecimal = (value?: number | string | null) => {
+export const formatDecimal = (
+  value?: number | string | null,
+  fractionDigits = 2,
+) => {
   const parsed = Number(value ?? 0);
   if (!Number.isFinite(parsed) || parsed === 0) return "";
 
   return parsed.toLocaleString("vi-VN", {
-    maximumFractionDigits: 2,
+    maximumFractionDigits: fractionDigits,
   });
 };
 

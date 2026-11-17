@@ -1,23 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, RefreshCw } from "lucide-react";
+import { FileSpreadsheet, Loader2, RefreshCw } from "lucide-react";
+import toast from "react-hot-toast";
 
 import { schoolApi } from "@/service/school.api";
 import { schoolExpenseApi } from "@/service/schoolExpense";
 import { getSalesEmployees } from "@/service/employee";
-import { subjectApi } from "@/service/subject.api";
 import SearchableSelect from "@/components/SearchableSelect";
+import { formatCurrency } from "../RealExpenseDetail/components/ExpenseSummary";
 import {
-  arrayFrom,
-  formatCurrency,
-  toNumber,
-  unwrap,
-} from "../RealExpenseDetail/components/ExpenseSummary";
+  DEFAULT_SCHOOL_YEAR,
+  includeDefaultSchoolYear,
+} from "@/constants/schoolYear";
+import { EXCEL_FILE_TYPE, saveBlob } from "@/utils/saveBlob";
+import {
+  buildGlobalExpenseReportExcel,
+  globalExpenseReportFileName,
+  type GlobalExpenseExcelFilters,
+  type GlobalExpenseExcelRow,
+} from "./globalExpenseReportExcel";
 
 const listFrom = (value: any) =>
   Array.isArray(value) ? value : Array.isArray(value?.data) ? value.data : [];
-
-const sum = (items: any[], getter: (item: any) => number) =>
-  items.reduce((total, item) => total + getter(item), 0);
 
 const getSchoolYear = (month: number, year: number) => {
   if (!month || !year) return "";
@@ -55,125 +58,255 @@ const roleLabel = (role: string) => {
   return labels[role] || role;
 };
 
-const roleColor = (role: string) => {
-  if (role === "sales" || role === "employee")
-    return "bg-blue-100 text-blue-600";
-  if (role === "probation") return "bg-yellow-100 text-yellow-700";
-  if (role === "employee_la") return "bg-green-100 text-green-600";
-  if (role === "director" || role === "director_la")
-    return "bg-purple-100 text-purple-700";
-  if (role === "saleadmin" || role === "salesadmin_la")
-    return "bg-indigo-100 text-indigo-700";
-  return "bg-gray-100 text-gray-600";
+/** Các số của một dòng môn học — cũng dùng cho header/footer tổng. */
+type ReportNumbers = {
+  students: number;
+  periods: number;
+  revenue: number;
+  schoolExpense: number;
+  schoolPaid: number;
+  invoice: number;
+  collected: number;
+  outsideExpense: number;
+  outsidePaid: number;
+  schoolTeacher: number;
+  companyTeacher: number;
+  annualPolicy: number;
+  otherExpense: number;
+  profit: number;
 };
 
-const getSummaryValues = (
-  response: any,
-  subjectMap: Map<number, any>,
+type ReportRow = ReportNumbers & {
+  key: string;
+  employee: any;
+  school: any;
+  period: any;
+  subjectName: string;
+};
+
+const EMPTY_NUMBERS: ReportNumbers = {
+  students: 0,
+  periods: 0,
+  revenue: 0,
+  schoolExpense: 0,
+  schoolPaid: 0,
+  invoice: 0,
+  collected: 0,
+  outsideExpense: 0,
+  outsidePaid: 0,
+  schoolTeacher: 0,
+  companyTeacher: 0,
+  annualPolicy: 0,
+  otherExpense: 0,
+  profit: 0,
+};
+
+const sumRows = (rows: ReportNumbers[]): ReportNumbers =>
+  rows.reduce(
+    (total, row) =>
+      Object.fromEntries(
+        (Object.keys(EMPTY_NUMBERS) as (keyof ReportNumbers)[]).map((key) => [
+          key,
+          Math.round((total[key] + row[key]) * 100) / 100,
+        ])
+      ) as ReportNumbers,
+    { ...EMPTY_NUMBERS }
+  );
+
+const numbersFrom = (item: any): ReportNumbers => ({
+  students: Number(item.quantity?.students || 0),
+  periods: Number(item.quantity?.periods || 0),
+  revenue: Number(item.revenue?.expected || 0),
+  schoolExpense: Number(item.breakdown?.school?.expected || 0),
+  schoolPaid: Number(item.breakdown?.school?.paid || 0),
+  invoice: Number(item.invoice?.total || 0),
+  // Đã thu = Số tiền thu/chi của các dòng Hóa Đơn chọn "Thu" (như sổ thu chi);
+  // server cũ chưa trả trường này thì giữ số Đã thu của bảng Doanh Thu.
+  collected: Number(
+    typeof item.invoice?.collected === "number"
+      ? item.invoice.collected
+      : item.revenue?.collected || 0
+  ),
+  outsideExpense: Number(item.breakdown?.outside?.expected || 0),
+  outsidePaid: Number(item.breakdown?.outside?.paid || 0),
+  schoolTeacher: Number(item.breakdown?.schoolTeacher || 0),
+  companyTeacher: Number(item.breakdown?.companyTeacher || 0),
+  annualPolicy: Number(item.breakdown?.annualPolicy || 0),
+  otherExpense: Number(item.breakdown?.other || 0),
+  profit: Number(item.breakdown?.profit || 0),
+});
+
+const periodLabel = (period: any) =>
+  period?.name || `${period?.month || "--"}/${period?.year || "--"}`;
+
+const money = (value: number) => formatCurrency(value);
+
+const count = (value: number) =>
+  new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 }).format(value);
+
+/** Ô số lượng (Số HS / Số tiết): số 0 hiện nhạt như ô tiền. */
+function CountCell({ value, className }: { value: number; className: string }) {
+  return (
+    <td
+      className={`border border-slate-300 px-2 py-1.5 text-right tabular-nums ${
+        value ? className : "text-slate-300"
+      }`}
+    >
+      {count(value)}
+    </td>
+  );
+}
+
+/** Ô số: số 0 hiện nhạt để mắt dừng ở ô có tiền. */
+function MoneyCell({
+  value,
+  className = "",
+}: {
+  value: number;
+  className?: string;
+}) {
+  return (
+    <td
+      className={`border border-slate-300 px-2 py-1.5 text-right tabular-nums ${
+        value ? className : "text-slate-300"
+      }`}
+    >
+      {money(value)}
+    </td>
+  );
+}
+
+/** Các cột số theo đúng thứ tự tiêu đề — dùng chung cho dòng trường và dòng tổng. */
+function NumberCells({
+  row,
+  strong = false,
+}: {
+  row: ReportNumbers;
+  strong?: boolean;
+}) {
+  const bold = strong ? "font-black" : "";
+  return (
+    <>
+      <CountCell value={row.students} className={`${bold} text-slate-700`} />
+      <CountCell value={row.periods} className={`${bold} text-slate-700`} />
+      <MoneyCell value={row.revenue} className={`${bold} text-slate-900`} />
+      <MoneyCell
+        value={row.schoolExpense}
+        className={`${bold} text-slate-800`}
+      />
+      <MoneyCell
+        value={row.schoolPaid}
+        className={`${bold} text-emerald-700`}
+      />
+      <MoneyCell
+        value={row.invoice}
+        className={`${bold || "font-bold"} text-amber-800`}
+      />
+      <MoneyCell value={row.collected} className={`${bold} text-emerald-700`} />
+      <MoneyCell
+        value={row.outsideExpense}
+        className={`${bold} text-slate-800`}
+      />
+      <MoneyCell
+        value={row.outsidePaid}
+        className={`${bold} text-emerald-700`}
+      />
+      <MoneyCell
+        value={row.schoolTeacher}
+        className={`${bold} text-slate-800`}
+      />
+      <MoneyCell
+        value={row.companyTeacher}
+        className={`${bold} text-slate-800`}
+      />
+      <MoneyCell
+        value={row.annualPolicy}
+        className={`${bold} text-slate-800`}
+      />
+      <MoneyCell
+        value={row.otherExpense}
+        className={`${bold} text-slate-800`}
+      />
+      <MoneyCell
+        value={row.profit}
+        className={`${bold || "font-bold"} ${
+          row.profit < 0 ? "text-rose-700" : "text-blue-700"
+        }`}
+      />
+    </>
+  );
+}
+
+const GROUP_HEADERS = [
+  { label: "Số lượng", span: 2, className: "bg-slate-100 text-slate-700" },
+  { label: "Doanh thu", span: 1, className: "bg-slate-200 text-slate-700" },
+  { label: "Chi trường", span: 2, className: "bg-sky-100 text-sky-800" },
+  { label: "Hóa đơn / Thu", span: 2, className: "bg-amber-100 text-amber-800" },
+  { label: "Chi ngoài", span: 2, className: "bg-cyan-100 text-cyan-800" },
+  {
+    label: "Chi phí khác",
+    span: 4,
+    className: "bg-violet-100 text-violet-800",
+  },
+  { label: "Kết quả", span: 1, className: "bg-blue-100 text-blue-800" },
+];
+
+const COLUMN_HEADERS: { label: string; title?: string }[] = [
+  { label: "Số HS" },
+  { label: "Số tiết" },
+  { label: "Doanh thu", title: "Thành tiền bảng Doanh Thu" },
+  { label: "Chi trường", title: "Tổng chi trường (Bảng Chi Trường)" },
+  { label: "Đã chi", title: "Đã chi (Bảng Chi Trường)" },
+  { label: "Hóa đơn", title: "Tổng thanh toán công ty của bảng Hóa Đơn" },
+  {
+    label: "Đã thu",
+    title: 'Số tiền thu/chi của các dòng Hóa Đơn chọn "Thu"',
+  },
+  { label: "Chi ngoài", title: "Chi Ngoài" },
+  { label: "Đã chi", title: "Đã chi ngoài" },
+  { label: "Giáo viên trường" },
+  { label: "Giáo viên Cty" },
+  {
+    label: "CS năm",
+    title:
+      "Tổng đề xuất đã chi của trường trong năm học (chỉ hiển thị một lần để không cộng trùng)",
+  },
+  { label: "Chi khác" },
+  {
+    label: "Lợi nhuận",
+    title:
+      "Doanh thu − Chi trường − Chi ngoài − Giáo viên trường − Giáo viên Cty − CS năm − Chi khác",
+  },
+];
+
+const rowGroupSpan = (
+  rows: ReportRow[],
+  index: number,
+  getKey: (row: ReportRow) => string
 ) => {
-  const payload = unwrap(response);
-  const sources = [payload?.summary, payload].filter(Boolean);
-  const revenues = arrayFrom(sources, ["revenueItems", "revenues"]);
-  const schoolItems = arrayFrom(sources, ["schoolExpenseItems", "schoolItems"]);
-  const managementItems = arrayFrom(sources, [
-    "managementExpenseItems",
-    "managementItems",
-  ]);
-  const cashItems = arrayFrom(sources, ["cashPolicyItems", "cashPolicies"]);
-  const summaryItems = [...revenues, ...schoolItems, ...managementItems];
-  const matchedSubjectNames = [
-    ...new Set(
-      summaryItems
-        .map(
-          (item) => {
-            const subject = subjectMap.get(
-              Number(item.subjectId ?? item.subject?.id),
-            );
-            return (
-            subject?.name ||
-            subject?.code ||
-            item.subject?.name ||
-            item.subject?.code ||
-            item.subjectName ||
-            item.subjectCode
-            );
-          },
-        )
-        .filter(Boolean),
-    ),
-  ];
-  const subjectNames = matchedSubjectNames.length
-    ? matchedSubjectNames
-    : [
-        ...new Set(
-          [...subjectMap.values()]
-            .map((subject) => subject.name || subject.code)
-            .filter(Boolean),
-        ),
-      ];
-  console.debug("[GlobalExpenseReport] Đối chiếu môn học", {
-    summarySubjectIds: summaryItems.map((item) =>
-      Number(item.subjectId ?? item.subject?.id),
-    ),
-    databaseSubjects: [...subjectMap.values()].map((subject) => ({
-      id: subject.id,
-      name: subject.name,
-      code: subject.code,
-      schoolId: subject.schoolId ?? subject.school?.id,
-    })),
-    resolvedSubjectNames: subjectNames,
-    usedSchoolSubjectFallback: matchedSubjectNames.length === 0,
-  });
-  const revenue = sum(revenues, (item) =>
-    toNumber(
-      item.invoiceAmount ??
-        toNumber(item.unitPrice) *
-          toNumber(item.studentCount) *
-          toNumber(item.monthsCount),
-    ),
-  );
-  const schoolExpense = sum(schoolItems, (item) =>
-    toNumber(
-      item.schoolExpenseAmount ??
-        (toNumber(item.teacherUnitPrice) +
-          toNumber(item.taxUnitPrice) +
-          toNumber(item.csvcUnitPrice)) *
-          toNumber(item.studentCount) *
-          toNumber(item.monthsCount),
-    ),
-  );
-  const managementExpense = sum(managementItems, (item) =>
-    toNumber(item.totalOutside ?? item.totalOutsideExpense),
-  );
-  const paid = sum(schoolItems, (item) => toNumber(item.paidAmount)) +
-    sum(managementItems, (item) => toNumber(item.paidAmount));
-  const totalExpense = schoolExpense + managementExpense;
-
-  return {
-    revenue,
-    schoolExpense,
-    managementExpense,
-    totalExpense,
-    paid,
-    remaining: Math.max(0, totalExpense - paid),
-    cashPolicy: sum(
-      cashItems,
-      (item) => toNumber(item.cashPolicyAmount) + toNumber(item.otherAmount),
-    ),
-    subjectNames,
-  };
+  const key = getKey(rows[index]);
+  if (index > 0 && getKey(rows[index - 1]) === key) return 0;
+  let span = 1;
+  while (index + span < rows.length && getKey(rows[index + span]) === key) {
+    span += 1;
+  }
+  return span;
 };
 
+/**
+ * Báo cáo tổng hợp thu chi theo môn, nhóm theo nhân viên kinh doanh. Header và
+ * footer của mỗi bảng cùng dùng một phép cộng để luôn khớp nhau.
+ */
 export default function GlobalExpenseReport() {
-  const [rows, setRows] = useState<any[]>([]);
+  const [rows, setRows] = useState<ReportRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [keyword, setKeyword] = useState("");
   const [employeeId, setEmployeeId] = useState("");
   const [schoolId, setSchoolId] = useState("");
-  const [year, setYear] = useState("");
+  const [year, setYear] = useState(DEFAULT_SCHOOL_YEAR);
   const [month, setMonth] = useState("");
-  const [onlyRemaining, setOnlyRemaining] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 30;
 
@@ -181,115 +314,51 @@ export default function GlobalExpenseReport() {
     setLoading(true);
     setError("");
     try {
-      const [
-        schoolResponse,
-        expenseResponse,
-        employeeResponse,
-        subjectResponse,
-      ] =
+      const [schoolResponse, summaryResponse, employeeResponse] =
         await Promise.all([
-        schoolApi.getAll({ page: 1, limit: 1000 }),
-        schoolExpenseApi.getAll({ page: 1, limit: 1000 }),
-        getSalesEmployees(),
-        subjectApi.getAll(),
-      ]);
+          schoolApi.getAll({ page: 1, limit: 1000 }),
+          schoolExpenseApi.getCashflowSummary(),
+          getSalesEmployees(),
+        ]);
       const schools = listFrom(schoolResponse);
       const schoolMap = new Map(
-        schools.map((school: any) => [Number(school.id), school]),
+        schools.map((school: any) => [Number(school.id), school])
       );
       const employeeMap = new Map(
-        employeeResponse.map((employee) => [Number(employee.id), employee]),
+        employeeResponse.map((employee) => [Number(employee.id), employee])
       );
-      const subjectsBySchool = new Map<number, any[]>();
-      subjectResponse.forEach((subject) => {
-        const subjectSchoolId = Number(
-          subject.schoolId ?? subject.school?.id,
-        );
-        subjectsBySchool.set(subjectSchoolId, [
-          ...(subjectsBySchool.get(subjectSchoolId) || []),
-          subject,
-        ]);
+      const summaryItems = Array.isArray(summaryResponse?.items)
+        ? summaryResponse.items
+        : [];
+      const results: ReportRow[] = summaryItems.flatMap((item) => {
+        const schoolId = Number(item.school?.id);
+        const school: any = {
+          ...(schoolMap.get(schoolId) || {}),
+          ...(item.school || {}),
+        };
+        const employee =
+          school.employee ||
+          employeeMap.get(
+            Number(school.employeeId ?? school.employee?.id ?? 0)
+          ) ||
+          {};
+        const base = {
+          employee,
+          school,
+          period: item.period,
+        };
+        return (item.subjects || []).map((subjectItem: any) => ({
+          ...base,
+          ...numbersFrom(subjectItem),
+          key: `${item.schoolExpenseId}-subject-${subjectItem.subject?.id}`,
+          subjectName: subjectItem.subject?.name || "Chưa đặt tên môn",
+        }));
       });
-      const expenses = listFrom(expenseResponse);
-      console.debug("[GlobalExpenseReport] Dữ liệu nguồn", {
-        schools: schools.map((school: any) => ({
-          id: school.id,
-          name: school.name,
-          employeeId: school.employeeId ?? school.employee?.id,
-        })),
-        expenses: expenses.map((expense: any) => ({
-          id: expense.id,
-          schoolId: expense.schoolId ?? expense.school?.id,
-          period: expense.period || expense.expensePeriod,
-        })),
-        subjects: subjectResponse.map((subject) => ({
-          id: subject.id,
-          name: subject.name,
-          code: subject.code,
-          schoolId: subject.schoolId ?? subject.school?.id,
-          schoolYear: subject.schoolYear,
-        })),
-        subjectsBySchool: [...subjectsBySchool.entries()].map(
-          ([mappedSchoolId, mappedSubjects]) => ({
-            schoolId: mappedSchoolId,
-            subjectIds: mappedSubjects.map((subject) => subject.id),
-          }),
-        ),
-      });
-      const results = await Promise.allSettled(
-        expenses.map(async (expense: any) => {
-          const schoolId = Number(
-            expense.schoolId ?? expense.school?.id,
-          );
-          const school = {
-            ...(schoolMap.get(schoolId) || {}),
-            ...(expense.school || {}),
-          };
-          const employee =
-            school.employee ||
-            employeeMap.get(
-              Number(
-                school.employeeId ??
-                  school.employee?.id ??
-                  expense.employeeId ??
-                  expense.employee?.id,
-              ),
-            ) ||
-            expense.employee ||
-            {};
-          const period = expense.period || expense.expensePeriod || {};
-          const summary = await schoolExpenseApi.getSummary(
-            Number(expense.id),
-          );
-          const subjects = subjectsBySchool.get(schoolId) || [];
-          const subjectMap = new Map(
-            subjects.map((subject: any) => [Number(subject.id), subject]),
-          );
-          console.debug("[GlobalExpenseReport] Phiếu thu chi", {
-            schoolExpenseId: expense.id,
-            schoolId,
-            schoolName: school.name,
-            availableSubjectIds: [...subjectMap.keys()],
-            summary,
-          });
-          return {
-            key: expense.id,
-            employee,
-            school,
-            period,
-            ...getSummaryValues(summary, subjectMap),
-          };
-        }),
-      );
-      setRows(
-        results.flatMap((result) =>
-          result.status === "fulfilled" ? [result.value] : [],
-        ),
-      );
+      setRows(results);
     } catch (loadError: any) {
       setError(
         loadError?.response?.data?.message ||
-          "Không thể tải báo cáo tổng hợp thu chi",
+          "Không thể tải báo cáo tổng hợp thu chi"
       );
     } finally {
       setLoading(false);
@@ -321,92 +390,184 @@ export default function GlobalExpenseReport() {
   }, [rows, employeeId]);
   const years = useMemo(
     () =>
-      [
-        ...new Set(
-          rows
-            .map((row) =>
-              getSchoolYear(
-                Number(row.period?.month),
-                Number(row.period?.year),
-              ),
-            )
-            .filter(Boolean),
-        ),
-      ]
+      includeDefaultSchoolYear(
+        rows
+          .map((row) =>
+            getSchoolYear(Number(row.period?.month), Number(row.period?.year))
+          )
+          .filter(Boolean)
+      )
         .sort()
         .reverse(),
-    [rows],
+    [rows]
   );
-  const schoolYearMonths = useMemo(
-    () => getSchoolYearMonths(year),
-    [year],
+  const schoolYearMonths = useMemo(() => getSchoolYearMonths(year), [year]);
+
+  const filteredRows = useMemo(
+    () =>
+      rows.filter((row) => {
+        const search = keyword.trim().toLocaleLowerCase("vi");
+        if (
+          search &&
+          !`${row.employee?.name || ""} ${row.school?.name || ""} ${
+            row.school?.taxCode || ""
+          } ${row.subjectName}`
+            .toLocaleLowerCase("vi")
+            .includes(search)
+        ) {
+          return false;
+        }
+        if (employeeId && String(row.employee?.id) !== employeeId) return false;
+        if (schoolId && String(row.school?.id) !== schoolId) return false;
+        if (
+          year &&
+          getSchoolYear(Number(row.period?.month), Number(row.period?.year)) !==
+            year
+        ) {
+          return false;
+        }
+        if (
+          month &&
+          `${Number(row.period?.year)}-${Number(row.period?.month)}` !== month
+        ) {
+          return false;
+        }
+        return true;
+      }),
+    [rows, keyword, employeeId, schoolId, year, month]
   );
 
-  const filteredRows = rows.filter((row) => {
-    const search = keyword.trim().toLocaleLowerCase("vi");
-    if (
-      search &&
-      !`${row.employee?.name || ""} ${row.school?.name || ""} ${
-        row.school?.taxCode || ""
-      } ${(row.subjectNames || []).join(" ")}`
-        .toLocaleLowerCase("vi")
-        .includes(search)
-    ) {
-      return false;
-    }
-    if (employeeId && String(row.employee?.id) !== employeeId) return false;
-    if (schoolId && String(row.school?.id) !== schoolId) return false;
-    if (
-      year &&
-      getSchoolYear(
-        Number(row.period?.month),
-        Number(row.period?.year),
-      ) !== year
-    ) {
-      return false;
-    }
-    if (
-      month &&
-      `${Number(row.period?.year)}-${Number(row.period?.month)}` !== month
-    ) {
-      return false;
-    }
-    return !onlyRemaining || row.remaining > 0;
-  });
+  // Sắp theo nhân viên → trường → kỳ (mới nhất trước) để một nhân viên nằm liền nhau qua các trang.
+  const sortedRows = useMemo(
+    () =>
+      [...filteredRows].sort(
+        (a, b) =>
+          (a.employee?.name || "Chưa phân công").localeCompare(
+            b.employee?.name || "Chưa phân công",
+            "vi"
+          ) ||
+          (a.school?.name || "").localeCompare(b.school?.name || "", "vi") ||
+          Number(b.period?.year) - Number(a.period?.year) ||
+          Number(b.period?.month) - Number(a.period?.month) ||
+          a.subjectName.localeCompare(b.subjectName, "vi")
+      ),
+    [filteredRows]
+  );
 
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
-  const paginatedRows = filteredRows.slice(
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / pageSize));
+  const paginatedRows = sortedRows.slice(
     (currentPage - 1) * pageSize,
-    currentPage * pageSize,
+    currentPage * pageSize
   );
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [keyword, employeeId, schoolId, year, month, onlyRemaining]);
+  }, [keyword, employeeId, schoolId, year, month]);
 
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
   }, [currentPage, totalPages]);
 
+  // Tổng của từng nhân viên tính trên mọi dòng khớp lọc (kể cả trang khác).
+  const employeeTotals = useMemo(() => {
+    const map = new Map<string, { rows: ReportRow[]; total: ReportNumbers }>();
+    filteredRows.forEach((row) => {
+      const name = row.employee?.name || "Chưa phân công";
+      const current = map.get(name) ?? { rows: [], total: EMPTY_NUMBERS };
+      current.rows.push(row);
+      map.set(name, current);
+    });
+    map.forEach((value) => {
+      value.total = sumRows(value.rows);
+    });
+    return map;
+  }, [filteredRows]);
+
   const groups = useMemo(() => {
-    const map = new Map<string, any[]>();
+    const map = new Map<string, ReportRow[]>();
     paginatedRows.forEach((row) => {
       const name = row.employee?.name || "Chưa phân công";
       map.set(name, [...(map.get(name) || []), row]);
     });
-    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0], "vi"));
+    return [...map.entries()];
   }, [paginatedRows]);
 
-  const totals = filteredRows.reduce(
-    (result, row) => ({
-      revenue: result.revenue + row.revenue,
-      totalExpense: result.totalExpense + row.totalExpense,
-      paid: result.paid + row.paid,
-      remaining: result.remaining + row.remaining,
-      cashPolicy: result.cashPolicy + row.cashPolicy,
-    }),
-    { revenue: 0, totalExpense: 0, paid: 0, remaining: 0, cashPolicy: 0 },
-  );
+  const totals = useMemo(() => sumRows(filteredRows), [filteredRows]);
+
+  const excelFilters = useMemo<GlobalExpenseExcelFilters>(() => {
+    const monthItem = schoolYearMonths.find(
+      (item) => `${item.year}-${item.month}` === month,
+    );
+    return {
+      keyword,
+      employeeName: employees.find(([value]) => value === employeeId)?.[1],
+      schoolName: schools.find(([value]) => value === schoolId)?.[1],
+      schoolYear: year,
+      monthLabel: monthItem
+        ? `${String(monthItem.month).padStart(2, "0")}/${monthItem.year}`
+        : undefined,
+    };
+  }, [
+    employeeId,
+    employees,
+    keyword,
+    month,
+    schoolId,
+    schools,
+    schoolYearMonths,
+    year,
+  ]);
+
+  const handleExportExcel = async () => {
+    if (!filteredRows.length || exporting) return;
+    setExporting(true);
+    try {
+      const excelRows: GlobalExpenseExcelRow[] = filteredRows.map((row) => ({
+        employeeName: row.employee?.name || "Chưa phân công",
+        employeeRoles: Array.isArray(row.employee?.roles)
+          ? row.employee.roles.map(roleLabel).join(", ")
+          : "",
+        employeeContact: row.employee?.phone || row.employee?.email || "",
+        schoolName: row.school?.name || "",
+        schoolTaxCode: row.school?.taxCode || "",
+        periodName: periodLabel(row.period),
+        schoolYear: getSchoolYear(
+          Number(row.period?.month),
+          Number(row.period?.year),
+        ),
+        subjectName: row.subjectName,
+        students: row.students,
+        periods: row.periods,
+        revenue: row.revenue,
+        schoolExpense: row.schoolExpense,
+        schoolPaid: row.schoolPaid,
+        invoice: row.invoice,
+        collected: row.collected,
+        outsideExpense: row.outsideExpense,
+        outsidePaid: row.outsidePaid,
+        schoolTeacher: row.schoolTeacher,
+        companyTeacher: row.companyTeacher,
+        annualPolicy: row.annualPolicy,
+        otherExpense: row.otherExpense,
+        profit: row.profit,
+      }));
+      const blob = await buildGlobalExpenseReportExcel(
+        excelRows,
+        excelFilters,
+      );
+      await saveBlob(
+        blob,
+        globalExpenseReportFileName(excelFilters),
+        EXCEL_FILE_TYPE,
+      );
+      toast.success(`Đã xuất ${excelRows.length} dòng báo cáo thu chi`);
+    } catch (exportError) {
+      console.error("Failed to export cashflow report", exportError);
+      toast.error("Không thể xuất file Excel báo cáo tổng hợp thu chi");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -415,6 +576,27 @@ export default function GlobalExpenseReport() {
       </div>
     );
   }
+
+  const cards: { label: string; value: number; tone: string }[] = [
+    { label: "Doanh thu", value: totals.revenue, tone: "text-slate-900" },
+    { label: "Hóa đơn", value: totals.invoice, tone: "text-amber-800" },
+    { label: "Đã thu", value: totals.collected, tone: "text-emerald-700" },
+    {
+      label: "Chi trường",
+      value: totals.schoolExpense,
+      tone: "text-slate-900",
+    },
+    {
+      label: "Chi ngoài",
+      value: totals.outsideExpense,
+      tone: "text-slate-900",
+    },
+    {
+      label: "Lợi nhuận",
+      value: totals.profit,
+      tone: totals.profit < 0 ? "text-rose-700" : "text-blue-700",
+    },
+  ];
 
   return (
     <div className="space-y-5">
@@ -425,36 +607,82 @@ export default function GlobalExpenseReport() {
               Báo cáo tổng hợp thu chi
             </h2>
             <p className="mt-1 text-base text-slate-500">
-              Nhóm theo nhân viên kinh doanh và từng trường phụ trách
+              Mỗi dòng là một môn trong một kỳ; lợi nhuận tính theo đúng các
+              khoản chi hiển thị trên bảng
             </p>
           </div>
-          <button
-            onClick={load}
-            className="flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 font-bold text-white"
-          >
-            <RefreshCw size={18} /> Làm mới
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              disabled={!filteredRows.length || exporting}
+              className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {exporting ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <FileSpreadsheet size={18} />
+              )}
+              {exporting ? "Đang xuất..." : "Xuất Excel"}
+            </button>
+            <button
+              type="button"
+              onClick={load}
+              className="flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 font-bold text-white"
+            >
+              <RefreshCw size={18} /> Làm mới
+            </button>
+          </div>
         </div>
         <div className="mt-5 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
           <input
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
-            placeholder="Tên NV, trường, MST..."
+            placeholder="Tên NV, trường, MST, môn..."
             className="rounded-xl border border-slate-200 px-4 py-3 text-base"
           />
-          <SearchableSelect value={employeeId} onChange={(value) => {
-            setEmployeeId(value);
-            setSchoolId("");
-          }} options={employees.map(([value, label]) => ({ id: value, name: label }))} placeholder="Tất cả nhân viên" searchPlaceholder="Tìm nhân viên…" />
-          <SearchableSelect value={schoolId} onChange={setSchoolId} options={schools.map(([value, label]) => ({ id: value, name: label }))} placeholder="Tất cả trường" searchPlaceholder="Tìm trường…" />
-          <select value={year} onChange={(e) => {
-            setYear(e.target.value);
-            setMonth("");
-          }} className="rounded-xl border border-slate-200 px-4 py-3 text-base">
+          <SearchableSelect
+            value={employeeId}
+            onChange={(value) => {
+              setEmployeeId(value);
+              setSchoolId("");
+            }}
+            options={employees.map(([value, label]) => ({
+              id: value,
+              name: label,
+            }))}
+            placeholder="Tất cả nhân viên"
+            searchPlaceholder="Tìm nhân viên…"
+          />
+          <SearchableSelect
+            value={schoolId}
+            onChange={setSchoolId}
+            options={schools.map(([value, label]) => ({
+              id: value,
+              name: label,
+            }))}
+            placeholder="Tất cả trường"
+            searchPlaceholder="Tìm trường…"
+          />
+          <select
+            value={year}
+            onChange={(e) => {
+              setYear(e.target.value);
+              setMonth("");
+            }}
+            className="rounded-xl border border-slate-200 px-4 py-3 text-base"
+          >
             <option value="">Tất cả năm học</option>
-            {years.map((value) => <option key={value}>{value}</option>)}
+            {years.map((value) => (
+              <option key={value}>{value}</option>
+            ))}
           </select>
-          <select value={month} onChange={(e) => setMonth(e.target.value)} disabled={!year} className="rounded-xl border border-slate-200 px-4 py-3 text-base disabled:bg-slate-100 disabled:text-slate-400">
+          <select
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+            disabled={!year}
+            className="rounded-xl border border-slate-200 px-4 py-3 text-base disabled:bg-slate-100 disabled:text-slate-400"
+          >
             <option value="">Tất cả tháng</option>
             {schoolYearMonths.map((item) => (
               <option
@@ -465,124 +693,211 @@ export default function GlobalExpenseReport() {
               </option>
             ))}
           </select>
-          <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-base font-bold">
-            <input type="checkbox" checked={onlyRemaining} onChange={(e) => setOnlyRemaining(e.target.checked)} />
-            Còn phải chi
-          </label>
         </div>
       </section>
 
-      {error && <div className="rounded-2xl bg-rose-50 p-4 font-bold text-rose-700">{error}</div>}
+      {error && (
+        <div className="rounded-2xl bg-rose-50 p-4 font-bold text-rose-700">
+          {error}
+        </div>
+      )}
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        {[
-          ["Tổng doanh thu", totals.revenue],
-          ["Tổng chi", totals.totalExpense],
-          ["Đã chi", totals.paid],
-          ["Còn phải chi", totals.remaining],
-          ["Chính sách tiền mặt", totals.cashPolicy],
-        ].map(([label, value]) => (
-          <div key={String(label)} className="rounded-2xl bg-white p-4 shadow-sm">
-            <p className="text-base font-bold text-slate-500">{label}</p>
-            <p className="mt-2 text-xl font-black text-slate-900">{formatCurrency(value)}</p>
-          </div>
-        ))}
+      <section className="overflow-auto border border-slate-300 bg-white">
+        <table className="w-full min-w-[900px] border-collapse text-sm">
+          <thead>
+            <tr className="bg-slate-100">
+              {cards.map((card) => (
+                <th
+                  key={card.label}
+                  className="border border-slate-300 px-3 py-2 text-left font-bold text-slate-600"
+                >
+                  {card.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              {cards.map((card) => (
+                <td
+                  key={card.label}
+                  className={`border border-slate-300 px-3 py-2 text-right font-black tabular-nums ${card.tone}`}
+                >
+                  {money(card.value)}
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
       </section>
 
       {groups.map(([employeeName, employeeRows]) => {
         const employee = employeeRows[0]?.employee || {};
         const roles = Array.isArray(employee.roles) ? employee.roles : [];
+        const all = employeeTotals.get(employeeName);
+        const schoolOrder = new Map<string, number>();
+        employeeRows.forEach((row) => {
+          const key = String(row.school?.id || row.school?.name || "unknown");
+          if (!schoolOrder.has(key)) schoolOrder.set(key, schoolOrder.size);
+        });
 
         return (
-        <section key={employeeName} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-col items-center gap-2 border-b border-slate-100 bg-white px-5 py-4 sm:flex-row sm:items-center">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-blue-50 text-3xl">
-              👤
+          <section
+            key={employeeName}
+            className="overflow-hidden border border-slate-300 bg-white"
+          >
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-slate-300 bg-slate-100 px-3 py-2 text-sm">
+              <strong className="text-slate-900">{employeeName}</strong>
+              <span className="text-slate-500">
+                {employee.phone || employee.email || "Chưa có liên hệ"}
+              </span>
+              <span className="text-slate-500">
+                {roles.length
+                  ? roles.map(roleLabel).join(", ")
+                  : "Chưa có vai trò"}
+              </span>
+              <span className="ml-auto font-semibold text-slate-700">
+                {new Set(all?.rows.map((row) => row.school?.id)).size} trường
+              </span>
+              <span
+                className={`font-black tabular-nums ${
+                  (all?.total.profit ?? 0) < 0
+                    ? "text-rose-700"
+                    : "text-blue-700"
+                }`}
+              >
+                Lợi nhuận: {money(all?.total.profit ?? 0)}
+              </span>
             </div>
-            <div className="min-w-0 flex-1 text-center sm:text-left">
-              <p className="text-lg font-black text-slate-800">
-                {employeeName}
-              </p>
-              <p className="mt-0.5 text-sm text-slate-400">
-                {employee.phone || employee.email || "Chưa có thông tin liên hệ"}
-              </p>
-              <div className="mt-2 flex flex-wrap justify-center gap-1 sm:justify-start">
-                {roles.length ? (
-                  roles.map((role: string) => (
-                    <span
-                      key={role}
-                      className={`rounded-full px-2 py-1 text-xs font-semibold ${roleColor(
-                        role,
-                      )}`}
+            <div className="overflow-auto">
+              <table className="w-full min-w-[2200px] border-collapse whitespace-nowrap text-xs">
+                <thead>
+                  <tr className="font-black uppercase tracking-wide">
+                    <th
+                      rowSpan={2}
+                      className="sticky left-0 z-10 min-w-[260px] border border-slate-400 bg-slate-200 px-2 py-1.5 text-left text-slate-700"
                     >
-                      {roleLabel(role)}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-xs italic text-slate-300">
-                    Chưa có vai trò
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="rounded-xl bg-slate-100 px-4 py-2 text-center">
-              <p className="text-xs font-semibold uppercase text-slate-400">
-                Trường phụ trách
-              </p>
-              <p className="mt-1 text-xl font-black text-slate-800">
-                {new Set(employeeRows.map((row) => row.school?.id)).size}
-              </p>
-            </div>
-          </div>
-          <div className="overflow-auto">
-            <table className="min-w-[1500px] whitespace-nowrap text-lg">
-              <thead className="bg-slate-100 text-slate-700">
-                <tr>
-                  <th className="px-4 py-3 text-left">
-                    Nhân viên kinh doanh
-                  </th>
-                  <th className="px-4 py-3 text-left">Trường</th>
-                  <th className="px-4 py-3 text-left">Tên môn học</th>
-                  <th className="px-4 py-3 text-left">Tháng</th>
-                  <th className="px-4 py-3 text-right">Doanh thu</th>
-                  <th className="px-4 py-3 text-right">Chi nhà trường</th>
-                  <th className="px-4 py-3 text-right">Chi ngoài HĐ</th>
-                  <th className="px-4 py-3 text-right">Tổng chi</th>
-                  <th className="px-4 py-3 text-right">Đã chi</th>
-                  <th className="px-4 py-3 text-right">Còn phải chi</th>
-                  <th className="px-4 py-3 text-right">CS tiền mặt</th>
-                  <th className="px-4 py-3 text-right">Chênh lệch</th>
-                </tr>
-              </thead>
-              <tbody>
-                {employeeRows
-                  .sort((a, b) => (a.school?.name || "").localeCompare(b.school?.name || "", "vi"))
-                  .map((row) => (
-                    <tr key={row.key} className="border-t border-slate-100 hover:bg-blue-50">
-                      <td className="px-4 py-3 font-bold text-blue-700">
-                        {row.employee?.name || "Chưa phân công"}
-                      </td>
-                      <td className="px-4 py-3 font-bold">{row.school?.name || "--"}</td>
-                      <td className="px-4 py-3">
-                        {row.subjectNames?.length
-                          ? row.subjectNames.join(", ")
-                          : "--"}
-                      </td>
-                      <td className="px-4 py-3">{row.period?.name || `${row.period?.month || "--"}/${row.period?.year || "--"}`}</td>
-                      <td className="px-4 py-3 text-right">{formatCurrency(row.revenue)}</td>
-                      <td className="px-4 py-3 text-right">{formatCurrency(row.schoolExpense)}</td>
-                      <td className="px-4 py-3 text-right">{formatCurrency(row.managementExpense)}</td>
-                      <td className="px-4 py-3 text-right font-bold">{formatCurrency(row.totalExpense)}</td>
-                      <td className="px-4 py-3 text-right text-emerald-700">{formatCurrency(row.paid)}</td>
-                      <td className="px-4 py-3 text-right font-bold text-orange-700">{formatCurrency(row.remaining)}</td>
-                      <td className="px-4 py-3 text-right">{formatCurrency(row.cashPolicy)}</td>
-                      <td className="px-4 py-3 text-right font-bold text-blue-700">{formatCurrency(row.revenue - row.totalExpense - row.cashPolicy)}</td>
+                      Trường
+                    </th>
+                    <th
+                      rowSpan={2}
+                      className="min-w-[130px] border border-slate-400 bg-slate-200 px-2 py-1.5 text-left text-slate-700"
+                    >
+                      Kỳ
+                    </th>
+                    <th
+                      rowSpan={2}
+                      className="min-w-[220px] border border-slate-400 bg-slate-200 px-2 py-1.5 text-left text-slate-700"
+                    >
+                      Môn học
+                    </th>
+                    {GROUP_HEADERS.map((group, index) => (
+                      <th
+                        key={index}
+                        colSpan={group.span}
+                        className={`border border-slate-400 px-2 py-1.5 text-center ${group.className}`}
+                      >
+                        {group.label}
+                      </th>
+                    ))}
+                  </tr>
+                  <tr className="bg-slate-100 font-bold text-slate-600">
+                    {COLUMN_HEADERS.map((column, index) => (
+                      <th
+                        key={`${column.label}-${index}`}
+                        title={column.title}
+                        className="border border-slate-400 px-2 py-1.5 text-right"
+                      >
+                        {column.label}
+                      </th>
+                    ))}
+                  </tr>
+                  {all && (
+                    <tr className="bg-yellow-50">
+                      <th
+                        colSpan={3}
+                        className="sticky left-0 z-10 border border-slate-400 bg-yellow-50 px-2 py-1.5 text-left font-black text-slate-800"
+                      >
+                        TỔNG {employeeName.toLocaleUpperCase("vi")}
+                      </th>
+                      <NumberCells row={all.total} strong />
                     </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+                  )}
+                </thead>
+                <tbody>
+                  {employeeRows.map((row, index) => {
+                    const schoolKeyOf = (item: ReportRow) =>
+                      String(item.school?.id || item.school?.name || "unknown");
+                    const periodKeyOf = (item: ReportRow) =>
+                      `${schoolKeyOf(item)}-${String(item.period?.id || "")}`;
+                    const schoolKey = schoolKeyOf(row);
+                    const schoolSpan = rowGroupSpan(
+                      employeeRows,
+                      index,
+                      schoolKeyOf
+                    );
+                    const periodSpan = rowGroupSpan(
+                      employeeRows,
+                      index,
+                      periodKeyOf
+                    );
+                    const order = schoolOrder.get(schoolKey) || 0;
+                    const rowBackground =
+                      order % 2 === 0 ? "bg-white" : "bg-slate-50";
+
+                    return (
+                      <tr
+                        key={row.key}
+                        className={`${rowBackground} hover:bg-yellow-50`}
+                      >
+                        {schoolSpan > 0 && (
+                          <td
+                            rowSpan={schoolSpan}
+                            className={`sticky left-0 z-[1] max-w-[280px] border border-slate-400 px-2 py-1.5 align-top font-bold text-slate-900 ${rowBackground}`}
+                          >
+                            <p className="whitespace-normal leading-5">
+                              {row.school?.name || "--"}
+                            </p>
+                          </td>
+                        )}
+                        {periodSpan > 0 && (
+                          <td
+                            rowSpan={periodSpan}
+                            className={`border border-slate-300 px-2 py-1.5 align-top font-semibold text-slate-600 ${rowBackground}`}
+                          >
+                            {periodLabel(row.period)}
+                          </td>
+                        )}
+                        <td
+                          className="max-w-[240px] truncate border border-slate-300 px-2 py-1.5 font-semibold text-slate-700"
+                          title={row.subjectName}
+                        >
+                          {row.subjectName}
+                        </td>
+                        <NumberCells row={row} />
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                {all && (
+                  <tfoot>
+                    <tr className="bg-yellow-50">
+                      <td
+                        colSpan={3}
+                        className="sticky left-0 z-[1] border border-slate-400 bg-yellow-50 px-2 py-1.5 font-black text-slate-800"
+                      >
+                        Tổng {employeeName}
+                        <span className="ml-1 text-xs font-semibold text-slate-400">
+                          ({all.rows.length} dòng)
+                        </span>
+                      </td>
+                      <NumberCells row={all.total} strong />
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </section>
         );
       })}
       {!groups.length && (
@@ -590,12 +905,12 @@ export default function GlobalExpenseReport() {
           Không có dữ liệu phù hợp với bộ lọc.
         </div>
       )}
-      {filteredRows.length > 0 && (
+      {sortedRows.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-base font-semibold text-slate-600">
             Hiển thị {(currentPage - 1) * pageSize + 1}–
-            {Math.min(currentPage * pageSize, filteredRows.length)} trong tổng{" "}
-            {filteredRows.length} dòng
+            {Math.min(currentPage * pageSize, sortedRows.length)} trong tổng{" "}
+            {sortedRows.length} dòng
           </p>
           <div className="flex items-center gap-2">
             <button

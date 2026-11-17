@@ -21,11 +21,13 @@ import { usePagedList } from "../hooks/usePagedList";
 import type { RefOption } from "../hooks/useTeachingRefData";
 import {
   classNameOf,
+  endOfMonth,
   endOfWeek,
   formatCheckedAt,
   formatDate,
   formatTime,
   isDateOrderValid,
+  startOfMonth,
   startOfWeek,
   todayISO,
 } from "../lib";
@@ -98,29 +100,43 @@ export default function LessonReportTab({ teachers, schools }: Props) {
   return (
     <div className="space-y-3">
       <FilterCard>
-        <div className="flex gap-2 items-center md:col-span-2">
-          <input
-            type="date"
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-            className="flex-1 min-w-0 px-2 py-2 border rounded-lg text-sm"
-          />
-          <span className="text-gray-400 text-sm">→</span>
-          <input
-            type="date"
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-            className="flex-1 min-w-0 px-2 py-2 border rounded-lg text-sm"
-          />
-          <button
-            onClick={() => {
-              setFromDate(startOfWeek(todayISO()));
-              setToDate(endOfWeek(todayISO()));
-            }}
-            className="px-3 py-2 rounded-lg bg-blue-50 text-blue-600 text-xs font-medium whitespace-nowrap"
-          >
-            Tuần này
-          </button>
+        <div className="flex flex-wrap gap-2 items-center md:col-span-2">
+          {/* Thiếu chỗ (điện thoại) thì các nút chọn nhanh xuống dòng, không bóp ô ngày. */}
+          <div className="flex flex-1 min-w-[17rem] items-center gap-2">
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="flex-1 min-w-0 px-2 py-2 border rounded-lg text-sm"
+            />
+            <span className="text-gray-400 text-sm">→</span>
+            <input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="flex-1 min-w-0 px-2 py-2 border rounded-lg text-sm"
+            />
+          </div>
+          <div className="flex shrink-0 gap-1.5">
+            <button
+              onClick={() => {
+                setFromDate(startOfWeek(todayISO()));
+                setToDate(endOfWeek(todayISO()));
+              }}
+              className="px-3 py-2 rounded-lg bg-blue-50 text-blue-600 text-xs font-medium whitespace-nowrap"
+            >
+              Tuần này
+            </button>
+            <button
+              onClick={() => {
+                setFromDate(startOfMonth(todayISO()));
+                setToDate(endOfMonth(todayISO()));
+              }}
+              className="px-3 py-2 rounded-lg bg-blue-50 text-blue-600 text-xs font-medium whitespace-nowrap"
+            >
+              Tháng này
+            </button>
+          </div>
         </div>
 
         {!rangeValid && (

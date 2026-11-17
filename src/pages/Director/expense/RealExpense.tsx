@@ -4,6 +4,7 @@ import { toast } from "react-hot-toast";
 
 import HeaderWithBack from "@/components/HeaderWithBack";
 import SearchableSelect from "@/components/SearchableSelect";
+import { DEFAULT_SCHOOL_YEAR } from "@/constants/schoolYear";
 
 import {
   Search,
@@ -23,15 +24,32 @@ import { schoolApi } from "@/service/school.api";
 import { employeeApi } from "@/service/employee";
 import { expensePeriodApi } from "@/service/expensePeriod";
 import { schoolExpenseApi } from "@/service/schoolExpense";
+import { subjectApi } from "@/service/subject.api";
 import { StatCard } from "./component/StatCard";
 import RealExpenseDetail from "./RealExpenseDetail/index";
 import GlobalExpenseReport from "./components/GlobalExpenseReport";
+import SchoolTeacherPayrollReport from "./components/SchoolTeacherPayroll/SchoolTeacherPayrollReport";
+import { COLLABORATOR_PAY_ROLES } from "@/service/collaboratorPayroll";
+import SchoolInfoModal, { SchoolInfo } from "./components/SchoolInfoModal";
 import { getApiErrorMessage } from "@/utils/apiError";
 import { hasRole } from "@/utils/auth";
 
-/** Khớp `WRITE_ROLES` của `POST /school-expenses` ở backend. */
+/** Khớp `WRITE_ROLES` của `/school-expenses` ở backend. */
 const canWriteSchoolExpense = () =>
-  hasRole("accountant", "ketoan_congno", "ketoan_truong", "troly_gd", "director");
+  hasRole(
+    "accountant",
+    "ketoan_congno",
+    "ketoan_truong",
+    "thuquy",
+    "troly_gd",
+    "director",
+  );
+
+/** Sales admin chỉ đọc, tạo được bảng rỗng để xem và xác nhận đúng BBCS. */
+const canCreateSchoolExpense = () =>
+  canWriteSchoolExpense() ||
+  hasRole("saleadmin", "salesadmin", "salesadmin_la");
+
 const getSchoolYearRange = (schoolYear: string) => {
   const years = schoolYear.match(/\d{4}/g)?.map(Number) || [];
 
@@ -44,12 +62,7 @@ const getSchoolYearRange = (schoolYear: string) => {
 };
 
 const getCurrentSchoolYear = () => {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = today.getMonth() + 1;
-  const startYear = month >= 8 ? year : year - 1;
-
-  return `${startYear}-${startYear + 1}`;
+  return DEFAULT_SCHOOL_YEAR;
 };
 
 const getExpensePeriodYear = (
@@ -62,6 +75,85 @@ const getExpensePeriodYear = (
   if (!range) return fallbackYear;
 
   return month >= 8 ? range.startYear : range.endYear;
+};
+
+// Thứ tự tháng trong năm học: 8 → 12 rồi 1 → 7.
+const SCHOOL_YEAR_MONTHS = [8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7];
+const getSchoolYearMonthOrder = (month: number) =>
+  SCHOOL_YEAR_MONTHS.indexOf(month);
+
+const getDefaultPeriodName = (month: number, year: number) =>
+  `${String(month).padStart(2, "0")}/${year}`;
+
+/** Tên hiển thị của kỳ: đã đổi tên / dòng tuỳ chỉnh thì dùng tên, không thì "Tháng M". */
+const getPeriodLabel = (period: any) => {
+  const month = Number(period?.month);
+  if (month > 12) return period?.name || "";
+  return period?.name &&
+    period.name !== getDefaultPeriodName(month, Number(period.year))
+    ? period.name
+    : `Tháng ${month}`;
+};
+
+/**
+ * Các kỳ đang có của 1 năm học — không bắt buộc đủ 12 tháng (tháng đã xoá thì
+ * không hiện). Tháng thật (1–12) xếp theo năm học, dòng tuỳ chỉnh (tháng ảo
+ * > 12, gắn năm bắt đầu) xếp sau.
+ */
+const getSchoolYearPeriods = (periods: any[], schoolYear: string) => {
+  const range = getSchoolYearRange(schoolYear);
+  if (!range) return [];
+
+  const monthPeriods = periods
+    .filter((p: any) => {
+      const month = Number(p.month);
+      return (
+        month >= 1 &&
+        month <= 12 &&
+        Number(p.year) === getExpensePeriodYear(schoolYear, month, 0)
+      );
+    })
+    .sort(
+      (a: any, b: any) =>
+        getSchoolYearMonthOrder(Number(a.month)) -
+        getSchoolYearMonthOrder(Number(b.month)),
+    );
+  const customPeriods = periods
+    .filter(
+      (p: any) => Number(p.month) > 12 && Number(p.year) === range.startYear,
+    )
+    .sort((a: any, b: any) => Number(a.month) - Number(b.month));
+
+  return [...monthPeriods, ...customPeriods];
+};
+
+/**
+ * Chọn kỳ có sẵn để mở thay cho tháng/năm mong muốn: đúng tháng/năm nếu còn,
+ * không thì tháng gần nhất trước đó trong năm học, rồi tới kỳ đầu tiên.
+ * Trả null khi năm học chưa có kỳ nào.
+ */
+const pickSchoolYearPeriod = (
+  periods: any[],
+  schoolYear: string,
+  month: number,
+  year: number,
+) => {
+  const exact = periods.find(
+    (p: any) => Number(p.month) === month && Number(p.year) === year,
+  );
+  if (exact) return exact;
+
+  const yearPeriods = getSchoolYearPeriods(periods, schoolYear);
+  const targetOrder = getSchoolYearMonthOrder(month);
+  const previous = yearPeriods
+    .filter(
+      (p: any) =>
+        Number(p.month) <= 12 &&
+        getSchoolYearMonthOrder(Number(p.month)) <= targetOrder,
+    )
+    .pop();
+
+  return previous || yearPeriods[0] || null;
 };
 
 const getPreferredSchoolYear = (schoolYears: string[]) => {
@@ -118,11 +210,21 @@ export default function RealExpense() {
   const [selectedSchoolId, setSelectedSchoolId] = useState<number | null>(null);
 
   const [activeSchool, setActiveSchool] = useState<any>(null);
+  /** Kế toán sửa thông tin trường in trên hóa đơn (MST, mã ĐVQHNS...). */
+  const [editingSchoolInfo, setEditingSchoolInfo] = useState<SchoolInfo | null>(
+    null,
+  );
   const [employeePage, setEmployeePage] = useState(1);
 
   const [loadingDetail, setLoadingDetail] = useState(false);
-  const [mainView, setMainView] = useState<"schools" | "report">("schools");
+  const [mainView, setMainView] = useState<
+    "schools" | "report" | "school-teacher-payroll"
+  >("schools");
+  // Tab "Lương GV trường" (thay Lương GV CTV) — khớp quyền API backend (không gồm Sales Admin).
+  const canViewCollaboratorPay = hasRole(...COLLABORATOR_PAY_ROLES);
   const [customPeriodName, setCustomPeriodName] = useState("");
+  // "" = dòng tuỳ chỉnh; số = thêm lại tháng thật (1–12) chưa có trong năm học.
+  const [customPeriodMonth, setCustomPeriodMonth] = useState<number | "">("");
   const [addingCustomPeriod, setAddingCustomPeriod] = useState(false);
   const [editingPeriodId, setEditingPeriodId] = useState<number | null>(null);
   const [editingPeriodName, setEditingPeriodName] = useState("");
@@ -205,6 +307,10 @@ export default function RealExpense() {
   // trường, đổi tháng, đổi năm học) có thể cùng lúc đòi cùng 1 kỳ, chỉ gọi
   // API 1 lần.
   const pendingPeriodRef = useRef(new Map<string, Promise<any>>());
+  // Tương tự cho bảng chi phí theo key trường-kỳ: mở trường có thể chạy chồng
+  // nhiều lượt (effect theo kỳ / năm học) — gọi tạo song song sẽ sinh 2 bảng
+  // cho cùng 1 kỳ (backend chỉ kiểm tra trước khi insert).
+  const pendingExpenseRef = useRef(new Map<string, Promise<number | null>>());
 
   const addPeriodToList = (period: any) => {
     setPeriods((prev: any[]) =>
@@ -214,7 +320,12 @@ export default function RealExpense() {
 
   // Lấy kỳ (tháng/năm) của 1 trường, chưa có thì tạo. Backend tạo kiểu
   // idempotent (đã có thì trả kỳ cũ) nên an toàn khi gọi lặp.
-  const ensurePeriod = (schoolId: number, month: number, year: number) => {
+  const ensurePeriod = (
+    schoolId: number,
+    month: number,
+    year: number,
+    name?: string,
+  ) => {
     const key = `${schoolId}-${month}-${year}`;
     const pending = pendingPeriodRef.current.get(key);
     if (pending) return pending;
@@ -223,7 +334,7 @@ export default function RealExpense() {
       .create({
         month,
         year,
-        name: `${String(month).padStart(2, "0")}/${year}`,
+        name: name || getDefaultPeriodName(month, year),
         schoolId,
       })
       .then((res: any) => {
@@ -236,6 +347,72 @@ export default function RealExpense() {
       });
 
     pendingPeriodRef.current.set(key, promise);
+    return promise;
+  };
+
+  // Năm học của trường lấy từ môn học — cùng nguồn và cách chọn với màn chi
+  // tiết (schoolYears + handleSchoolYearsChange). Năm đang chọn không có trong
+  // danh sách thì đổi sang năm của trường; trường chưa có môn thì giữ nguyên.
+  const resolveSchoolYear = async (schoolId: number) => {
+    try {
+      const res = await subjectApi.getFinanceBySchool(schoolId);
+      const subjects = Array.isArray(res)
+        ? res
+        : Array.isArray(res?.data)
+          ? res.data
+          : [];
+      const years = [
+        ...new Set<string>(
+          subjects.map((s: any) => s.schoolYear).filter(Boolean),
+        ),
+      ].sort(
+        (a, b) =>
+          Number(b.match(/\d{4}/)?.[0] || 0) -
+          Number(a.match(/\d{4}/)?.[0] || 0),
+      );
+
+      return !years.length || years.includes(selectedSchoolYear)
+        ? selectedSchoolYear
+        : getPreferredSchoolYear(years);
+    } catch (error) {
+      console.log(error);
+      return selectedSchoolYear;
+    }
+  };
+
+  // Id bảng chi phí của trường trong kỳ, chưa có thì tạo (nếu có quyền).
+  // null = chưa có và không tạo được (đã báo người dùng).
+  const ensureSchoolExpense = (schoolId: number, periodId: number) => {
+    const key = `${schoolId}-${periodId}`;
+    const pending = pendingExpenseRef.current.get(key);
+    if (pending) return pending;
+
+    const promise = (async (): Promise<number | null> => {
+      const existedRes = await schoolExpenseApi.checkExisted(schoolId, periodId);
+      const existed = existedRes?.data || existedRes;
+      if (existed?.id) return existed.id;
+
+      // Backend chỉ cho Kế toán / Kế toán công nợ / Kế toán trưởng / Thủ quỹ /
+      // Trợ lý GĐ / GĐ / Sales admin tạo bảng chi phí — role khác gọi create là 403.
+      if (!canCreateSchoolExpense()) {
+        toast.error(
+          "Trường này chưa có bảng chi phí. Chỉ Kế toán, Kế toán trưởng, Thủ quỹ, Trợ lý GĐ, Sales admin hoặc Giám đốc mới tạo được.",
+        );
+        return null;
+      }
+
+      const createdRes = await schoolExpenseApi.create({ schoolId, periodId });
+      const created = createdRes?.data || createdRes;
+      if (!created?.id) {
+        alert("Không tạo được phiếu thu chi");
+        return null;
+      }
+      return created.id;
+    })().finally(() => {
+      pendingExpenseRef.current.delete(key);
+    });
+
+    pendingExpenseRef.current.set(key, promise);
     return promise;
   };
 
@@ -258,20 +435,19 @@ export default function RealExpense() {
 
       setPeriods(periodData);
 
-      const currentPeriod = periodData.find(
-        (item: any) =>
-          Number(item.month) === Number(currentMonth) &&
-          Number(item.year) === Number(currentYear),
+      // Giữ kỳ đang chọn nếu thuộc trường này (vừa mở từ danh sách trường),
+      // không thì chọn kỳ có sẵn gần tháng hiện tại — không tự tạo lại tháng
+      // đã xoá.
+      setSelectedPeriod((prev: any) =>
+        prev?.id && periodData.some((item: any) => item.id === prev.id)
+          ? prev
+          : pickSchoolYearPeriod(
+              periodData,
+              selectedSchoolYear,
+              currentMonth,
+              currentYear,
+            ) || { month: currentMonth, year: currentYear },
       );
-
-      if (currentPeriod) {
-        setSelectedPeriod(currentPeriod);
-      } else {
-        setSelectedPeriod({
-          month: currentMonth,
-          year: currentYear,
-        });
-      }
     } catch (error) {
       console.log(error);
     }
@@ -343,69 +519,85 @@ export default function RealExpense() {
     return schools;
   }, [schools, activeSchool, selectedEmployeeId, employeePage]);
 
-  const customPeriods = useMemo(() => {
-    const range = getSchoolYearRange(selectedSchoolYear);
-    if (!range) return [];
+  const schoolYearPeriods = useMemo(
+    () => getSchoolYearPeriods(periods, selectedSchoolYear),
+    [periods, selectedSchoolYear],
+  );
 
-    // Dòng tuỳ chỉnh dùng số tháng "ảo" (> 12) gắn với năm bắt đầu của năm học.
-    return periods
-      .filter(
-        (p: any) =>
-          Number(p.month) > 12 && Number(p.year) === range.startYear,
-      )
-      .sort((a: any, b: any) => Number(a.month) - Number(b.month));
-  }, [periods, selectedSchoolYear]);
+  // Tháng thật (1–12) chưa có kỳ trong năm học — chọn được ở "+ Thêm dòng".
+  const missingSchoolYearMonths = useMemo(
+    () =>
+      SCHOOL_YEAR_MONTHS.filter(
+        (month) =>
+          !schoolYearPeriods.some((p: any) => Number(p.month) === month),
+      ),
+    [schoolYearPeriods],
+  );
 
-  const handleChangePeriod = async (month: number, year: number) => {
-    console.log("change period", month, year);
-    try {
-      // TÌM TRONG LIST
-      const existed = periods.find(
-        (x: any) =>
-          Number(x.month) === Number(month) && Number(x.year) === Number(year),
-      );
-
-      // ĐÃ CÓ
-      if (existed) {
-        console.log("created period", existed);
-        setSelectedPeriod(existed);
-
-        return;
-      }
-
-      if (!activeSchool?.id) return;
-
-      // CHƯA CÓ -> CREATE
-      const created = await ensurePeriod(activeSchool.id, month, year);
-
-      setSelectedPeriod(created);
-    } catch (error) {
-      console.log(error);
-      toast.error(getApiErrorMessage(error, "Không thể mở kỳ chi phí"));
+  // Đổi năm học → mở kỳ có sẵn tương ứng, không tự tạo kỳ mới.
+  const handleChangePeriod = (month: number, year: number) => {
+    const period = pickSchoolYearPeriod(
+      periods,
+      selectedSchoolYear,
+      month,
+      year,
+    );
+    if (period) {
+      setSelectedPeriod(period);
+      return;
     }
+
+    const fallbackMonth = month > 12 ? currentMonth : month;
+    setSelectedPeriod({
+      month: fallbackMonth,
+      year: getExpensePeriodYear(selectedSchoolYear, fallbackMonth, year),
+    });
+  };
+
+  const closeAddPeriodForm = () => {
+    setAddingCustomPeriod(false);
+    setCustomPeriodName("");
+    setCustomPeriodMonth("");
   };
 
   const handleAddCustomPeriod = async () => {
     const name = customPeriodName.trim();
-    if (!name || !activeSchool?.id) return;
+    if (!activeSchool?.id) return;
+    if (!customPeriodMonth && !name) return;
 
     try {
-      // Không truyền month — backend tự cấp số tháng "ảo" (> 12) chưa dùng
-      // trong năm này (của trường này), tránh đụng 12 tháng thật và tránh
-      // race-condition.
-      const range = getSchoolYearRange(selectedSchoolYear);
-      const year = range?.startYear || currentYear;
+      let created: any;
 
-      const created = await expensePeriodApi.create({
-        year,
-        name,
-        schoolId: activeSchool.id,
-      });
+      if (customPeriodMonth) {
+        // Thêm lại tháng thật đã xoá (hoặc chưa từng tạo) của năm học.
+        const year = getExpensePeriodYear(
+          selectedSchoolYear,
+          customPeriodMonth,
+          currentYear,
+        );
+        created = await ensurePeriod(
+          activeSchool.id,
+          customPeriodMonth,
+          year,
+          name || undefined,
+        );
+      } else {
+        // Không truyền month — backend tự cấp số tháng "ảo" (> 12) chưa dùng
+        // trong năm này (của trường này), tránh đụng 12 tháng thật và tránh
+        // race-condition.
+        const range = getSchoolYearRange(selectedSchoolYear);
+        const year = range?.startYear || currentYear;
 
-      addPeriodToList(created);
+        created = await expensePeriodApi.create({
+          year,
+          name,
+          schoolId: activeSchool.id,
+        });
+        addPeriodToList(created);
+      }
+
       setSelectedPeriod(created);
-      setCustomPeriodName("");
-      setAddingCustomPeriod(false);
+      closeAddPeriodForm();
     } catch (error) {
       console.log(error);
       toast.error(getApiErrorMessage(error, "Không thể tạo dòng mới"));
@@ -444,12 +636,21 @@ export default function RealExpense() {
     try {
       await expensePeriodApi.delete(period.id);
 
-      setPeriods((prev: any) => prev.filter((p: any) => p.id !== period.id));
-      setSelectedPeriod((prev: any) =>
-        prev?.id === period.id
-          ? { month: currentMonth, year: currentYear }
-          : prev,
-      );
+      const remaining = periods.filter((p: any) => p.id !== period.id);
+      setPeriods(remaining);
+
+      // Xoá đúng kỳ đang mở → chuyển sang kỳ còn lại gần nhất; năm học không
+      // còn kỳ nào thì đóng phiếu, không tự tạo lại tháng vừa xoá.
+      if (selectedPeriod?.id === period.id) {
+        const next = pickSchoolYearPeriod(
+          remaining,
+          selectedSchoolYear,
+          Number(period.month),
+          Number(period.year),
+        );
+        setSelectedPeriod(next);
+        if (!next) setActiveExpenseId(null);
+      }
       setDeletingPeriod(null);
     } catch (error) {
       console.log(error);
@@ -463,7 +664,9 @@ export default function RealExpense() {
 
       setPeriods((prev: any) => [created, ...prev]);
       setSelectedPeriod(created);
-      toast.success(`Đã nhân bản "${period.name}" kèm toàn bộ dữ liệu thu chi`);
+      toast.success(
+        `Đã nhân bản "${getPeriodLabel(period)}" kèm toàn bộ dữ liệu thu chi`,
+      );
     } catch (error) {
       console.log(error);
       toast.error(getApiErrorMessage(error, "Không thể nhân bản dòng"));
@@ -472,15 +675,17 @@ export default function RealExpense() {
 
   const handleSchoolYearsChange = useCallback((years: string[]) => {
     setSchoolYears(years);
+    // Trường chưa có môn (chưa có năm học nào) → giữ năm học đang chọn: đổi năm
+    // ở đây sẽ kéo theo đổi kỳ và tự tạo thêm một kỳ trống của năm khác.
     setSelectedSchoolYear((currentSchoolYear) =>
-      years.includes(currentSchoolYear)
+      !years.length || years.includes(currentSchoolYear)
         ? currentSchoolYear
         : getPreferredSchoolYear(years),
     );
   }, []);
 
   useEffect(() => {
-    if (!selectedSchoolYear) return;
+    if (!selectedSchoolYear || !selectedPeriod) return;
 
     const month = Number(selectedPeriod?.month || currentMonth);
     const periodYear = getExpensePeriodYear(
@@ -496,11 +701,11 @@ export default function RealExpense() {
 
   const handleOpenSchoolExpense = async (school: any) => {
     try {
-      if (!selectedPeriod) {
-        alert("Vui lòng chọn kỳ tháng");
-
-        return;
-      }
+      // Chưa chọn kỳ (vd. vừa xoá hết kỳ của năm học) → nhắm tháng hiện tại.
+      const targetPeriod = selectedPeriod || {
+        month: currentMonth,
+        year: currentYear,
+      };
 
       setLoadingDetail(true);
 
@@ -509,58 +714,49 @@ export default function RealExpense() {
 
       // Chỉ dùng id kỳ đang chọn khi nó thuộc đúng trường này — vừa chuyển
       // trường thì selectedPeriod.id có thể còn là kỳ của trường trước.
-      if (selectedPeriod.id && periodsSchoolIdRef.current === school.id) {
-        periodId = selectedPeriod.id;
+      if (targetPeriod.id && periodsSchoolIdRef.current === school.id) {
+        periodId = targetPeriod.id;
       } else {
         // Dòng tuỳ chỉnh (tháng ảo > 12) là riêng từng trường — sang trường
         // khác thì quay về tháng hiện tại.
-        const isCustom = Number(selectedPeriod.month) > 12;
-        const period = await ensurePeriod(
-          school.id,
-          isCustom ? currentMonth : Number(selectedPeriod.month),
-          isCustom ? currentYear : Number(selectedPeriod.year),
-        );
+        const isCustom = Number(targetPeriod.month) > 12;
+        const month = isCustom ? currentMonth : Number(targetPeriod.month);
+        const year = isCustom ? currentYear : Number(targetPeriod.year);
+
+        // Chọn đúng năm học của trường TRƯỚC khi tìm / tạo kỳ: tạo theo năm
+        // đang chọn rồi màn chi tiết mới đổi sang năm của trường thì sinh thêm
+        // một kỳ + bảng chi phí trống ở năm kia.
+        const schoolYear = await resolveSchoolYear(school.id);
+        const periodYear = getExpensePeriodYear(schoolYear, month, year);
+
+        // Không bắt buộc đủ 12 tháng: ưu tiên kỳ có sẵn của trường, chỉ tự
+        // tạo khi năm học này của trường chưa có kỳ nào (mở lần đầu) — tháng
+        // đã xoá không bị tạo lại.
+        const schoolPeriods =
+          periodsSchoolIdRef.current === school.id
+            ? periods
+            : await expensePeriodApi
+                .getAll({ schoolId: school.id })
+                .then((res: any) =>
+                  Array.isArray(res) ? res : res?.data || [],
+                );
+        const period =
+          pickSchoolYearPeriod(
+            schoolPeriods,
+            schoolYear,
+            month,
+            periodYear,
+          ) || (await ensurePeriod(school.id, month, periodYear));
 
         periodId = period.id;
 
-        if (period.id !== selectedPeriod.id) setSelectedPeriod(period);
+        // Đổi năm + kỳ trong cùng một lượt render để effect đồng bộ năm học
+        // không thấy kỳ lệch năm rồi tự mở (và tạo) kỳ khác.
+        if (schoolYear !== selectedSchoolYear) setSelectedSchoolYear(schoolYear);
+        if (period.id !== selectedPeriod?.id) setSelectedPeriod(period);
       }
-      // CHECK EXISTED
-      const existedRes = await schoolExpenseApi.checkExisted(
-        school.id,
-        periodId,
-      );
-
-      const existed = existedRes?.data || existedRes;
-
-      // ĐÃ TỒN TẠI
-      if (existed?.id) {
-        expenseId = existed.id;
-      } else {
-        // Backend chỉ cho Kế toán / Kế toán công nợ / Kế toán trưởng / Trợ lý
-        // GĐ / GĐ tạo bảng chi phí — role khác gọi create là 403.
-        if (!canWriteSchoolExpense()) {
-          toast.error(
-            "Trường này chưa có bảng chi phí. Chỉ Kế toán, Kế toán trưởng, Trợ lý GĐ hoặc Giám đốc mới tạo được.",
-          );
-          return;
-        }
-        // CREATE
-        const createdRes = await schoolExpenseApi.create({
-          schoolId: school.id,
-          periodId,
-        });
-
-        const created = createdRes?.data || createdRes;
-
-        if (!created?.id) {
-          alert("Không tạo được phiếu thu chi");
-
-          return;
-        }
-
-        expenseId = created.id;
-      }
+      expenseId = await ensureSchoolExpense(school.id, periodId);
+      if (!expenseId) return;
 
       setSelectedSchoolId(school.id);
       setActiveSchool(school);
@@ -604,7 +800,7 @@ export default function RealExpense() {
       <div className="mt-[60px] p-4">
         <div
           className={`grid grid-cols-1 gap-5 items-start ${
-            !activeExpenseId && mainView === "report"
+            !activeExpenseId && mainView !== "schools"
               ? ""
               : "xl:grid-cols-[minmax(0,1fr)_150px]"
           }`}
@@ -634,10 +830,26 @@ export default function RealExpense() {
                 >
                   Báo cáo tổng hợp
                 </button>
+                {canViewCollaboratorPay && (
+                  <button
+                    onClick={() => setMainView("school-teacher-payroll")}
+                    className={`flex-1 rounded-xl px-4 py-3 text-base font-bold ${
+                      mainView === "school-teacher-payroll"
+                        ? "bg-blue-600 text-white"
+                        : "text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    Lương GV trường
+                  </button>
+                )}
               </div>
             )}
             {!activeExpenseId && mainView === "report" ? (
               <GlobalExpenseReport />
+            ) : !activeExpenseId &&
+              mainView === "school-teacher-payroll" &&
+              canViewCollaboratorPay ? (
+              <SchoolTeacherPayrollReport />
             ) : (
             <>
             {/* SEARCH */}
@@ -739,6 +951,7 @@ export default function RealExpense() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {visibleSchools.map((school) => {
                       const isSelected = activeSchool?.id === school.id;
+                      const isOpen = isSelected && Boolean(activeExpenseId);
 
                       return (
                         <div
@@ -755,17 +968,18 @@ export default function RealExpense() {
                               !activeExpenseId &&
                               handleOpenSchoolExpense(school)
                             }
-                            className="
-                  group
-                  bg-white
-                  rounded-2xl
-                  border border-slate-200
-                  p-4
-                  hover:shadow-lg
-                  hover:border-blue-200
-                  transition-all
-                  cursor-pointer
-                "
+                            className={`
+                              group
+                              bg-white
+                              rounded-2xl
+                              border border-slate-200
+                              p-4
+                              hover:shadow-lg
+                              hover:border-blue-200
+                              transition-all
+                              cursor-pointer
+                              ${isOpen ? "sticky top-[72px] z-40 shadow-lg" : ""}
+                            `}
                           >
                             <div className="flex items-start gap-3">
                               <div className="w-11 h-11 rounded-xl bg-blue-600 flex items-center justify-center shrink-0">
@@ -778,28 +992,84 @@ export default function RealExpense() {
                                     {school.name}
                                   </h3>
 
-                                  <span
-                                    className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                                      school.status === 0
-                                        ? "bg-emerald-100 text-emerald-700"
-                                        : "bg-red-100 text-red-700"
-                                    }`}
-                                  >
-                                    {school.status === 0
-                                      ? "Hoạt động"
-                                      : "Ngừng"}
-                                  </span>
+                                  <div className="flex shrink-0 items-center gap-2">
+                                    <span
+                                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                        school.status === 0
+                                          ? "bg-emerald-100 text-emerald-700"
+                                          : "bg-red-100 text-red-700"
+                                      }`}
+                                    >
+                                      {school.status === 0
+                                        ? "Hoạt động"
+                                        : "Ngừng"}
+                                    </span>
+
+                                    <ChevronRight
+                                      size={18}
+                                      className="shrink-0 text-slate-400 transition-all group-hover:translate-x-1 group-hover:text-blue-600"
+                                    />
+                                  </div>
                                 </div>
 
-                                <p className="text-xs text-slate-500 truncate mt-1">
-                                  {school.address}
-                                </p>
+                                <div
+                                  className={`mt-1 grid gap-1 ${
+                                    isOpen
+                                      ? "sm:grid-cols-2 sm:gap-x-8"
+                                      : "grid-cols-1"
+                                  }`}
+                                >
+                                  <div className="min-w-0">
+                                    <p className="truncate text-xs text-slate-500">
+                                      {school.address}
+                                    </p>
 
-                                {school.taxCode && (
-                                  <p className="text-[11px] text-slate-400 mt-0.5">
-                                    MST: {school.taxCode}
-                                  </p>
-                                )}
+                                    <div className="mt-0.5 flex flex-wrap items-center gap-x-3 text-[11px] text-slate-400">
+                                      {school.taxCode && (
+                                        <span>MST: {school.taxCode}</span>
+                                      )}
+                                      {school.budgetCode && (
+                                        <span>
+                                          Mã ĐVQHNS: {school.budgetCode}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div
+                                    className={`min-w-0 ${
+                                      isOpen
+                                        ? "sm:border-l sm:border-slate-100 sm:pl-8"
+                                        : ""
+                                    }`}
+                                  >
+                                    {school.employee?.name && (
+                                      <div className="flex flex-wrap items-center gap-x-2 text-xs">
+                                        <span className="font-semibold text-slate-700">
+                                          {school.employee.name}
+                                        </span>
+                                        {school.employee.phone && (
+                                          <span className="text-slate-400">
+                                            {school.employee.phone}
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    {canWriteSchoolExpense() && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setEditingSchoolInfo(school);
+                                        }}
+                                        className="text-[11px] font-semibold text-blue-600 hover:underline"
+                                      >
+                                        ✏️ Sửa thông tin
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
                             </div>
 
@@ -836,29 +1106,6 @@ export default function RealExpense() {
                               </div>
                             </div>
 
-                            {/* STAFF */}
-                            <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
-                              <div className="min-w-0">
-                                <p className="text-xs font-semibold text-slate-700 truncate">
-                                  {school.employee?.name}
-                                </p>
-
-                                <p className="text-[11px] text-slate-400">
-                                  {school.employee?.phone}
-                                </p>
-                              </div>
-
-                              <ChevronRight
-                                size={18}
-                                className="
-                                shrink-0
-                                text-slate-400
-                                group-hover:text-blue-600
-                                group-hover:translate-x-1
-                                transition-all
-                              "
-                              />
-                            </div>
                           </div>
 
                           {/* DETAIL */}
@@ -1020,107 +1267,23 @@ export default function RealExpense() {
                     </p>
 
                     <p className="text-[11px] text-slate-400">
-                      {String(selectedPeriod?.month || 1).padStart(2, "0")}
+                      {selectedPeriod?.month
+                        ? String(selectedPeriod.month).padStart(2, "0")
+                        : "—"}
                     </p>
                   </div>
 
                   <div className="flex flex-col gap-1.5 max-h-[420px] overflow-auto pr-1">
-                    {Array.from({ length: 12 }).map((_, i) => {
-                      const month = i + 1;
-                      const active = selectedPeriod?.month === month;
-                      const year = getExpensePeriodYear(
-                        selectedSchoolYear,
-                        month,
-                        Number(selectedPeriod?.year || new Date().getFullYear()),
-                      );
-                      const existingPeriod = periods.find(
-                        (p: any) =>
-                          Number(p.month) === month && Number(p.year) === year,
-                      );
-                      const editing =
-                        existingPeriod && editingPeriodId === existingPeriod.id;
+                    {activeSchool && !schoolYearPeriods.length && (
+                      <p className="px-1 py-2 text-xs text-slate-400">
+                        Chưa có kỳ nào trong năm học. Bấm "+ Thêm dòng" để tạo.
+                      </p>
+                    )}
 
-                      return (
-                        <div
-                          key={month}
-                          className={`
-              rounded-xl border text-sm font-semibold transition-all
-              px-2 py-1.5
-              ${
-                active
-                  ? "bg-blue-600 border-blue-600 text-white shadow-sm"
-                  : "bg-white border-slate-200 text-slate-700 hover:border-blue-300"
-              }
-              ${editing ? "ring-2 ring-emerald-400" : ""}
-            `}
-                        >
-                          <button
-                            onClick={() => handleChangePeriod(month, year)}
-                            className="w-full text-left truncate px-1 block"
-                          >
-                            {existingPeriod?.name &&
-                            existingPeriod.name !==
-                              `${String(month).padStart(2, "0")}/${year}`
-                              ? existingPeriod.name
-                              : `Tháng ${month}`}
-                          </button>
-
-                          {existingPeriod && (
-                            <div className="flex items-center justify-end gap-1 mt-1">
-                              <button
-                                onClick={() => {
-                                  setEditingPeriodId(existingPeriod.id);
-                                  setEditingPeriodName(
-                                    existingPeriod.name ===
-                                      `${String(month).padStart(2, "0")}/${year}`
-                                      ? `Tháng ${month}`
-                                      : existingPeriod.name,
-                                  );
-                                }}
-                                title="Sửa tên"
-                                className={`p-1 rounded-lg transition-colors ${
-                                  active
-                                    ? "hover:bg-blue-700"
-                                    : "hover:bg-slate-100"
-                                }`}
-                              >
-                                <Pencil size={14} />
-                              </button>
-
-                              <button
-                                onClick={() =>
-                                  handleDuplicatePeriod(existingPeriod)
-                                }
-                                title="Nhân bản (kèm toàn bộ dữ liệu thu chi)"
-                                className={`p-1 rounded-lg transition-colors ${
-                                  active
-                                    ? "hover:bg-blue-700"
-                                    : "hover:bg-emerald-100 hover:text-emerald-600"
-                                }`}
-                              >
-                                <Copy size={14} />
-                              </button>
-
-                              <button
-                                onClick={() =>
-                                  requestDeletePeriod(existingPeriod)
-                                }
-                                title="Xoá dòng"
-                                className={`p-1 rounded-lg transition-colors ${
-                                  active
-                                    ? "hover:bg-blue-700"
-                                    : "hover:bg-red-100 hover:text-red-600"
-                                }`}
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-
-                    {customPeriods.map((period: any) => {
+                    {schoolYearPeriods.map((period: any) => {
+                      // Tháng ảo (> 12) là dòng tuỳ chỉnh / bản sao.
+                      const isCustom = Number(period.month) > 12;
+                      const label = getPeriodLabel(period);
                       const active = selectedPeriod?.id === period.id;
                       const editing = editingPeriodId === period.id;
 
@@ -1133,7 +1296,9 @@ export default function RealExpense() {
               ${
                 active
                   ? "bg-blue-600 border-blue-600 text-white shadow-sm"
-                  : "bg-emerald-50 border-emerald-200 text-emerald-700 hover:border-emerald-300"
+                  : isCustom
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:border-emerald-300"
+                    : "bg-white border-slate-200 text-slate-700 hover:border-blue-300"
               }
               ${editing ? "ring-2 ring-emerald-400" : ""}
             `}
@@ -1142,20 +1307,23 @@ export default function RealExpense() {
                             onClick={() => setSelectedPeriod(period)}
                             className="w-full text-left truncate px-1 block"
                           >
-                            {period.name}
+                            {label}
                           </button>
 
-                          <div className="flex items-center justify-end gap-1 mt-1">
+                          {canWriteSchoolExpense() && (
+                            <div className="flex items-center justify-end gap-1 mt-1">
                             <button
                               onClick={() => {
                                 setEditingPeriodId(period.id);
-                                setEditingPeriodName(period.name);
+                                setEditingPeriodName(label);
                               }}
                               title="Sửa tên"
                               className={`p-1 rounded-lg transition-colors ${
                                 active
                                   ? "hover:bg-blue-700"
-                                  : "hover:bg-emerald-100"
+                                  : isCustom
+                                    ? "hover:bg-emerald-100"
+                                    : "hover:bg-slate-100"
                               }`}
                             >
                               <Pencil size={14} />
@@ -1167,7 +1335,9 @@ export default function RealExpense() {
                               className={`p-1 rounded-lg transition-colors ${
                                 active
                                   ? "hover:bg-blue-700"
-                                  : "hover:bg-emerald-100"
+                                  : isCustom
+                                    ? "hover:bg-emerald-100"
+                                    : "hover:bg-emerald-100 hover:text-emerald-600"
                               }`}
                             >
                               <Copy size={14} />
@@ -1185,47 +1355,70 @@ export default function RealExpense() {
                               <Trash2 size={14} />
                             </button>
                           </div>
+                          )}
                         </div>
                       );
                     })}
                   </div>
 
                   {addingCustomPeriod ? (
-                    <div className="flex items-center gap-1.5 mt-1.5">
+                    <div className="flex flex-col gap-1.5 mt-1.5">
+                      <select
+                        value={customPeriodMonth}
+                        onChange={(e) =>
+                          setCustomPeriodMonth(
+                            e.target.value ? Number(e.target.value) : "",
+                          )
+                        }
+                        className="
+              h-9 rounded-xl border border-slate-200
+              bg-white px-2 text-sm outline-none focus:border-emerald-500
+            "
+                      >
+                        <option value="">Dòng tuỳ chỉnh</option>
+                        {missingSchoolYearMonths.map((month) => (
+                          <option key={month} value={month}>
+                            Tháng {month}
+                          </option>
+                        ))}
+                      </select>
                       <input
                         autoFocus
                         value={customPeriodName}
                         onChange={(e) => setCustomPeriodName(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter") handleAddCustomPeriod();
-                          if (e.key === "Escape") {
-                            setAddingCustomPeriod(false);
-                            setCustomPeriodName("");
-                          }
+                          if (e.key === "Escape") closeAddPeriodForm();
                         }}
-                        placeholder="Tên dòng..."
+                        placeholder={
+                          customPeriodMonth
+                            ? `Tháng ${customPeriodMonth}`
+                            : "Tên dòng..."
+                        }
                         className="
-              flex-1 h-9 rounded-xl border border-slate-200
+              h-9 rounded-xl border border-slate-200
               bg-white px-3 text-sm outline-none focus:border-emerald-500
             "
                       />
-                      <button
-                        onClick={handleAddCustomPeriod}
-                        className="h-9 px-3 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700"
-                      >
-                        Lưu
-                      </button>
-                      <button
-                        onClick={() => {
-                          setAddingCustomPeriod(false);
-                          setCustomPeriodName("");
-                        }}
-                        className="h-9 px-3 rounded-xl border border-slate-200 text-slate-500 text-sm"
-                      >
-                        Huỷ
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={handleAddCustomPeriod}
+                          disabled={
+                            !customPeriodMonth && !customPeriodName.trim()
+                          }
+                          className="flex-1 h-9 px-3 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Lưu
+                        </button>
+                        <button
+                          onClick={closeAddPeriodForm}
+                          className="flex-1 h-9 px-3 rounded-xl border border-slate-200 text-slate-500 text-sm"
+                        >
+                          Huỷ
+                        </button>
+                      </div>
                     </div>
-                  ) : (
+                  ) : canWriteSchoolExpense() ? (
                     <button
                       onClick={() => setAddingCustomPeriod(true)}
                       disabled={!activeSchool}
@@ -1240,7 +1433,7 @@ export default function RealExpense() {
                     >
                       + Thêm dòng
                     </button>
-                  )}
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -1310,6 +1503,22 @@ export default function RealExpense() {
         </div>
       )}
 
+      {editingSchoolInfo && (
+        <SchoolInfoModal
+          school={editingSchoolInfo}
+          onClose={() => setEditingSchoolInfo(null)}
+          onSaved={(updated) => {
+            setSchools((list) =>
+              list.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)),
+            );
+            setActiveSchool((current: any) =>
+              current?.id === updated.id ? { ...current, ...updated } : current,
+            );
+            setEditingSchoolInfo(null);
+          }}
+        />
+      )}
+
       {deletingPeriod && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm px-4"
@@ -1320,7 +1529,7 @@ export default function RealExpense() {
             className="w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-slate-200 p-5"
           >
             <h3 className="text-base font-bold text-slate-800 mb-1">
-              Xoá dòng "{deletingPeriod.name}"?
+              Xoá dòng "{getPeriodLabel(deletingPeriod)}"?
             </h3>
             <p className="text-sm text-slate-500 mb-4">
               Toàn bộ dữ liệu thu chi của dòng này sẽ bị xoá vĩnh viễn. Hành

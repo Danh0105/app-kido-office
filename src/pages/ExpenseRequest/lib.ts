@@ -1,11 +1,96 @@
 import { getEmployeeId, getEmployeeRoles, hasRole } from "@/utils/auth";
 import type {
+  CashflowSource,
   EquipmentSource,
   ExpenseAssignment,
+  ExpenseMonthlyItem,
   ExpenseRequest,
   ExpenseRequestKind,
   ExpenseStatus,
 } from "@/types/expenseRequest";
+
+/**
+ * Các trường của đề xuất chi tháng theo thứ tự đã chọn. Đề xuất cũ (một trường)
+ * chưa có danh sách thì lấy từ các cột đơn.
+ */
+export const monthlyItemsOf = (req: ExpenseRequest): ExpenseMonthlyItem[] => {
+  if (!req.isMonthlyExpense) return [];
+  if (req.monthlyItems?.length) {
+    return [...req.monthlyItems].sort(
+      (a, b) => (a.position ?? 0) - (b.position ?? 0) || (a.id ?? 0) - (b.id ?? 0)
+    );
+  }
+  const schoolId = req.schoolId ?? req.school?.id ?? null;
+  if (!schoolId) return [];
+  return [
+    {
+      schoolId,
+      schoolYear: req.schoolYear ?? null,
+      subjectId: req.subjectId ?? req.subject?.id ?? null,
+      expensePeriodId: req.expensePeriodId ?? req.expensePeriod?.id ?? null,
+      school: req.school ? { id: req.school.id, name: req.school.name } : null,
+      subject: req.subject ?? null,
+      expensePeriod: req.expensePeriod ?? null,
+    },
+  ];
+};
+
+/** Lệnh chi chi tháng chia được theo trường: ≥2 trường, mỗi trường có phần tiền lúc duyệt. */
+export const canSplitMonthlyOrder = (req: ExpenseRequest) => {
+  // Trường Giám đốc không duyệt không có trong lệnh chi.
+  const items = (req.monthlyItems ?? []).filter((item) => !item.excluded);
+  return (
+    items.length >= 2 &&
+    items.every(
+      (item) => item.approvedAmount !== null && item.approvedAmount !== undefined
+    )
+  );
+};
+
+/** Chi một phần: phần dư = phần của các trường không chi (khớp backend). */
+export const monthlyRemainder = (req: ExpenseRequest): number | null => {
+  const items = req.monthlyItems ?? [];
+  if (!items.some((item) => item.spent === false)) return null;
+  return (
+    Math.round(
+      items
+        .filter((item) => item.spent === false)
+        .reduce((sum, item) => sum + Number(item.approvedAmount || 0), 0) * 100
+    ) / 100
+  );
+};
+
+/**
+ * Bảng nguồn của đề xuất chi tháng: Chi Ngoài (đề xuất chi tháng cũ để trống),
+ * Chi Trường, Chi GV trường. Chi Năm trả null.
+ */
+/**
+ * Quy trình Kế toán (Chi Ngoài / Chi Trường / Chi GV trường từ 16/11/2026):
+ * Kế toán nhập số liệu → Kế toán trưởng → Giám đốc → Kế toán công nợ lập lệnh
+ * chi → Thủ quỹ → kinh doanh.
+ */
+export const isAccountantChain = (
+  req: Pick<ExpenseRequest, "isMonthlyExpense" | "approvalFlow">
+) => Boolean(req.isMonthlyExpense) && req.approvalFlow === "ACCOUNTANT_CHAIN";
+
+export const cashflowSourceOf = (
+  req: Pick<ExpenseRequest, "isMonthlyExpense" | "cashflowSource">
+): CashflowSource | null =>
+  req.isMonthlyExpense ? req.cashflowSource ?? "MANAGEMENT" : null;
+
+export const monthlyItemLabel = (item: ExpenseMonthlyItem) =>
+  [
+    item.schoolTeacherId
+      ? `GV ${item.schoolTeacher?.name || `#${item.schoolTeacherId}`}`
+      : item.subject?.catalog?.name || item.subject?.name,
+    item.expensePeriod
+      ? item.expensePeriod.name ||
+        `Tháng ${item.expensePeriod.month}/${item.expensePeriod.year}`
+      : null,
+    item.schoolYear,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
 // Some expense endpoints/notification payloads use different wrappers for the
 // same request. Resolve them in one place so an absent `id` never becomes NaN.
@@ -57,14 +142,33 @@ export const isApproverSide = () =>
     "thuquy",
     // Phòng kỹ thuật giữ hai chốt của nhánh thiết bị (lệnh xuất kho, nhận lại
     // hàng) — cùng vị trí trong luồng như kế toán công nợ + thủ quỹ bên tiền.
-    "ky_thuat",
+    "ky_thuat"
   );
 
-export const isDebtAccountant = () =>
-  hasRole("ketoan_congno", "ketoan_truong");
+// Khớp CASHFLOW_READ_ROLES của backend: ai không xem được thu chi thì không thấy Bảng Chi Ngoài.
+export const canReadManagementExpense = () =>
+  hasRole(
+    "accountant",
+    "ketoan_congno",
+    "ketoan_truong",
+    "troly_gd",
+    "director",
+    "thuquy",
+    "saleadmin",
+    "salesadmin",
+    "salesadmin_la"
+  );
+
+export const isDebtAccountant = () => hasRole("ketoan_congno", "ketoan_truong");
 
 /** Phòng kỹ thuật — xử lý đề xuất thiết bị và sửa chữa. */
 export const isTechnical = () => hasRole("ky_thuat");
+
+export const isTeacherFinanceWorkspace = () =>
+  hasRole("giaovien_congty") && !hasRole("sales") && !isApproverSide();
+
+export const canCreateExpenseRequest = () =>
+  hasRole("sales", "giaovien_congty");
 
 /**
  * Tài khoản **chỉ** thuộc phòng kỹ thuật: chỉ xem nhánh thiết bị/sửa chữa,
@@ -78,6 +182,7 @@ export const isEquipmentOnlyUser = () =>
   isTechnical() &&
   !hasRole(
     "sales",
+    "giaovien_congty",
     "accountant",
     "director",
     "director_la",
@@ -86,7 +191,7 @@ export const isEquipmentOnlyUser = () =>
     "ketoan_congno",
     "ketoan_truong",
     "troly_gd",
-    "thuquy",
+    "thuquy"
   );
 
 /**
@@ -97,11 +202,13 @@ export const requestKindOf = (req?: {
   requestKind?: ExpenseRequestKind | null;
 }): ExpenseRequestKind => req?.requestKind ?? "CASH";
 
-export const isEquipmentRequest = (req?: { requestKind?: ExpenseRequestKind | null }) =>
-  requestKindOf(req) === "EQUIPMENT";
+export const isEquipmentRequest = (req?: {
+  requestKind?: ExpenseRequestKind | null;
+}) => requestKindOf(req) === "EQUIPMENT";
 
-export const isRepairRequest = (req?: { requestKind?: ExpenseRequestKind | null }) =>
-  requestKindOf(req) === "REPAIR";
+export const isRepairRequest = (req?: {
+  requestKind?: ExpenseRequestKind | null;
+}) => requestKindOf(req) === "REPAIR";
 
 /** Nguồn thiết bị; đề xuất thiết bị cũ chưa có trường này = kho. */
 export const equipmentSourceOf = (req?: {
@@ -121,6 +228,9 @@ export const isSupplierEquipment = (req?: {
  */
 export const KIND_STATUSES: Record<ExpenseRequestKind, ExpenseStatus[]> = {
   CASH: [
+    "PENDING_ACCOUNTING",
+    "PENDING_ACCOUNTANT",
+    "PENDING_CHIEF_APPROVAL",
     "PENDING_APPROVAL",
     "APPROVED",
     "PAYMENT_ORDERED",
@@ -128,6 +238,7 @@ export const KIND_STATUSES: Record<ExpenseRequestKind, ExpenseStatus[]> = {
     "CASH_RECEIVED",
     "SPENT",
     "NOT_SPENT",
+    "PARTIALLY_SPENT",
     "FUND_RETURNED",
     "REJECTED",
     "WITHDRAWN",
@@ -164,17 +275,30 @@ const ALL_EXPENSE_STATUSES: ExpenseStatus[] = [
 
 // Base route for expense pages depends on which nav tree the current user uses.
 export const expenseBasePath = () =>
-  isApproverSide() ? "/director/expense-requests" : "/employee/expense-requests";
+  isTeacherFinanceWorkspace()
+    ? "/giao-vien/de-nghi-tai-chinh"
+    : isApproverSide()
+      ? "/director/expense-requests"
+      : "/employee/expense-requests";
 
 export const expenseTasksPath = () =>
-  isApproverSide() ? "/director/expense-tasks" : "/employee/expense-tasks";
+  isTeacherFinanceWorkspace()
+    ? "/giao-vien/de-nghi-tai-chinh/viec-cua-toi"
+    : isApproverSide()
+      ? "/director/expense-tasks"
+      : "/employee/expense-tasks";
 
 // Creating a request is always a sales/owner action. A multi-role sales user
 // may otherwise inherit the director base path from roles such as `thuquy`,
 // causing `/director/expense-requests/new` to be parsed as the `:id` route.
-export const expenseCreatePath = () => "/employee/expense-requests/new";
+const expenseOwnerBasePath = () =>
+  isTeacherFinanceWorkspace()
+    ? "/giao-vien/de-nghi-tai-chinh"
+    : "/employee/expense-requests";
+
+export const expenseCreatePath = () => `${expenseOwnerBasePath()}/new`;
 export const expenseEditPath = (id: number) =>
-  `/employee/expense-requests/${id}/edit`;
+  `${expenseOwnerBasePath()}/${id}/edit`;
 
 export const isOwner = (req?: ExpenseCreatorFields) => {
   const me = Number(getEmployeeId());
@@ -183,6 +307,10 @@ export const isOwner = (req?: ExpenseCreatorFields) => {
 };
 
 export type ActionKey =
+  // --- quy trình Kế toán ---
+  | "submitToChief"
+  | "chiefApprove"
+  | "chiefReject"
   | "approve"
   | "reject"
   | "withdraw"
@@ -195,8 +323,10 @@ export type ActionKey =
   | "cashReleased"
   | "cashReceived"
   | "confirmSpent"
+  | "partialSpent"
   | "confirmNotSpent"
   | "fundReturned"
+  | "remainderReturned"
   // --- nhánh đề xuất thiết bị ---
   | "stockIssueOrder"
   | "equipmentReceived"
@@ -239,6 +369,27 @@ type ExpenseStepDefinition = {
 };
 
 export const EXPENSE_STEPS: Record<ActionKey, ExpenseStepDefinition> = {
+  // --- quy trình Kế toán (khớp EXPENSE_TRANSITIONS bên BE) ---
+  // Kế toán nhập số liệu bảng ở QL thu chi rồi gửi; Kế toán trưởng làm được
+  // thay Kế toán nhưng không tự duyệt tiếp bước của mình.
+  submitToChief: {
+    roles: ["accountant", "ketoan_truong"],
+    from: ["PENDING_ACCOUNTANT"],
+    owner: false,
+    kinds: ["CASH"],
+  },
+  chiefApprove: {
+    roles: ["ketoan_truong"],
+    from: ["PENDING_CHIEF_APPROVAL"],
+    owner: false,
+    kinds: ["CASH"],
+  },
+  chiefReject: {
+    roles: ["ketoan_truong"],
+    from: ["PENDING_CHIEF_APPROVAL"],
+    owner: false,
+    kinds: ["CASH"],
+  },
   // Sales Admin duyệt/từ chối ngang quyền Giám đốc — cùng một chốt quyết định,
   // ai xử lý trước cũng được (khớp EXPENSE_TRANSITIONS bên BE).
   approve: {
@@ -254,15 +405,20 @@ export const EXPENSE_STEPS: Record<ActionKey, ExpenseStepDefinition> = {
   // Chủ đơn tự rút — chỉ khi còn đang chờ duyệt, giống điều kiện BE (state
   // machine WITHDRAW). Giám đốc rút hộ được đơn của bất kỳ ai (overrideRoles).
   withdraw: {
-    roles: ["sales", "director", "director_la"],
-    from: ["PENDING_APPROVAL"],
+    roles: ["sales", "giaovien_congty", "director", "director_la"],
+    from: [
+      "PENDING_ACCOUNTING",
+      "PENDING_ACCOUNTANT",
+      "PENDING_CHIEF_APPROVAL",
+      "PENDING_APPROVAL",
+    ],
     owner: true,
     overrideRoles: ["director", "director_la"],
   },
   // Chủ đơn được sửa ở mọi trạng thái. Mỗi lần lưu, backend đưa đề xuất về
   // PENDING_APPROVAL và xoá các dấu duyệt để chạy lại quy trình từ đầu.
   edit: {
-    roles: ["sales"],
+    roles: ["sales", "giaovien_congty"],
     from: ALL_EXPENSE_STATUSES,
     owner: true,
   },
@@ -270,18 +426,34 @@ export const EXPENSE_STEPS: Record<ActionKey, ExpenseStepDefinition> = {
   // lệnh chi/xuất quỹ) và chưa xuất kho, giống RESOURCE_MOVED_STATUSES bên BE.
   delete: {
     roles: ["director", "director_la"],
-    from: ["PENDING_APPROVAL", "APPROVED", "REJECTED", "WITHDRAWN"],
+    from: [
+      "PENDING_ACCOUNTING",
+      "PENDING_ACCOUNTANT",
+      "PENDING_CHIEF_APPROVAL",
+      "PENDING_APPROVAL",
+      "APPROVED",
+      "REJECTED",
+      "WITHDRAWN",
+    ],
     owner: false,
   },
-  saleadminReview: { roles: ["saleadmin", "salesadmin_la"], from: ["PENDING_APPROVAL"], owner: false },
-  saleadminReject: { roles: ["saleadmin", "salesadmin_la"], from: ["PENDING_APPROVAL"], owner: false },
+  saleadminReview: {
+    roles: ["saleadmin", "salesadmin_la"],
+    from: ["PENDING_APPROVAL"],
+    owner: false,
+  },
+  saleadminReject: {
+    roles: ["saleadmin", "salesadmin_la"],
+    from: ["PENDING_APPROVAL"],
+    owner: false,
+  },
 
   // --- nhánh ĐỀ XUẤT TIỀN ---
   // Kế toán trưởng có toàn quyền của kế toán công nợ + thủ quỹ (khớp
   // ExpenseRole.CHIEF_ACCOUNTANT bên BE).
   paymentOrder: {
     roles: ["ketoan_congno", "ketoan_truong"],
-    from: ["APPROVED", "FUND_RETURNED"],
+    from: ["PENDING_ACCOUNTING", "APPROVED", "FUND_RETURNED"],
     owner: false,
     kinds: ["CASH"],
   },
@@ -292,6 +464,7 @@ export const EXPENSE_STEPS: Record<ActionKey, ExpenseStepDefinition> = {
   editPaymentOrder: {
     roles: ["ketoan_congno", "ketoan_truong"],
     from: [
+      "PENDING_APPROVAL",
       "PAYMENT_ORDERED",
       "CASH_RELEASED",
       "CASH_RECEIVED",
@@ -315,7 +488,7 @@ export const EXPENSE_STEPS: Record<ActionKey, ExpenseStepDefinition> = {
     kinds: ["CASH"],
   },
   cashReceived: {
-    roles: ["sales"],
+    roles: ["sales", "giaovien_congty"],
     from: ["CASH_RELEASED"],
     owner: true,
     kinds: ["CASH"],
@@ -337,7 +510,7 @@ export const EXPENSE_STEPS: Record<ActionKey, ExpenseStepDefinition> = {
     kinds: ["EQUIPMENT"],
   },
   equipmentReceived: {
-    roles: ["sales"],
+    roles: ["sales", "giaovien_congty"],
     from: ["STOCK_ISSUE_ORDERED"],
     owner: true,
     kinds: ["EQUIPMENT"],
@@ -385,12 +558,25 @@ export const EXPENSE_STEPS: Record<ActionKey, ExpenseStepDefinition> = {
 
   // --- dùng chung: chủ đơn chốt đã dùng / chưa dùng cho cả hai nhánh ---
   confirmSpent: {
-    roles: ["sales"],
+    roles: ["sales", "giaovien_congty"],
     from: ["CASH_RECEIVED", "EQUIPMENT_RECEIVED"],
     owner: true,
   },
+  // Chi tháng nhiều trường: chỉ chi một số trường, phần dư hoàn quỹ.
+  partialSpent: {
+    roles: ["sales", "giaovien_congty"],
+    from: ["CASH_RECEIVED"],
+    owner: true,
+    kinds: ["CASH"],
+  },
+  remainderReturned: {
+    roles: ["thuquy", "ketoan_truong"],
+    from: ["PARTIALLY_SPENT"],
+    owner: false,
+    kinds: ["CASH"],
+  },
   confirmNotSpent: {
-    roles: ["sales"],
+    roles: ["sales", "giaovien_congty"],
     from: ["CASH_RECEIVED", "EQUIPMENT_RECEIVED"],
     owner: true,
   },
@@ -399,9 +585,56 @@ export const EXPENSE_STEPS: Record<ActionKey, ExpenseStepDefinition> = {
 export const canDoStep = (
   step: ActionKey,
   req: ExpenseRequest,
-  user = { id: Number(getEmployeeId()), roles: getEmployeeRoles() },
+  user = { id: Number(getEmployeeId()), roles: getEmployeeRoles() }
 ) => {
   const definition = EXPENSE_STEPS[step];
+
+  if (!req.isMonthlyExpense && step === "partialSpent") return false;
+
+  if (req.isMonthlyExpense) {
+    if (step === "saleadminReview" || step === "saleadminReject") return false;
+    // Khớp backend: tiền đã xuất thì chủ đơn không sửa, vì lệnh chi là căn cứ của sổ quỹ.
+    if (
+      step === "edit" &&
+      ["CASH_RELEASED", "CASH_RECEIVED", "SPENT", "NOT_SPENT", "PARTIALLY_SPENT"].includes(req.status)
+    ) {
+      return false;
+    }
+    // Chi một phần chỉ khi có từ 2 trường và lệnh chi chia được theo trường
+    // (do hệ thống lập lúc Giám đốc duyệt).
+    if (step === "partialSpent" && !canSplitMonthlyOrder(req)) return false;
+    if (
+      (step === "approve" || step === "reject") &&
+      !user.roles.some((role) => ["director", "director_la"].includes(role))
+    ) {
+      return false;
+    }
+    // Chi tháng mới chờ Giám đốc chưa có lệnh chi (số tiền lập lúc duyệt).
+    if (
+      step === "editPaymentOrder" &&
+      req.status === "PENDING_APPROVAL" &&
+      !req.paymentOrder
+    ) {
+      return false;
+    }
+    // Quy trình Kế toán: lệnh chi do Kế toán công nợ lập sau khi Giám đốc
+    // duyệt; đã chi thì QL thu chi đã ghi theo lệnh chi nên không sửa nữa.
+    if (
+      isAccountantChain(req) &&
+      step === "editPaymentOrder" &&
+      ["PENDING_APPROVAL", "SPENT"].includes(req.status)
+    ) {
+      return false;
+    }
+  } else if (
+    step === "submitToChief" ||
+    step === "chiefApprove" ||
+    step === "chiefReject"
+  ) {
+    return false;
+  } else if (step === "editPaymentOrder" && req.status === "PENDING_APPROVAL") {
+    return false;
+  }
 
   if (
     definition.equipmentSources &&
@@ -439,7 +672,7 @@ export const canDoStep = (
   }
 
   const hasOverrideRole = definition.overrideRoles?.some((role) =>
-    user.roles.includes(role),
+    user.roles.includes(role)
   );
   if (hasOverrideRole) return true;
 
@@ -452,15 +685,23 @@ export const availableActions = (req: ExpenseRequest): ActionKey[] => {
   // Kế toán trưởng không thao tác ở màn này — trừ khi được Giám đốc chỉ định
   // xử lý/nghiệm thu thiết bị mua từ nhà cung cấp.
   const readOnly = hasRole("ketoan_truong");
+  // ...nhưng giữ bước của quy trình Kế toán (nhập số liệu thay Kế toán, duyệt).
+  const chiefSteps: ActionKey[] = ["submitToChief", "chiefApprove", "chiefReject"];
   // Người bàn giao đã từ chối thì không làm bước kỹ thuật nữa (BE chặn), chờ
   // Giám đốc chọn người thay thế.
   const me = Number(getEmployeeId());
   const declinedHandover = (req.assignments || []).some(
-    (a) => a.role === "HANDOVER" && a.status === "DECLINED" && a.employeeId === me,
+    (a) =>
+      a.role === "HANDOVER" && a.status === "DECLINED" && a.employeeId === me
   );
   return (Object.keys(EXPENSE_STEPS) as ActionKey[]).filter((step) => {
-    if (readOnly && !EXPENSE_STEPS[step].assignee) return false;
-    if (declinedHandover && (step === "stockIssueOrder" || step === "repairAccept")) {
+    if (readOnly && !EXPENSE_STEPS[step].assignee && !chiefSteps.includes(step)) {
+      return false;
+    }
+    if (
+      declinedHandover &&
+      (step === "stockIssueOrder" || step === "repairAccept")
+    ) {
       return false;
     }
     // Thiết bị từ nhà cung cấp đã nhập kho thật thì không sửa được nữa (BE
@@ -492,9 +733,17 @@ export const mainAssigneeLabel = (kind?: ExpenseRequestKind | null) =>
   kind === "REPAIR" ? "Người đảm nhận chính" : "Người bàn giao";
 
 /** Còn được từ chối / thay người khi việc chưa bắt đầu (chưa xuất kho). */
-const ASSIGNMENT_OPEN_STATUSES: ExpenseStatus[] = ["APPROVED", "EQUIPMENT_RETURNED"];
+const ASSIGNMENT_OPEN_STATUSES: ExpenseStatus[] = [
+  "APPROVED",
+  "EQUIPMENT_RETURNED",
+];
 
-const ASSIGNMENT_REPLACER_ROLES = ["director", "director_la", "saleadmin", "salesadmin_la"];
+const ASSIGNMENT_REPLACER_ROLES = [
+  "director",
+  "director_la",
+  "saleadmin",
+  "salesadmin_la",
+];
 
 /** Người đang được giao (chưa từ chối, chưa bị thay) + người từ chối chờ thay. */
 export const activeAssignments = (req: ExpenseRequest) =>
@@ -505,7 +754,7 @@ export const activeAssignments = (req: ExpenseRequest) =>
  * giao đề xuất sửa chữa dùng nút "Từ chối" sửa chữa sẵn có nên không tính.
  */
 export const myDeclinableAssignment = (
-  req: ExpenseRequest,
+  req: ExpenseRequest
 ): ExpenseAssignment | null => {
   const me = Number(getEmployeeId());
   if (!me || !ASSIGNMENT_OPEN_STATUSES.includes(req.status)) return null;
@@ -514,14 +763,18 @@ export const myDeclinableAssignment = (
       (a) =>
         a.employeeId === me &&
         a.status === "ASSIGNED" &&
-        !(a.role === "HANDOVER" && isRepairRequest(req)),
+        !(a.role === "HANDOVER" && isRepairRequest(req))
     ) || null
   );
 };
 
 /** Giám đốc/Sales Admin chọn được người thay thế cho người đã từ chối này. */
-export const canReplaceAssignment = (req: ExpenseRequest, a: ExpenseAssignment) => {
-  if (a.status !== "DECLINED" || !hasRole(...ASSIGNMENT_REPLACER_ROLES)) return false;
+export const canReplaceAssignment = (
+  req: ExpenseRequest,
+  a: ExpenseAssignment
+) => {
+  if (a.status !== "DECLINED" || !hasRole(...ASSIGNMENT_REPLACER_ROLES))
+    return false;
   // Người bàn giao sửa chữa thay bằng "Chỉ định người khác" (REPAIR_REJECTED).
   if (a.role === "HANDOVER" && isRepairRequest(req)) return false;
   const open: ExpenseStatus[] =
@@ -538,12 +791,18 @@ export const waitingMessage = (req: ExpenseRequest): string | null => {
   const purchase = isSupplierEquipment(req);
 
   switch (req.status) {
+    case "PENDING_ACCOUNTING":
+      return "Chờ Kế toán công nợ nhập số tiền…";
+    case "PENDING_ACCOUNTANT":
+      return "Chờ Kế toán nhập số liệu ở QL thu chi rồi gửi Kế toán trưởng…";
+    case "PENDING_CHIEF_APPROVAL":
+      return "Chờ Kế toán trưởng duyệt…";
     case "PENDING_APPROVAL":
       return "Chờ giám đốc duyệt…";
     case "APPROVED":
       if (
         (req.assignments || []).some(
-          (a) => a.role === "HANDOVER" && a.status === "DECLINED",
+          (a) => a.role === "HANDOVER" && a.status === "DECLINED"
         )
       ) {
         return "Người bàn giao đã từ chối, chờ giám đốc chọn người thay thế…";
@@ -575,6 +834,12 @@ export const waitingMessage = (req: ExpenseRequest): string | null => {
       return equipment
         ? "Chưa dùng, chờ phòng kỹ thuật nhận lại thiết bị…"
         : "Chưa chi, chờ thủ quỹ nhận lại quỹ…";
+    case "PARTIALLY_SPENT": {
+      const remainder = monthlyRemainder(req);
+      return remainder != null
+        ? `Đã chi một phần, chờ thủ quỹ nhận lại phần dư ${remainder.toLocaleString("vi-VN")} đ…`
+        : "Đã chi một phần, chờ thủ quỹ nhận lại phần dư…";
+    }
     case "FUND_RETURNED":
       return "Đã hoàn quỹ, chờ kế toán công nợ lên lại lệnh chi…";
     case "STOCK_ISSUE_ORDERED":
@@ -638,12 +903,12 @@ const getCreator = (req?: ExpenseCreatorFields) => {
     typeof req.createdBy === "object"
       ? (req.createdBy as CreatorLike)
       : undefined;
-  return (req.creator || req.createdByUser || createdBy) as CreatorLike | undefined;
+  return (req.creator || req.createdByUser || createdBy) as
+    | CreatorLike
+    | undefined;
 };
 
-export const creatorId = (
-  req?: ExpenseCreatorFields,
-) => {
+export const creatorId = (req?: ExpenseCreatorFields) => {
   if (!req) return undefined;
   const creator = getCreator(req);
   const rawId =
@@ -655,9 +920,7 @@ export const creatorId = (
   return Number.isFinite(id) && id > 0 ? id : undefined;
 };
 
-export const creatorName = (
-  req: ExpenseCreatorFields,
-) => {
+export const creatorName = (req: ExpenseCreatorFields) => {
   const name = cleanText(getCreator(req)?.name);
   if (name) return name;
 
@@ -665,26 +928,23 @@ export const creatorName = (
   return id ? `#${id}` : "—";
 };
 
-export const creatorPhone = (
-  req: ExpenseCreatorFields,
-) => cleanText(getCreator(req)?.phone);
+export const creatorPhone = (req: ExpenseCreatorFields) =>
+  cleanText(getCreator(req)?.phone);
 
-export const creatorEmail = (
-  req: ExpenseCreatorFields,
-) => cleanText(getCreator(req)?.email);
+export const creatorEmail = (req: ExpenseCreatorFields) =>
+  cleanText(getCreator(req)?.email);
 
-export const creatorDepartment = (
-  req: ExpenseCreatorFields,
-) => {
+export const creatorDepartment = (req: ExpenseCreatorFields) => {
   const creator = getCreator(req);
   if (!creator) return "";
-  if (typeof creator.department === "string") return cleanText(creator.department);
-  return cleanText(creator.department?.name) || cleanText(creator.departmentName);
+  if (typeof creator.department === "string")
+    return cleanText(creator.department);
+  return (
+    cleanText(creator.department?.name) || cleanText(creator.departmentName)
+  );
 };
 
-export const creatorDetails = (
-  req: ExpenseCreatorFields,
-) => {
+export const creatorDetails = (req: ExpenseCreatorFields) => {
   const details: { label: string; value: string }[] = [];
   const phone = creatorPhone(req);
   const email = creatorEmail(req);
@@ -699,6 +959,5 @@ export const creatorDetails = (
   return details;
 };
 
-export const creatorInlineDetails = (
-  req: ExpenseCreatorFields,
-) => creatorDetails(req).map((item) => `${item.label}: ${item.value}`);
+export const creatorInlineDetails = (req: ExpenseCreatorFields) =>
+  creatorDetails(req).map((item) => `${item.label}: ${item.value}`);

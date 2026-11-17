@@ -75,7 +75,9 @@ export default function SchoolBranchPage() {
     try {
       setLocations(await schoolLocationApi.getBySchool(Number(id)));
     } catch (error: any) {
-      toast.error(getApiErrorMessage(error, "Không tải được danh sách điểm trường"));
+      toast.error(
+        getApiErrorMessage(error, "Không tải được danh sách điểm trường")
+      );
       setLocations([]);
     } finally {
       setLoading(false);
@@ -92,7 +94,7 @@ export default function SchoolBranchPage() {
   const remove = async (item: SchoolLocation) => {
     if (
       !window.confirm(
-        `Xoá điểm trường "${item.name}"?\n\nLớp và lịch dạy đang gắn điểm này sẽ quay về mức trường, không bị xoá theo.`,
+        `Xoá điểm trường "${item.name}"?\n\nLớp và lịch dạy đang gắn điểm này sẽ quay về mức trường, không bị xoá theo.`
       )
     ) {
       return;
@@ -251,7 +253,7 @@ export default function SchoolBranchPage() {
 }
 
 /** Form khai tên + địa chỉ + toạ độ của một điểm trường. */
-function SchoolBranchFormModal({
+export function SchoolBranchFormModal({
   schoolId,
   schoolName,
   location,
@@ -270,13 +272,13 @@ function SchoolBranchFormModal({
   const [name, setName] = useState(location?.name || "");
   const [address, setAddress] = useState(location?.address || "");
   const [latitude, setLatitude] = useState(
-    point ? formatCoord(point.latitude) : "",
+    point ? formatCoord(point.latitude) : ""
   );
   const [longitude, setLongitude] = useState(
-    point ? formatCoord(point.longitude) : "",
+    point ? formatCoord(point.longitude) : ""
   );
   const [radius, setRadius] = useState(
-    String(location?.checkinRadius || DEFAULT_CHECKIN_RADIUS),
+    String(location?.checkinRadius || DEFAULT_CHECKIN_RADIUS)
   );
   const [mapsLink, setMapsLink] = useState(location?.googleMapsUrl || "");
 
@@ -320,7 +322,10 @@ function SchoolBranchFormModal({
     }
 
     if (!isGoogleMapsUrl(link)) {
-      setErrors((prev) => ({ ...prev, mapsLink: "Link Google Maps không hợp lệ" }));
+      setErrors((prev) => ({
+        ...prev,
+        mapsLink: "Link Google Maps không hợp lệ",
+      }));
       return;
     }
 
@@ -336,7 +341,7 @@ function SchoolBranchFormModal({
         ...prev,
         mapsLink: getApiErrorMessage(
           error,
-          "Không đọc được vị trí từ link Google Maps",
+          "Không đọc được vị trí từ link Google Maps"
         ),
       }));
     } finally {
@@ -413,7 +418,9 @@ function SchoolBranchFormModal({
         raw.forEach((line: string) => toast.error(line));
       } else if (error?.response?.status === 400) {
         // Hay gặp nhất: trùng tên điểm trường trong cùng một trường.
-        setErrors({ name: getApiErrorMessage(error, "Tên điểm trường đã tồn tại") });
+        setErrors({
+          name: getApiErrorMessage(error, "Tên điểm trường đã tồn tại"),
+        });
       } else if (error?.response?.status !== 403) {
         toast.error(getApiErrorMessage(error, "Lưu điểm trường thất bại"));
       }

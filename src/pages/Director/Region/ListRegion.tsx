@@ -5,6 +5,7 @@ import { provinceApi } from "@/service/province";
 import { employeeApi } from "@/service/employee";
 import { wardApi } from "@/service/ward";
 import { toast } from "react-hot-toast";
+import { isDirectorAssistantViewer } from "@/utils/auth";
 
 /**
  * GET /provinces/provinces-by-employee/:id trả về **danh sách tỉnh phẳng**
@@ -16,6 +17,8 @@ type ProvinceType = {
 };
 
 export default function Province() {
+    // Trợ lý GĐ chỉ xem: không thêm / thu hồi khu vực.
+    const readOnly = isDirectorAssistantViewer();
     const { employeeId } = useParams();
     const navigate = useNavigate();
 
@@ -97,6 +100,7 @@ export default function Province() {
             <HeaderWithBack title="Danh sách tỉnh" />
 
             {/* BUTTON ADD */}
+            {!readOnly && (
             <div className="fixed bottom-6 right-6 z-50">
                 <button
                     onClick={handleOpenAdd}
@@ -105,6 +109,7 @@ export default function Province() {
                     +
                 </button>
             </div>
+            )}
 
             {/* LIST */}
             <div className="p-4 space-y-3 pt-20">
@@ -139,6 +144,7 @@ export default function Province() {
                         </div>
 
                         {/* DELETE */}
+                        {!readOnly && (
                         <button
                             onClick={async (e) => {
                                 e.stopPropagation();
@@ -159,6 +165,7 @@ export default function Province() {
                         >
                             Xoá
                         </button>
+                        )}
                     </div>
                 ))}
             </div>

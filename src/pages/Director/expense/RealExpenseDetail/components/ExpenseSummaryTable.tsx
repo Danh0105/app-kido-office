@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { arrayFrom, formatCurrency, toNumber, unwrap } from "./ExpenseSummary";
+import { invoiceAmountOfSavedRow, revenueBaseQuantity } from "@/utils/revenueAmount";
 
 type Props = {
   data: any;
@@ -18,6 +19,20 @@ const formatDate = (value?: string | number | null) => {
     ? String(value)
     : date.toLocaleDateString("vi-VN");
 };
+
+/** Công nợ đã chi dư không được bù trừ cho một dòng khác còn phải chi. */
+const remainingPayable = (
+  totalExpense: unknown,
+  paidAmount: unknown,
+  explicitRemaining?: unknown,
+) =>
+  Math.max(
+    0,
+    toNumber(
+      explicitRemaining,
+      toNumber(totalExpense) - toNumber(paidAmount),
+    ),
+  );
 
 export default function ExpenseSummaryTable({ data, subjects }: Props) {
   const [onlyRemaining, setOnlyRemaining] = useState(true);
@@ -39,9 +54,10 @@ export default function ExpenseSummaryTable({ data, subjects }: Props) {
         collectedDate: item.collectedDate,
         totalOutsideExpense: toNumber(item.totalOutsideExpense),
         paidAmount: toNumber(item.paidAmount),
-        remainingOutsideExpense: toNumber(
-          item.remainingOutsideExpense ??
-            toNumber(item.totalOutsideExpense) - toNumber(item.paidAmount)
+        remainingOutsideExpense: remainingPayable(
+          item.totalOutsideExpense,
+          item.paidAmount,
+          item.remainingOutsideExpense,
         ),
         paymentDate: item.paymentDate,
         payer: item.payer,
@@ -61,11 +77,14 @@ export default function ExpenseSummaryTable({ data, subjects }: Props) {
       "managementExpenseItems",
       "managementItems",
     ]);
+    // Giáo viên trường (kỳ từ 11/2026) tách khỏi Chi Trường — cộng lại vào Chi
+    // Trường cùng dòng để Tổng chi ngoài HĐ không đổi.
+    const schoolTeacherItems = arrayFrom(sources, ["schoolTeacherItems"]);
     const rowMap = new Map<string, any>();
 
     const addItems = (
       items: any[],
-      field: "revenue" | "schoolItem" | "managementItem"
+      field: "revenue" | "schoolItem" | "managementItem" | "schoolTeacherItem"
     ) => {
       items.forEach((item, index) => {
         const subjectId = toNumber(item.subjectId ?? item.subject?.id);
@@ -84,25 +103,36 @@ export default function ExpenseSummaryTable({ data, subjects }: Props) {
     addItems(revenues, "revenue");
     addItems(schoolItems, "schoolItem");
     addItems(managementItems, "managementItem");
+    addItems(schoolTeacherItems, "schoolTeacherItem");
 
     return [...rowMap.values()]
       .sort((a, b) => a.subjectId - b.subjectId || a.rowIndex - b.rowIndex)
-      .map(({ key, subjectId, revenue, schoolItem, managementItem }) => {
+      .map(({ key, subjectId, revenue, schoolItem, managementItem, schoolTeacherItem }) => {
         const sourceItem = revenue || schoolItem || managementItem || {};
-        const invoiceAmount = toNumber(
+        // Thành tiền của bảng Doanh Thu, chưa trừ Chi Trường.
+        const revenueTotal = toNumber(
           revenue?.invoiceAmount ??
             toNumber(revenue?.unitPrice) *
               toNumber(revenue?.studentCount) *
               toNumber(revenue?.monthsCount)
         );
-        const schoolExpenseAmount = toNumber(
-          schoolItem?.schoolExpenseAmount ??
-            (toNumber(schoolItem?.teacherUnitPrice ?? schoolItem?.giaovien) +
-              toNumber(schoolItem?.taxUnitPrice ?? schoolItem?.thue) +
-              toNumber(schoolItem?.csvcUnitPrice ?? schoolItem?.csvc)) *
-              toNumber(schoolItem?.studentCount) *
-              toNumber(schoolItem?.monthsCount)
-        );
+        // Số tiền hóa đơn phải khớp cột Thành tiền của bảng Hóa Đơn.
+        const invoiceAmount = revenue
+          ? invoiceAmountOfSavedRow(
+              revenue,
+              schoolItem,
+              subjects.find((item: any) => toNumber(item.id) === subjectId),
+            )
+          : 0;
+        const schoolExpenseAmount =
+          toNumber(
+            schoolItem?.schoolExpenseAmount ??
+              (toNumber(schoolItem?.teacherUnitPrice ?? schoolItem?.giaovien) +
+                toNumber(schoolItem?.taxUnitPrice ?? schoolItem?.thue) +
+                toNumber(schoolItem?.csvcUnitPrice ?? schoolItem?.csvc)) *
+                toNumber(schoolItem?.studentCount) *
+                toNumber(schoolItem?.monthsCount)
+          ) + toNumber(schoolTeacherItem?.amount);
         const managementExpenseAmount = toNumber(
           managementItem?.totalOutside ??
             managementItem?.totalOutsideExpense ??
@@ -136,7 +166,16 @@ export default function ExpenseSummaryTable({ data, subjects }: Props) {
           schoolExpenseAmount + managementExpenseAmount;
         const paidAmount =
           toNumber(schoolItem?.paidAmount) +
-          toNumber(managementItem?.paidAmount);
+          toNumber(managementItem?.paidAmount) +
+          toNumber(schoolTeacherItem?.paidAmount);
+        const explicitRemaining =
+          schoolItem?.remaining !== undefined ||
+          managementItem?.remaining !== undefined ||
+          schoolTeacherItem?.remaining !== undefined
+            ? toNumber(schoolItem?.remaining) +
+              toNumber(managementItem?.remaining) +
+              toNumber(schoolTeacherItem?.remaining)
+            : undefined;
 
         return {
           key,
@@ -146,19 +185,27 @@ export default function ExpenseSummaryTable({ data, subjects }: Props) {
             schoolItem?.subject?.name ||
             managementItem?.subject?.name,
           totalPeriods: sourceItem.totalPeriods,
-          studentCount: sourceItem.studentCount,
+          // Cột Số học sinh lấy theo Số lượng của bảng Hóa Đơn:
+          // ưu tiên số HS, nếu trống thì dùng số tiết.
+          studentCount: revenue
+            ? revenueBaseQuantity(revenue)
+            : sourceItem.studentCount,
           invoiceAmount,
           collectedDate: revenue?.collectedDate || revenue?.paymentDate,
           totalOutsideExpense,
           paidAmount,
-          remainingOutsideExpense: totalOutsideExpense - paidAmount,
+          remainingOutsideExpense: remainingPayable(
+            totalOutsideExpense,
+            paidAmount,
+            explicitRemaining,
+          ),
           paymentDate:
             schoolItem?.paymentDate ||
             managementItem?.paymentDate ||
             schoolItem?.expenseDate ||
             managementItem?.expenseDate,
           payer: schoolItem?.payer || managementItem?.payer,
-          revenueAmount: toNumber(revenue?.revenueAmount ?? invoiceAmount),
+          revenueAmount: toNumber(revenue?.revenueAmount ?? revenueTotal),
           expenseAmount: toNumber(
             schoolItem?.expenseAmount ??
               managementItem?.expenseAmount ??
@@ -171,7 +218,7 @@ export default function ExpenseSummaryTable({ data, subjects }: Props) {
             sourceItem.expensePeriod,
         };
       });
-  }, [data]);
+  }, [data, subjects]);
 
   const subjectLabel = (row: any) => {
     if (row.subjectName) return row.subjectName;
@@ -223,6 +270,7 @@ export default function ExpenseSummaryTable({ data, subjects }: Props) {
   const columnTotals = visibleRows.reduce(
     (totals, row) => ({
       totalPeriods: totals.totalPeriods + toNumber(row.totalPeriods),
+      studentCount: totals.studentCount + toNumber(row.studentCount),
       invoiceAmount: totals.invoiceAmount + toNumber(row.invoiceAmount),
       totalOutsideExpense:
         totals.totalOutsideExpense + toNumber(row.totalOutsideExpense),
@@ -235,6 +283,7 @@ export default function ExpenseSummaryTable({ data, subjects }: Props) {
     }),
     {
       totalPeriods: 0,
+      studentCount: 0,
       invoiceAmount: 0,
       totalOutsideExpense: 0,
       paidAmount: 0,
@@ -253,8 +302,8 @@ export default function ExpenseSummaryTable({ data, subjects }: Props) {
       : "--");
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:rounded-3xl">
-      <div className="flex flex-col gap-4 border-b border-slate-100 px-4 py-4 sm:px-5 md:flex-row md:items-center md:justify-between">
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_12px_36px_-24px_rgba(15,23,42,0.45)] sm:rounded-3xl">
+      <div className="flex flex-col gap-4 border-b border-slate-200 bg-white px-4 py-5 sm:px-6 md:flex-row md:items-center md:justify-between">
         <div>
           <h3 className="text-xl font-black text-slate-900 sm:text-2xl">
             Tổng hợp công nợ
@@ -445,104 +494,108 @@ export default function ExpenseSummaryTable({ data, subjects }: Props) {
             ))}
           </div>
 
-        <div className="hidden max-h-[620px] overflow-auto md:block">
-          <table className="min-w-[2200px] whitespace-nowrap text-xl">
-            <thead className="sticky top-0 z-20 bg-slate-900 text-white">
-              <tr>
-                <th className="sticky left-0 z-30 w-20 bg-slate-900 px-4 py-3 text-center">
+        <div className="hidden max-h-[620px] overflow-auto bg-slate-50/50 md:block">
+          <table className="min-w-[2200px] border-separate border-spacing-0 whitespace-nowrap text-lg [&_td]:!px-4 [&_td]:!py-3.5 [&_td]:!text-lg [&_td]:leading-snug [&_th]:!px-4 [&_th]:!py-3.5 [&_th]:!text-lg [&_th]:leading-snug">
+            <thead className="sticky top-0 z-20 bg-slate-900 text-slate-100 shadow-sm">
+              <tr className="divide-x divide-slate-700/70">
+                <th className="sticky left-0 z-30 w-20 bg-slate-900 text-center font-extrabold">
                   STT
                 </th>
-                <th className="sticky left-20 z-30 min-w-[180px] bg-slate-900 px-4 py-3 text-left">
+                <th className="sticky left-20 z-30 min-w-[180px] bg-slate-900 text-left font-extrabold shadow-[6px_0_12px_-10px_rgba(15,23,42,0.9)]">
                   Môn học
                 </th>
-                <th className="px-4 py-3 text-left">Tháng</th>
-                <th className="px-4 py-3 text-right">Số tiết</th>
-                <th className="px-4 py-3 text-right">Số học sinh</th>
-                <th className="px-4 py-3 text-right">Số tiền hóa đơn</th>
-                <th className="px-4 py-3 text-left">Ngày thu</th>
-                <th className="px-4 py-3 text-right">Tổng chi ngoài HĐ</th>
-                <th className="px-4 py-3 text-right">Đã chi</th>
-                <th className="px-4 py-3 text-right">Còn phải chi</th>
-                <th className="px-4 py-3 text-left">Ngày chi</th>
-                <th className="px-4 py-3 text-left">Người chi</th>
-                <th className="px-4 py-3 text-right">Doanh thu</th>
-                <th className="px-4 py-3 text-right">Chi phí</th>
-                <th className="min-w-[260px] px-4 py-3 text-left">Ghi chú</th>
+                <th className="text-left font-extrabold">Tháng</th>
+                <th className="text-right font-extrabold">Số tiết</th>
+                <th className="text-right font-extrabold">Số học sinh</th>
+                <th className="text-right font-extrabold">Số tiền hóa đơn</th>
+                <th className="text-left font-extrabold">Ngày thu</th>
+                <th className="text-right font-extrabold">Tổng chi ngoài HĐ</th>
+                <th className="text-right font-extrabold">Đã chi</th>
+                <th className="text-right font-extrabold">Còn phải chi</th>
+                <th className="text-left font-extrabold">Ngày chi</th>
+                <th className="text-left font-extrabold">Người chi</th>
+                <th className="text-right font-extrabold">Doanh thu</th>
+                <th className="text-right font-extrabold">Chi phí</th>
+                <th className="min-w-[260px] text-left font-extrabold">Ghi chú</th>
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b-2 border-blue-200 bg-blue-50 font-black text-slate-900">
+              <tr className="bg-blue-50 font-extrabold text-slate-900 shadow-[inset_0_-2px_0_0_rgba(147,197,253,0.65)]">
                 <td
                   colSpan={3}
-                  className="sticky left-0 z-10 bg-blue-50 px-4 py-4 text-center text-blue-800"
+                  className="sticky left-0 z-10 bg-blue-50 text-center tracking-wide text-blue-800"
                 >
                   TỔNG CỘNG
                 </td>
-                <td className="px-4 py-4 text-right">
+                <td className="text-right tabular-nums">
                   {new Intl.NumberFormat("vi-VN").format(
                     columnTotals.totalPeriods,
                   )}
                 </td>
-                <td className="px-4 py-4 text-center">--</td>
-                <td className="px-4 py-4 text-right text-blue-800">
+                <td className="text-right tabular-nums">
+                  {new Intl.NumberFormat("vi-VN").format(
+                    columnTotals.studentCount,
+                  )}
+                </td>
+                <td className="text-right tabular-nums text-blue-800">
                   {formatCurrency(columnTotals.invoiceAmount)}
                 </td>
-                <td className="px-4 py-4 text-center">--</td>
-                <td className="px-4 py-4 text-right text-rose-700">
+                <td className="text-center text-slate-400">--</td>
+                <td className="text-right tabular-nums text-rose-700">
                   {formatCurrency(columnTotals.totalOutsideExpense)}
                 </td>
-                <td className="px-4 py-4 text-right text-emerald-700">
+                <td className="text-right tabular-nums text-emerald-700">
                   {formatCurrency(columnTotals.paidAmount)}
                 </td>
-                <td className="px-4 py-4 text-right text-orange-700">
+                <td className="text-right tabular-nums text-orange-700">
                   {formatCurrency(columnTotals.remainingOutsideExpense)}
                 </td>
-                <td className="px-4 py-4 text-center">--</td>
-                <td className="px-4 py-4 text-center">--</td>
-                <td className="px-4 py-4 text-right text-emerald-700">
+                <td className="text-center text-slate-400">--</td>
+                <td className="text-center text-slate-400">--</td>
+                <td className="text-right tabular-nums text-emerald-700">
                   {formatCurrency(columnTotals.revenueAmount)}
                 </td>
-                <td className="px-4 py-4 text-right text-orange-700">
+                <td className="text-right tabular-nums text-orange-700">
                   {formatCurrency(columnTotals.expenseAmount)}
                 </td>
-                <td className="px-4 py-4 text-center">--</td>
+                <td className="text-center text-slate-400">--</td>
               </tr>
               {visibleRows.map((row, index) => (
                 <tr
                   key={row.key}
-                  className="border-t border-slate-100 hover:bg-slate-50"
+                  className="group bg-white text-slate-700 transition-colors hover:bg-blue-50/60 [&>td]:border-b [&>td]:border-slate-100"
                 >
-                  <td className="sticky left-0 z-10 bg-white px-4 py-3 text-center font-semibold group-hover:bg-slate-50">
+                  <td className="sticky left-0 z-10 bg-white text-center font-semibold text-slate-500 transition-colors group-hover:bg-blue-50">
                     {index + 1}
                   </td>
-                  <td className="sticky left-20 z-10 bg-white px-4 py-3 font-semibold">
+                  <td className="sticky left-20 z-10 bg-white font-bold text-slate-900 shadow-[6px_0_12px_-10px_rgba(15,23,42,0.45)] transition-colors group-hover:bg-blue-50">
                     {subjectLabel(row)}
                   </td>
-                  <td className="px-4 py-3 font-semibold text-slate-700">
+                  <td className="font-semibold text-slate-700">
                     {periodLabel(row)}
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="text-right font-bold tabular-nums text-slate-900">
                     {row.totalPeriods ?? "--"}
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="text-right font-bold tabular-nums text-slate-900">
                     {row.studentCount ?? "--"}
                   </td>
-                  <td className="px-4 py-3 text-right font-semibold text-blue-700">
+                  <td className="text-right font-extrabold tabular-nums text-blue-700">
                     {formatCurrency(row.invoiceAmount)}
                   </td>
-                  <td className="px-4 py-3">{formatDate(row.collectedDate)}</td>
-                  <td className="px-4 py-3 text-right font-semibold text-rose-700">
+                  <td>{formatDate(row.collectedDate)}</td>
+                  <td className="text-right font-extrabold tabular-nums text-rose-700">
                     {formatCurrency(row.totalOutsideExpense)}
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="text-right font-bold tabular-nums text-slate-900">
                     {formatCurrency(row.paidAmount)}
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="text-right">
                     <span
-                      className={`inline-flex rounded-full px-3 py-1 text-sm font-black ${
+                      className={`inline-flex rounded-lg border px-3 py-1.5 font-extrabold tabular-nums ${
                         row.remainingOutsideExpense > 0
-                          ? "bg-red-100 text-red-700"
-                          : "bg-emerald-100 text-emerald-700"
+                          ? "border-red-200 bg-red-50 text-red-700"
+                          : "border-emerald-200 bg-emerald-50 text-emerald-700"
                       }`}
                     >
                       {row.remainingOutsideExpense > 0
@@ -550,17 +603,17 @@ export default function ExpenseSummaryTable({ data, subjects }: Props) {
                         : "Đã chi đủ"}
                     </span>
                   </td>
-                  <td className="px-4 py-3">{formatDate(row.paymentDate)}</td>
-                  <td className="px-4 py-3">{row.payer || "--"}</td>
-                  <td className="px-4 py-3 text-right font-semibold text-emerald-700">
+                  <td>{formatDate(row.paymentDate)}</td>
+                  <td>{row.payer || "--"}</td>
+                  <td className="text-right font-extrabold tabular-nums text-emerald-700">
                     {formatCurrency(row.revenueAmount)}
                   </td>
-                  <td className="px-4 py-3 text-right font-semibold text-orange-700">
+                  <td className="text-right font-extrabold tabular-nums text-orange-700">
                     {formatCurrency(row.expenseAmount)}
                   </td>
                   <td
                     title={row.note || ""}
-                    className="max-w-[320px] whitespace-normal px-4 py-3 text-slate-600"
+                    className="max-w-[320px] whitespace-normal text-slate-600"
                   >
                     <span className="line-clamp-2">{row.note || "--"}</span>
                   </td>

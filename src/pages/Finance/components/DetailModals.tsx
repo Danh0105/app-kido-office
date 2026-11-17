@@ -1,0 +1,467 @@
+import { useMemo, useState } from "react";
+import { Loader2 } from "lucide-react";
+
+import DecimalInput from "@/components/DecimalInput";
+import { newIdempotencyKey, type MoneyMovementPayload } from "@/service/finance";
+import type { FinanceDeduction, FinanceDetail, FinanceRecipient, PaymentMethod } from "@/types/finance";
+import { useFinanceMeta } from "../FinanceRoutes";
+import {
+  PAYMENT_METHOD_LABELS,
+  formatMoney,
+  inputClass,
+  labelClass,
+  primaryButton,
+  secondaryButton,
+  todayVN,
+} from "../lib";
+import { Modal } from "./FinanceUi";
+
+type Submit<T> = (value: T) => Promise<unknown>;
+
+/** Duyệt một cấp; cấp được phép điều chỉnh thì nhập số chấp nhận theo dòng (bắt buộc lý do khi khác). */
+export function ApproveModal({
+  detail,
+  canAdjust,
+  isControlStep,
+  onClose,
+  onSubmit,
+}: {
+  detail: FinanceDetail;
+  canAdjust: boolean;
+  isControlStep: boolean;
+  onClose: () => void;
+  onSubmit: Submit<{
+    comment?: string;
+    adjustments?: { itemId: number; approvedAmount: number; reason?: string }[];
+    /** Chứng từ kiểm soát — tải lên trước khi duyệt (cấp kiểm soát). */
+    files?: File[];
+  }>;
+}) {
+  const [comment, setComment] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const [rows, setRows] = useState(() =>
+    detail.items.map((item) => ({
+      itemId: item.id,
+      description: item.description,
+      declared: item.amount,
+      approved: item.approvedAmount ?? item.amount,
+      reason: item.adjustmentReason ?? "",
+    })),
+  );
+  const [busy, setBusy] = useState(false);
+  const approvedTotal = rows.reduce((sum, row) => sum + row.approved, 0);
+  const invalid = rows.find(
+    (row) => row.approved > row.declared || (row.approved !== row.declared && !row.reason.trim()),
+  );
+
+  const submit = async () => {
+    setBusy(true);
+    try {
+      await onSubmit({
+        comment: comment.trim() || undefined,
+        files: isControlStep && files.length ? files : undefined,
+        adjustments: canAdjust
+          ? rows
+              .filter((row) => {
+                const item = detail.items.find((i) => i.id === row.itemId)!;
+                return row.approved !== (item.approvedAmount ?? item.amount);
+              })
+              .map((row) => ({ itemId: row.itemId, approvedAmount: row.approved, reason: row.reason.trim() || undefined }))
+          : undefined,
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      open
+      wide={canAdjust}
+      title={`Duyệt ${detail.code}`}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className={secondaryButton} onClick={onClose}>
+            Đóng
+          </button>
+          <button
+            type="button"
+            className={primaryButton}
+            disabled={busy || (canAdjust && !!invalid)}
+            onClick={() => void submit()}
+          >
+            {busy && <Loader2 size={16} className="animate-spin" />} Duyệt
+          </button>
+        </>
+      }
+    >
+      {canAdjust && (
+        <div className="mb-4 space-y-2">
+          <p className="text-sm text-slate-600">
+            Ghi nhận số tiền được chấp nhận cho từng dòng (không lớn hơn số kê khai; khác số kê khai phải có lý do).
+          </p>
+          {rows.map((row, index) => (
+            <div key={row.itemId} className="grid gap-2 rounded-xl border border-slate-200 p-3 md:grid-cols-12">
+              <div className="md:col-span-4">
+                <p className="text-sm font-semibold text-slate-800">
+                  {index + 1}. {row.description}
+                </p>
+                <p className="text-xs text-slate-500">Kê khai: {formatMoney(row.declared)} đ</p>
+              </div>
+              <DecimalInput
+                allowDecimal={false}
+                keepZero
+                value={row.approved}
+                max={row.declared}
+                onValueChange={(value) =>
+                  setRows((prev) => prev.map((r) => (r.itemId === row.itemId ? { ...r, approved: value } : r)))
+                }
+                className={`${inputClass} mt-0 text-right md:col-span-3`}
+              />
+              <input
+                className={`${inputClass} mt-0 md:col-span-5`}
+                placeholder={row.approved !== row.declared ? "Lý do điều chỉnh *" : "Lý do (nếu có)"}
+                value={row.reason}
+                onChange={(e) =>
+                  setRows((prev) => prev.map((r) => (r.itemId === row.itemId ? { ...r, reason: e.target.value } : r)))
+                }
+              />
+            </div>
+          ))}
+          <p className="text-right text-sm">
+            Tổng chấp nhận: <b className="tabular-nums text-blue-700">{formatMoney(approvedTotal)} đ</b> / kê khai{" "}
+            {formatMoney(detail.totalAmount)} đ
+          </p>
+        </div>
+      )}
+      {isControlStep && (
+        <label className={`${labelClass} mb-4`}>
+          Chứng từ kiểm soát (không bắt buộc)
+          <input
+            type="file"
+            multiple
+            accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx,.xls,.docx,.doc"
+            className={`${inputClass} file:mr-2 file:rounded-lg file:border-0 file:bg-blue-50 file:px-2 file:py-1 file:text-blue-700`}
+            onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+          />
+          {files.length > 0 && (
+            <span className="mt-1 block text-[11px] font-normal text-slate-600">{files.map((f) => f.name).join(", ")}</span>
+          )}
+        </label>
+      )}
+      <label className={labelClass}>
+        Ý kiến (không bắt buộc)
+        <textarea className={inputClass} rows={3} value={comment} onChange={(e) => setComment(e.target.value)} />
+      </label>
+    </Modal>
+  );
+}
+/** Nhập lý do bắt buộc: từ chối, yêu cầu bổ sung, huỷ, bỏ qua cấp, huỷ phiếu chi/thu, thu hồi. */
+export function ReasonModal({
+  title,
+  label,
+  confirmText,
+  danger = false,
+  optional = false,
+  onClose,
+  onSubmit,
+}: {
+  title: string;
+  label: string;
+  confirmText: string;
+  danger?: boolean;
+  optional?: boolean;
+  onClose: () => void;
+  onSubmit: Submit<string>;
+}) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  return (
+    <Modal
+      open
+      title={title}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className={secondaryButton} onClick={onClose}>
+            Đóng
+          </button>
+          <button
+            type="button"
+            disabled={busy || (!optional && !text.trim())}
+            className={
+              danger
+                ? "inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
+                : primaryButton
+            }
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await onSubmit(text.trim());
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {busy && <Loader2 size={16} className="animate-spin" />} {confirmText}
+          </button>
+        </>
+      }
+    >
+      <label className={labelClass}>
+        {label}
+        {!optional && " *"}
+        <textarea className={inputClass} rows={4} autoFocus value={text} onChange={(e) => setText(e.target.value)} />
+      </label>
+    </Modal>
+  );
+}
+/**
+ * Ghi nhận chi tiền / thu hoàn trả. Khoá chống gửi lặp sinh một lần khi mở
+ * modal — bấm nhiều lần hay mạng chập chờn vẫn chỉ ghi một phiếu.
+ */
+const recipientKey = (r: Pick<FinanceRecipient, "supplierId">) => (r.supplierId === null ? "requester" : String(r.supplierId));
+
+export function MoneyModal({
+  kind,
+  remaining: totalRemaining,
+  defaultMethod,
+  defaultCashAccountCode,
+  recipients = [],
+  onClose,
+  onSubmit,
+}: {
+  kind: "payment" | "refund";
+  remaining: number;
+  defaultMethod?: PaymentMethod | null;
+  defaultCashAccountCode?: string | null;
+  /**
+   * Phiếu có NCC nhận tiền: những người còn phải chi (NCC / người đề nghị) —
+   * thủ quỹ chọn chuyển cho ai, số tiền không vượt phần còn lại của người đó.
+   */
+  recipients?: FinanceRecipient[];
+  onClose: () => void;
+  onSubmit: Submit<{ payload: MoneyMovementPayload; proofs: File[] }>;
+}) {
+  const meta = useFinanceMeta();
+  const idempotencyKey = useMemo(() => newIdempotencyKey(), []);
+  const choices = kind === "payment" ? recipients.filter((r) => r.remaining > 0) : [];
+  const [chosenKey, setChosenKey] = useState(choices[0] ? recipientKey(choices[0]) : "");
+  const recipient = choices.find((r) => recipientKey(r) === chosenKey);
+  const remaining = recipient ? Math.min(recipient.remaining, totalRemaining) : totalRemaining;
+  // Gợi ý tài khoản lần chi trước (hoặc kiểm soát đã chọn ở phiếu cũ); thủ quỹ được đổi.
+  const defaultAccount = meta.cashAccounts.find((a) => a.code === defaultCashAccountCode);
+  const [amount, setAmount] = useState(remaining);
+  const [date, setDate] = useState(todayVN());
+  const [method, setMethod] = useState<PaymentMethod>(
+    defaultAccount ? (defaultAccount.groupCode === "111" ? "CASH" : "BANK_TRANSFER") : (defaultMethod ?? "BANK_TRANSFER"),
+  );
+  const [cashAccountCode, setCashAccountCode] = useState(defaultAccount?.code ?? "");
+  const [transactionRef, setTransactionRef] = useState("");
+  const [note, setNote] = useState("");
+  const [proofs, setProofs] = useState<File[]>([]);
+  const [busy, setBusy] = useState(false);
+  const accounts = meta.cashAccounts.filter((a) => (method === "CASH" ? a.groupCode === "111" : a.groupCode === "112"));
+  // Chi tiền là bước cuối: thủ quỹ bắt buộc chọn tài khoản thanh toán.
+  const accountRequired = kind === "payment";
+  const invalid = amount <= 0 || amount > remaining || (accountRequired && !cashAccountCode);
+
+  return (
+    <Modal
+      open
+      title={kind === "payment" ? "Ghi nhận chi tiền" : "Ghi nhận nhân viên hoàn trả"}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className={secondaryButton} onClick={onClose}>
+            Đóng
+          </button>
+          <button
+            type="button"
+            className={primaryButton}
+            disabled={busy || invalid}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await onSubmit({
+                  payload: {
+                    amount,
+                    ...(recipient ? { supplierId: recipient.supplierId } : {}),
+                    date,
+                    method,
+                    cashAccountCode: cashAccountCode || undefined,
+                    transactionRef: transactionRef.trim() || undefined,
+                    note: note.trim() || undefined,
+                    idempotencyKey,
+                  },
+                  proofs,
+                });
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {busy && <Loader2 size={16} className="animate-spin" />} Ghi nhận
+          </button>
+        </>
+      }
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        {choices.length > 0 && (
+          <div className="sm:col-span-2">
+            <label className={labelClass}>
+              Chuyển cho *
+              <select
+                className={inputClass}
+                value={chosenKey}
+                onChange={(e) => {
+                  const next = choices.find((r) => recipientKey(r) === e.target.value);
+                  setChosenKey(e.target.value);
+                  if (next) setAmount(Math.min(next.remaining, totalRemaining));
+                }}
+              >
+                {choices.map((r) => (
+                  <option key={recipientKey(r)} value={recipientKey(r)}>
+                    {r.kind === "SUPPLIER" ? "NCC" : "Người đề nghị"}: {r.name} — còn {formatMoney(r.remaining)} đ
+                  </option>
+                ))}
+              </select>
+            </label>
+            {recipient && (
+              <dl className="mt-2 grid gap-x-4 gap-y-1 rounded-lg bg-slate-50 px-3 py-2 text-sm sm:grid-cols-2" data-testid="money-recipient">
+                <div>
+                  <dt className="text-xs text-slate-500">Ngân hàng</dt>
+                  <dd className="font-medium text-slate-800">{recipient.bankName || "—"}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-500">Số tài khoản</dt>
+                  <dd className="font-mono font-medium text-slate-800">{recipient.bankAccountNumber || "—"}</dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="text-xs text-slate-500">Chủ tài khoản</dt>
+                  <dd className="font-medium text-slate-800">{recipient.bankAccountHolder || recipient.name}</dd>
+                </div>
+              </dl>
+            )}
+          </div>
+        )}
+        <label className={`${labelClass} sm:col-span-2`}>
+          Số tiền (đ) — còn {kind === "payment" ? "phải chi" : "phải thu"}
+          {recipient ? ` cho ${recipient.name}` : ""} {formatMoney(remaining)} đ
+          <DecimalInput allowDecimal={false} value={amount} max={remaining} onValueChange={setAmount} className={inputClass} />
+        </label>
+        <label className={labelClass}>
+          {kind === "payment" ? "Ngày chi" : "Ngày thu"}
+          <input type="date" className={inputClass} value={date} onChange={(e) => setDate(e.target.value)} />
+        </label>
+        <label className={labelClass}>
+          Hình thức
+          <select
+            className={inputClass}
+            value={method}
+            onChange={(e) => { setMethod(e.target.value as PaymentMethod); setCashAccountCode(""); }}
+          >
+            {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className={labelClass}>
+          {accountRequired ? "Tài khoản thanh toán *" : "Tài khoản tiền"}
+          <select
+            className={inputClass}
+            value={cashAccountCode}
+            onChange={(e) => setCashAccountCode(e.target.value)}
+          >
+            <option value="">{accountRequired ? "Chọn tài khoản" : "Không chọn"}</option>
+            {accounts.map((a) => (
+              <option key={a.code} value={a.code}>
+                {a.code} — {a.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className={labelClass}>
+          Mã giao dịch / số phiếu
+          <input className={inputClass} value={transactionRef} onChange={(e) => setTransactionRef(e.target.value)} />
+        </label>
+        <label className={`${labelClass} sm:col-span-2`}>
+          Ghi chú
+          <input className={inputClass} value={note} onChange={(e) => setNote(e.target.value)} />
+        </label>
+        <label className={`${labelClass} sm:col-span-2`}>
+          {kind === "payment" ? "Biên nhận chuyển tiền" : "Biên nhận hoàn trả"} (ảnh/PDF)
+          <input
+            type="file"
+            multiple
+            accept=".pdf,.jpg,.jpeg,.png,.webp"
+            className="mt-1 block w-full text-sm"
+            onChange={(e) => setProofs(Array.from(e.target.files ?? []))}
+          />
+        </label>
+      </div>
+    </Modal>
+  );
+}
+
+export function DeductionModal({
+  row,
+  outstanding,
+  onClose,
+  onSubmit,
+}: {
+  row: Pick<FinanceDeduction, "id" | "periodMonth" | "periodYear" | "plannedAmount">;
+  outstanding: number;
+  onClose: () => void;
+  onSubmit: Submit<{ amount: number; note?: string; idempotencyKey: string }>;
+}) {
+  const idempotencyKey = useMemo(() => newIdempotencyKey(), []);
+  const [amount, setAmount] = useState(Math.min(row.plannedAmount, outstanding));
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  return (
+    <Modal
+      open
+      title={`Ghi nhận khấu trừ lương tháng ${row.periodMonth}/${row.periodYear}`}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className={secondaryButton} onClick={onClose}>
+            Đóng
+          </button>
+          <button
+            type="button"
+            className={primaryButton}
+            disabled={busy || amount <= 0 || amount > outstanding}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await onSubmit({ amount, note: note.trim() || undefined, idempotencyKey });
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {busy && <Loader2 size={16} className="animate-spin" />} Xác nhận đã trừ
+          </button>
+        </>
+      }
+    >
+      <p className="mb-3 text-sm text-slate-600">
+        Kế hoạch kỳ này {formatMoney(row.plannedAmount)} đ · còn phải trừ {formatMoney(outstanding)} đ. Mỗi kỳ chỉ ghi nhận một lần; trừ ít hơn kế
+        hoạch thì phần còn lại dồn sang kỳ sau.
+      </p>
+      <label className={labelClass}>
+        Số tiền đã trừ vào phiếu lương (đ)
+        <DecimalInput allowDecimal={false} value={amount} max={outstanding} onValueChange={setAmount} className={inputClass} />
+      </label>
+      <label className={`${labelClass} mt-3`}>
+        Ghi chú
+        <input className={inputClass} value={note} onChange={(e) => setNote(e.target.value)} />
+      </label>
+    </Modal>
+  );
+}

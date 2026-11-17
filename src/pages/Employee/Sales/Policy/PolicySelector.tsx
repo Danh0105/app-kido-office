@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
-import { BookOpen, Building2, CalendarDays, Filter, MapPin, Pencil, Plus, Power, PowerOff, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { BookOpen, Building2, CalendarDays, Filter, HandCoins, MapPin, Pencil, Plus, Power, PowerOff, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import HeaderWithBack from "@/components/HeaderWithBack";
+import OtherCashflowPanel from "@/pages/OtherCashflow/OtherCashflowPanel";
 import { policiesApi } from "@/service/policy";
 import { provinceApi } from "@/service/province";
 import { wardApi } from "@/service/ward";
@@ -20,6 +21,11 @@ import SubjectFormModal from "@/components/subject/SubjectFormModal";
 import SearchableSelect from "@/components/SearchableSelect";
 import FormCreate from "./FormCreate";
 import { currentSchoolYear } from "@/pages/Teaching/lib";
+import {
+  DEFAULT_SCHOOL_YEAR,
+  includeDefaultSchoolYear,
+  PREVIOUS_SCHOOL_YEAR,
+} from "@/constants/schoolYear";
 import type {
   PolicyFilterOptions,
   PolicyPageItem,
@@ -27,7 +33,8 @@ import type {
 } from "@/types/policy";
 
 const PAGE_SIZE = 12;
-type Tab = "policies" | "schools" | "subjects";
+const ALL_SCHOOL_YEARS_QUERY = "__all__";
+type Tab = "policies" | "schools" | "subjects" | "other-cashflow";
 type SimpleOption = { value: string; label: string };
 /** Trường trực thuộc nhân viên — đủ field cho thẻ danh sách và form chỉnh sửa. */
 type ManagedSchool = {
@@ -37,6 +44,8 @@ type ManagedSchool = {
   phone?: string;
   representative?: string;
   taxCode?: string;
+  /** Mã đơn vị quan hệ ngân sách (7 chữ số) — in trên hóa đơn điện tử. */
+  budgetCode?: string | null;
   scale?: number | string | null;
   classCount?: number | string | null;
   latitude?: number | string | null;
@@ -60,7 +69,7 @@ type SubjectPolicyRow = {
 
 const SCHOOL_ACTIVE = 0;
 const SCHOOL_STOPPED = 1;
-const emptySchoolForm = { name: "", address: "", representative: "", phone: "", taxCode: "", scale: "", classCount: "", regionId: "", wardId: "" };
+const emptySchoolForm = { name: "", address: "", representative: "", phone: "", taxCode: "", budgetCode: "", scale: "", classCount: "", regionId: "", wardId: "" };
 const fallbackSchoolYears = () => {
   // Luôn có sẵn năm học đến 2028-2029 để tạo môn/chính sách cho năm tới,
   // kể cả khi hệ thống chưa có dữ liệu năm đó — không phụ thuộc đồng hồ máy chủ.
@@ -112,7 +121,7 @@ export default function PolicySelector() {
   const [managementRegion, setManagementRegion] = useState("");
   const [managementWard, setManagementWard] = useState("");
   const [managementSchool, setManagementSchool] = useState("");
-  const [managementYear, setManagementYear] = useState("");
+  const [managementYear, setManagementYear] = useState(DEFAULT_SCHOOL_YEAR);
   const [schools, setSchools] = useState<ManagedSchool[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [managementSearch, setManagementSearch] = useState("");
@@ -347,6 +356,7 @@ export default function PolicySelector() {
       representative: school.representative || "",
       phone: school.phone || "",
       taxCode: school.taxCode || "",
+      budgetCode: school.budgetCode || "",
       scale: school.scale == null ? "" : String(school.scale),
       classCount: school.classCount == null ? "" : String(school.classCount),
       regionId: school.ward?.province?.id ? String(school.ward.province.id) : "",
@@ -372,11 +382,16 @@ export default function PolicySelector() {
       toast.error("Vui lòng chọn phường/xã");
       return;
     }
+    if (schoolForm.budgetCode.trim() && !/^[0-9]{7}$/.test(schoolForm.budgetCode.trim())) {
+      toast.error("Mã ĐV QH ngân sách gồm 7 chữ số");
+      return;
+    }
     setSchoolSaving(true);
     const payload = {
       name: schoolForm.name.trim(), address: schoolForm.address.trim(),
       representative: schoolForm.representative.trim(), phone: schoolForm.phone.trim(),
-      taxCode: schoolForm.taxCode.trim(), scale: Number(schoolForm.scale) || 0,
+      taxCode: schoolForm.taxCode.trim(), budgetCode: schoolForm.budgetCode.trim(),
+      scale: Number(schoolForm.scale) || 0,
       classCount: Number(schoolForm.classCount) || 0,
     };
     try {
@@ -480,7 +495,10 @@ export default function PolicySelector() {
       status: searchParams.get("status") || "",
       schoolId: searchParams.get("schoolId") || "",
       subjectId: searchParams.get("subjectId") || "",
-      schoolYear: searchParams.get("schoolYear") || "",
+      schoolYear:
+        searchParams.get("schoolYear") === ALL_SCHOOL_YEARS_QUERY
+          ? ""
+          : searchParams.get("schoolYear") || DEFAULT_SCHOOL_YEAR,
       fromDate: searchParams.get("fromDate") || "",
       toDate: searchParams.get("toDate") || "",
     }),
@@ -496,7 +514,9 @@ export default function PolicySelector() {
   const updateFilter = (key: PolicyFilterKey, value: string) => {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
-      if (value) next.set(key, value);
+      if (key === "schoolYear" && !value) {
+        next.set(key, ALL_SCHOOL_YEARS_QUERY);
+      } else if (value) next.set(key, value);
       else next.delete(key);
       // Đổi filter thì luôn về trang 1.
       next.delete("page");
@@ -603,9 +623,10 @@ export default function PolicySelector() {
   // Gộp năm học thực tế từ backend với dải năm mặc định (đến 2028-2029) —
   // trước đây chỉ dùng backend khi có dữ liệu nên bị mất các năm tương lai
   // chưa phát sinh môn học nào.
-  const managementYears = Array.from(
-    new Set([...(options?.schoolYears || []), ...fallbackSchoolYears()]),
-  ).sort((a, b) => b.localeCompare(a));
+  const managementYears = includeDefaultSchoolYear([
+    ...(options?.schoolYears || []),
+    ...fallbackSchoolYears(),
+  ]).sort((a, b) => b.localeCompare(a));
   const policyYears = Array.from(
     new Set(
       [
@@ -653,7 +674,7 @@ export default function PolicySelector() {
 
   const clearSubjectFilters = () => {
     setManagementSchool("");
-    setManagementYear("");
+    setManagementYear(DEFAULT_SCHOOL_YEAR);
     setManagementSearch("");
   };
 
@@ -763,10 +784,11 @@ export default function PolicySelector() {
           <p className="mt-1 text-sm text-slate-500">Tìm kiếm và lọc theo dữ liệu chính thức từ hệ thống.</p>
         </div>
 
-        <nav className="mb-4 grid grid-cols-3 gap-1 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+        <nav className="mb-4 grid grid-cols-2 gap-1 rounded-2xl sm:grid-cols-4 border border-slate-200 bg-white p-1 shadow-sm">
           <TabButton active={tab === "policies"} onClick={() => setTab("policies")} icon={<Filter size={15} />} label="Tất cả chính sách" />
           <TabButton active={tab === "schools"} onClick={() => setTab("schools")} icon={<Building2 size={15} />} label="Quản lý trường" />
           <TabButton active={tab === "subjects"} onClick={() => setTab("subjects")} icon={<BookOpen size={15} />} label="Quản lý môn học" />
+          <TabButton active={tab === "other-cashflow"} onClick={() => setTab("other-cashflow")} icon={<HandCoins size={15} />} label="Thu Chi ngoài" />
         </nav>
 
         {tab === "schools" && (
@@ -799,6 +821,7 @@ export default function PolicySelector() {
                         <InfoField label="Người đại diện" value={school.representative} />
                         <InfoField label="Số điện thoại" value={school.phone} />
                         <InfoField label="Mã số thuế" value={school.taxCode} />
+                        <InfoField label="Mã ĐVQHNS" value={school.budgetCode} />
                         <InfoField label="Quy mô học sinh" value={formatCount(school.scale)} />
                         <InfoField label="Số lớp" value={formatCount(school.classCount)} />
                         <InfoField label="Phường/Xã" value={school.ward?.name} />
@@ -858,6 +881,8 @@ export default function PolicySelector() {
             </div>
           </DirectManagement>
         )}
+
+        {tab === "other-cashflow" && <OtherCashflowPanel />}
 
         {tab === "subjects" && (
           <DirectManagement title="Tất cả môn học" icon={<BookOpen size={22} />} search={managementSearch} onSearch={setManagementSearch} onCreate={() => setShowSubjectForm(true)} createLabel="Tạo môn" searchPlaceholder="Tìm môn học, trường, mã môn, số HĐ...">
@@ -1009,7 +1034,7 @@ export default function PolicySelector() {
               />
             </div>
             <Select label="Môn học" value={filters.subjectId} options={policyFilterSubjects.map(x => ({ value: String(x.id), label: x.name }))} onChange={v => updateFilter("subjectId", v)} disabled={optionsLoading} />
-            <Select label="Năm học" value={filters.schoolYear} options={(options?.schoolYears || []).map(x => ({ value: x, label: x }))} onChange={v => updateFilter("schoolYear", v)} disabled={optionsLoading} />
+            <Select label="Năm học" value={filters.schoolYear} options={includeDefaultSchoolYear(options?.schoolYears || []).map(x => ({ value: x, label: x }))} onChange={v => updateFilter("schoolYear", v)} disabled={optionsLoading} />
           </div>
           <div className="mt-2 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 sm:w-1/2 sm:pr-1">
             <label className="text-[11px] font-semibold text-slate-500">
@@ -1300,6 +1325,7 @@ function SchoolFormModal({ form, setForm, regions, wards, setRegion, onClose, on
           {field("representative", "Người đại diện")}
           {field("phone", "Số điện thoại")}
           {field("taxCode", "Mã số thuế")}
+          {field("budgetCode", "Mã ĐV QH ngân sách (7 số)")}
           {field("scale", "Quy mô học sinh")}
           {field("classCount", "Số lớp")}
         </div>
@@ -1459,8 +1485,8 @@ function SchoolSubjectsModal({
     [state.subjects],
   );
 
-  const [fromYear, setFromYear] = useState("");
-  const [toYear, setToYear] = useState("");
+  const [fromYear, setFromYear] = useState(PREVIOUS_SCHOOL_YEAR);
+  const [toYear, setToYear] = useState(DEFAULT_SCHOOL_YEAR);
   const [pickedSubjectIds, setPickedSubjectIds] = useState<number[]>([]);
   const [applying, setApplying] = useState(false);
   const [result, setResult] = useState<RolloverResult | null>(null);

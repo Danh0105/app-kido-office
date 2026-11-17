@@ -7,7 +7,11 @@ import "./css/Sales.css";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { policiesApi } from "../../../../service/policy";
 import { PolicyStatus } from "../../enum/PolicyStatus";
-import { hasRole, isChiefAccountant } from "../../../../utils/auth";
+import {
+  hasRole,
+  isChiefAccountant,
+  isDirectorAssistantViewer,
+} from "../../../../utils/auth";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import HeaderWithBack from "@/components/HeaderWithBack";
 import { subjectApi } from "@/service/subject.api";
@@ -27,7 +31,10 @@ import {
   policyPercentBase,
 } from "@/types/policy";
 import { isDirectorBrandUiEnabled } from "@/utils/directorUi";
-import { resolveApiFileUrl } from "@/utils/fileUrl";
+import {
+  AuthenticatedFileImage,
+  openAuthenticatedFile,
+} from "@/components/AuthenticatedFile";
 import { Paperclip, ExternalLink, X, Upload, Loader2 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { getApiErrorMessage } from "@/utils/apiError";
@@ -260,23 +267,21 @@ export default function Sales({
               >
                 <div className="flex min-w-0 items-center gap-2">
                   {isImageFile(file) && (
-                    <a
-                      href={resolveApiFileUrl(file.url)}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      type="button"
+                      onClick={() => void openAuthenticatedFile(file.url, file.originalName)}
                       className="shrink-0"
                     >
-                      <img
-                        src={resolveApiFileUrl(file.url)}
+                      <AuthenticatedFileImage
+                        fileUrl={file.url}
                         alt={file.originalName}
                         className="h-12 w-12 rounded-md border border-gray-100 object-cover"
                       />
-                    </a>
+                    </button>
                   )}
-                  <a
-                    href={resolveApiFileUrl(file.url)}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
+                    onClick={() => void openAuthenticatedFile(file.url, file.originalName)}
                     title={file.originalName}
                     className="inline-flex min-w-0 items-center gap-1.5 text-sm font-medium text-blue-700 hover:underline"
                   >
@@ -287,7 +292,7 @@ export default function Sales({
                     )}
                     <span className="truncate">{file.originalName}</span>
                     <ExternalLink size={14} className="shrink-0" />
-                  </a>
+                  </button>
                   {canEditPolicyFiles && file.id !== "legacy" && (
                     <button
                       type="button"
@@ -370,7 +375,8 @@ export default function Sales({
     hasRole("saleadmin", "salesadmin_la") &&
     !hasRole("director", "director_la");
   const isRejected = finalStatus === PolicyStatus.REJECTED;
-  const readOnly = isChiefAccountant();
+  // Kế toán trưởng, trợ lý GĐ chỉ xem — backend cũng không cho họ duyệt.
+  const readOnly = isChiefAccountant() || isDirectorAssistantViewer();
   const showActions =
     !isFinalApproved && !isRejected && !readOnly && !isWaitingOnDirector;
   useEffect(() => {
@@ -511,7 +517,10 @@ export default function Sales({
       try {
         const resSubject = await subjectApi.findOne(finalSubjectId);
 
-        const resEmployee = await employeeApi.getById(Number(finalUser));
+        // Chính sách cũ có thể không còn người tạo: không gọi API với id rỗng.
+        const resEmployee = finalUser
+          ? await employeeApi.getById(Number(finalUser))
+          : null;
 
         setSubject(resSubject);
         setEmployee(resEmployee);

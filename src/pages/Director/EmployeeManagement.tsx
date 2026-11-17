@@ -5,6 +5,8 @@ import { employeeApi } from "@/service/employee";
 import { teacherApi } from "@/service/teaching";
 import type { Teacher } from "@/types/teaching";
 import { getApiErrorMessage } from "@/utils/apiError";
+import { hasRole, isDirectorAssistantViewer } from "@/utils/auth";
+import { DEPARTMENT_HEAD_POSITIONS, DEPARTMENT_HEAD_ROLES } from "@/utils/departmentHeads";
 import { resolveApiFileUrl } from "@/utils/fileUrl";
 import TeacherDetailModal from "./components/TeacherDetailModal";
 
@@ -14,6 +16,7 @@ const ROLE_OPTIONS = [
   { value: "salesadmin_la", label: "Sale Admin LA" },
   { value: "director", label: "Giám đốc" },
   { value: "director_la", label: "Giám đốc LA" },
+  ...DEPARTMENT_HEAD_POSITIONS,
   { value: "accountant", label: "Kế toán" },
   { value: "ketoan_congno", label: "KT công nợ" },
   { value: "ketoan_truong", label: "Kế toán trưởng" },
@@ -45,6 +48,7 @@ const roleColor = (r: string) => {
   if (r === "director") return "bg-purple-100 text-purple-700";
   if (r === "director_la") return "bg-red-100 text-red-700";
   if (r === "saleadmin" || r === "salesadmin_la") return "bg-indigo-100 text-indigo-700";
+  if (DEPARTMENT_HEAD_ROLES.includes(r)) return "bg-amber-100 text-amber-700";
   if (r === "accountant") return "bg-orange-100 text-orange-700";
   if (r === "ketoan_congno" || r === "thuquy" || r === "ketoan_truong" || r === "troly_gd")
     return "bg-teal-100 text-teal-700";
@@ -54,7 +58,6 @@ const roleColor = (r: string) => {
   return "bg-gray-100 text-gray-600";
 };
 
-const roleLabel = (r: string) => ROLE_OPTIONS.find((o) => o.value === r)?.label ?? r;
 
 type Employee = {
   id: number;
@@ -76,7 +79,19 @@ const employeeAvatarUrl = (employee: Employee) => {
 const employeeInitial = (employee: Employee) =>
   (employee.name || employee.email || "U").trim().charAt(0).toUpperCase() || "U";
 
-export default function EmployeeManagement() {
+/** `embedded`: nằm trong khung của phân hệ khác, không dựng header/nền toàn trang. */
+export default function EmployeeManagement({ embedded = false }: { embedded?: boolean }) {
+  // Trợ lý GĐ chỉ xem (trừ khi kiêm Nhân sự): ẩn thêm / phân quyền / duyệt / xoá.
+  const readOnly = isDirectorAssistantViewer() && !hasRole("nhansu");
+  const [roleOptions, setRoleOptions] = useState(ROLE_OPTIONS);
+  const roleLabel = (role: string) => roleOptions.find(option => option.value === role)?.label ?? role;
+  useEffect(() => {
+    let active = true;
+    employeeApi.getPositions().then(positions => {
+      if (active) setRoleOptions([...positions, { value: "probation", label: "Thử việc" }, { value: "employee_la", label: "Long An" }]);
+    }).catch(() => { /* Giữ danh mục cũ khi server chưa rollout endpoint. */ });
+    return () => { active = false; };
+  }, []);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -193,7 +208,7 @@ export default function EmployeeManagement() {
     const commonRoles = (() => {
       const selected = employees.filter((e) => selectedIds.has(e.id));
       if (!selected.length) return [];
-      return ROLE_OPTIONS.map((o) => o.value).filter((r) =>
+      return roleOptions.map((o) => o.value).filter((r) =>
         selected.every((e) => (e.roles ?? []).includes(r)),
       );
     })();
@@ -266,14 +281,14 @@ export default function EmployeeManagement() {
   const roleFilterOptions = useMemo(() => {
     const present = new Set<string>();
     tabEmployees.forEach((e) => (e.roles ?? []).forEach((r) => present.add(r)));
-    const known = ROLE_OPTIONS.filter(
+    const known = roleOptions.filter(
       (o) => present.has(o.value) && !(tab === "ctv" && o.value === CTV_ROLE),
     );
     const unknown = [...present]
-      .filter((r) => !ROLE_OPTIONS.some((o) => o.value === r) && r !== CTV_ROLE)
+      .filter((r) => !roleOptions.some((o) => o.value === r) && r !== CTV_ROLE)
       .map((r) => ({ value: r, label: r }));
     return [...known, ...unknown];
-  }, [tabEmployees, tab]);
+  }, [tabEmployees, tab, roleOptions]);
 
   const filteredEmployees = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -304,11 +319,11 @@ export default function EmployeeManagement() {
   };
 
   return (
-    <div className="bg-gray-100 min-h-screen pb-32">
-      <HeaderWithBack title="Quản lý nhân viên" />
+    <div className={embedded ? "" : "bg-gray-100 min-h-screen pb-32"}>
+      {!embedded && <HeaderWithBack title="Quản lý nhân viên" />}
 
       {/* ── Tabs ── */}
-      <div className="px-3 pt-[68px] pb-2 flex gap-2">
+      <div className={`px-3 pb-2 flex gap-2 ${embedded ? "" : "pt-[68px]"}`}>
         {TABS.map(({ key, label }) => (
           <button
             key={key}
@@ -328,6 +343,7 @@ export default function EmployeeManagement() {
       </div>
 
       {/* ── Toolbar ── */}
+      {!readOnly && (
       <div className="px-3 pb-2 flex items-center gap-2">
         <button
           onClick={() => {
@@ -358,6 +374,7 @@ export default function EmployeeManagement() {
           </button>
         )}
       </div>
+      )}
 
       {/* ── Search + filter ── */}
       <div className="px-3 pb-2 flex items-center gap-2">
@@ -426,13 +443,16 @@ export default function EmployeeManagement() {
             >
               {/* ── Card header: avatar + checkbox ── */}
               <div
-                className="relative flex flex-col items-center pt-3 pb-1 px-2 cursor-pointer"
-                onClick={() =>
-                  tab === "ctv" ? setDetailTarget(item) : toggleSelect(item.id)
-                }
+                className={`relative flex flex-col items-center pt-3 pb-1 px-2 ${
+                  tab === "ctv" || !readOnly ? "cursor-pointer" : ""
+                }`}
+                onClick={() => {
+                  if (tab === "ctv") setDetailTarget(item);
+                  else if (!readOnly) toggleSelect(item.id);
+                }}
               >
                 {/* Tab CTV dùng cú chạm để mở hồ sơ, nên chọn hàng loạt tách ra ô tick riêng. */}
-                {tab === "ctv" && (
+                {tab === "ctv" && !readOnly && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -497,6 +517,7 @@ export default function EmployeeManagement() {
               </div>
 
               {/* ── Actions ── */}
+              {!readOnly && (
               <div className="border-t border-gray-100 px-2 py-2 flex flex-col gap-1.5">
                 <button
                   onClick={() => {
@@ -524,6 +545,7 @@ export default function EmployeeManagement() {
                   Xoá
                 </button>
               </div>
+              )}
             </div>
           );
         })}
@@ -561,7 +583,7 @@ export default function EmployeeManagement() {
               <div className="border rounded-xl p-3">
                 <p className="text-sm font-medium text-gray-600 mb-2">Chọn quyền</p>
                 <div className="grid grid-cols-2 gap-1">
-                  {ROLE_OPTIONS.map(({ value, label }) => (
+                  {roleOptions.map(({ value, label }) => (
                     <label key={value} className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-gray-50 cursor-pointer">
                       <input
                         type="checkbox"
@@ -592,7 +614,7 @@ export default function EmployeeManagement() {
               <p className="text-sm text-gray-500">{roleTarget.name}</p>
             </div>
             <div className="space-y-0.5 max-h-[60vh] overflow-y-auto">
-              {ROLE_OPTIONS.map(({ value, label }) => (
+              {roleOptions.map(({ value, label }) => (
                 <label key={value} className="flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-gray-50 cursor-pointer">
                   <input
                     type="checkbox"
@@ -635,7 +657,7 @@ export default function EmployeeManagement() {
             </div>
 
             <div className="space-y-0.5 max-h-[45vh] overflow-y-auto">
-              {ROLE_OPTIONS.map(({ value, label }) => (
+              {roleOptions.map(({ value, label }) => (
                 <label key={value} className="flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-gray-50 cursor-pointer">
                   <input
                     type="checkbox"

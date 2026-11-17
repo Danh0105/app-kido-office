@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatDecimal, parseLocalizedDecimal } from "@/utils/decimal";
+import { formatDecimalDraft, parseDecimalDraft } from "@/utils/decimalInput";
 
 /**
  * Định dạng lại chuỗi đang gõ dở với dấu phân cách nghìn (VD "5000000" ->
@@ -13,37 +14,6 @@ import { formatDecimal, parseLocalizedDecimal } from "@/utils/decimal";
  * gõ tiếp theo hiểu nhầm thành dấu thập phân, làm mất số (VD gõ "5,000,000"
  * ra "5,00000000").
  */
-const liveFormat = (raw: string, allowDecimal: boolean) => {
-  const negative = raw.trim().startsWith("-");
-  let cleaned = raw.replace(/[^\d,.-]/g, "").replace(/(?!^)-/g, "");
-  if (negative) cleaned = cleaned.replace(/^-/, "");
-  const sign = negative ? "-" : "";
-
-  if (!allowDecimal) {
-    const intPart = cleaned.replace(/[.,]/g, "").replace(/^0+(?=\d)/, "");
-    return intPart ? `${sign}${Number(intPart).toLocaleString("vi-VN")}` : "";
-  }
-
-  const lastComma = cleaned.lastIndexOf(",");
-  const lastDot = cleaned.lastIndexOf(".");
-  const sepIdx = Math.max(lastComma, lastDot);
-
-  const rawIntPart = (sepIdx >= 0 ? cleaned.slice(0, sepIdx) : cleaned).replace(
-    /[.,]/g,
-    "",
-  );
-  const decPart = (sepIdx >= 0 ? cleaned.slice(sepIdx + 1) : "").replace(
-    /[.,]/g,
-    "",
-  );
-  const intPart = rawIntPart.replace(/^0+(?=\d)/, "");
-
-  const groupedInt = intPart ? Number(intPart).toLocaleString("vi-VN") : "";
-
-  if (sepIdx >= 0) return `${sign}${groupedInt},${decPart}`;
-  return `${sign}${groupedInt}`;
-};
-
 type DecimalInputProps = {
   value?: number | string | null;
   onValueChange: (value: number) => void;
@@ -51,11 +21,17 @@ type DecimalInputProps = {
   placeholder?: string;
   min?: number;
   max?: number;
+  /** Gọi khi giá trị gõ vào vượt `max` (ô vẫn giữ giá trị đã chặn về `max`). */
+  onOverMax?: (max: number) => void;
   disabled?: boolean;
   /** Hiện "0" thật thay vì để trống khi giá trị bằng 0 (mặc định ẩn để trống). */
   keepZero?: boolean;
   /** false = số nguyên, không cho gõ phần thập phân (VD số tiền VND). Mặc định true. */
   allowDecimal?: boolean;
+  /** Chỉ đẩy giá trị ra component cha khi blur/Enter, để không tính khi đang gõ dở. */
+  commitOnBlur?: boolean;
+  /** Số chữ số thập phân khi hiển thị và khi đọc ở chế độ `commitOnBlur`. Mặc định 2. */
+  fractionDigits?: number;
 };
 
 export default function DecimalInput({
@@ -65,14 +41,19 @@ export default function DecimalInput({
   placeholder = "0",
   min = 0,
   max,
+  onOverMax,
   disabled = false,
   keepZero = false,
   allowDecimal = true,
+  commitOnBlur = false,
+  fractionDigits = 2,
 }: DecimalInputProps) {
   const [focused, setFocused] = useState(false);
   const display = (v: typeof value) =>
-    keepZero && Number(v ?? 0) === 0 ? "0" : formatDecimal(v);
+    keepZero && Number(v ?? 0) === 0 ? "0" : formatDecimal(v, fractionDigits);
   const [draft, setDraft] = useState(display(value));
+  // Chỉ bấm qua ô mà không gõ gì thì không ghi lại: giá trị cũ giữ nguyên độ chính xác.
+  const dirty = useRef(false);
 
   useEffect(() => {
     if (!focused) {
@@ -83,6 +64,23 @@ export default function DecimalInput({
   const clampValue = (nextValue: number) => {
     const minimumApplied = Math.max(min, nextValue);
     return max === undefined ? minimumApplied : Math.min(max, minimumApplied);
+  };
+
+  const emit = (parsed: number) => {
+    if (max !== undefined && parsed > max) onOverMax?.(max);
+    const next = clampValue(parsed);
+    onValueChange(next);
+    return next;
+  };
+
+  const integerDraftValue = (nextDraft: string) =>
+    Number(nextDraft.replace(/[^\d-]/g, "")) || 0;
+
+  const commitDraft = () => {
+    const parsed = allowDecimal
+      ? parseDecimalDraft(draft, fractionDigits)
+      : integerDraftValue(draft);
+    setDraft(display(emit(parsed)));
   };
 
   return (
@@ -103,16 +101,33 @@ export default function DecimalInput({
         );
       }}
       onChange={(event) => {
-        const nextDraft = liveFormat(event.target.value, allowDecimal);
+        const nextDraft = formatDecimalDraft(
+          event.target.value,
+          allowDecimal,
+          !commitOnBlur,
+        );
         setDraft(nextDraft);
-        const parsed = allowDecimal
-          ? parseLocalizedDecimal(nextDraft)
-          : Number(nextDraft.replace(/[^\d-]/g, "")) || 0;
-        onValueChange(clampValue(parsed));
+        dirty.current = true;
+        if (commitOnBlur) return;
+        emit(
+          allowDecimal
+            ? parseLocalizedDecimal(nextDraft)
+            : integerDraftValue(nextDraft),
+        );
       }}
       onBlur={() => {
         setFocused(false);
-        setDraft(display(value));
+        if (commitOnBlur && dirty.current) {
+          commitDraft();
+        } else {
+          setDraft(display(value));
+        }
+        dirty.current = false;
+      }}
+      onKeyDown={(event) => {
+        if (commitOnBlur && event.key === "Enter") {
+          event.currentTarget.blur();
+        }
       }}
       className={className}
     />

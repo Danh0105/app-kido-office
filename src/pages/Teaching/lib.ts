@@ -2,10 +2,12 @@ import {
   DAY_OF_WEEK_OPTIONS,
   type CalendarSession,
   type SchoolClass,
+  type Teacher,
   type TeachingSchedule,
   type TeachingSession,
 } from "@/types/teaching";
 import { hasRole } from "@/utils/auth";
+import { DEFAULT_SCHOOL_YEAR } from "@/constants/schoolYear";
 
 // ================= PHÂN QUYỀN =================
 // User nhiều role → lấy quyền rộng nhất (vừa giaovien vừa nhansu/giaovu → dùng giao diện quản lý).
@@ -22,7 +24,6 @@ export const canViewTeacherDirectory = () =>
     "nhansu",
     "giaovu",
     "director",
-    "director_la",
     "troly_gd",
     "ketoan_truong",
     "giaovien_congty",
@@ -60,9 +61,14 @@ export const canApproveTeacherAccount = () => hasRole("nhansu");
  * hiện mục menu ra rồi bấm vào nhận 403 còn khó hiểu hơn là không thấy.
  */
 export const canViewActivityLog = () =>
-  hasRole("nhansu", "director", "director_la", "troly_gd");
+  hasRole("nhansu", "director", "troly_gd");
 
-const RATE_FIELDS = ["defaultRatePerPeriod", "ratePerPeriod", "otherCosts"] as const;
+const RATE_FIELDS = [
+  "defaultRatePerPeriod",
+  "rateEffectiveFrom",
+  "ratePerPeriod",
+  "otherCosts",
+] as const;
 
 /** Bỏ field tiền khỏi payload khi user không có quyền khai. */
 export function stripRateFields<T extends object>(payload: T): T {
@@ -78,12 +84,13 @@ export const canViewTeaching = () =>
     "nhansu",
     "giaovu",
     "director",
-    "director_la",
     "troly_gd",
     "ketoan_truong",
   );
 
 export const isTeacher = () => hasRole(TEACHER_STAFF_ROLE, TEACHER_COLLABORATOR_ROLE);
+
+export const isCompanyTeacher = () => hasRole(TEACHER_STAFF_ROLE);
 
 // Màn đầu tiên user được phép vào — dùng khi chặn route.
 export const teachingHomePath = () => {
@@ -151,10 +158,20 @@ export const teachingMenusForUser = () =>
       (!item.moneyFeature || TEACHING_MONEY_FEATURES_ENABLED || canSetTeachingRates()),
   );
 
-export const TEACHER_MENUS = [
+/**
+ * Giáo viên công ty được Nhân sự xếp lịch (không tự đăng ký tiết) và có phụ
+ * cấp xăng → thay "Tiết đang mở" bằng bản tổng hợp chấm công + quãng đường,
+ * và có thêm không gian đề nghị tài chính nội bộ.
+ */
+export const teacherMenusForUser = () => [
   { title: "Lịch của tôi", path: "/giao-vien/lich-day" },
   { title: "Chấm công", path: "/giao-vien/cham-cong" },
-  { title: "Tiết đang mở", path: "/giao-vien/dang-ky-tiet-day" },
+  ...(isCompanyTeacher()
+    ? [
+        { title: "Tổng hợp công", path: "/giao-vien/tong-hop-cong" },
+        { title: "Đề nghị tài chính", path: "/giao-vien/de-nghi-tai-chinh" },
+      ]
+    : [{ title: "Tiết đang mở", path: "/giao-vien/dang-ky-tiet-day" }]),
 ];
 
 // ================= TÀI KHOẢN GIÁO VIÊN =================
@@ -263,10 +280,7 @@ export const MAX_STUDENT_COUNT = 1000;
  * Chỉ dùng làm phương án dự phòng khi trường chưa có năm học nào trong dữ liệu.
  */
 export const currentSchoolYear = () => {
-  const now = new Date();
-  const year =
-    now.getMonth() + 1 >= 8 ? now.getFullYear() : now.getFullYear() - 1;
-  return `${year}-${year + 1}`;
+  return DEFAULT_SCHOOL_YEAR;
 };
 
 /** Năm học mới nhất lên đầu; "Hè 2026-2027" xếp cạnh năm tương ứng. */
@@ -472,6 +486,17 @@ export const startOfMonth = (value: string) => {
 export const endOfMonth = (value: string) => {
   const d = fromISODate(value);
   return toISODate(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+};
+
+/**
+ * "Hiệu lực đến" mặc định của lịch mới: 31/05 — hết năm học chứa `from`
+ * (chuyển năm học ở tháng 8, như `currentSchoolYear`). Tháng 6–7 năm học đã
+ * hết nên quay về cuối tháng như trước.
+ */
+export const defaultScheduleEffectiveTo = (from = todayISO()) => {
+  const [y, m] = from.split("-").map(Number);
+  const end = `${m >= 8 ? y + 1 : y}-05-31`;
+  return end >= from ? end : endOfMonth(from);
 };
 
 export const addMonths = (value: string, months: number) => {
@@ -858,4 +883,52 @@ export function inLocationScope(
   if (!scope) return true;
   if (Number(scope) === MAIN_SCHOOL_LOCATION_ID) return schoolLocationId == null;
   return String(schoolLocationId ?? "") === scope;
+}
+
+// ================= NHÃN GIÁO VIÊN =================
+
+/**
+ * Tên giáo viên kèm SĐT ("Nguyễn Văn A - 0901234567") để phân biệt người trùng
+ * tên trên thời khoá biểu / chấm công. Không có SĐT thì chỉ hiện tên.
+ */
+export function formatTeacherLabel(
+  name: string | null | undefined,
+  phone?: string | null,
+): string {
+  const label = (name ?? "").trim();
+  const tel = (phone ?? "").trim();
+  if (!tel) return label;
+  return label ? `${label} - ${tel}` : tel;
+}
+
+type TeacherContact = Pick<Teacher, "id" | "name" | "phone">;
+
+const teacherIndexCache = new WeakMap<readonly TeacherContact[], Map<string, TeacherContact>>();
+
+/** Tra giáo viên theo id trong danh sách `/teachers` (mỗi mảng chỉ đánh chỉ mục một lần). */
+export function findTeacher(
+  teachers: readonly TeacherContact[] | undefined,
+  id: number | string | null | undefined,
+): TeacherContact | undefined {
+  if (!teachers || id == null || id === "") return undefined;
+  let index = teacherIndexCache.get(teachers);
+  if (!index) {
+    index = new Map(teachers.map((teacher) => [String(teacher.id), teacher]));
+    teacherIndexCache.set(teachers, index);
+  }
+  return index.get(String(id));
+}
+
+/**
+ * Nhãn "Tên - SĐT" theo id giáo viên. `fallbackName` (tên BE trả kèm lịch/buổi)
+ * được ưu tiên giữ nguyên; SĐT lấy từ danh bạ `/teachers` — role không xem được
+ * danh bạ (kinh doanh) có danh sách rỗng nên chỉ thấy tên như trước.
+ */
+export function teacherLabel(
+  teachers: readonly TeacherContact[] | undefined,
+  id: number | string | null | undefined,
+  fallbackName?: string | null,
+): string {
+  const teacher = findTeacher(teachers, id);
+  return formatTeacherLabel(fallbackName || teacher?.name, teacher?.phone);
 }

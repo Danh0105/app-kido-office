@@ -3,6 +3,14 @@
 import { Building2, CalendarDays, Receipt, Wallet } from "lucide-react";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
 import RevenueExpenseRow from "./RevenueExpenseRow";
+import { getPolicyTeacherUnitPrice } from "../../utils/policyOtherCosts";
+import CollaboratorPayrollRow, {
+  type CollaboratorPayrollScope,
+} from "./CollaboratorPayrollRow";
+
+/** Lưới cột của bảng Chi Trường — header, dòng lương GV CTV và footer dùng chung. */
+const GRID_COLS =
+  "grid grid-cols-[200px_120px_90px_120px_140px_150px_160px_140px_120px_140px_150px_160px_180px_230px_150px_150px_160px_180px_70px]";
 
 type Props = {
   rows: any[];
@@ -16,6 +24,12 @@ type Props = {
   ) => void;
   updateRow: (index: number, field: any, value: string | number) => void;
   removeRow: (index: number) => void;
+  /** Kỳ đã "Kết thúc" → chỉ còn Ngày chi + Nguồn chi sửa được. */
+  finalized?: boolean;
+  /** Kỳ từ 11/2026: Giáo viên trường tách sang bảng riêng dưới Chi Ngoài. */
+  teacherSplit?: boolean;
+  /** Có thì hiện dòng "Lương GV CTV" (chỉ xem, không cộng tổng). */
+  collaboratorPayroll?: CollaboratorPayrollScope | null;
 };
 
 export default function RevenueExpenseTable({
@@ -25,6 +39,9 @@ export default function RevenueExpenseTable({
   updateInputRow,
   updateRow,
   removeRow,
+  finalized = false,
+  teacherSplit = false,
+  collaboratorPayroll,
 }: Props) {
   const policyData = subjects?.policies?.[0]?.data || {};
   const fallbackInputData = inputRows[0] || ({} as InputExpenseRow);
@@ -34,9 +51,7 @@ export default function RevenueExpenseTable({
       const inputData = inputRows[index] || fallbackInputData;
       const students = Number(inputData.studentCount || 0);
       const months = Number(inputData.monthsCount || 0);
-      const teacherUnitPrice = Number(
-        row.teacherUnitPrice ?? row.giaovien ?? policyData?.giaovien ?? 0,
-      );
+      const teacherUnitPrice = getPolicyTeacherUnitPrice(policyData);
       const taxUnitPrice = Number(
         row.taxUnitPrice ??
           row.thue ??
@@ -48,7 +63,9 @@ export default function RevenueExpenseTable({
       const csvcUnitPrice = Number(
         row.csvcUnitPrice ?? row.csvc ?? policyData?.csvc ?? 0,
       );
-      const teacherAmount = students * months * teacherUnitPrice;
+      const teacherAmount = teacherSplit
+        ? 0
+        : students * months * teacherUnitPrice;
       const taxAmount = students * months * taxUnitPrice;
       const csvcAmount = csvcUnitPrice * months * students;
       const totalSchoolExpense = teacherAmount + taxAmount + csvcAmount;
@@ -113,12 +130,11 @@ export default function RevenueExpenseTable({
 
       {/* TABLE */}
       <div className="overflow-x-auto">
-        <div className="min-w-[2590px]">
+        <div className="min-w-[2820px]">
           {/* HEADER ROW */}
           <div
-            className="
-              grid
-              grid-cols-[200px_120px_90px_120px_140px_150px_160px_140px_120px_140px_150px_160px_180px_150px_150px_160px_180px_70px]
+            className={`
+              ${GRID_COLS}
               bg-slate-900
               text-white
               font-semibold
@@ -126,7 +142,7 @@ export default function RevenueExpenseTable({
               sticky
               top-0
               z-10
-            "
+            `}
           >
             <div className="p-3 text-center border-r border-slate-700">
               📄 Nội dung
@@ -182,6 +198,10 @@ export default function RevenueExpenseTable({
             </div>
 
             <div className="p-3 text-center border-r border-slate-700">
+              🏦 Nguồn chi
+            </div>
+
+            <div className="p-3 text-center border-r border-slate-700">
               <div className="flex items-center justify-center gap-2">
                 <Wallet size={14} />
                 Đã chi
@@ -215,20 +235,29 @@ export default function RevenueExpenseTable({
                 updateInputRow={updateInputRow}
                 updateRow={updateRow}
                 removeRow={removeRow}
+                finalized={finalized}
+                teacherSplit={teacherSplit}
               />
             ))}
           </div>
 
+          {/* LƯƠNG GV CTV — chỉ hiển thị, không cộng vào Tổng cộng bên dưới */}
+          {collaboratorPayroll && (
+            <CollaboratorPayrollRow
+              scope={collaboratorPayroll}
+              gridClass={GRID_COLS}
+            />
+          )}
+
           {/* FOOTER */}
           <div
-            className="
-              grid
-              grid-cols-[200px_120px_90px_120px_140px_150px_160px_140px_120px_140px_150px_160px_180px_150px_150px_160px_180px_70px]
+            className={`
+              ${GRID_COLS}
               bg-slate-100
               border-t-2
               border-slate-300
               font-bold
-            "
+            `}
           >
             <div className={`${footerCellClass} col-span-4 text-slate-700`}>
               <span className="text-sm uppercase tracking-wide">Tổng cộng</span>
@@ -257,6 +286,9 @@ export default function RevenueExpenseTable({
 
             <div className={footerCellClass} />
 
+            <div className={footerCellClass} />
+
+            {/* Nguồn chi */}
             <div className={footerCellClass} />
 
             <div className={`${footerCellClass} text-red-600`}>

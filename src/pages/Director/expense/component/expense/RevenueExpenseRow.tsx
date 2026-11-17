@@ -3,8 +3,10 @@
 import { Trash2 } from "lucide-react";
 import { useMemo } from "react";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
-import { formatDecimal } from "@/utils/decimal";
+import { formatDecimal, roundDecimal } from "@/utils/decimal";
 import DecimalInput from "@/components/DecimalInput";
+import { getPolicyTeacherUnitPrice } from "../../utils/policyOtherCosts";
+import CashAccountSelect from "./CashAccountSelect";
 
 type Props = {
   row: any;
@@ -19,6 +21,10 @@ type Props = {
   ) => void;
   updateRow: (index: number, field: string, value: string | number) => void;
   removeRow: (index: number) => void;
+  /** Kỳ đã "Kết thúc" → chỉ còn Ngày chi + Nguồn chi sửa được. */
+  finalized?: boolean;
+  /** Kỳ từ 11/2026: Giáo viên trường tách sang bảng riêng dưới Chi Ngoài. */
+  teacherSplit?: boolean;
 };
 
 export default function RevenueExpenseRow({
@@ -29,14 +35,14 @@ export default function RevenueExpenseRow({
   updateInputRow,
   updateRow,
   removeRow,
+  finalized = false,
+  teacherSplit = false,
 }: Props) {
   const students = Number(inputData.studentCount || 0);
   const months = Number(inputData.monthsCount || 0);
 
   const policyData = subjects?.policies?.[0]?.data || {};
-  const teacherUnitPrice = Number(
-    row.teacherUnitPrice ?? row.giaovien ?? policyData?.giaovien ?? 0,
-  );
+  const teacherUnitPrice = getPolicyTeacherUnitPrice(policyData);
   const taxUnitPrice = Number(
     row.taxUnitPrice ??
       row.thue ??
@@ -53,7 +59,9 @@ export default function RevenueExpenseRow({
 
   const calculations = useMemo(() => {
     const invoiceAmount = students * months * unitPrice;
-    const teacherAmount = students * months * teacherUnitPrice;
+    const teacherAmount = teacherSplit
+      ? 0
+      : students * months * teacherUnitPrice;
     const csvcAmount = csvcUnitPrice * months * students;
     const taxAmount = students * months * taxUnitPrice;
 
@@ -71,12 +79,22 @@ export default function RevenueExpenseRow({
     months,
     unitPrice,
     teacherUnitPrice,
+    teacherSplit,
     csvcUnitPrice,
     taxUnitPrice,
   ]);
   const paidAmount = Number(row.paidAmount || 0);
   const remainingSchoolExpense = calculations.totalSchoolExpense - paidAmount;
-  const locked = !!inputData.invoiceLocked;
+  const invoiceLocked = !!inputData.invoiceLocked;
+  const locked = invoiceLocked || finalized;
+  // Kỳ đã kết thúc: server chỉ ghi Ngày chi + Nguồn chi lên dòng đã lưu.
+  const dateSourceLocked = finalized && !row?.id;
+  // Đã chi do Đề xuất Chi Trường ghi vào khi kinh doanh xác nhận chi: Ngày chi,
+  // Nguồn chi, Đã chi lấy từ đề xuất và khoá; Người chi / Ghi chú vẫn sửa được.
+  const suggestCodes: string | undefined = row?.suggestCodes || undefined;
+  const suggestTitle = suggestCodes
+    ? `Lấy từ đề xuất chi ${suggestCodes} — không sửa tay được`
+    : undefined;
 
   const inputClass = `
     w-full
@@ -119,7 +137,7 @@ export default function RevenueExpenseRow({
     <div
       className={`
         grid
-        grid-cols-[200px_120px_90px_120px_140px_150px_160px_140px_120px_140px_150px_160px_180px_150px_150px_160px_180px_70px]
+        grid-cols-[200px_120px_90px_120px_140px_150px_160px_140px_120px_140px_150px_160px_180px_230px_150px_150px_160px_180px_70px]
         border-b
         hover:bg-blue-50/40
         transition-all
@@ -142,14 +160,12 @@ export default function RevenueExpenseRow({
 
       {/* SỐ TIẾT */}
       <div className="flex text-center items-center justify-center border-r border-slate-200 px-2 py-2 font-semibold text-slate-700">
-        <input
-          type="number"
-          min="0"
-          step="0.01"
+        <DecimalInput
           value={Number(inputData.totalPeriods) || ""}
           disabled={locked}
-          onChange={(e) =>
-            updateInputRow(index, "totalPeriods", Number(e.target.value || 0))
+          commitOnBlur
+          onValueChange={(value) =>
+            updateInputRow(index, "totalPeriods", value)
           }
           className={`${metricInputClass} text-slate-700`}
         />
@@ -157,29 +173,26 @@ export default function RevenueExpenseRow({
 
       {/* SỐ HS */}
       <div className="flex text-center items-center justify-center border-r border-slate-200 px-2 py-2 font-semibold text-sky-700">
-        <input
-          type="number"
-          min="0"
-          step="0.01"
+        <DecimalInput
           value={Number(inputData.studentCount) || ""}
           disabled={locked}
-          onChange={(e) =>
-            updateInputRow(index, "studentCount", Number(e.target.value || 0))
+          commitOnBlur
+          onValueChange={(value) =>
+            updateInputRow(index, "studentCount", value)
           }
           className={`${metricInputClass} text-sky-700`}
         />
       </div>
 
-      {/* SỐ THÁNG */}
+      {/* SỐ THÁNG — tối đa 4 chữ số thập phân, khớp numeric(15,4) ở DB */}
       <div className="flex text-center items-center justify-center border-r border-slate-200 px-2 py-2 font-semibold text-indigo-700">
-        <input
-          type="number"
-          min="0"
-          step="0.01"
+        <DecimalInput
           value={Number(inputData.monthsCount) || ""}
           disabled={locked}
-          onChange={(e) =>
-            updateInputRow(index, "monthsCount", Number(e.target.value || 0))
+          commitOnBlur
+          fractionDigits={4}
+          onValueChange={(value) =>
+            updateInputRow(index, "monthsCount", roundDecimal(value, 4))
           }
           className={`${metricInputClass} text-indigo-700`}
         />
@@ -193,7 +206,8 @@ export default function RevenueExpenseRow({
             updateRow(index, "csvcUnitPrice", value)
           }
           placeholder="0"
-          allowDecimal={false}
+          fractionDigits={2}
+          commitOnBlur
           className={`${metricInputClass} text-emerald-700`}
         />
       </div>
@@ -212,15 +226,17 @@ export default function RevenueExpenseRow({
           {calculations.csvcAmount.toLocaleString("vi-VN")}
         </span>
       </div>
-      {/* ĐƠN GIÁ GIÁO VIÊN (= đơn giá × tháng) */}
-      <div className="p-2 border-r border-slate-200">
+      {/* ĐƠN GIÁ GIÁO VIÊN — lấy từ Thông tin cơ sở vật chất */}
+      <div
+        className="p-2 border-r border-slate-200"
+        title={teacherSplit ? "Đơn giá theo Thông tin cơ sở vật chất; tiền giáo viên được theo dõi ở bảng riêng" : undefined}
+      >
         <DecimalInput
           value={teacherUnitPrice}
-          disabled={locked}
-          onValueChange={(value) =>
-            updateRow(index, "teacherUnitPrice", value)
-          }
-          allowDecimal={false}
+          disabled
+          onValueChange={() => undefined}
+          fractionDigits={2}
+          commitOnBlur
           className={`${metricInputClass} text-amber-700`}
         />
       </div>
@@ -250,7 +266,8 @@ export default function RevenueExpenseRow({
             updateRow(index, "taxUnitPrice", value)
           }
           placeholder="0"
-          allowDecimal={false}
+          fractionDigits={2}
+          commitOnBlur
           className={`${metricInputClass} text-rose-700`}
         />
       </div>
@@ -304,26 +321,38 @@ export default function RevenueExpenseRow({
         </select>
       </div>
 
-      {/* NGÀY CHI */}
-      <div className="p-2 border-r border-slate-200">
+      {/* NGÀY CHI — kỳ đã kết thúc vẫn sửa được (cùng Nguồn chi) */}
+      <div className="p-2 border-r border-slate-200" title={suggestTitle}>
         <input
           type="date"
           value={row.paymentDate || ""}
-          disabled={locked}
+          disabled={invoiceLocked || dateSourceLocked || !!suggestCodes}
           onChange={(e) => updateRow(index, "paymentDate", e.target.value)}
           className={inputClass}
         />
       </div>
 
+      {/* NGUỒN CHI — tài khoản tiền đã chi (báo cáo thu chi) */}
+      <div className="p-2 border-r border-slate-200" title={suggestTitle}>
+        <CashAccountSelect
+          value={row.cashAccount}
+          disabled={dateSourceLocked || !!suggestCodes}
+          onChange={(value) => updateRow(index, "cashAccount", value)}
+          className={inputClass}
+        />
+      </div>
+
       {/* ĐÃ CHI */}
-      <div className="p-2 border-r border-slate-200">
+      <div className="p-2 border-r border-slate-200" title={suggestTitle}>
         <DecimalInput
           value={paidAmount}
+          disabled={finalized || !!suggestCodes}
           onValueChange={(value) => {
             updateRow(index, "paidAmount", value);
           }}
           placeholder="0"
           allowDecimal={false}
+          commitOnBlur
           className="
             w-full h-10
             rounded-lg
@@ -334,6 +363,11 @@ export default function RevenueExpenseRow({
             font-bold
           "
         />
+        {suggestCodes && (
+          <div className="mt-1 truncate text-center text-[11px] font-medium text-emerald-700">
+            Theo {suggestCodes}
+          </div>
+        )}
       </div>
 
       {/* CÒN LẠI */}
@@ -379,6 +413,8 @@ export default function RevenueExpenseRow({
       <div className="flex items-center justify-center">
         <button
           onClick={() => removeRow(index)}
+          disabled={finalized || !!suggestCodes}
+          title={suggestCodes ? `Đã chi theo đề xuất ${suggestCodes} — không xoá được` : undefined}
           className="
             flex items-center justify-center
             w-10 h-10

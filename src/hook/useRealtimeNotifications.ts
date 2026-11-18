@@ -190,6 +190,8 @@ function applyIncoming(event: RealtimeNotificationEvent, raw: unknown) {
 
 let boundSocket: Socket | null = null;
 
+const hasAccessToken = () => Boolean(localStorage.getItem("access_token"));
+
 function attachSocketListeners(socket: Socket) {
     REALTIME_EVENTS.forEach((event) => {
         socket.on(event, (payload: unknown) => applyIncoming(event, payload));
@@ -211,6 +213,11 @@ function attachSocketListeners(socket: Socket) {
 // Binds once per socket instance; utils/socket.ts itself recreates the instance on
 // employeeId change (logout/login as a different account), so this naturally re-binds too.
 export function ensureRealtimeConnection() {
+    // Realtime boot is mounted for public routes too, including the login page.
+    // Do not ask the socket factory for credentials until login has persisted
+    // the token. Login calls this function again immediately after doing so.
+    if (!hasAccessToken()) return;
+
     const socket = getSocket();
     if (!socket || socket === boundSocket) return;
 
@@ -249,7 +256,7 @@ export function RealtimeNotificationsBoot() {
             if (document.visibilityState === "visible") {
                 appActive = true;
                 ensureRealtimeConnection();
-                reconcileNotifications();
+                if (hasAccessToken()) reconcileNotifications();
             } else {
                 appActive = false;
             }
@@ -258,7 +265,7 @@ export function RealtimeNotificationsBoot() {
 
         const onOnline = () => {
             ensureRealtimeConnection();
-            reconcileNotifications();
+            if (hasAccessToken()) reconcileNotifications();
         };
         window.addEventListener("online", onOnline);
 
@@ -268,7 +275,7 @@ export function RealtimeNotificationsBoot() {
                 appActive = isActive;
                 if (isActive) {
                     ensureRealtimeConnection();
-                    reconcileNotifications();
+                    if (hasAccessToken()) reconcileNotifications();
                 }
             }).then((handle) => {
                 removeAppStateListener = () => handle.remove();

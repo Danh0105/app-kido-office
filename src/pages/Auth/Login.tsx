@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import logo from "../../static/Logo.png";
 import { useNavigate } from "react-router-dom";
 import FaceVerify from "../FaceId/FaceVerify";
+import { ensureRealtimeConnection } from "@/hook/useRealtimeNotifications";
+import { initNativePush } from "@/utils/nativePush";
 
 // 13/11/2026: tạm ẩn đăng nhập bằng FaceID — chỉ còn đăng nhập mật khẩu.
 // Đổi thành true để hiện lại tab FaceID.

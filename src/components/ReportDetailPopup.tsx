@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Send, ClipboardList, MapPin } from "lucide-react";
 import { dailyReportApi } from "@/service/report";
-import { getSocket } from "@/utils/socket";
+import { getReportSocket } from "@/utils/socket";
 import {
   getEmployeeId,
   getEmployeeName,

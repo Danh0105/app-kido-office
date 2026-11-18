@@ -4,6 +4,7 @@ const SOCKET_URL = import.meta.env.VITE_SOCKET_URL;
 
 let socketInstance: Socket | null = null;
 let suggestSocketInstance: Socket | null = null;
+let reportSocketInstance: Socket | null = null;
 let socketToken: string | null = null;
 
 const currentToken = () => localStorage.getItem("access_token");
@@ -58,44 +59,36 @@ export const getSuggestSocket = () => {
         });
     }
 
-    return defaultSocket;
+    return suggestSocketInstance;
 };
 
-// Lazy /report namespace — only used by ReportDetailPopup. Handshake key is `userId`
-// (not `employeeId`) per the backend contract for this namespace.
-export const getReportSocket = (): Socket | null => {
-    const userId = getEmployeeId();
-    if (!userId) return null;
+// Namespace báo cáo cũng xác thực bằng JWT như namespace mặc định; danh tính
+// và room do backend suy ra từ token, không nhận userId do client tự gửi.
+export const getReportSocket = () => {
+    const token = requireToken();
+    resetIfTokenChanged(token);
 
-    const userIdKey = String(userId);
-
-    if (reportSocket && reportSocketUserId !== userIdKey) {
-        reportSocket.disconnect();
-        reportSocket = null;
-        reportSocketUserId = null;
-    }
-
-    if (!reportSocket) {
-        reportSocketUserId = userIdKey;
-        reportSocket = io(`${SOCKET_URL}/report`, {
-            ...RECONNECTION_OPTIONS,
-            query: { userId: userIdKey },
-            auth: { userId: userIdKey },
+    if (!reportSocketInstance) {
+        reportSocketInstance = io(`${SOCKET_URL}/report`, {
+            transports: ["websocket"],
+            auth: { token },
         });
 
-        reportSocket.on("connect_error", (err) => {
+        reportSocketInstance.on("connect_error", (err) => {
             console.error("REPORT SOCKET ERROR", err);
         });
     }
 
-    return reportSocket;
+    return reportSocketInstance;
 };
 
 export const disconnectSockets = () => {
-    defaultSocket?.disconnect();
-    reportSocket?.disconnect();
+    socketInstance?.disconnect();
+    suggestSocketInstance?.disconnect();
+    reportSocketInstance?.disconnect();
 
     socketInstance = null;
     suggestSocketInstance = null;
+    reportSocketInstance = null;
     socketToken = null;
 };

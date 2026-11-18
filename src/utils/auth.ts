@@ -1,5 +1,6 @@
 import api from "@/service/api";
 import { decodeJwtPayload } from "./jwt";
+import { disconnectSockets } from "./socket";
 import {
     hasBroadRoleIn,
     isAccountantOnlyIn,
@@ -71,7 +72,6 @@ export const canManageSubjects = (): boolean =>
     hasRole("director", "director_la", "saleadmin", "salesadmin_la");
 
 export const getEmployeeName = () => {
-
     const user = getUserFromToken();
     return user?.name;
 };

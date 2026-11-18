@@ -7,10 +7,7 @@ import HeaderWithBack from "@/components/HeaderWithBack";
 import { DEFAULT_SCHOOL_YEAR } from "@/constants/schoolYear";
 import Tabs from "./components/Tabs";
 import Pagination from "./components/Pagination";
-import {
-  RevenueEInvoice,
-  schoolExpenseApi,
-} from "@/service/schoolExpense";
+import { RevenueEInvoice, schoolExpenseApi } from "@/service/schoolExpense";
 import { subjectApi } from "@/service/subject.api";
 
 import { expensePeriodApi } from "@/service/expensePeriod";
@@ -200,7 +197,11 @@ export default function RealExpenseDetail({
   // Kế toán / KT công nợ / thủ quỹ: bảng "Chi Ngoài" đã khoá vẫn nhập được cột
   // chi như KTT, nhưng chỉ trên dòng đã lưu (server không thêm dòng cho họ).
   // Trợ lý GĐ / giám đốc chỉ còn Ngày chi + Nguồn chi.
-  const isLockedPaymentEditor = hasRole("accountant", "ketoan_congno", "thuquy");
+  const isLockedPaymentEditor = hasRole(
+    "accountant",
+    "ketoan_congno",
+    "thuquy",
+  );
   // Sales admin xem toàn bộ dữ liệu thu chi nhưng chỉ được xác nhận đúng BBCS.
   const isSalesAdmin = hasRole("saleadmin", "salesadmin", "salesadmin_la");
   // Lương GV CTV (tab + dòng ở bảng Chi Trường) — khớp quyền API backend.
@@ -258,9 +259,9 @@ export default function RealExpenseDetail({
   // Hóa đơn điện tử (nháp Viettel) theo rowIndex của các dòng doanh thu.
   const [einvoices, setEInvoices] = useState<RevenueEInvoice[]>([]);
   const [exportingInvoices, setExportingInvoices] = useState(false);
-  const [unlinkingEInvoiceId, setUnlinkingEInvoiceId] = useState<
-    number | null
-  >(null);
+  const [unlinkingEInvoiceId, setUnlinkingEInvoiceId] = useState<number | null>(
+    null,
+  );
   const [historyList, setHistoryList] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -285,9 +286,10 @@ export default function RealExpenseDetail({
   const canViewSchoolTeacher = canViewCollaboratorPay && !isSalesAdmin;
   const canApproveSchoolTeacher = hasRole(...SCHOOL_TEACHER_APPROVE_ROLES);
   const [schoolTeacherApplies, setSchoolTeacherApplies] = useState(false);
-  const [schoolTeacherRows, setSchoolTeacherRows] = useState<SchoolTeacherRow[]>([
-    initialSchoolTeacherRow,
-  ]);
+  const [showTeacherTable, setShowTeacherTable] = useState(false);
+  const [schoolTeacherRows, setSchoolTeacherRows] = useState<
+    SchoolTeacherRow[]
+  >([initialSchoolTeacherRow]);
   const [schoolTeacherSavedSignature, setSchoolTeacherSavedSignature] =
     useState("");
   const [schoolTeacherApproval, setSchoolTeacherApproval] =
@@ -427,8 +429,8 @@ export default function RealExpenseDetail({
       const subjectList = Array.isArray(res)
         ? res
         : Array.isArray(res?.data)
-        ? res.data
-        : [];
+          ? res.data
+          : [];
 
       setAllSubjects(subjectList);
     } catch (error) {
@@ -609,11 +611,11 @@ export default function RealExpenseDetail({
         });
       });
 
-      setSummaryTableData(
-        summaries.length ? merged : currentSummary,
-      );
+      setSummaryTableData(summaries.length ? merged : currentSummary);
     } catch (error) {
-      setSummaryError(getApiErrorMessage(error, "Không thể tải tổng hợp thu chi"));
+      setSummaryError(
+        getApiErrorMessage(error, "Không thể tải tổng hợp thu chi"),
+      );
       setSummaryTableData(null);
     } finally {
       setSummaryLoading(false);
@@ -628,8 +630,8 @@ export default function RealExpenseDetail({
     const list = Array.isArray(history)
       ? history
       : Array.isArray(history?.data)
-      ? history.data
-      : [];
+        ? history.data
+        : [];
 
     return [...list].sort((a: any, b: any) => {
       const left = new Date(a?.createdAt || 0).getTime();
@@ -992,7 +994,9 @@ export default function RealExpenseDetail({
   ) => {
     const inputCount = Math.max(nextInputRows.length, 1);
     const saved = data?.items ?? [];
-    const toRow = (item: SchoolTeacherItemsResponse["items"][number]): SchoolTeacherRow => ({
+    const toRow = (
+      item: SchoolTeacherItemsResponse["items"][number],
+    ): SchoolTeacherRow => ({
       id: item.id,
       content: item.content ?? "",
       totalPeriods: Number(item.totalPeriods || 0),
@@ -1015,7 +1019,17 @@ export default function RealExpenseDetail({
         .sort((a, b) => a.rowIndex - b.rowIndex)
         .map(toRow),
     ];
-    setSchoolTeacherApplies(!!data?.applies);
+    setSchoolTeacherApplies(Boolean(data?.applies));
+    // showTeacherTable là điều kiện hiển thị; applies chỉ phản ánh bảng đã có
+    // số tiền lương dương và điều khiển phép tính Chi Trường.
+    const visibility = (
+      data as
+        | (SchoolTeacherItemsResponse & { showTeacherTable?: boolean })
+        | null
+    )?.showTeacherTable;
+    setShowTeacherTable(
+      canViewSchoolTeacher && Boolean(visibility ?? data?.applies),
+    );
     setSchoolTeacherApproval(data?.approval ?? null);
     setSchoolTeachers(data?.teachers ?? []);
     setSchoolTeacherOtherGross(data?.otherSubjectGross ?? {});
@@ -1146,25 +1160,25 @@ export default function RealExpenseDetail({
     try {
       const [revenues, schoolItems, mgmtItems, history, invoices] =
         await Promise.all([
-        revenueItemApi.getAll({
-          schoolExpenseId: resolvedSchoolExpenseId,
-          subjectId: subId,
-        }),
-        schoolExpenseItemApi.getAll({
-          schoolExpenseId: resolvedSchoolExpenseId,
-          subjectId: subId,
-        }),
-        managementExpenseItemApi.getAll({
-          schoolExpenseId: resolvedSchoolExpenseId,
-          subjectId: subId,
-        }),
-        schoolExpenseApi
-          .getHistory(resolvedSchoolExpenseId, { subjectId: subId })
-          .catch(() => []),
-        schoolExpenseApi
-          .getEInvoices(resolvedSchoolExpenseId, subId)
-          .catch(() => []),
-      ]);
+          revenueItemApi.getAll({
+            schoolExpenseId: resolvedSchoolExpenseId,
+            subjectId: subId,
+          }),
+          schoolExpenseItemApi.getAll({
+            schoolExpenseId: resolvedSchoolExpenseId,
+            subjectId: subId,
+          }),
+          managementExpenseItemApi.getAll({
+            schoolExpenseId: resolvedSchoolExpenseId,
+            subjectId: subId,
+          }),
+          schoolExpenseApi
+            .getHistory(resolvedSchoolExpenseId, { subjectId: subId })
+            .catch(() => []),
+          schoolExpenseApi
+            .getEInvoices(resolvedSchoolExpenseId, subId)
+            .catch(() => []),
+        ]);
 
       setSavedRevenues(revenues || []);
       setEInvoices(invoices || []);
@@ -1322,8 +1336,7 @@ export default function RealExpenseDetail({
                   savedCostByPolicyKey
                     .filter(
                       ({ savedCost }) =>
-                        savedCost?.tax !== undefined &&
-                        savedCost?.tax !== null,
+                        savedCost?.tax !== undefined && savedCost?.tax !== null,
                     )
                     .map(({ key, savedCost }) => [
                       key,
@@ -1351,12 +1364,23 @@ export default function RealExpenseDetail({
         );
       }
 
-      // Bảng Giáo viên trường: server cho biết kỳ có áp dụng không; lỗi thì ẩn.
+      // Luôn tải trạng thái hiển thị riêng với trạng thái phát sinh tiền lương.
+      // Không im lặng che lỗi API (tránh người dùng tưởng bảng đã bị xoá).
       applySchoolTeacherData(
         canViewSchoolTeacher
           ? await schoolExpenseApi
               .getSchoolTeacherItems(resolvedSchoolExpenseId, subId)
-              .catch(() => null)
+              .catch((error) => {
+                console.error("Failed to load school teacher items", error);
+                toast.error(
+                  getApiErrorMessage(
+                    error,
+                    "Không tải được bảng Giáo viên trường",
+                  ),
+                  { id: "school-teacher-load-error" },
+                );
+                return null;
+              })
           : null,
         nextInputRows,
       );
@@ -1449,13 +1473,11 @@ export default function RealExpenseDetail({
           studentCount: Number(inputRow.studentCount || 0),
           monthsCount: Number(inputRow.monthsCount ?? 0),
           ql1UnitPrice: Number(
-            row.ql1UnitPrice ??
-              Number(ttcs.ql1Percent || 0),
+            row.ql1UnitPrice ?? Number(ttcs.ql1Percent || 0),
           ),
           ql1Tax: Number(row.ql1Tax ?? ttcs.ql1Tax ?? 0),
           ql2UnitPrice: Number(
-            row.ql2UnitPrice ??
-              Number(ttcs.ql2Percent || 0),
+            row.ql2UnitPrice ?? Number(ttcs.ql2Percent || 0),
           ),
           ql2Tax: Number(row.ql2Tax ?? ttcs.ql2Tax ?? 0),
           otherCosts: getPolicyOtherCosts(activeSubject).map(
@@ -1468,9 +1490,7 @@ export default function RealExpenseDetail({
                   row.otherCostUnitPrices?.[key] ??
                     getOtherCostGrossPrice(item),
                 ),
-                tax: Number(
-                  row.otherCostTaxes?.[key] ?? getOtherCostTax(item),
-                ),
+                tax: Number(row.otherCostTaxes?.[key] ?? getOtherCostTax(item)),
               };
             },
           ),
@@ -1482,8 +1502,9 @@ export default function RealExpenseDetail({
           note: row.note || "",
         };
       }),
-      // Có bảng Giáo viên trường thì server bỏ phần giáo viên khỏi Chi Trường.
-      ...(schoolTeacherApplies
+      // Gửi bảng khi được hiển thị, kể cả chưa có lương (lưu lần đầu).
+      // Server chỉ tách tiền GV khỏi Chi Trường khi có lương dương thực tế.
+      ...(showTeacherTable
         ? {
             schoolTeacherItems: schoolTeacherRows.map((row, index) => {
               const standalone = index >= rows.length;
@@ -1499,7 +1520,11 @@ export default function RealExpenseDetail({
                     }
                   : {}),
                 schoolTeacherId: row.schoolTeacherId ?? null,
-                unitPrice: Number(row.unitPrice ?? policyData.giaovien ?? 0),
+                // Chưa chọn giáo viên thì dòng mẫu không phát sinh tiền,
+                // kể cả khi chính sách có sẵn đơn giá.
+                unitPrice: row.schoolTeacherId
+                  ? Number(row.unitPrice ?? policyData.giaovien ?? 0)
+                  : 0,
                 expenseDate: row.expenseDate || undefined,
                 cashAccount: row.cashAccount || undefined,
                 note: row.note || "",
@@ -1546,7 +1571,10 @@ export default function RealExpenseDetail({
     } catch (error: any) {
       // Không tải lại: giữ nguyên dữ liệu người dùng đang nhập.
       toast.error(
-        getApiErrorMessage(error, "Không thể lưu dữ liệu trước khi đẩy hóa đơn"),
+        getApiErrorMessage(
+          error,
+          "Không thể lưu dữ liệu trước khi đẩy hóa đơn",
+        ),
       );
       setExportingInvoices(false);
       return;
@@ -1759,6 +1787,7 @@ export default function RealExpenseDetail({
       setManagementRows([initialManagementRow]);
       setSchoolTeacherRows([initialSchoolTeacherRow]);
       setSchoolTeacherApplies(false);
+      setShowTeacherTable(false);
       setSchoolTeacherApproval(null);
     }
   }, [activeSubjectId]);
@@ -2042,135 +2071,146 @@ export default function RealExpenseDetail({
                 className="m-0 min-w-0 border-0 p-0"
               >
                 <InputExpenseTable
-                rows={inputRows}
-                defaultFee={Number(
-                  activeSubject?.policies?.[0]?.data?.fee || 0,
-                )}
-                onUpdate={updateInputRow}
-                onAdd={addInputRow}
-                onRemove={removeInputRow}
-              />
+                  rows={inputRows}
+                  defaultFee={Number(
+                    activeSubject?.policies?.[0]?.data?.fee || 0,
+                  )}
+                  onUpdate={updateInputRow}
+                  onAdd={addInputRow}
+                  onRemove={removeInputRow}
+                />
               </fieldset>
-              {!isSalesAdmin && <ExpenseFormTable
-                inputRows={inputRows}
-                revenueRows={revenueRows}
-                managementRows={managementRows}
-                subjects={activeSubject}
-                editingItem={editingItem}
-                loading={loading}
-                addRow={addInputRow}
-                addManagementRow={addManagementRow}
-                removeRevenueRow={removeRevenueRow}
-                removeManagementRow={removeManagementRow}
-                updateInputRow={updateInputRow}
-                updateRevenueRow={updateRevenueRow}
-                updateManagementRow={updateManagementRow}
-                handleSubmit={handleSubmit}
-                handleCancelEdit={handleCancelEdit}
-                handleViewHistory={handleViewHistory}
-                historyLoading={historyLoading}
-                managementConfirmed={managementConfirmed}
-                managementPolicyLocked={managementConfirmed || finalized}
-                managementSavedRowsOnly={
-                  (managementConfirmed && !isChief) || finalized
-                }
-                // Kỳ đã kết thúc: mọi người chỉ còn Ngày chi + Nguồn chi.
-                managementDateSourceOnly={
-                  finalized ||
-                  (managementConfirmed && !isChief && !isLockedPaymentEditor)
-                }
-                managementConfirmedByName={managementConfirmedByName}
-                managementConfirmedAt={managementConfirmedAt}
-                historyCount={historyList.length}
-                isChief={isChief}
-                finalized={finalized}
-                finalizedByName={finalizedByName}
-                finalizedAt={finalizedAt}
-                lockActionLoading={lockActionLoading || confirmingManagement}
-                onConfirmManagement={handleConfirmManagementExpense}
-                onUnconfirmManagement={handleUnconfirmManagementExpense}
-                onFinalize={handleFinalize}
-                onReopen={handleReopen}
-                onExportInvoices={handleExportInvoices}
-                exportingInvoices={exportingInvoices}
-                einvoices={einvoices}
-                onUnlinkEInvoice={isChief ? handleUnlinkEInvoice : undefined}
-                unlinkingEInvoiceId={unlinkingEInvoiceId}
-                schoolName={resolvedSchool?.name}
-                schoolYear={selectedSchoolYear}
-                teacherSplit={schoolTeacherApplies}
-                schoolTeacherSection={
-                  schoolTeacherApplies ? (
-                    <SchoolTeacherTable
-                      rows={schoolTeacherRows}
-                      inputRows={inputRows}
-                      defaultUnitPrice={Number(
-                        activeSubject?.policies?.[0]?.data?.giaovien || 0,
-                      )}
-                      schoolId={schoolTeacherSchoolId ?? resolvedSchoolId ?? null}
-                      teachers={schoolTeachers}
-                      otherSubjectGross={schoolTeacherOtherGross}
-                      onTeacherSaved={(teacher) =>
-                        setSchoolTeachers((prev) =>
-                          [...prev.filter((item) => item.id !== teacher.id), teacher].sort(
-                            (a, b) => a.name.localeCompare(b.name, "vi"),
-                          ),
-                        )
-                      }
-                      updateRow={updateSchoolTeacherRow}
-                      addRow={addSchoolTeacherRow}
-                      removeRow={removeSchoolTeacherRow}
-                      dateSourceOnly={finalized}
-                      approval={schoolTeacherApproval}
-                      canApprove={canApproveSchoolTeacher}
-                      approving={approvingSchoolTeacher}
-                      dirty={
-                        schoolTeacherSignature(schoolTeacherRows, inputRows) !==
-                        schoolTeacherSavedSignature
-                      }
-                      onApprove={handleApproveSchoolTeacher}
-                    />
-                  ) : undefined
-                }
-              />}
+              {!isSalesAdmin && (
+                <ExpenseFormTable
+                  inputRows={inputRows}
+                  revenueRows={revenueRows}
+                  managementRows={managementRows}
+                  subjects={activeSubject}
+                  editingItem={editingItem}
+                  loading={loading}
+                  addRow={addInputRow}
+                  addManagementRow={addManagementRow}
+                  removeRevenueRow={removeRevenueRow}
+                  removeManagementRow={removeManagementRow}
+                  updateInputRow={updateInputRow}
+                  updateRevenueRow={updateRevenueRow}
+                  updateManagementRow={updateManagementRow}
+                  handleSubmit={handleSubmit}
+                  handleCancelEdit={handleCancelEdit}
+                  handleViewHistory={handleViewHistory}
+                  historyLoading={historyLoading}
+                  managementConfirmed={managementConfirmed}
+                  managementPolicyLocked={managementConfirmed || finalized}
+                  managementSavedRowsOnly={
+                    (managementConfirmed && !isChief) || finalized
+                  }
+                  // Kỳ đã kết thúc: mọi người chỉ còn Ngày chi + Nguồn chi.
+                  managementDateSourceOnly={
+                    finalized ||
+                    (managementConfirmed && !isChief && !isLockedPaymentEditor)
+                  }
+                  managementConfirmedByName={managementConfirmedByName}
+                  managementConfirmedAt={managementConfirmedAt}
+                  historyCount={historyList.length}
+                  isChief={isChief}
+                  finalized={finalized}
+                  finalizedByName={finalizedByName}
+                  finalizedAt={finalizedAt}
+                  lockActionLoading={lockActionLoading || confirmingManagement}
+                  onConfirmManagement={handleConfirmManagementExpense}
+                  onUnconfirmManagement={handleUnconfirmManagementExpense}
+                  onFinalize={handleFinalize}
+                  onReopen={handleReopen}
+                  onExportInvoices={handleExportInvoices}
+                  exportingInvoices={exportingInvoices}
+                  einvoices={einvoices}
+                  onUnlinkEInvoice={isChief ? handleUnlinkEInvoice : undefined}
+                  unlinkingEInvoiceId={unlinkingEInvoiceId}
+                  schoolName={resolvedSchool?.name}
+                  schoolYear={selectedSchoolYear}
+                  teacherSplit={schoolTeacherApplies}
+                  schoolTeacherSection={
+                    showTeacherTable ? (
+                      <SchoolTeacherTable
+                        rows={schoolTeacherRows}
+                        inputRows={inputRows}
+                        defaultUnitPrice={Number(
+                          activeSubject?.policies?.[0]?.data?.giaovien || 0,
+                        )}
+                        schoolId={
+                          schoolTeacherSchoolId ?? resolvedSchoolId ?? null
+                        }
+                        teachers={schoolTeachers}
+                        otherSubjectGross={schoolTeacherOtherGross}
+                        onTeacherSaved={(teacher) =>
+                          setSchoolTeachers((prev) =>
+                            [
+                              ...prev.filter((item) => item.id !== teacher.id),
+                              teacher,
+                            ].sort((a, b) =>
+                              a.name.localeCompare(b.name, "vi"),
+                            ),
+                          )
+                        }
+                        updateRow={updateSchoolTeacherRow}
+                        addRow={addSchoolTeacherRow}
+                        removeRow={removeSchoolTeacherRow}
+                        dateSourceOnly={finalized}
+                        approval={schoolTeacherApproval}
+                        canApprove={canApproveSchoolTeacher}
+                        approving={approvingSchoolTeacher}
+                        dirty={
+                          schoolTeacherSignature(
+                            schoolTeacherRows,
+                            inputRows,
+                          ) !== schoolTeacherSavedSignature
+                        }
+                        onApprove={handleApproveSchoolTeacher}
+                      />
+                    ) : undefined
+                  }
+                />
+              )}
 
               {/*
                 Sales admin: xem đầy đủ mọi bảng ở chế độ chỉ đọc và chỉ được
                 thao tác nút xác nhận đúng BBCS.
                 Kế toán trưởng đi qua form đầy đủ phía trên giống Kế toán/Giám đốc.
               */}
-              {isSalesAdmin && <ExpenseFormTable
-                inputRows={inputRows}
-                revenueRows={revenueRows}
-                managementRows={managementRows}
-                subjects={activeSubject}
-                editingItem={editingItem}
-                loading={loading}
-                addRow={addInputRow}
-                removeRevenueRow={removeRevenueRow}
-                removeManagementRow={removeManagementRow}
-                updateInputRow={updateInputRow}
-                updateRevenueRow={updateRevenueRow}
-                updateManagementRow={updateManagementRow}
-                handleSubmit={handleSubmit}
-                handleCancelEdit={handleCancelEdit}
-                readOnly
-                managementConfirmed={managementConfirmed}
-                managementReadOnly
-                managementConfirmedByName={managementConfirmedByName}
-                managementConfirmedAt={managementConfirmedAt}
-                canConfirmManagement={isSalesAdmin}
-                confirmingManagement={confirmingManagement}
-                onConfirmManagement={handleConfirmManagementExpense}
-                finalized={finalized}
-                finalizedByName={finalizedByName}
-                finalizedAt={finalizedAt}
-                schoolName={resolvedSchool?.name}
-                schoolYear={selectedSchoolYear}
-                handleViewHistory={handleViewHistory}
-                historyLoading={historyLoading}
-                historyCount={historyList.length}
-              />}
+              {isSalesAdmin && (
+                <ExpenseFormTable
+                  inputRows={inputRows}
+                  revenueRows={revenueRows}
+                  managementRows={managementRows}
+                  subjects={activeSubject}
+                  editingItem={editingItem}
+                  loading={loading}
+                  addRow={addInputRow}
+                  removeRevenueRow={removeRevenueRow}
+                  removeManagementRow={removeManagementRow}
+                  updateInputRow={updateInputRow}
+                  updateRevenueRow={updateRevenueRow}
+                  updateManagementRow={updateManagementRow}
+                  handleSubmit={handleSubmit}
+                  handleCancelEdit={handleCancelEdit}
+                  readOnly
+                  managementConfirmed={managementConfirmed}
+                  managementReadOnly
+                  managementConfirmedByName={managementConfirmedByName}
+                  managementConfirmedAt={managementConfirmedAt}
+                  canConfirmManagement={isSalesAdmin}
+                  confirmingManagement={confirmingManagement}
+                  onConfirmManagement={handleConfirmManagementExpense}
+                  finalized={finalized}
+                  finalizedByName={finalizedByName}
+                  finalizedAt={finalizedAt}
+                  schoolName={resolvedSchool?.name}
+                  schoolYear={selectedSchoolYear}
+                  handleViewHistory={handleViewHistory}
+                  historyLoading={historyLoading}
+                  historyCount={historyList.length}
+                />
+              )}
 
               {/* SAVED DATA */}
               <SavedDataSection

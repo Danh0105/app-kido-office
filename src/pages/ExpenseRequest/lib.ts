@@ -339,6 +339,38 @@ export type ActionKey =
   | "stockInReceipt"
   | "stockInAccept";
 
+/**
+ * Kế toán trưởng là người vận hành dự phòng cho mọi bước chuyển của đề xuất
+ * chi. Không gồm tạo/sửa/xoá đề xuất hay kiểm duyệt chính sách Sales Admin.
+ * Backend vẫn chốt loại, trạng thái và cấm cùng một người làm hai bước kiểm
+ * soát liên tiếp.
+ */
+const CHIEF_ACCOUNTANT_WORKFLOW_STEPS = new Set<ActionKey>([
+  "submitToChief",
+  "chiefApprove",
+  "chiefReject",
+  "approve",
+  "reject",
+  "withdraw",
+  "paymentOrder",
+  "editPaymentOrder",
+  "cashReleased",
+  "cashReceived",
+  "confirmSpent",
+  "partialSpent",
+  "confirmNotSpent",
+  "fundReturned",
+  "remainderReturned",
+  "stockIssueOrder",
+  "equipmentReceived",
+  "equipmentReturned",
+  "repairAccept",
+  "repairReject",
+  "reassignRepair",
+  "stockInReceipt",
+  "stockInAccept",
+]);
+
 type ExpenseStepDefinition = {
   roles: readonly string[];
   from: readonly ExpenseStatus[];
@@ -588,6 +620,9 @@ export const canDoStep = (
   user = { id: Number(getEmployeeId()), roles: getEmployeeRoles() }
 ) => {
   const definition = EXPENSE_STEPS[step];
+  const chiefWorkflowOverride =
+    user.roles.includes("ketoan_truong") &&
+    CHIEF_ACCOUNTANT_WORKFLOW_STEPS.has(step);
 
   if (!req.isMonthlyExpense && step === "partialSpent") return false;
 
@@ -605,6 +640,7 @@ export const canDoStep = (
     if (step === "partialSpent" && !canSplitMonthlyOrder(req)) return false;
     if (
       (step === "approve" || step === "reject") &&
+      !chiefWorkflowOverride &&
       !user.roles.some((role) => ["director", "director_la"].includes(role))
     ) {
       return false;
@@ -651,8 +687,8 @@ export const canDoStep = (
         : req.stockInHandlerId;
     return (
       Number.isFinite(user.id) &&
-      assigneeId != null &&
-      Number(assigneeId) === user.id &&
+      (chiefWorkflowOverride ||
+        (assigneeId != null && Number(assigneeId) === user.id)) &&
       definition.from.includes(req.status) &&
       (!definition.kinds || definition.kinds.includes(requestKindOf(req)))
     );
@@ -664,16 +700,17 @@ export const canDoStep = (
 
   if (
     !Number.isFinite(user.id) ||
-    !definition.roles.some((role) => user.roles.includes(role)) ||
+    (!chiefWorkflowOverride &&
+      !definition.roles.some((role) => user.roles.includes(role))) ||
     !definition.from.includes(req.status) ||
     (definition.kinds && !definition.kinds.includes(requestKindOf(req)))
   ) {
     return false;
   }
 
-  const hasOverrideRole = definition.overrideRoles?.some((role) =>
-    user.roles.includes(role)
-  );
+  const hasOverrideRole =
+    chiefWorkflowOverride ||
+    definition.overrideRoles?.some((role) => user.roles.includes(role));
   if (hasOverrideRole) return true;
 
   return owner === definition.owner;
@@ -682,11 +719,7 @@ export const canDoStep = (
 // Actions the current user may take on a request, derived from status + role + ownership.
 // Backend is the source of truth; this only decides which buttons to show.
 export const availableActions = (req: ExpenseRequest): ActionKey[] => {
-  // Kế toán trưởng không thao tác ở màn này — trừ khi được Giám đốc chỉ định
-  // xử lý/nghiệm thu thiết bị mua từ nhà cung cấp.
-  const readOnly = hasRole("ketoan_truong");
-  // ...nhưng giữ bước của quy trình Kế toán (nhập số liệu thay Kế toán, duyệt).
-  const chiefSteps: ActionKey[] = ["submitToChief", "chiefApprove", "chiefReject"];
+  const chiefWorkflowOverride = hasRole("ketoan_truong");
   // Người bàn giao đã từ chối thì không làm bước kỹ thuật nữa (BE chặn), chờ
   // Giám đốc chọn người thay thế.
   const me = Number(getEmployeeId());
@@ -695,10 +728,8 @@ export const availableActions = (req: ExpenseRequest): ActionKey[] => {
       a.role === "HANDOVER" && a.status === "DECLINED" && a.employeeId === me
   );
   return (Object.keys(EXPENSE_STEPS) as ActionKey[]).filter((step) => {
-    if (readOnly && !EXPENSE_STEPS[step].assignee && !chiefSteps.includes(step)) {
-      return false;
-    }
     if (
+      !chiefWorkflowOverride &&
       declinedHandover &&
       (step === "stockIssueOrder" || step === "repairAccept")
     ) {
@@ -743,6 +774,7 @@ const ASSIGNMENT_REPLACER_ROLES = [
   "director_la",
   "saleadmin",
   "salesadmin_la",
+  "ketoan_truong",
 ];
 
 /** Người đang được giao (chưa từ chối, chưa bị thay) + người từ chối chờ thay. */

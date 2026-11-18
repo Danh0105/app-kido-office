@@ -2,17 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Send, ClipboardList, MapPin } from "lucide-react";
 import { dailyReportApi } from "@/service/report";
-<<<<<<< HEAD
 import { getSocket } from "@/utils/socket";
 import {
   getEmployeeId,
   getEmployeeName,
   isDirectorAssistantViewer,
 } from "@/utils/auth";
-=======
-import { getReportSocket } from "@/utils/socket";
-import { getEmployeeId, getEmployeeName } from "@/utils/auth";
->>>>>>> 2606e04 (hr)
 
 type Task = {
   id: number;
@@ -217,10 +212,13 @@ export default function ReportDetailPopup({ reportId, onClose }: Props) {
                 Danh sách công việc ({report?.tasks?.length || 0})
               </div>
               {report?.tasks?.map((task, idx) => {
-                const { tags: titleTags, cleaned: cleanedTitle } = extractTags(task.title);
-                const { tags: contentTags, cleaned: cleanedContent } = task.content
-                  ? extractTags(task.content)
-                  : { tags: [], cleaned: "" };
+                const { tags: titleTags, cleaned: cleanedTitle } = extractTags(
+                  task.title,
+                );
+                const { tags: contentTags, cleaned: cleanedContent } =
+                  task.content
+                    ? extractTags(task.content)
+                    : { tags: [], cleaned: "" };
                 const allTags = [...titleTags, ...contentTags];
 
                 return (
@@ -233,13 +231,17 @@ export default function ReportDetailPopup({ reportId, onClose }: Props) {
                         {idx + 1}
                       </span>
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium">{cleanedTitle}</div>
+                        <div className="text-sm font-medium">
+                          {cleanedTitle}
+                        </div>
                         {allTags.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-1">
                             {allTags.map((tag, i) => (
                               <span
                                 key={i}
-                                className={`px-2 py-[1px] text-[10px] font-medium rounded-full ${tagColors[i % tagColors.length]}`}
+                                className={`px-2 py-[1px] text-[10px] font-medium rounded-full ${
+                                  tagColors[i % tagColors.length]
+                                }`}
                               >
                                 {tag}
                               </span>
@@ -326,140 +328,154 @@ export default function ReportDetailPopup({ reportId, onClose }: Props) {
 
             {/* INPUT */}
             {canSendMessage ? (
-            <div className="relative border-t px-3 py-2 bg-white">
-              {showSuggestions && (() => {
-                const tasks = report?.tasks || [];
-                const filtered = tasks.filter((t) =>
-                  t.title.toLowerCase().includes(suggestionFilter.toLowerCase()),
-                );
-                if (filtered.length === 0) return null;
+              <div className="relative border-t px-3 py-2 bg-white">
+                {showSuggestions &&
+                  (() => {
+                    const tasks = report?.tasks || [];
+                    const filtered = tasks.filter((t) =>
+                      t.title
+                        .toLowerCase()
+                        .includes(suggestionFilter.toLowerCase()),
+                    );
+                    if (filtered.length === 0) return null;
 
-                return (
-                  <div className="absolute bottom-full left-3 right-3 bg-white border rounded-xl shadow-lg max-h-[180px] overflow-y-auto z-10">
-                    {filtered.map((task, i) => (
-                      <button
-                        key={task.id}
-                        className={`w-full text-left px-3 py-2 text-sm hover:bg-orange-50 transition ${
-                          i === selectedSuggestionIdx ? "bg-orange-50" : ""
-                        }`}
-                        onMouseDown={(e) => {
+                    return (
+                      <div className="absolute bottom-full left-3 right-3 bg-white border rounded-xl shadow-lg max-h-[180px] overflow-y-auto z-10">
+                        {filtered.map((task, i) => (
+                          <button
+                            key={task.id}
+                            className={`w-full text-left px-3 py-2 text-sm hover:bg-orange-50 transition ${
+                              i === selectedSuggestionIdx ? "bg-orange-50" : ""
+                            }`}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              const cursor =
+                                inputRef.current?.selectionStart || 0;
+                              const before = newMessage.slice(0, cursor);
+                              const after = newMessage.slice(cursor);
+                              const hashStart = before.lastIndexOf("#");
+                              const inserted = `#${task.title.replace(
+                                /\s+/g,
+                                "_",
+                              )} `;
+                              setNewMessage(
+                                before.slice(0, hashStart) + inserted + after,
+                              );
+                              setShowSuggestions(false);
+                              setSuggestionFilter("");
+                              setSelectedSuggestionIdx(0);
+                              inputRef.current?.focus();
+                            }}
+                          >
+                            <span className="text-orange-500 font-medium">
+                              #
+                            </span>
+                            {task.title}
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })()}
+
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={newMessage}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setNewMessage(val);
+
+                      const cursor = e.target.selectionStart || 0;
+                      const textBefore = val.slice(0, cursor);
+                      const hashIdx = textBefore.lastIndexOf("#");
+
+                      if (hashIdx !== -1) {
+                        const charBeforeHash = textBefore[hashIdx - 1];
+                        if (hashIdx === 0 || charBeforeHash === " ") {
+                          const query = textBefore.slice(hashIdx + 1);
+                          if (!query.includes(" ")) {
+                            setShowSuggestions(true);
+                            setSuggestionFilter(query);
+                            setSelectedSuggestionIdx(0);
+                            return;
+                          }
+                        }
+                      }
+                      setShowSuggestions(false);
+                    }}
+                    onKeyDown={(e) => {
+                      if (showSuggestions) {
+                        const tasks = report?.tasks || [];
+                        const filtered = tasks.filter((t) =>
+                          t.title
+                            .toLowerCase()
+                            .includes(suggestionFilter.toLowerCase()),
+                        );
+
+                        if (e.key === "ArrowDown") {
                           e.preventDefault();
+                          setSelectedSuggestionIdx((prev) =>
+                            prev < filtered.length - 1 ? prev + 1 : 0,
+                          );
+                          return;
+                        }
+                        if (e.key === "ArrowUp") {
+                          e.preventDefault();
+                          setSelectedSuggestionIdx((prev) =>
+                            prev > 0 ? prev - 1 : filtered.length - 1,
+                          );
+                          return;
+                        }
+                        if (e.key === "Enter" && filtered.length > 0) {
+                          e.preventDefault();
+                          const task = filtered[selectedSuggestionIdx];
                           const cursor = inputRef.current?.selectionStart || 0;
                           const before = newMessage.slice(0, cursor);
                           const after = newMessage.slice(cursor);
                           const hashStart = before.lastIndexOf("#");
-                          const inserted = `#${task.title.replace(/\s+/g, "_")} `;
+                          const inserted = `#${task.title.replace(
+                            /\s+/g,
+                            "_",
+                          )} `;
                           setNewMessage(
                             before.slice(0, hashStart) + inserted + after,
                           );
                           setShowSuggestions(false);
                           setSuggestionFilter("");
                           setSelectedSuggestionIdx(0);
-                          inputRef.current?.focus();
-                        }}
-                      >
-                        <span className="text-orange-500 font-medium">#</span>
-                        {task.title}
-                      </button>
-                    ))}
-                  </div>
-                );
-              })()}
-
-              <div className="flex items-center gap-2">
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={newMessage}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setNewMessage(val);
-
-                    const cursor = e.target.selectionStart || 0;
-                    const textBefore = val.slice(0, cursor);
-                    const hashIdx = textBefore.lastIndexOf("#");
-
-                    if (hashIdx !== -1) {
-                      const charBeforeHash = textBefore[hashIdx - 1];
-                      if (hashIdx === 0 || charBeforeHash === " ") {
-                        const query = textBefore.slice(hashIdx + 1);
-                        if (!query.includes(" ")) {
-                          setShowSuggestions(true);
-                          setSuggestionFilter(query);
-                          setSelectedSuggestionIdx(0);
+                          return;
+                        }
+                        if (e.key === "Escape") {
+                          setShowSuggestions(false);
                           return;
                         }
                       }
-                    }
-                    setShowSuggestions(false);
-                  }}
-                  onKeyDown={(e) => {
-                    if (showSuggestions) {
-                      const tasks = report?.tasks || [];
-                      const filtered = tasks.filter((t) =>
-                        t.title.toLowerCase().includes(suggestionFilter.toLowerCase()),
-                      );
 
-                      if (e.key === "ArrowDown") {
+                      if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
-                        setSelectedSuggestionIdx((prev) =>
-                          prev < filtered.length - 1 ? prev + 1 : 0,
-                        );
-                        return;
+                        handleSend();
                       }
-                      if (e.key === "ArrowUp") {
-                        e.preventDefault();
-                        setSelectedSuggestionIdx((prev) =>
-                          prev > 0 ? prev - 1 : filtered.length - 1,
-                        );
-                        return;
-                      }
-                      if (e.key === "Enter" && filtered.length > 0) {
-                        e.preventDefault();
-                        const task = filtered[selectedSuggestionIdx];
-                        const cursor = inputRef.current?.selectionStart || 0;
-                        const before = newMessage.slice(0, cursor);
-                        const after = newMessage.slice(cursor);
-                        const hashStart = before.lastIndexOf("#");
-                        const inserted = `#${task.title.replace(/\s+/g, "_")} `;
-                        setNewMessage(
-                          before.slice(0, hashStart) + inserted + after,
-                        );
-                        setShowSuggestions(false);
-                        setSuggestionFilter("");
-                        setSelectedSuggestionIdx(0);
-                        return;
-                      }
-                      if (e.key === "Escape") {
-                        setShowSuggestions(false);
-                        return;
-                      }
-                    }
-
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSend();
-                    }
-                  }}
-                  onBlur={() => {
-                    setTimeout(() => setShowSuggestions(false), 150);
-                  }}
-                  placeholder="Nhập tin nhắn... (# để gắn tag)"
-                  className="flex-1 bg-gray-100 rounded-full px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-300"
-                />
-                <button
-                  onClick={handleSend}
-                  disabled={!newMessage.trim() || sending}
-                  className="w-10 h-10 bg-orange-500 text-white rounded-full flex items-center justify-center disabled:opacity-40 transition active:scale-95"
-                >
-                  {sending ? (
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <Send className="w-4 h-4" />
-                  )}
-                </button>
+                    }}
+                    onBlur={() => {
+                      setTimeout(() => setShowSuggestions(false), 150);
+                    }}
+                    placeholder="Nhập tin nhắn... (# để gắn tag)"
+                    className="flex-1 bg-gray-100 rounded-full px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-300"
+                  />
+                  <button
+                    onClick={handleSend}
+                    disabled={!newMessage.trim() || sending}
+                    className="w-10 h-10 bg-orange-500 text-white rounded-full flex items-center justify-center disabled:opacity-40 transition active:scale-95"
+                  >
+                    {sending ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
               </div>
-            </div>
             ) : (
               <p className="border-t bg-white px-3 py-2 text-center text-xs text-gray-400">
                 Chỉ xem — trợ lý giám đốc không gửi tin nhắn.

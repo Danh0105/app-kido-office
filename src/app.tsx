@@ -8,6 +8,20 @@ import { initWebPush } from "./utils/webPush";
 
 import { registerSW } from "virtual:pwa-register";
 
+// Khi service worker mới tiếp quản, trang hiện tại vẫn đang chạy bundle cũ đã
+// nạp vào bộ nhớ. Tải lại đúng một lần để tránh tiếp tục gọi code lỗi thời sau
+// khi production đã được cập nhật.
+if ("serviceWorker" in navigator) {
+    let refreshing = false;
+
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (refreshing) return;
+
+        refreshing = true;
+        window.location.reload();
+    });
+}
+
 registerSW({
     immediate: true,
 });

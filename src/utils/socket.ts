@@ -58,12 +58,42 @@ export const getSuggestSocket = () => {
         });
     }
 
-    return suggestSocketInstance;
+    return defaultSocket;
+};
+
+// Lazy /report namespace — only used by ReportDetailPopup. Handshake key is `userId`
+// (not `employeeId`) per the backend contract for this namespace.
+export const getReportSocket = (): Socket | null => {
+    const userId = getEmployeeId();
+    if (!userId) return null;
+
+    const userIdKey = String(userId);
+
+    if (reportSocket && reportSocketUserId !== userIdKey) {
+        reportSocket.disconnect();
+        reportSocket = null;
+        reportSocketUserId = null;
+    }
+
+    if (!reportSocket) {
+        reportSocketUserId = userIdKey;
+        reportSocket = io(`${SOCKET_URL}/report`, {
+            ...RECONNECTION_OPTIONS,
+            query: { userId: userIdKey },
+            auth: { userId: userIdKey },
+        });
+
+        reportSocket.on("connect_error", (err) => {
+            console.error("REPORT SOCKET ERROR", err);
+        });
+    }
+
+    return reportSocket;
 };
 
 export const disconnectSockets = () => {
-    socketInstance?.disconnect();
-    suggestSocketInstance?.disconnect();
+    defaultSocket?.disconnect();
+    reportSocket?.disconnect();
 
     socketInstance = null;
     suggestSocketInstance = null;

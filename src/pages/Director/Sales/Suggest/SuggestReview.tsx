@@ -316,7 +316,7 @@ export default function SuggestReview() {
           )}
           {data.fileUrl && (
             <a
-              href={`https://sales.kidoedu.vn${data.fileUrl}`}
+              href={`${import.meta.env.VITE_API_URL}${data.fileUrl}`}
               target="_blank"
               className="inline-flex items-center gap-1 text-xs text-blue-500 font-medium"
             >

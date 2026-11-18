@@ -1,4 +1,5 @@
 import api from './api';
+import { reconcileNotifications } from '@/hook/useRealtimeNotifications';
 
 export const notificationApi = {
     // ======================================================
@@ -13,12 +14,23 @@ export const notificationApi = {
         return res.data;
     },
 
+    // 20 bản mới nhất chưa đọc — dùng để seed store realtime khi mở app.
+    getUnread: async () => {
+        const res = await api.get(
+            '/notifications/unread',
+        );
+
+        return res.data;
+    },
+
     markAsRead: async (
         id: number,
     ) => {
         const res = await api.patch(
             `/notifications/${id}/read`,
         );
+
+        reconcileNotifications();
 
         return res.data;
     },
@@ -27,6 +39,8 @@ export const notificationApi = {
         const res = await api.patch(
             '/notifications/read-all',
         );
+
+        reconcileNotifications();
 
         return res.data;
     },

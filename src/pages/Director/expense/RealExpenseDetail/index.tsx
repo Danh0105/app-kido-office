@@ -2037,7 +2037,7 @@ export default function RealExpenseDetail({
                                 <td className="px-5 py-4 text-base font-semibold">
                                   {sg.fileUrl ? (
                                     <a
-                                      href={`https://sales.kidoedu.vn${sg.fileUrl}`}
+                                      href={`${import.meta.env.VITE_API_URL}${sg.fileUrl}`}
                                       target="_blank"
                                       rel="noreferrer"
                                       className="inline-flex items-center gap-1 text-blue-600 font-bold hover:underline"

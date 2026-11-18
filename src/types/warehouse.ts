@@ -8,6 +8,7 @@ export type WarehouseItem = {
   imei?: string | null;
   quantity: number;
   note?: string | null;
+  imageUrl?: string | null; // /uploads/warehouse-items/...
   createdBy?: number;
   creator?: { id: number; name?: string };
   createdAt?: string;
@@ -21,6 +22,9 @@ export type WarehouseReceiptItem = {
   name: string;
   quantity: number;
   unit?: string | null;
+  unitPrice?: number | null;
+  serial?: string | null; // Số serial/IMEI
+  note?: string | null; // Ghi chú chi tiết cho dòng thiết bị
 };
 
 export type WarehouseReceipt = {

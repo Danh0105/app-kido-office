@@ -93,6 +93,7 @@ export default function CheckinAlertBanner() {
   // Báo động đẩy về qua socket thì tải lại ngay, không đợi hết nhịp poll.
   useEffect(() => {
     const socket = getSocket();
+    if (!socket) return;
     socket.on("teaching-checkin-alert:new", load);
     return () => {
       socket.off("teaching-checkin-alert:new", load);

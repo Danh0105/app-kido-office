@@ -44,7 +44,7 @@ export default function Login({ onSuccess }: Props) {
   const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState("");
   const [loginNotice, setLoginNotice] = useState<LoginNotice | null>(
-    savedLoginNotice
+    savedLoginNotice,
   );
   const [pendingUser, setPendingUser] = useState<any>(() => {
     try {
@@ -64,7 +64,7 @@ export default function Login({ onSuccess }: Props) {
     navigate(
       EMPLOYEE_ROLES.some((r) => roles.includes(r))
         ? "/employee/home"
-        : "/director"
+        : "/director",
     );
   };
 
@@ -103,7 +103,7 @@ export default function Login({ onSuccess }: Props) {
     try {
       const result = await loginWithRetry(
         { phone: form.phone, password: form.password },
-        () => setRetrying(true)
+        () => setRetrying(true),
       );
 
       const message = loginErrorMessage(result);
@@ -122,7 +122,7 @@ export default function Login({ onSuccess }: Props) {
           JSON.stringify({
             phone: form.phone,
             password: form.password,
-          })
+          }),
         );
       } else {
         localStorage.removeItem("remember_login");
@@ -132,9 +132,18 @@ export default function Login({ onSuccess }: Props) {
       // token, cả hai đều không có hạn chờ. Trước đây `await` ở đây nên mạng yếu
       // là kẹt luôn ở màn đăng nhập dù token đã lưu xong — đăng nhập được rồi
       // mà người dùng tưởng hỏng.
+      ensureRealtimeConnection();
       void initWebPush().catch((pushError) => {
         console.warn("Web push initialization failed after login:", pushError);
       });
+      if (Capacitor.isNativePlatform()) {
+        void initNativePush().catch((pushError) => {
+          console.warn(
+            "Native push initialization failed after login:",
+            pushError,
+          );
+        });
+      }
 
       finishLogin(data.user, data.loginNotice);
     } catch (err: any) {
@@ -263,10 +272,11 @@ export default function Login({ onSuccess }: Props) {
             <FaceVerify
               onSuccess={(user: any, notice?: LoginNotice) => {
                 // Cùng lý do với đăng nhập mật khẩu: không chờ đăng ký thông báo.
+                ensureRealtimeConnection();
                 void initWebPush().catch((pushError) => {
                   console.warn(
                     "Web push initialization failed after face login:",
-                    pushError
+                    pushError,
                   );
                 });
                 localStorage.setItem("user", JSON.stringify(user));

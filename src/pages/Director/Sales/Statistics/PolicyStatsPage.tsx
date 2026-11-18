@@ -1117,7 +1117,7 @@ export default function PolicyStatsPage({
                                   <td className="px-3 py-2">
                                     {sg.fileUrl && (
                                       <a
-                                        href={`https://sales.kidoedu.vn${sg.fileUrl}`}
+                                        href={`${import.meta.env.VITE_API_URL}${sg.fileUrl}`}
                                         target="_blank"
                                         className="text-blue-500"
                                       >
@@ -1642,7 +1642,7 @@ export default function PolicyStatsPage({
                                           )}
                                           {sg.fileUrl && (
                                             <a
-                                              href={`https://sales.kidoedu.vn${sg.fileUrl}`}
+                                              href={`${import.meta.env.VITE_API_URL}${sg.fileUrl}`}
                                               target="_blank"
                                               onClick={(e) =>
                                                 e.stopPropagation()

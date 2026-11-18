@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
-import { Plus, Pencil } from "lucide-react";
+import { Plus, Pencil, QrCode, Camera } from "lucide-react";
 
 import HeaderWithBack from "@/components/HeaderWithBack";
 import BottomNav from "@/layout/BottomNav";
@@ -11,6 +11,8 @@ import type { WarehouseItem, WarehouseReceipt } from "@/types/warehouse";
 
 import WarehouseItemModal from "./components/WarehouseItemModal";
 import WarehouseReceiptModal from "./components/WarehouseReceiptModal";
+import WarehouseItemQrModal from "./components/WarehouseItemQrModal";
+import { toFileUrl } from "./warehouseQr";
 
 type Tab = "items" | "receipts";
 
@@ -18,7 +20,13 @@ const fmtDate = (value?: string) =>
   value ? new Date(value).toLocaleString("vi-VN") : "—";
 
 export default function WarehousePage() {
-  const canManage = hasRole("ky_thuat", "director", "director_la", "saleadmin", "salesadmin_la");
+  const canManage = hasRole(
+    "ky_thuat",
+    "director",
+    "director_la",
+    "saleadmin",
+    "salesadmin_la",
+  );
   // Trợ lý GĐ xem cả lịch sử phiếu nhập/xuất nhưng không lập phiếu.
   const canViewReceipts = canManage || isDirectorAssistantViewer();
 
@@ -26,8 +34,11 @@ export default function WarehousePage() {
   const [items, setItems] = useState<WarehouseItem[]>([]);
   const [receipts, setReceipts] = useState<WarehouseReceipt[]>([]);
   const [loading, setLoading] = useState(true);
-  const [itemModal, setItemModal] = useState<WarehouseItem | null | undefined>(undefined);
+  const [itemModal, setItemModal] = useState<WarehouseItem | null | undefined>(
+    undefined,
+  );
   const [receiptModalOpen, setReceiptModalOpen] = useState(false);
+  const [qrItem, setQrItem] = useState<WarehouseItem | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -102,24 +113,54 @@ export default function WarehousePage() {
                     key={item.id}
                     className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100 flex items-center justify-between"
                   >
-                    <div>
-                      <p className="font-medium text-sm text-gray-800">{item.name}</p>
-                      <p className="text-xs text-gray-400">
-                        {item.code}
-                        {item.imei ? ` · IMEI: ${item.imei}` : ""}
-                      </p>
-                      {item.note && (
-                        <p className="text-xs text-gray-400 mt-0.5">{item.note}</p>
+                    <button
+                      type="button"
+                      onClick={() => setQrItem(item)}
+                      className="flex items-center gap-3 min-w-0 text-left"
+                    >
+                      {item.imageUrl ? (
+                        <img
+                          src={toFileUrl(item.imageUrl)}
+                          alt={item.name}
+                          className="w-12 h-12 shrink-0 rounded-lg object-cover border"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 shrink-0 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400">
+                          <Camera size={18} />
+                        </div>
                       )}
-                    </div>
-                    <div className="flex items-center gap-2">
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm text-gray-800">
+                          {item.name}
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          {item.code}
+                          {item.imei ? ` · IMEI: ${item.imei}` : ""}
+                        </p>
+                        {item.note && (
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            {item.note}
+                          </p>
+                        )}
+                      </div>
+                    </button>
+                    <div className="flex items-center gap-2 shrink-0">
                       <span
                         className={`text-sm font-semibold ${
-                          item.quantity > 0 ? "text-emerald-600" : "text-gray-400"
+                          item.quantity > 0
+                            ? "text-emerald-600"
+                            : "text-gray-400"
                         }`}
                       >
                         {item.quantity} {item.unit}
                       </span>
+                      <button
+                        onClick={() => setQrItem(item)}
+                        title="Ảnh & mã QR"
+                        className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600"
+                      >
+                        <QrCode size={14} />
+                      </button>
                       {canManage && (
                         <button
                           onClick={() => setItemModal(item)}
@@ -159,12 +200,26 @@ export default function WarehousePage() {
                       <p className="font-medium text-sm text-gray-800">
                         {r.type === "IN" ? "📥" : "📤"} {r.code}
                       </p>
-                      <p className="text-xs text-gray-400">{fmtDate(r.createdAt)}</p>
+                      <p className="text-xs text-gray-400">
+                        {fmtDate(r.createdAt)}
+                      </p>
                     </div>
                     <ul className="mt-1 text-xs text-gray-600 space-y-0.5">
                       {r.items.map((line, i) => (
                         <li key={i}>
                           • {line.name} × {line.quantity} {line.unit}
+                          {line.unitPrice != null &&
+                            ` · ${line.unitPrice.toLocaleString("vi-VN")}đ`}
+                          {line.serial && (
+                            <p className="pl-3 text-gray-500 whitespace-pre-line">
+                              Serial/IMEI: {line.serial}
+                            </p>
+                          )}
+                          {line.note && (
+                            <p className="pl-3 text-gray-400 whitespace-pre-line">
+                              {line.note}
+                            </p>
+                          )}
                         </li>
                       ))}
                     </ul>
@@ -193,6 +248,19 @@ export default function WarehousePage() {
             load();
             toast.success("Đã lưu thiết bị");
           }}
+        />
+      )}
+
+      {qrItem && (
+        <WarehouseItemQrModal
+          item={qrItem}
+          canManage={canManage}
+          onClose={() => setQrItem(null)}
+          onImageChanged={(updated) =>
+            setItems((prev) =>
+              prev.map((it) => (it.id === updated.id ? updated : it)),
+            )
+          }
         />
       )}
 

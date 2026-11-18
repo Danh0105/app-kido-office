@@ -37,6 +37,7 @@ export default function CheckinAlertWatcher() {
     let socket: ReturnType<typeof getSocket>;
     try {
       socket = getSocket();
+      if (!socket) return;
     } catch {
       return;
     }

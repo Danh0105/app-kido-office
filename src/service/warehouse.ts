@@ -24,7 +24,13 @@ export type UpdateWarehouseItemPayload = {
 
 export type CreateWarehouseReceiptPayload = {
   type: WarehouseReceiptType;
-  items: { warehouseItemId: number; quantity: number }[];
+  items: {
+    warehouseItemId: number;
+    quantity: number;
+    serial?: string;
+    unitPrice?: number;
+    note?: string;
+  }[];
   note?: string;
 };
 
@@ -51,6 +57,13 @@ export const warehouseApi = {
     data: UpdateWarehouseItemPayload,
   ): Promise<WarehouseItem> => {
     const res = await api.patch(`${BASE}/items/${id}`, data);
+    return res.data;
+  },
+
+  uploadItemImage: async (id: number, image: Blob): Promise<WarehouseItem> => {
+    const form = new FormData();
+    form.append("image", image, "device.jpg");
+    const res = await api.post(`${BASE}/items/${id}/image`, form);
     return res.data;
   },
 

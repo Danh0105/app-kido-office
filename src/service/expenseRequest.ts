@@ -1,4 +1,5 @@
 import api from "./api";
+import { reconcileNotifications } from "@/hook/useRealtimeNotifications";
 import type {
   CashflowItemsResponse,
   CashflowSheetResponse,
@@ -545,6 +546,7 @@ export const expenseNotificationApi = {
 
   markAsRead: async (id: number): Promise<{ success: boolean }> => {
     const res = await api.patch(`/notifications/expense/${id}/read`);
+    reconcileNotifications();
     return res.data;
   },
 
@@ -554,6 +556,7 @@ export const expenseNotificationApi = {
     const res = await api.patch(`/notifications/expense/read-all`, undefined, {
       params: query,
     });
+    reconcileNotifications();
     return res.data;
   },
 };

@@ -109,7 +109,9 @@ export default function WarehouseItemModal({
           </div>
 
           <div>
-            <label className="text-sm text-gray-600">Số IMEI (không bắt buộc)</label>
+            <label className="text-sm text-gray-600">
+              Số IMEI (không bắt buộc)
+            </label>
             <input
               type="text"
               value={imei}
@@ -122,7 +124,9 @@ export default function WarehouseItemModal({
 
           {!item && (
             <div>
-              <label className="text-sm text-gray-600">Số lượng tồn ban đầu</label>
+              <label className="text-sm text-gray-600">
+                Số lượng tồn ban đầu
+              </label>
               <input
                 type="number"
                 min={0}

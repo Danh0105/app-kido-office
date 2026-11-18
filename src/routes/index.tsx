@@ -8,6 +8,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/pages/Employee/Sales/Statistics/hooks/queryClient";
 import ScrollToTop from "@/components/ScrollToTop";
 import CheckinAlertWatcher from "@/components/CheckinAlertWatcher";
+import { RealtimeNotificationsBoot } from "@/hook/useRealtimeNotifications";
 
 
 export default function Index() {
@@ -20,6 +21,7 @@ export default function Index() {
       {/* Nghe báo động chưa check-in ở mọi màn, cần Router nên đặt trong đây. */}
       <CheckinAlertWatcher />
       <QueryClientProvider client={queryClient}>
+        <RealtimeNotificationsBoot />
         <ExportProvider>
           <AppRoutes />
         </ExportProvider>

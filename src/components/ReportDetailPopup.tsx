@@ -2,12 +2,17 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Send, ClipboardList, MapPin } from "lucide-react";
 import { dailyReportApi } from "@/service/report";
+<<<<<<< HEAD
 import { getSocket } from "@/utils/socket";
 import {
   getEmployeeId,
   getEmployeeName,
   isDirectorAssistantViewer,
 } from "@/utils/auth";
+=======
+import { getReportSocket } from "@/utils/socket";
+import { getEmployeeId, getEmployeeName } from "@/utils/auth";
+>>>>>>> 2606e04 (hr)
 
 type Task = {
   id: number;
@@ -71,7 +76,8 @@ export default function ReportDetailPopup({ reportId, onClose }: Props) {
   }, [reportId]);
 
   useEffect(() => {
-    const socket = getSocket();
+    const socket = getReportSocket();
+    if (!socket) return;
 
     const handleNewMessage = (data: any) => {
       if (data.reportId === reportId) {

@@ -282,6 +282,7 @@ export function useAppNotifications() {
   // ================= SOCKET =================
   useEffect(() => {
     const socket = getSocket();
+    if (!socket) return;
     const user = JSON.parse(localStorage.getItem("user") || "{}");
     if (!user?.id) return;
 
@@ -294,6 +295,7 @@ export function useAppNotifications() {
 
   useEffect(() => {
     const socket = getSocket();
+    if (!socket) return;
 
     const handleNew = (data: any) => {
       // Đếm lại từ server thay vì +1 thủ công: sự kiện này tới được đây nghĩa

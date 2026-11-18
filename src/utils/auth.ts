@@ -80,4 +80,6 @@ export const logout = () => {
 
     // clear header axios nếu có
     delete api.defaults.headers.common["Authorization"];
+
+    disconnectSockets();
 };

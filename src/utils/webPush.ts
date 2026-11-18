@@ -1,12 +1,15 @@
 import {
     getToken,
     onMessage,
-    isSupported,
 } from "firebase/messaging";
 
-import { messaging } from "@/firebase";
+import { toast } from "react-hot-toast";
+
+import { getMessagingSafe } from "@/firebase";
 import { employeeApi } from "@/service/employee";
 import { getDeviceType } from "./getDeviceType";
+import { reconcileNotifications } from "@/hook/useRealtimeNotifications";
+import { getSocket } from "./socket";
 
 let initialized = false;
 let initializationPromise: Promise<void> | null = null;
@@ -37,9 +40,9 @@ const initializeWebPush = async () => {
     try {
         if (initialized) return;
 
-        const supported = await isSupported();
+        const messaging = await getMessagingSafe();
 
-        if (!supported) {
+        if (!messaging) {
             console.log("❌ Firebase Messaging not supported on this browser");
             return;
         }
@@ -83,6 +86,21 @@ const initializeWebPush = async () => {
 
         onMessage(messaging, (payload) => {
             console.log("📩 Foreground:", payload);
+
+            // Socket already live → the realtime toast/badge already handled this,
+            // showing the push too would just duplicate it. Just resync counters.
+            const socket = getSocket();
+            if (socket?.connected) {
+                reconcileNotifications();
+                return;
+            }
+
+            reconcileNotifications();
+            const title = payload.notification?.title;
+            const body = payload.notification?.body;
+            if (title || body) {
+                toast([title, body].filter(Boolean).join(" — "));
+            }
         });
     } catch (err) {
         initialized = false;

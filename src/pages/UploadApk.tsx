@@ -24,7 +24,7 @@ export default function UploadApk() {
             setLoading(true);
 
             await axios.post(
-                "https://sales.kidoedu.vn/admin/version/upload",
+                `${import.meta.env.VITE_API_URL}/admin/version/upload`,
                 formData,
                 {
                     headers: {

@@ -7,9 +7,21 @@ import {
 } from "@/service/warehouse";
 import { getApiErrorMessage } from "@/utils/apiError";
 
-type LineDraft = { warehouseItemId: string; quantity: string };
+type LineDraft = {
+  warehouseItemId: string;
+  quantity: string;
+  serial: string;
+  unitPrice: string;
+  note: string;
+};
 
-const emptyLine = (): LineDraft => ({ warehouseItemId: "", quantity: "1" });
+const emptyLine = (): LineDraft => ({
+  warehouseItemId: "",
+  quantity: "1",
+  serial: "",
+  unitPrice: "",
+  note: "",
+});
 
 export default function WarehouseReceiptModal({
   items,
@@ -29,12 +41,14 @@ export default function WarehouseReceiptModal({
 
   const changeLine = (index: number, patch: Partial<LineDraft>) =>
     setLines((prev) =>
-      prev.map((line, i) => (i === index ? { ...line, ...patch } : line)),
+      prev.map((line, i) => (i === index ? { ...line, ...patch } : line))
     );
 
   const addLine = () => setLines((prev) => [...prev, emptyLine()]);
   const removeLine = (index: number) =>
-    setLines((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)));
+    setLines((prev) =>
+      prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)
+    );
 
   const itemById = (id: string) => items.find((it) => String(it.id) === id);
 
@@ -45,11 +59,21 @@ export default function WarehouseReceiptModal({
       return;
     }
     const invalidQty = filled.findIndex(
-      (l) => !/^\d+$/.test(l.quantity.trim()) || Number(l.quantity) <= 0,
+      (l) => !/^\d+$/.test(l.quantity.trim()) || Number(l.quantity) <= 0
     );
     if (invalidQty >= 0) {
       setError(`Dòng ${invalidQty + 1}: số lượng phải là số nguyên > 0`);
       return;
+    }
+    if (type === "IN") {
+      const invalidPrice = filled.findIndex((l) => {
+        const price = l.unitPrice.trim();
+        return price !== "" && !(Number(price) >= 0);
+      });
+      if (invalidPrice >= 0) {
+        setError(`Dòng ${invalidPrice + 1}: đơn giá không hợp lệ`);
+        return;
+      }
     }
     if (type === "OUT") {
       const overStock = filled.findIndex((l) => {
@@ -70,6 +94,13 @@ export default function WarehouseReceiptModal({
         items: filled.map((l) => ({
           warehouseItemId: Number(l.warehouseItemId),
           quantity: Number(l.quantity),
+          ...(type === "IN"
+            ? {
+                serial: l.serial.trim() || undefined,
+                unitPrice: l.unitPrice.trim() ? Number(l.unitPrice) : undefined,
+                note: l.note.trim() || undefined,
+              }
+            : {}),
         })),
         note: note.trim() || undefined,
       };
@@ -128,42 +159,77 @@ export default function WarehouseReceiptModal({
                 return (
                   <div
                     key={index}
-                    className="rounded-xl border border-gray-200 p-2 flex items-center gap-2"
+                    className="rounded-xl border border-gray-200 p-2 space-y-2"
                   >
-                    <select
-                      value={line.warehouseItemId}
-                      onChange={(e) =>
-                        changeLine(index, { warehouseItemId: e.target.value })
-                      }
-                      className="flex-1 min-w-0 px-2 py-2 border rounded-lg text-sm"
-                    >
-                      <option value="">Chọn thiết bị…</option>
-                      {items.map((it) => (
-                        <option key={it.id} value={it.id}>
-                          {it.name} (tồn {it.quantity} {it.unit})
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      type="number"
-                      min={1}
-                      step={1}
-                      inputMode="numeric"
-                      value={line.quantity}
-                      onChange={(e) =>
-                        changeLine(index, { quantity: e.target.value })
-                      }
-                      className="w-20 px-2 py-2 border rounded-lg text-sm"
-                      placeholder="SL"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeLine(index)}
-                      disabled={lines.length <= 1}
-                      className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-50 disabled:text-gray-300"
-                    >
-                      ✕
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={line.warehouseItemId}
+                        onChange={(e) =>
+                          changeLine(index, { warehouseItemId: e.target.value })
+                        }
+                        className="flex-1 min-w-0 px-2 py-2 border rounded-lg text-sm"
+                      >
+                        <option value="">Chọn thiết bị…</option>
+                        {items.map((it) => (
+                          <option key={it.id} value={it.id}>
+                            {it.name} (tồn {it.quantity} {it.unit})
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        min={1}
+                        step={1}
+                        inputMode="numeric"
+                        value={line.quantity}
+                        onChange={(e) =>
+                          changeLine(index, { quantity: e.target.value })
+                        }
+                        className="w-20 px-2 py-2 border rounded-lg text-sm"
+                        placeholder="SL"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeLine(index)}
+                        disabled={lines.length <= 1}
+                        className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-50 disabled:text-gray-300"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    {type === "IN" && (
+                      <div className="space-y-2">
+                        <textarea
+                          value={line.serial}
+                          rows={1}
+                          onChange={(e) =>
+                            changeLine(index, { serial: e.target.value })
+                          }
+                          className="w-full px-2 py-2 border rounded-lg text-sm"
+                          placeholder="Serial / IMEI (mỗi máy 1 dòng)"
+                        />
+                        <input
+                          type="number"
+                          min={0}
+                          inputMode="numeric"
+                          value={line.unitPrice}
+                          onChange={(e) =>
+                            changeLine(index, { unitPrice: e.target.value })
+                          }
+                          className="w-full px-2 py-2 border rounded-lg text-sm"
+                          placeholder="Đơn giá nhập (đ)"
+                        />
+                        <textarea
+                          value={line.note}
+                          rows={2}
+                          onChange={(e) =>
+                            changeLine(index, { note: e.target.value })
+                          }
+                          className="w-full px-2 py-2 border rounded-lg text-sm"
+                          placeholder="Chi tiết: tình trạng, bảo hành, nhà cung cấp…"
+                        />
+                      </div>
+                    )}
                   </div>
                 );
               })}

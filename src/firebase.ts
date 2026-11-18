@@ -1,6 +1,10 @@
 import { initializeApp } from "firebase/app";
 
-import { getMessaging } from "firebase/messaging";
+import {
+    getMessaging,
+    isSupported,
+    type Messaging,
+} from "firebase/messaging";
 
 const firebaseConfig = {
     apiKey:
@@ -31,5 +35,15 @@ const firebaseConfig = {
 const app =
     initializeApp(firebaseConfig);
 
-export const messaging =
-    getMessaging(app);
+// getMessaging() throws synchronously when service workers are unavailable
+// (non-secure origin, native WebView), so only create it after isSupported().
+let messagingPromise: Promise<Messaging | null> | null = null;
+
+export const getMessagingSafe = () => {
+    if (!messagingPromise) {
+        messagingPromise = isSupported()
+            .then((ok) => (ok ? getMessaging(app) : null))
+            .catch(() => null);
+    }
+    return messagingPromise;
+};

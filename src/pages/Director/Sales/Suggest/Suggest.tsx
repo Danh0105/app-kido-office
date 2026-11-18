@@ -221,7 +221,7 @@ function SuggestCard({
 
       {item.fileUrl && (
         <a
-          href={`https://sales.kidoedu.vn${item.fileUrl}`}
+          href={`${import.meta.env.VITE_API_URL}${item.fileUrl}`}
           target="_blank"
           onClick={(e) => e.stopPropagation()}
           className="inline-flex items-center gap-1 mt-2 text-xs text-blue-500 font-medium"
@@ -508,7 +508,7 @@ function SuggestDetailPopup({
               )}
               {suggest.fileUrl && (
                 <a
-                  href={`https://sales.kidoedu.vn${suggest.fileUrl}`}
+                  href={`${import.meta.env.VITE_API_URL}${suggest.fileUrl}`}
                   target="_blank"
                   className="inline-flex items-center gap-1 text-xs text-blue-500 font-medium"
                 >

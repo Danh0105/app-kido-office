@@ -3,7 +3,7 @@
 import { Building2, CalendarDays, Receipt, Wallet } from "lucide-react";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
 import RevenueExpenseRow from "./RevenueExpenseRow";
-import { getPolicyTeacherUnitPrice } from "../../utils/policyOtherCosts";
+import { rowTeacherUnitPrice } from "../../utils/policyOtherCosts";
 import CollaboratorPayrollRow, {
   type CollaboratorPayrollScope,
 } from "./CollaboratorPayrollRow";
@@ -51,7 +51,8 @@ export default function RevenueExpenseTable({
       const inputData = inputRows[index] || fallbackInputData;
       const students = Number(inputData.studentCount || 0);
       const months = Number(inputData.monthsCount || 0);
-      const teacherUnitPrice = getPolicyTeacherUnitPrice(policyData);
+      // ĐG giáo viên của dòng (nhập như ĐG CSVC; bỏ trống = theo chính sách).
+      const teacherUnitPrice = rowTeacherUnitPrice(row, policyData);
       const taxUnitPrice = Number(
         row.taxUnitPrice ??
           row.thue ??
@@ -63,9 +64,8 @@ export default function RevenueExpenseTable({
       const csvcUnitPrice = Number(
         row.csvcUnitPrice ?? row.csvc ?? policyData?.csvc ?? 0,
       );
-      const teacherAmount = teacherSplit
-        ? 0
-        : students * months * teacherUnitPrice;
+      // Tính cả khi môn có bảng Giáo viên trường (19/11/2026).
+      const teacherAmount = students * months * teacherUnitPrice;
       const taxAmount = students * months * taxUnitPrice;
       const csvcAmount = csvcUnitPrice * months * students;
       const totalSchoolExpense = teacherAmount + taxAmount + csvcAmount;

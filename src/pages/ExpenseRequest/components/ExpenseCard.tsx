@@ -16,6 +16,7 @@ import {
   requestKindOf,
   isSupplierEquipment,
   cashflowSourceOf,
+  isSalesPick,
   monthlyItemsOf,
 } from "../lib";
 
@@ -60,7 +61,8 @@ export default function ExpenseCard({
   // Chi tháng nhiều trường: danh sách chỉ có tên trường (môn/kỳ xem ở chi tiết).
   const source = cashflowSourceOf(item);
   const monthlyItems = monthlyItemsOf(item);
-  const multiSchool = monthlyItems.length > 1;
+  // "Đề xuất chi tháng" tích chọn: nhiều khoản nhưng chỉ một trường + một kỳ.
+  const multiSchool = monthlyItems.length > 1 && !isSalesPick(item);
   const schoolNames = [
     ...new Set(
       monthlyItems.map((entry) => entry.school?.name || `#${entry.schoolId}`)
@@ -99,7 +101,11 @@ export default function ExpenseCard({
           ) : (
             <KindBadge kind={kind} />
           )}
-          {source ? (
+          {isSalesPick(item) ? (
+            <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-indigo-100 text-indigo-700">
+              🗓️ Chi tháng
+            </span>
+          ) : source ? (
             <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-indigo-100 text-indigo-700">
               {CASHFLOW_SOURCE_META[source].icon}{" "}
               {CASHFLOW_SOURCE_META[source].short}

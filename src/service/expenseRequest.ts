@@ -24,6 +24,7 @@ import type {
   StockInOrder,
   StockIssueItem,
   StockIssueOrder,
+  MonthlyCashflowItemInput,
 } from "@/types/expenseRequest";
 
 const BASE = "/expense-requests";
@@ -84,6 +85,14 @@ export type CreateExpensePayload = {
     /** Chi GV trường. */
     schoolTeacherId?: number;
   }[];
+  /**
+   * "Đề xuất chi tháng" tích chọn (từ 19/11/2026): các khoản đã tích ở bảng
+   * Chi Trường / Chi Ngoài / Giáo viên trường của `schoolId` trong kỳ
+   * `expensePeriodId` (gửi dạng JSON).
+   */
+  cashflowItems?: MonthlyCashflowItemInput[];
+  /** Số tiền kinh doanh đề xuất (≤ tổng Còn chi các khoản đã chọn). */
+  salesAmount?: number;
   wardId?: number;
   /** Chi Năm cho trường: dòng hỗ trợ trong chính sách đã tích + số tiền (gửi dạng JSON). */
   policySupportItems?: {
@@ -182,6 +191,19 @@ export const expenseRequestApi = {
   /** Kế toán nhập xong số liệu bảng ở QL thu chi: chốt số tiền, gửi Kế toán trưởng. */
   submitToChief: async (id: number, note?: string): Promise<ExpenseRequest> => {
     const res = await api.post(`${BASE}/${id}/submit-to-chief`, { note });
+    return res.data;
+  },
+
+  /**
+   * "Đề xuất chi tháng" tích chọn: Kế toán / Kế toán công nợ nhập số tiền
+   * từng khoản (0 = bỏ khoản) rồi gửi thẳng Giám đốc duyệt.
+   */
+  submitAmounts: async (
+    id: number,
+    items: { id: number; amount: number }[],
+    note?: string
+  ): Promise<ExpenseRequest> => {
+    const res = await api.post(`${BASE}/${id}/submit-amounts`, { items, note });
     return res.data;
   },
 

@@ -54,6 +54,25 @@ function monthlySteps(source: CashflowSource): Step[] {
   ];
 }
 
+/** "Đề xuất chi tháng" tích chọn (từ 19/11/2026). */
+const SALES_PICK_STEPS: Step[] = [
+  {
+    who: "Bạn",
+    what: "chọn trường + kỳ kế toán, tích Chi trường / Chi Ban quản lí / Chi giáo viên, chọn khoản và nhập số tiền đề xuất.",
+  },
+  {
+    who: "Kế toán / Kế toán công nợ",
+    what: "nhập số tiền từng khoản rồi gửi Giám đốc.",
+  },
+  { who: "Giám đốc", what: "duyệt (hoặc từ chối)." },
+  { who: "Kế toán công nợ", what: "lập lệnh chi." },
+  { who: "Thủ quỹ", what: "xuất tiền." },
+  {
+    who: "Bạn",
+    what: "nhận tiền và xác nhận đã chi — Đã chi, Ngày chi, Nguồn chi tự ghi vào QL thu chi theo từng khoản.",
+  },
+];
+
 const YEAR_BRANCHES: { title: string; steps: Step[] }[] = [
   {
     title: "💵 Tiền",
@@ -90,16 +109,28 @@ const YEAR_BRANCHES: { title: string; steps: Step[] }[] = [
 
 export default function ExpenseFlowSteps({
   source,
+  salesPick = false,
 }: {
   /** `null` = Đề xuất chi Năm. */
   source: CashflowSource | null;
+  /** "Đề xuất chi tháng" tích chọn. */
+  salesPick?: boolean;
 }) {
   return (
     <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3">
       <p className="mb-2 text-xs font-semibold text-blue-700">
         Quy trình duyệt
       </p>
-      {source ? (
+      {salesPick ? (
+        <>
+          <StepList steps={SALES_PICK_STEPS} />
+          <p className="mt-2 text-[11px] text-gray-500">
+            Mỗi khoản Kế toán nhập không vượt Còn chi của khoản, tổng không vượt
+            số bạn đề xuất. Sửa đề xuất trước khi Thủ quỹ xuất tiền sẽ chạy lại
+            quy trình từ bước Kế toán.
+          </p>
+        </>
+      ) : source ? (
         <>
           <StepList steps={monthlySteps(source)} />
           <p className="mt-2 text-[11px] text-gray-500">

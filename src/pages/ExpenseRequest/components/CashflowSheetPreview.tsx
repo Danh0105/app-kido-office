@@ -4,6 +4,7 @@ import { invoiceCashAccountLabel } from "@/pages/Director/expense/RealExpenseDet
 import {
   CASHFLOW_ITEM_STATUS_META,
   CASHFLOW_SOURCE_META,
+  SALES_PICK_SOURCE_META,
   type CashflowSheetResponse,
   type SchoolExpenseSheetRow,
   type SchoolTeacherSheetRow,
@@ -279,20 +280,48 @@ function SchoolTeacherRows({ rows }: { rows: SchoolTeacherSheetRow[] }) {
  * nhập ở bảng nguồn của trường trong kỳ đã chọn (chỉ xem), cùng số còn đề xuất
  * được. Chi Trường: dòng Hình thức chi "Có trong HĐ" tính là đã chi.
  */
+/** Vì sao một khoản không tích được ở "Đề xuất chi tháng" (null = tích được). */
+export function sheetGroupBlockReason(
+  sheet: CashflowSheetResponse,
+  group: CashflowSheetResponse["groups"][number]
+): string | null {
+  if (sheet.openSheetRequest) {
+    return `Bảng đang có đề xuất ${
+      sheet.openSheetRequest.code || `#${sheet.openSheetRequest.id}`
+    } (quy trình cũ)`;
+  }
+  if (group.openRequest) {
+    return `Đang trong ${group.openRequest.code || `#${group.openRequest.id}`}`;
+  }
+  if (group.bbcsConfirmed === false) return "Chưa xác nhận BBCS";
+  if (!(group.remainingAmount > 0)) return "Không còn tiền phải chi";
+  return null;
+}
+
 export default function CashflowSheetPreview({
   sheet,
   loading,
   error,
+  selectable = false,
+  selected,
+  onToggle,
 }: {
   sheet: CashflowSheetResponse | null;
   loading?: boolean;
   error?: string;
+  /** "Đề xuất chi tháng": kinh doanh tích từng khoản. */
+  selectable?: boolean;
+  /** Khoá `group.key` đã tích. */
+  selected?: Set<string>;
+  onToggle?: (group: CashflowSheetResponse["groups"][number], checked: boolean) => void;
 }) {
   if (loading) return <p className="text-xs text-gray-400">Đang tải số liệu QL thu chi…</p>;
   if (error) return <p className="text-xs text-red-500">{error}</p>;
   if (!sheet) return null;
 
-  const meta = CASHFLOW_SOURCE_META[sheet.source];
+  const meta = selectable
+    ? { ...CASHFLOW_SOURCE_META[sheet.source], ...SALES_PICK_SOURCE_META[sheet.source] }
+    : CASHFLOW_SOURCE_META[sheet.source];
   const total = sheet.groups.reduce((sum, group) => sum + Number(group.totalAmount || 0), 0);
   const paid = sheet.groups.reduce((sum, group) => sum + Number(group.paidAmount || 0), 0);
   const unassignedRows = sheet.unassigned.reduce((sum, item) => sum + item.rowCount, 0);
@@ -303,18 +332,29 @@ export default function CashflowSheetPreview({
     <section className="space-y-2 rounded-2xl border border-indigo-100 bg-indigo-50/40 p-3">
       <div>
         <h3 className="text-sm font-semibold text-indigo-800">
-          {meta.icon} Số liệu Kế toán đã nhập — bảng {sheet.table}
+          {selectable
+            ? `${meta.icon} ${(meta as { label: string }).label} — bảng ${sheet.table}`
+            : `${meta.icon} Số liệu Kế toán đã nhập — bảng ${sheet.table}`}
         </h3>
         <p className="text-xs text-slate-500">
-          {sheet.school.name || "Trường"} · {periodName}. Chỉ xem; Kế toán chốt số
-          tiền khi gửi Kế toán trưởng.
+          {sheet.school.name || "Trường"} · {periodName}.{" "}
+          {selectable
+            ? sheet.source === "SCHOOL_TEACHER"
+              ? "Tích giáo viên cần chi."
+              : "Tích môn cần chi — chỉ môn đã xác nhận BBCS ở bảng Chi Ngoài."
+            : "Chỉ xem; Kế toán chốt số tiền khi gửi Kế toán trưởng."}
         </p>
       </div>
 
       {!sheet.hasData ? (
-        <p className="rounded-lg bg-white px-3 py-2 text-xs text-slate-600">
-          Bảng {sheet.table} của trường trong kỳ này chưa có số liệu — Kế toán sẽ
-          nhập ở bước sau.
+        <p
+          className={`rounded-lg px-3 py-2 text-xs ${
+            selectable ? "bg-red-50 text-red-700" : "bg-white text-slate-600"
+          }`}
+        >
+          {selectable
+            ? `Kế toán chưa nhập bảng ${sheet.table} của trường trong kỳ này nên chưa đề xuất được.`
+            : `Bảng ${sheet.table} của trường trong kỳ này chưa có số liệu — Kế toán sẽ nhập ở bước sau.`}
         </p>
       ) : (
         <div className={`grid gap-1.5 ${sheet.source === "SCHOOL_EXPENSE" ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
@@ -348,8 +388,10 @@ export default function CashflowSheetPreview({
       )}
       {unassignedRows > 0 && (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          Còn {unassignedRows} dòng chưa chọn giáo viên — Kế toán phải chọn trước
-          khi gửi.
+          Còn {unassignedRows} dòng chưa chọn giáo viên —{" "}
+          {selectable
+            ? "Kế toán chọn giáo viên ở QL thu chi thì mới đề xuất được các dòng này."
+            : "Kế toán phải chọn trước khi gửi."}
         </p>
       )}
 
@@ -357,15 +399,39 @@ export default function CashflowSheetPreview({
         <ul className="space-y-1">
           {sheet.groups.map((group) => {
             const status = CASHFLOW_ITEM_STATUS_META[group.status];
+            const blocked = selectable ? sheetGroupBlockReason(sheet, group) : null;
+            const checked = !!selected?.has(group.key);
             return (
               <li
                 key={group.key}
-                className="flex flex-wrap items-center justify-between gap-1 rounded-lg bg-white px-2.5 py-1.5 text-xs"
+                className={`flex flex-wrap items-center justify-between gap-1 rounded-lg px-2.5 py-1.5 text-xs ${
+                  checked ? "bg-blue-50 ring-1 ring-blue-200" : "bg-white"
+                } ${selectable && blocked && !checked ? "opacity-60" : ""}`}
               >
                 <span className="flex flex-wrap items-center gap-1">
+                  {selectable && (
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={checked}
+                      disabled={!!blocked && !checked}
+                      onChange={(event) => onToggle?.(group, event.target.checked)}
+                      aria-label={`Chọn ${group.subjectName || group.teacherName || group.label}`}
+                    />
+                  )}
                   <span className="font-medium text-slate-800">
                     {group.subjectName || group.teacherName || group.label}
                   </span>
+                  {selectable && group.bbcsConfirmed === true && (
+                    <span className="rounded-full bg-emerald-50 px-1.5 py-[1px] text-[10px] text-emerald-700">
+                      ✓ BBCS
+                    </span>
+                  )}
+                  {selectable && blocked && !group.openRequest && (
+                    <span className="rounded-full bg-red-50 px-1.5 py-[1px] text-[10px] text-red-700">
+                      {blocked}
+                    </span>
+                  )}
                   <span className={`rounded-full px-1.5 py-[1px] text-[10px] font-medium ${status.className}`}>
                     {status.label}
                   </span>
@@ -391,7 +457,7 @@ export default function CashflowSheetPreview({
       )}
 
       {sheet.hasData && (
-        <details open className="rounded-xl bg-white p-2">
+        <details open={!selectable || sheet.source === "MANAGEMENT"} className="rounded-xl bg-white p-2">
           <summary className="cursor-pointer select-none text-xs font-semibold text-indigo-700">
             Chi tiết từng dòng ở QL thu chi
           </summary>

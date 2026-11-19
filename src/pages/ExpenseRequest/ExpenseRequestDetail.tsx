@@ -46,6 +46,7 @@ import {
 } from "./components/ManagementExpenseView";
 import MonthlyApproveModal from "./components/MonthlyApproveModal";
 import CashflowItemsPanel from "./components/CashflowItemsPanel";
+import SalesPickItemsPanel from "./components/SalesPickItemsPanel";
 import ReassignRepairModal from "./components/ReassignRepairModal";
 import StockIssueOrderModal from "./components/StockIssueOrderModal";
 import StockInReceiptModal from "./components/StockInReceiptModal";
@@ -72,6 +73,7 @@ import {
   canReadManagementExpense,
   cashflowSourceOf,
   isAccountantChain,
+  isSalesPick,
   monthlyItemLabel,
   monthlyItemsOf,
   monthlyRemainder,
@@ -662,6 +664,7 @@ export default function ExpenseRequestDetail({
   const source = cashflowSourceOf(data);
   const sourceMeta = source ? CASHFLOW_SOURCE_META[source] : null;
   const chain = isAccountantChain(data);
+  const salesPick = isSalesPick(data);
   // Chi Năm cho trường: tổng số kinh doanh nhập ở các dòng chính sách đã tích.
   const policySupportTotal = (data.policySupportItems ?? []).reduce(
     (sum, item) => sum + (Number(item.amount) || 0),
@@ -670,7 +673,7 @@ export default function ExpenseRequestDetail({
   // Số cho hộp duyệt: Chi Ngoài luồng cũ lấy từ bảng Chi Ngoài như trước;
   // quy trình Kế toán lấy số Kế toán chốt (khoản chi của đề xuất).
   const approvalView =
-    source === "MANAGEMENT" && !chain ? monthlyView : cashflowView;
+    source === "MANAGEMENT" && !chain && !salesPick ? monthlyView : cashflowView;
   // Kế toán / Kế toán trưởng nhập số liệu: mở QL thu chi của trường.
   const sheetSchoolId = Number(data.schoolId || data.school?.id || 0);
   const sheetLink =
@@ -726,7 +729,11 @@ export default function ExpenseRequestDetail({
                     {EQUIPMENT_SOURCE_META[equipmentSourceOf(data)].label}
                   </span>
                 )}
-                {sourceMeta ? (
+                {salesPick ? (
+                  <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-indigo-100 text-indigo-700">
+                    🗓️ Đề xuất chi tháng
+                  </span>
+                ) : sourceMeta ? (
                   <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-indigo-100 text-indigo-700">
                     {sourceMeta.icon} {sourceMeta.label}
                   </span>
@@ -959,7 +966,18 @@ export default function ExpenseRequestDetail({
         )}
 
         {/* ===== Khoản chi ở QL thu chi (Chi Ngoài / Chi Trường / GV trường) ===== */}
-        {source && (
+        {source && salesPick && (
+          <div id="sales-pick-items">
+            <SalesPickItemsPanel
+              requestId={data.id}
+              reloadKey={data.status}
+              onLoaded={setCashflowView}
+              canEnterAmounts={canDoStep("submitAmounts", data)}
+              onSubmitted={load}
+            />
+          </div>
+        )}
+        {source && !salesPick && (
           <CashflowItemsPanel
             requestId={data.id}
             source={source}
@@ -972,14 +990,19 @@ export default function ExpenseRequestDetail({
 
         {/* ===== Chi Ngoài cho người duyệt ===== */}
         {(data.school?.id || (data as any).schoolId) &&
-          (!source || source === "MANAGEMENT") &&
+          (salesPick
+            ? (data.monthlyItems ?? []).some(
+                (item) => item.cashflowSource === "MANAGEMENT"
+              )
+            : !source || source === "MANAGEMENT") &&
           (canDoStep("approve", data) ||
             canDoStep("submitToChief", data) ||
+            canDoStep("submitAmounts", data) ||
             canDoStep("chiefApprove", data)) &&
           canReadManagementExpense() && (
             <ManagementExpensePanel
               requestId={data.id}
-              monthly={Boolean(data.isMonthlyExpense)}
+              monthly={Boolean(data.isMonthlyExpense) && !salesPick}
               onLoaded={setMonthlyView}
             />
           )}
@@ -1199,15 +1222,23 @@ export default function ExpenseRequestDetail({
           items={monthlyItems.filter((item) => item.id != null)}
           itemAmounts={approvalView?.itemAmounts ?? null}
           remainingTotal={approvalView?.remainingTotal ?? null}
-          tableLabel={sourceMeta?.table}
-          title={sourceMeta ? `Duyệt ${sourceMeta.label}` : undefined}
+          tableLabel={salesPick ? undefined : sourceMeta?.table}
+          title={
+            salesPick
+              ? "Duyệt đề xuất chi tháng"
+              : sourceMeta
+                ? `Duyệt ${sourceMeta.label}`
+                : undefined
+          }
           existingAmount={
             data.paymentOrder?.amount != null
               ? Number(data.paymentOrder.amount)
               : null
           }
-          canSeeTable={source !== "MANAGEMENT" || chain || canReadManagementExpense()}
-          chain={chain}
+          canSeeTable={
+            source !== "MANAGEMENT" || chain || salesPick || canReadManagementExpense()
+          }
+          chain={chain || salesPick}
           loading={submitting}
           onClose={() => setModal(null)}
           onSubmit={(payload) => onApproveSubmit(payload)}
@@ -2240,6 +2271,14 @@ function ActionButton({
       label: "📤 Gửi Kế toán trưởng",
       color: "bg-indigo-600",
       onClick: () => onOpenModal("submitToChief"),
+    },
+    submitAmounts: {
+      label: "✍️ Nhập số tiền & gửi Giám đốc",
+      color: "bg-indigo-600",
+      onClick: () =>
+        document
+          .getElementById("sales-pick-items")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" }),
     },
     chiefApprove: {
       label: "✔️ KTT duyệt",

@@ -59,6 +59,15 @@ function CashflowSync({ log }: { log?: CashflowPaymentLog | null }) {
   );
 }
 
+/** Phần ghi về QL thu chi: Chi Ngoài + Chi Trường / Giáo viên trường (một hoặc nhiều bảng). */
+function syncLogs(d: ExpenseLogDetails): CashflowPaymentLog[] {
+  return [
+    d.chiNgoai,
+    d.cashflowPayment,
+    ...(d.cashflowPayments ?? []),
+  ].filter((log): log is CashflowPaymentLog => !!log);
+}
+
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
@@ -288,13 +297,66 @@ function StepDetails({ log, kind: requestKind }: { log: ExpenseLog; kind?: Expen
       );
     }
 
+    // "Đề xuất chi tháng" tích chọn: khoản + số tiền kinh doanh đề xuất.
+    case "CREATE":
+    case "UPDATE": {
+      if (!d.pickedItems?.length) return null;
+      return (
+        <Box tone="border-slate-200 bg-slate-50">
+          {d.salesAmount != null && (
+            <Row label="Số tiền đề xuất">{money(d.salesAmount)}</Row>
+          )}
+          <ul className="mt-1 space-y-0.5">
+            {d.pickedItems.map((item, index) => (
+              <li key={index} className="text-xs text-gray-700">
+                • {item.label} · Còn chi {money(item.remaining)}
+              </li>
+            ))}
+          </ul>
+        </Box>
+      );
+    }
+
     case "CONFIRM_SPENT": {
-      const sync = d.cashflowPayment ?? d.chiNgoai;
-      return sync ? (
+      const syncs = syncLogs(d);
+      return syncs.length ? (
         <Box tone="border-teal-100 bg-teal-50">
-          <CashflowSync log={sync} />
+          {syncs.map((sync, index) => (
+            <CashflowSync key={index} log={sync} />
+          ))}
         </Box>
       ) : null;
+    }
+
+    // "Đề xuất chi tháng" tích chọn: Kế toán nhập số tiền từng khoản.
+    case "SUBMIT_MONTHLY_AMOUNTS": {
+      if (d.amount == null && !d.items?.length) return null;
+      return (
+        <Box tone="border-indigo-100 bg-indigo-50">
+          {d.salesAmount != null && (
+            <Row label="Kinh doanh đề xuất">{money(d.salesAmount)}</Row>
+          )}
+          {d.amount != null && <Row label="Kế toán nhập">{money(d.amount)}</Row>}
+          {!!d.items?.length && (
+            <ul className="mt-1 space-y-0.5">
+              {d.items.map((item, index) => (
+                <li key={item.id ?? index} className="text-xs text-gray-700">
+                  ✅ {item.label} · {money(item.amount)}
+                </li>
+              ))}
+            </ul>
+          )}
+          {!!d.droppedItems?.length && (
+            <ul className="mt-1 space-y-0.5">
+              {d.droppedItems.map((item, index) => (
+                <li key={index} className="text-xs text-amber-700">
+                  ⏭️ {item.label} (nhập 0, bỏ khỏi đề xuất)
+                </li>
+              ))}
+            </ul>
+          )}
+        </Box>
+      );
     }
 
     case "CONFIRM_PARTIALLY_SPENT": {
@@ -313,7 +375,9 @@ function StepDetails({ log, kind: requestKind }: { log: ExpenseLog; kind?: Expen
               </li>
             ))}
           </ul>
-          <CashflowSync log={d.cashflowPayment ?? d.chiNgoai} />
+          {syncLogs(d).map((sync, index) => (
+            <CashflowSync key={index} log={sync} />
+          ))}
         </Box>
       );
     }

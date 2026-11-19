@@ -8,6 +8,7 @@ import type {
   ExpenseRequestKind,
   ExpenseStatus,
 } from "@/types/expenseRequest";
+import { SALES_PICK_SOURCE_META } from "@/types/expenseRequest";
 
 /**
  * Các trường của đề xuất chi tháng theo thứ tự đã chọn. Đề xuất cũ (một trường)
@@ -73,6 +74,20 @@ export const isAccountantChain = (
   req: Pick<ExpenseRequest, "isMonthlyExpense" | "approvalFlow">
 ) => Boolean(req.isMonthlyExpense) && req.approvalFlow === "ACCOUNTANT_CHAIN";
 
+/**
+ * "Đề xuất chi tháng" tích chọn (từ 19/11/2026): kinh doanh tích Chi trường /
+ * Chi Ban quản lí / Chi giáo viên → Kế toán hoặc Kế toán công nợ nhập số tiền
+ * từng khoản → Giám đốc → Kế toán công nợ lập lệnh chi → Thủ quỹ → kinh doanh.
+ */
+export const isSalesPick = (
+  req: Pick<ExpenseRequest, "isMonthlyExpense" | "approvalFlow">
+) => Boolean(req.isMonthlyExpense) && req.approvalFlow === "SALES_PICK";
+
+/** Chi tháng mà Kế toán công nợ lập lệnh chi sau khi Giám đốc duyệt từng khoản. */
+export const isMonthlyChain = (
+  req: Pick<ExpenseRequest, "isMonthlyExpense" | "approvalFlow">
+) => isAccountantChain(req) || isSalesPick(req);
+
 export const cashflowSourceOf = (
   req: Pick<ExpenseRequest, "isMonthlyExpense" | "cashflowSource">
 ): CashflowSource | null =>
@@ -80,6 +95,7 @@ export const cashflowSourceOf = (
 
 export const monthlyItemLabel = (item: ExpenseMonthlyItem) =>
   [
+    item.cashflowSource ? SALES_PICK_SOURCE_META[item.cashflowSource].label : null,
     item.schoolTeacherId
       ? `GV ${item.schoolTeacher?.name || `#${item.schoolTeacherId}`}`
       : item.subject?.catalog?.name || item.subject?.name,
@@ -309,6 +325,7 @@ export const isOwner = (req?: ExpenseCreatorFields) => {
 export type ActionKey =
   // --- quy trình Kế toán ---
   | "submitToChief"
+  | "submitAmounts"
   | "chiefApprove"
   | "chiefReject"
   | "approve"
@@ -347,6 +364,7 @@ export type ActionKey =
  */
 const CHIEF_ACCOUNTANT_WORKFLOW_STEPS = new Set<ActionKey>([
   "submitToChief",
+  "submitAmounts",
   "chiefApprove",
   "chiefReject",
   "approve",
@@ -406,6 +424,14 @@ export const EXPENSE_STEPS: Record<ActionKey, ExpenseStepDefinition> = {
   // thay Kế toán nhưng không tự duyệt tiếp bước của mình.
   submitToChief: {
     roles: ["accountant", "ketoan_truong"],
+    from: ["PENDING_ACCOUNTANT"],
+    owner: false,
+    kinds: ["CASH"],
+  },
+  // "Đề xuất chi tháng" tích chọn: Kế toán / Kế toán công nợ nhập số tiền
+  // từng khoản rồi gửi thẳng Giám đốc.
+  submitAmounts: {
+    roles: ["accountant", "ketoan_congno", "ketoan_truong"],
     from: ["PENDING_ACCOUNTANT"],
     owner: false,
     kinds: ["CASH"],
@@ -628,6 +654,9 @@ export const canDoStep = (
 
   if (req.isMonthlyExpense) {
     if (step === "saleadminReview" || step === "saleadminReject") return false;
+    // Hai luồng Kế toán dùng chung trạng thái PENDING_ACCOUNTANT.
+    if (step === "submitToChief" && isSalesPick(req)) return false;
+    if (step === "submitAmounts" && !isSalesPick(req)) return false;
     // Khớp backend: tiền đã xuất thì chủ đơn không sửa, vì lệnh chi là căn cứ của sổ quỹ.
     if (
       step === "edit" &&
@@ -656,7 +685,7 @@ export const canDoStep = (
     // Quy trình Kế toán: lệnh chi do Kế toán công nợ lập sau khi Giám đốc
     // duyệt; đã chi thì QL thu chi đã ghi theo lệnh chi nên không sửa nữa.
     if (
-      isAccountantChain(req) &&
+      isMonthlyChain(req) &&
       step === "editPaymentOrder" &&
       ["PENDING_APPROVAL", "SPENT"].includes(req.status)
     ) {
@@ -664,6 +693,7 @@ export const canDoStep = (
     }
   } else if (
     step === "submitToChief" ||
+    step === "submitAmounts" ||
     step === "chiefApprove" ||
     step === "chiefReject"
   ) {
@@ -826,7 +856,9 @@ export const waitingMessage = (req: ExpenseRequest): string | null => {
     case "PENDING_ACCOUNTING":
       return "Chờ Kế toán công nợ nhập số tiền…";
     case "PENDING_ACCOUNTANT":
-      return "Chờ Kế toán nhập số liệu ở QL thu chi rồi gửi Kế toán trưởng…";
+      return isSalesPick(req)
+        ? "Chờ Kế toán / Kế toán công nợ nhập số tiền từng khoản rồi gửi Giám đốc…"
+        : "Chờ Kế toán nhập số liệu ở QL thu chi rồi gửi Kế toán trưởng…";
     case "PENDING_CHIEF_APPROVAL":
       return "Chờ Kế toán trưởng duyệt…";
     case "PENDING_APPROVAL":

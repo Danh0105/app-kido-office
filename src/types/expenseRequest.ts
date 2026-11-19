@@ -169,6 +169,33 @@ export const CASHFLOW_SOURCE_META: Record<
   },
 };
 
+/**
+ * "Đề xuất chi tháng" tích chọn (từ 19/11/2026): tên loại khoản kinh doanh
+ * tích — Chi trường = bảng Chi Trường, Chi Ban quản lí = bảng Chi Ngoài, Chi
+ * giáo viên = bảng Giáo viên trường.
+ */
+export const SALES_PICK_SOURCES: CashflowSource[] = [
+  "SCHOOL_EXPENSE",
+  "MANAGEMENT",
+  "SCHOOL_TEACHER",
+];
+
+export const SALES_PICK_SOURCE_META: Record<
+  CashflowSource,
+  { label: string; table: string; icon: string }
+> = {
+  SCHOOL_EXPENSE: { label: "Chi trường", table: "Chi Trường", icon: "🏫" },
+  MANAGEMENT: { label: "Chi Ban quản lí", table: "Chi Ngoài", icon: "🗓️" },
+  SCHOOL_TEACHER: { label: "Chi giáo viên", table: "Giáo viên trường", icon: "👩‍🏫" },
+};
+
+/** Một khoản kinh doanh tích (trường + kỳ lấy từ đề xuất). */
+export type MonthlyCashflowItemInput = {
+  source: CashflowSource;
+  subjectId?: number;
+  schoolTeacherId?: number;
+};
+
 /** Trạng thái một khoản ở màn chọn khoản chi. */
 export type CashflowItemStatus =
   | "UNPAID"
@@ -246,6 +273,13 @@ export type ExpenseCashflowItem = {
   /** Trống khi đang xem trước bảng (Kế toán chưa gửi số liệu). */
   id: number | null;
   label: string;
+  /** "Đề xuất chi tháng" tích chọn: bảng nguồn của khoản. */
+  source?: CashflowSource;
+  sourceLabel?: string;
+  schoolId?: number | null;
+  table?: string;
+  /** "Đề xuất chi tháng" tích chọn: Còn chi hiện tại (trần số Kế toán nhập). */
+  maxAmount?: number;
   requestedAmount: number | null;
   approvedAmount: number | null;
   excluded: boolean;
@@ -273,6 +307,14 @@ export type ExpenseCashflowItemsResponse = {
   preview?: boolean;
   /** Bảng Giáo viên trường: dòng chưa chọn giáo viên (phải chọn trước khi gửi). */
   unassigned?: { rowCount: number; amount: number }[];
+  /** "Đề xuất chi tháng" tích chọn. */
+  salesPick?: boolean;
+  /** Số tiền kinh doanh đề xuất. */
+  salesAmount?: number | null;
+  /** Tổng Còn chi hiện tại của các khoản đã chọn. */
+  pickedRemainingTotal?: number;
+  /** Khoản Chi giáo viên người xem không được thấy. */
+  hiddenItemCount?: number;
 };
 
 /** Một dòng bảng Chi Trường Kế toán đã nhập (màn tạo đề xuất). */
@@ -341,7 +383,11 @@ export type CashflowSheetResponse = {
   inContractTotal: number;
   /** Đề xuất khác đang chạy cho cùng bảng (không tạo thêm được). */
   openSheetRequest: { id: number; code: string | null } | null;
-  groups: (CashflowItem & { inContractAmount: number })[];
+  groups: (CashflowItem & {
+    inContractAmount: number;
+    /** Chi Trường / Chi Ngoài: môn đã "Xác nhận đúng BBCS" (null với Giáo viên trường). */
+    bbcsConfirmed?: boolean | null;
+  })[];
   /** Chi Ngoài: bảng dựng như QL thu chi. */
   sections: ManagementExpenseSection[];
   /** Chi Trường / Giáo viên trường: từng dòng. */
@@ -418,6 +464,8 @@ export type PolicySupport = {
 export type ExpenseMonthlyItem = {
   id?: number;
   position?: number;
+  /** "Đề xuất chi tháng" tích chọn: bảng nguồn của khoản. */
+  cashflowSource?: CashflowSource | null;
   /** Đề xuất Chi GV trường: khoản = lương một giáo viên (không có môn). */
   schoolTeacherId?: number | null;
   schoolTeacher?: { id: number; name: string } | null;
@@ -508,6 +556,14 @@ export type ExpenseLogDetails = {
   /** CONFIRM_SPENT / CONFIRM_PARTIALLY_SPENT: phần ghi ngược về bảng nguồn. */
   chiNgoai?: CashflowPaymentLog | null;
   cashflowPayment?: CashflowPaymentLog | null;
+  /** "Đề xuất chi tháng" tích chọn: ghi về cả Chi Trường lẫn Giáo viên trường. */
+  cashflowPayments?: CashflowPaymentLog[];
+  /** "Đề xuất chi tháng" tích chọn: số tiền kinh doanh đề xuất. */
+  salesAmount?: number | null;
+  /** CREATE / UPDATE "Đề xuất chi tháng" tích chọn: khoản kinh doanh chọn. */
+  pickedItems?: { source: CashflowSource; label: string; remaining: number }[];
+  /** SUBMIT_MONTHLY_AMOUNTS: khoản Kế toán nhập 0 (bỏ khỏi đề xuất). */
+  droppedItems?: { label: string; remaining: number }[];
   /**
    * APPROVE_MONTHLY / APPROVE_MONTHLY_CHAIN: khoản nào được duyệt / không duyệt.
    * SUBMIT_TO_CHIEF_ACCOUNTANT: khoản Kế toán chốt (không có id/approved).
@@ -755,6 +811,8 @@ export type ExpenseRequest = {
    * Trống = chi tháng luồng cũ hoặc Chi Năm.
    */
   approvalFlow?: string | null;
+  /** "Đề xuất chi tháng" tích chọn (`approvalFlow = SALES_PICK`): số tiền kinh doanh đề xuất. */
+  salesAmount?: number | string | null;
   monthlyItems?: ExpenseMonthlyItem[];
   subjectId?: number;
   subject?: {
@@ -1094,6 +1152,7 @@ export const ACTION_LABEL: Record<string, string> = {
   APPROVE_MONTHLY: "Giám đốc duyệt chi tháng",
   // --- quy trình Kế toán ---
   SUBMIT_TO_CHIEF_ACCOUNTANT: "Kế toán nhập số liệu, gửi Kế toán trưởng",
+  SUBMIT_MONTHLY_AMOUNTS: "Kế toán nhập số tiền, gửi Giám đốc",
   CHIEF_APPROVE: "Kế toán trưởng duyệt",
   CHIEF_REJECT: "Kế toán trưởng từ chối",
   APPROVE_MONTHLY_CHAIN: "Giám đốc duyệt",

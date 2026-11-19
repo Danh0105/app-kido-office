@@ -178,7 +178,7 @@ export default function MonthlyApproveModal({
               >
                 {total == null ? (
                   canSeeTable
-                    ? `Đang tính số tiền từ bảng ${tableLabel}…`
+                    ? `Đang tính số tiền${tableLabel ? ` từ bảng ${tableLabel}` : ""}…`
                     : `Lệnh chi sẽ được lập bằng tổng cột Còn chi của bảng ${tableLabel} các trường được duyệt.`
                 ) : total <= 0 ? (
                   "Các trường được chọn không còn khoản nào cần chi (Còn chi = 0) nên chưa duyệt được."
@@ -187,7 +187,9 @@ export default function MonthlyApproveModal({
                     Duyệt <b>{money(total)}</b> (số Kế toán chốt
                     {excluded > 0
                       ? ` của ${checked.size}/${items.length} ${unit} được duyệt`
-                      : ` của bảng ${tableLabel}`}
+                      : tableLabel
+                        ? ` của bảng ${tableLabel}`
+                        : ` của ${items.length} ${unit}`}
                     ), chuyển Kế toán công nợ lập lệnh chi.
                   </>
                 ) : (

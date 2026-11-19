@@ -13,18 +13,29 @@ import { teacherApi } from "@/service/teaching";
 import { expenseRequestApi } from "@/service/expenseRequest";
 import { expensePeriodApi, type ExpensePeriod } from "@/service/expensePeriod";
 import {
-  CASHFLOW_SOURCE_META,
+  SALES_PICK_SOURCES,
+  SALES_PICK_SOURCE_META,
   statusLabel,
   type CashflowSheetResponse,
   type CashflowSource,
   type ExpenseRequest,
+  type MonthlyCashflowItemInput,
   type PolicySupport,
 } from "@/types/expenseRequest";
-import { canDoStep, cashflowSourceOf, expenseBasePath, todayISO } from "./lib";
+import DecimalInput from "@/components/DecimalInput";
+import { formatVnd } from "@/utils/decimal";
+import {
+  canDoStep,
+  cashflowSourceOf,
+  expenseBasePath,
+  isSalesPick,
+  todayISO,
+} from "./lib";
 import PolicySupportTables, {
   type PolicySupportSelection,
 } from "./components/PolicySupportTables";
-import CashflowSheetPreview from "./components/CashflowSheetPreview";
+import { sheetGroupBlockReason } from "./components/CashflowSheetPreview";
+import SalesPickSourceSheet from "./components/SalesPickSourceSheet";
 import ExpenseFlowSteps from "./components/ExpenseFlowSteps";
 import {
   DEFAULT_SCHOOL_YEAR,
@@ -49,6 +60,24 @@ const periodInSchoolYear = (period: ExpensePeriod, schoolYear: string | null) =>
   return schoolYear.split("-").map(Number).includes(Number(period.year));
 };
 
+/** Khoá khoản như BE `cashflowItemKey`: trường:kỳ:s<môn> / trường:kỳ:t<giáo viên>. */
+const itemKey = (
+  source: CashflowSource,
+  item: {
+    schoolId?: number | null;
+    expensePeriodId?: number | null;
+    subjectId?: number | null;
+    schoolTeacherId?: number | null;
+  }
+) =>
+  `${item.schoolId ?? 0}:${item.expensePeriodId ?? 0}:${
+    source === "SCHOOL_TEACHER"
+      ? `t${item.schoolTeacherId ?? 0}`
+      : `s${item.subjectId ?? 0}`
+  }`;
+
+const money = (value: number) => `${formatVnd(value) || "0"} đ`;
+
 const periodLabel = (period: ExpensePeriod) =>
   period.name ||
   (period.month <= 12
@@ -57,11 +86,12 @@ const periodLabel = (period: ExpensePeriod) =>
 
 // Hình thức: Chi Năm (phường/xã hoặc "Đề xuất ngoài chính sách" cho trường —
 // trường phải có hỗ trợ tiền mặt/thiết bị trong chính sách đã duyệt, form hiện
-// bảng cho kinh doanh xem) hoặc chi theo QL thu chi — Chi Ngoài (Chi chính sách
-// tháng), Chi Trường, Chi GV trường: chọn một trường + một kỳ kế toán Kế toán đã
-// tạo, form hiện toàn bộ số liệu bảng ở QL thu chi (Chi Trường: dòng "Có trong
-// HĐ" tính đã chi, không đề xuất); Kế toán nhập số liệu bảng rồi gửi Kế toán trưởng →
-// Giám đốc → Kế toán công nợ → Thủ quỹ → kinh doanh. Có `:id` trên URL = chế độ
+// bảng cho kinh doanh xem) hoặc "Đề xuất chi tháng" (từ 19/11/2026): chọn một
+// trường + một kỳ kế toán Kế toán đã tạo, tích Chi trường (bảng Chi Trường) /
+// Chi Ban quản lí (bảng Chi Ngoài) — chỉ môn đã xác nhận BBCS — / Chi giáo viên
+// (bảng Giáo viên trường Kế toán đã nhập), tích khoản và nhập số tiền ≤ tổng Còn
+// chi đã chọn; Kế toán / Kế toán công nợ nhập số tiền từng khoản → Giám đốc →
+// Kế toán công nợ → Thủ quỹ → kinh doanh. Có `:id` trên URL = chế độ
 // sửa: chủ đơn được sửa ở mọi trạng thái; sau khi lưu, đề xuất chạy lại quy
 // trình từ đầu. Nhân viên không chọn loại Chi Năm; Giám đốc phân loại khi duyệt.
 export default function ExpenseRequestForm() {
@@ -83,11 +113,17 @@ export default function ExpenseRequestForm() {
   // Form mở ở Chi Năm nên mặc định trừ chính sách; người dùng có thể bỏ chọn
   // để đề xuất không phụ thuộc chính sách hỗ trợ tiền mặt/thiết bị.
   const [deductPolicy, setDeductPolicy] = useState(true);
-  // null = Chi Năm; còn lại = bảng nguồn ở QL thu chi.
-  const [cashflowSource, setCashflowSource] = useState<CashflowSource | null>(
-    null
+  // false = Chi Năm; true = Đề xuất chi tháng (tích chọn khoản ở QL thu chi).
+  const [isMonthlyExpense, setIsMonthlyExpense] = useState(false);
+  // Loại đã tích + khoản đã chọn (khoá `itemKey`) + số liệu bảng từng loại.
+  const [pickSources, setPickSources] = useState<CashflowSource[]>([]);
+  const [picked, setPicked] = useState<Partial<Record<CashflowSource, string[]>>>(
+    {}
   );
-  const isMonthlyExpense = cashflowSource !== null;
+  const [sheets, setSheets] = useState<
+    Partial<Record<CashflowSource, CashflowSheetResponse | null>>
+  >({});
+  const [salesAmount, setSalesAmount] = useState(0);
   const [file, setFile] = useState<File | null>(null);
   const [proposalTarget, setProposalTarget] = useState<ProposalTarget>("WARD");
 
@@ -109,10 +145,6 @@ export default function ExpenseRequestForm() {
   const [periods, setPeriods] = useState<ExpensePeriod[]>([]);
   const [periodsLoading, setPeriodsLoading] = useState(false);
   const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null);
-  // Toàn bộ số liệu bảng nguồn của trường trong kỳ đã chọn.
-  const [sheet, setSheet] = useState<CashflowSheetResponse | null>(null);
-  const [sheetLoading, setSheetLoading] = useState(false);
-  const [sheetError, setSheetError] = useState("");
   // Chi Năm cho trường: hỗ trợ tiền mặt / thiết bị trong chính sách đã duyệt.
   const [policySupport, setPolicySupport] = useState<PolicySupport | null>(null);
   const [policySupportLoading, setPolicySupportLoading] = useState(false);
@@ -139,7 +171,29 @@ export default function ExpenseRequestForm() {
         setEditing(req);
         const source = cashflowSourceOf(req);
         const monthlyExpense = source !== null;
-        setCashflowSource(source);
+        setIsMonthlyExpense(monthlyExpense);
+        if (monthlyExpense) {
+          // Đề xuất tích chọn: chọn sẵn loại + khoản đã lưu. Đề xuất chi tháng
+          // cũ (một bảng): tích sẵn loại đó, kinh doanh chọn lại khoản.
+          const items = isSalesPick(req) ? req.monthlyItems ?? [] : [];
+          const sources = isSalesPick(req)
+            ? SALES_PICK_SOURCES.filter((src) =>
+                items.some((item) => (item.cashflowSource ?? source) === src)
+              )
+            : [source];
+          setPickSources(sources);
+          setPicked(
+            Object.fromEntries(
+              sources.map((src) => [
+                src,
+                items
+                  .filter((item) => (item.cashflowSource ?? source) === src)
+                  .map((item) => itemKey(src, item)),
+              ])
+            )
+          );
+          setSalesAmount(Number(req.salesAmount) || 0);
+        }
         setProposalTarget(monthlyExpense || req.schoolId ? "SCHOOL" : "WARD");
         setContent(req.content ?? "");
         setDescription(req.description ?? "");
@@ -435,38 +489,6 @@ export default function ExpenseRequestForm() {
     };
   }, [isMonthlyExpense, selectedSchool]);
 
-  // Chi theo QL thu chi: số liệu Kế toán đã nhập ở bảng của trường trong kỳ.
-  useEffect(() => {
-    setSheet(null);
-    setSheetError("");
-    if (!cashflowSource || !selectedSchool || !selectedPeriodId) return;
-    let active = true;
-    setSheetLoading(true);
-    expenseRequestApi
-      .getCashflowSheet({
-        source: cashflowSource,
-        schoolId: Number(selectedSchool),
-        expensePeriodId: Number(selectedPeriodId),
-        excludeSuggestId: isEdit ? editId : undefined,
-      })
-      .then((data) => {
-        if (active) setSheet(data);
-      })
-      .catch((err) => {
-        if (active) {
-          setSheetError(
-            err?.response?.data?.message || "Không tải được số liệu QL thu chi"
-          );
-        }
-      })
-      .finally(() => {
-        if (active) setSheetLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [cashflowSource, selectedSchool, selectedPeriodId, isEdit, editId]);
-
   // Chi Năm cho trường: bảng hỗ trợ tiền mặt / thiết bị trong chính sách.
   useEffect(() => {
     setPolicySupport(null);
@@ -535,6 +557,48 @@ export default function ExpenseRequestForm() {
       ? schoolYearOfMonth(selectedPeriod.month, selectedPeriod.year)
       : selectedSchoolYear || undefined;
 
+  // Khoản đã chọn (theo số liệu bảng hiện tại) + tổng Còn chi = trần số tiền.
+  const pickedGroups = pickSources.flatMap((src) => {
+    const keys = new Set(picked[src] ?? []);
+    return (sheets[src]?.groups ?? [])
+      .filter((group) => keys.has(group.key))
+      .map((group) => ({ source: src, group }));
+  });
+  const pickedTotal =
+    Math.round(
+      pickedGroups.reduce(
+        (sum, { group }) => sum + Math.max(0, Number(group.remainingAmount) || 0),
+        0
+      ) * 100
+    ) / 100;
+
+  const toggleSource = (src: CashflowSource, checked: boolean) => {
+    setPickSources((current) =>
+      checked
+        ? SALES_PICK_SOURCES.filter((item) => item === src || current.includes(item))
+        : current.filter((item) => item !== src)
+    );
+    if (!checked) {
+      setPicked((current) => ({ ...current, [src]: [] }));
+      setSheets((current) => ({ ...current, [src]: null }));
+    }
+    setError("");
+  };
+
+  const toggleItem = (
+    src: CashflowSource,
+    group: CashflowSheetResponse["groups"][number],
+    checked: boolean
+  ) => {
+    setPicked((current) => {
+      const keys = new Set(current[src] ?? []);
+      if (checked) keys.add(group.key);
+      else keys.delete(group.key);
+      return { ...current, [src]: [...keys] };
+    });
+    setError("");
+  };
+
   const pickFile = (list: FileList | null) => {
     const f = list?.[0];
     if (!f) return;
@@ -565,11 +629,25 @@ export default function ExpenseRequestForm() {
     if (isMonthlyExpense) {
       if (!selectedSchool) return "Vui lòng chọn trường";
       if (!selectedPeriodId) return "Vui lòng chọn kỳ kế toán";
-      if (sheetLoading) return "Đang tải số liệu QL thu chi";
-      if (sheet?.openSheetRequest)
-        return `Bảng này đã có đề xuất ${sheet.openSheetRequest.code || `#${sheet.openSheetRequest.id}`} đang chạy`;
-      if (sheet?.hasData && !(sheet.proposableTotal > 0))
-        return `Bảng ${sheet.table} không còn khoản nào cần đề xuất`;
+      if (!pickSources.length)
+        return "Tích ít nhất một loại: Chi trường, Chi Ban quản lí hoặc Chi giáo viên";
+      for (const src of pickSources) {
+        const label = SALES_PICK_SOURCE_META[src].label;
+        const sheet = sheets[src];
+        if (!sheet) return `Đang tải bảng ${label}`;
+        const keys = new Set(picked[src] ?? []);
+        const groups = sheet.groups.filter((group) => keys.has(group.key));
+        if (!groups.length)
+          return `Chọn khoản cần chi của ${label} hoặc bỏ tích ${label}`;
+        for (const group of groups) {
+          const reason = sheetGroupBlockReason(sheet, group);
+          if (reason)
+            return `${label} · ${group.subjectName || group.teacherName || group.label}: ${reason} — bỏ chọn khoản này`;
+        }
+      }
+      if (!(salesAmount > 0)) return "Nhập số tiền đề xuất";
+      if (salesAmount > pickedTotal + 0.005)
+        return `Số tiền đề xuất vượt tổng Còn chi các khoản đã chọn (${money(pickedTotal)})`;
       return "";
     }
     if (proposalTarget === "WARD" && !selectedWard)
@@ -622,19 +700,27 @@ export default function ExpenseRequestForm() {
       isEdit &&
       !window.confirm(
         isMonthlyExpense
-          ? "Lưu thay đổi sẽ đưa đề xuất về Chờ Kế toán nhập số liệu và chạy lại quy trình từ đầu. Tiếp tục?"
+          ? "Lưu thay đổi sẽ đưa đề xuất về Chờ Kế toán nhập số tiền và chạy lại quy trình từ đầu. Tiếp tục?"
           : "Lưu thay đổi sẽ đưa đề xuất về Chờ duyệt và gửi duyệt lại từ đầu. Tiếp tục?"
       )
     ) {
       return;
     }
     setSaving(true);
-    // Chi theo QL thu chi: một trường + kỳ đã có hoặc kỳ tháng mới.
+    // Đề xuất chi tháng: một trường + một kỳ + các khoản đã tích + số tiền.
+    const cashflowItems: MonthlyCashflowItemInput[] = pickedGroups.map(
+      ({ source, group }) =>
+        source === "SCHOOL_TEACHER"
+          ? { source, schoolTeacherId: Number(group.schoolTeacherId) }
+          : { source, subjectId: Number(group.subjectId) }
+    );
     const monthlySheet = isMonthlyExpense
       ? {
           schoolId: Number(selectedSchool),
           schoolYear: monthlySchoolYear,
           expensePeriodId: Number(selectedPeriodId),
+          cashflowItems,
+          salesAmount,
         }
       : {};
     const singleSchool = !isMonthlyExpense && proposalTarget === "SCHOOL";
@@ -657,7 +743,6 @@ export default function ExpenseRequestForm() {
           participants: participants.trim() || undefined,
           deductPolicy,
           isMonthlyExpense,
-          cashflowSource: cashflowSource ?? undefined,
           expectedPaymentDate: dateChanged ? expectedPaymentDate : undefined,
           schoolId:
             singleSchool && selectedSchool ? Number(selectedSchool) : undefined,
@@ -675,7 +760,7 @@ export default function ExpenseRequestForm() {
         });
         toast.success(
           isMonthlyExpense
-            ? "Đã sửa đề xuất, chờ Kế toán nhập số liệu lại"
+            ? "Đã sửa đề xuất, chờ Kế toán nhập số tiền lại"
             : "Đã sửa đề xuất và gửi duyệt lại từ đầu"
         );
         navigate(`${base}/${editId}`, { replace: true });
@@ -687,7 +772,6 @@ export default function ExpenseRequestForm() {
         participants: participants.trim() || undefined,
         deductPolicy,
         isMonthlyExpense,
-        cashflowSource: cashflowSource ?? undefined,
         expectedPaymentDate,
         wardId:
           !isMonthlyExpense && proposalTarget === "WARD" && selectedWard
@@ -705,7 +789,7 @@ export default function ExpenseRequestForm() {
       });
       toast.success(
         isMonthlyExpense
-          ? "Đã gửi đề xuất, chờ Kế toán nhập số liệu"
+          ? "Đã gửi đề xuất, chờ Kế toán nhập số tiền"
           : "Đã gửi đề xuất, chờ Giám đốc duyệt"
       );
       navigate(`${base}/${created.id}`, { replace: true });
@@ -756,28 +840,17 @@ export default function ExpenseRequestForm() {
               <div className="mt-1 grid grid-cols-2 gap-1 rounded-xl border border-gray-100 bg-gray-50 p-1">
                 {(
                   [
-                    { value: null, label: "Đề xuất chi Năm" },
-                    {
-                      value: "MANAGEMENT",
-                      label: CASHFLOW_SOURCE_META.MANAGEMENT.label,
-                    },
-                    {
-                      value: "SCHOOL_EXPENSE",
-                      label: CASHFLOW_SOURCE_META.SCHOOL_EXPENSE.label,
-                    },
-                    {
-                      value: "SCHOOL_TEACHER",
-                      label: "Đề xuất Chi Giáo viên Trường",
-                    },
-                  ] as { value: CashflowSource | null; label: string }[]
+                    { value: false, label: "Đề xuất chi Năm" },
+                    { value: true, label: "Đề xuất chi tháng" },
+                  ] as { value: boolean; label: string }[]
                 ).map((tab) => (
                   <button
-                    key={tab.value ?? "YEAR"}
+                    key={String(tab.value)}
                     type="button"
                     onClick={() => {
-                      if (tab.value === cashflowSource) return;
-                      setCashflowSource(tab.value);
-                      setDeductPolicy(tab.value === null);
+                      if (tab.value === isMonthlyExpense) return;
+                      setIsMonthlyExpense(tab.value);
+                      setDeductPolicy(!tab.value);
                       if (tab.value) {
                         setProposalTarget("SCHOOL");
                         setSelectedRegion(null);
@@ -787,7 +860,7 @@ export default function ExpenseRequestForm() {
                       setError("");
                     }}
                     className={`rounded-lg px-2 py-2 text-xs font-medium leading-tight transition ${
-                      cashflowSource === tab.value
+                      isMonthlyExpense === tab.value
                         ? "bg-blue-500 text-white shadow-sm"
                         : "text-gray-500"
                     }`}
@@ -796,15 +869,15 @@ export default function ExpenseRequestForm() {
                   </button>
                 ))}
               </div>
-              {cashflowSource && (
+              {isMonthlyExpense && (
                 <p className="mt-1 text-xs text-blue-600">
-                  Chọn trường và kỳ kế toán; form hiện toàn bộ số liệu bảng{" "}
-                  {CASHFLOW_SOURCE_META[cashflowSource].table} ở QL thu chi.
+                  Chọn trường và kỳ kế toán, tích Chi trường / Chi Ban quản lí /
+                  Chi giáo viên rồi chọn khoản cần chi ở bảng QL thu chi.
                 </p>
               )}
             </div>
 
-            <ExpenseFlowSteps source={cashflowSource} />
+            <ExpenseFlowSteps source={null} salesPick={isMonthlyExpense} />
 
             {!isMonthlyExpense && (
               <div>
@@ -956,6 +1029,7 @@ export default function ExpenseRequestForm() {
                   setSelectedSchoolYear(null);
                   setSelectedPeriodId(null);
                   setPolicySelection({});
+                  setPicked({});
                 }}
                 disabled={schoolsLoading}
               />
@@ -996,7 +1070,7 @@ export default function ExpenseRequestForm() {
                 />
               )}
 
-            {cashflowSource && selectedSchool && (
+            {isMonthlyExpense && selectedSchool && (
               <div>
                 <label className="text-sm text-gray-600">
                   Kỳ kế toán <span className="text-red-500">*</span>
@@ -1016,9 +1090,10 @@ export default function ExpenseRequestForm() {
                       id: period.id,
                       name: periodLabel(period),
                     }))}
-                    onChange={(value) =>
-                      setSelectedPeriodId(value ? Number(value) : null)
-                    }
+                    onChange={(value) => {
+                      setSelectedPeriodId(value ? Number(value) : null);
+                      setPicked({});
+                    }}
                     disabled={periodsLoading || yearPeriods.length === 0}
                   />
                   {!periodsLoading && yearPeriods.length === 0 && (
@@ -1030,12 +1105,97 @@ export default function ExpenseRequestForm() {
               </div>
             )}
 
-            {cashflowSource && selectedSchool && selectedPeriodId && (
-              <CashflowSheetPreview
-                sheet={sheet}
-                loading={sheetLoading}
-                error={sheetError}
-              />
+            {isMonthlyExpense && selectedSchool && selectedPeriodId && (
+              <div className="space-y-2">
+                <label className="text-sm text-gray-600">
+                  Loại chi <span className="text-red-500">*</span>
+                </label>
+                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+                  {SALES_PICK_SOURCES.map((src) => (
+                    <label
+                      key={src}
+                      className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${
+                        pickSources.includes(src)
+                          ? "border-blue-300 bg-blue-50 text-blue-800"
+                          : "border-gray-200 text-gray-700"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={pickSources.includes(src)}
+                        onChange={(event) => toggleSource(src, event.target.checked)}
+                      />
+                      {SALES_PICK_SOURCE_META[src].icon}{" "}
+                      {SALES_PICK_SOURCE_META[src].label}
+                    </label>
+                  ))}
+                </div>
+                {pickSources.includes("SCHOOL_TEACHER") && (
+                  <p className="text-xs text-gray-500">
+                    Chi giáo viên chỉ đề xuất được sau khi Kế toán nhập bảng Giáo
+                    viên trường (dưới bảng Chi Ngoài) của trường trong kỳ này.
+                  </p>
+                )}
+                {pickSources.map((src) => (
+                  <SalesPickSourceSheet
+                    key={`${src}:${selectedSchool}:${selectedPeriodId}`}
+                    source={src}
+                    schoolId={Number(selectedSchool)}
+                    expensePeriodId={Number(selectedPeriodId)}
+                    excludeSuggestId={isEdit ? editId : undefined}
+                    selected={new Set(picked[src] ?? [])}
+                    onToggle={toggleItem}
+                    onLoaded={(source, data) =>
+                      setSheets((current) => ({ ...current, [source]: data }))
+                    }
+                  />
+                ))}
+                {pickSources.length > 0 && (
+                  <div className="rounded-xl border border-gray-200 bg-white p-3 space-y-1.5">
+                    <div className="flex items-center justify-between text-xs text-gray-600">
+                      <span>
+                        Đã chọn {pickedGroups.length} khoản · Tổng Còn chi
+                      </span>
+                      <b className="tabular-nums text-orange-600">
+                        {money(pickedTotal)}
+                      </b>
+                    </div>
+                    <label className="text-sm text-gray-600">
+                      Số tiền đề xuất <span className="text-red-500">*</span>
+                    </label>
+                    <div className="flex gap-2">
+                      <DecimalInput
+                        value={salesAmount}
+                        onValueChange={(value) => setSalesAmount(Number(value) || 0)}
+                        className={`w-full rounded-lg border px-3 py-2 text-sm ${
+                          salesAmount > pickedTotal + 0.005 ? "border-red-300" : ""
+                        }`}
+                        placeholder="0"
+                        allowDecimal={false}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setSalesAmount(pickedTotal)}
+                        disabled={!(pickedTotal > 0)}
+                        className="shrink-0 rounded-lg border border-blue-200 px-3 text-xs font-medium text-blue-600 disabled:opacity-40"
+                      >
+                        Tối đa
+                      </button>
+                    </div>
+                    {salesAmount > pickedTotal + 0.005 ? (
+                      <p className="text-[11px] text-red-600">
+                        Vượt tổng Còn chi các khoản đã chọn ({money(pickedTotal)})
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-gray-500">
+                        Không vượt tổng Còn chi các khoản đã chọn. Kế toán sẽ nhập
+                        số tiền từng khoản, tổng không vượt số này.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
 
             <div>
@@ -1084,7 +1244,7 @@ export default function ExpenseRequestForm() {
             {isEdit
               ? "Có thể sửa ở mọi trạng thái. Mỗi lần lưu sẽ gửi duyệt lại từ đầu."
               : isMonthlyExpense
-              ? "Sau khi gửi, đề xuất chuyển Kế toán nhập số liệu. Có thể sửa lại trước khi Thủ quỹ xuất tiền; mỗi lần sửa sẽ chạy lại quy trình từ đầu."
+              ? "Sau khi gửi, đề xuất chuyển Kế toán nhập số tiền từng khoản. Có thể sửa lại trước khi Thủ quỹ xuất tiền; mỗi lần sửa sẽ chạy lại quy trình từ đầu."
               : "Sau khi gửi, đề xuất sẽ chuyển đến giám đốc duyệt. Có thể sửa lại ở mọi trạng thái; mỗi lần sửa sẽ duyệt lại từ đầu."}
           </p>
 

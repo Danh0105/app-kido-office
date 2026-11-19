@@ -46,6 +46,12 @@ const MAX_SIZE = 50 * 1024 * 1024;
 
 type Option = { id: number | string; name: string };
 type ProposalTarget = "WARD" | "SCHOOL";
+/**
+ * Hình thức đề xuất (một hàng tab): Chi Năm = đề xuất cho trường (trước đây
+ * "Đề xuất ngoài chính sách"), Chi tháng = tích khoản ở QL thu chi, Xã/phường
+ * = đề xuất cho phường/xã (cũng là chi Năm, Giám đốc phân loại khi duyệt).
+ */
+type FormKind = "YEAR" | "MONTHLY" | "WARD";
 
 /** Năm học của kỳ tháng thật (tháng 8 trở đi thuộc năm học bắt đầu năm đó). */
 const schoolYearOfMonth = (month: number, year: number) =>
@@ -84,9 +90,9 @@ const periodLabel = (period: ExpensePeriod) =>
     ? `Tháng ${period.month}/${period.year}`
     : `Kỳ ${period.month}/${period.year}`);
 
-// Hình thức: Chi Năm (phường/xã hoặc "Đề xuất ngoài chính sách" cho trường —
-// trường phải có hỗ trợ tiền mặt/thiết bị trong chính sách đã duyệt, form hiện
-// bảng cho kinh doanh xem) hoặc "Đề xuất chi tháng" (từ 19/11/2026): chọn một
+// Hình thức (một hàng tab): Chi Năm cho trường (trường phải có hỗ trợ tiền
+// mặt/thiết bị trong chính sách đã duyệt, form hiện bảng cho kinh doanh xem),
+// Đề xuất xã/phường (cũng là chi Năm) hoặc "Đề xuất chi tháng" (từ 19/11/2026): chọn một
 // trường + một kỳ kế toán Kế toán đã tạo, tích Chi trường (bảng Chi Trường) /
 // Chi Ban quản lí (bảng Chi Ngoài) — chỉ môn đã xác nhận BBCS — / Chi giáo viên
 // (bảng Giáo viên trường Kế toán đã nhập), tích khoản và nhập số tiền ≤ tổng Còn
@@ -125,7 +131,35 @@ export default function ExpenseRequestForm() {
   >({});
   const [salesAmount, setSalesAmount] = useState(0);
   const [file, setFile] = useState<File | null>(null);
-  const [proposalTarget, setProposalTarget] = useState<ProposalTarget>("WARD");
+  const [proposalTarget, setProposalTarget] = useState<ProposalTarget>("SCHOOL");
+  const formKind: FormKind = isMonthlyExpense
+    ? "MONTHLY"
+    : proposalTarget === "WARD"
+      ? "WARD"
+      : "YEAR";
+
+  const selectFormKind = (next: FormKind) => {
+    if (next === formKind) return;
+    const nextTarget: ProposalTarget = next === "WARD" ? "WARD" : "SCHOOL";
+    setIsMonthlyExpense(next === "MONTHLY");
+    setDeductPolicy(next !== "MONTHLY");
+    if (nextTarget !== proposalTarget) {
+      setProposalTarget(nextTarget);
+      setSelectedRegion(null);
+      setSelectedWard(null);
+      setSelectedSchool(null);
+      setSelectedSchoolYear(null);
+      setSelectedPeriodId(null);
+      setPolicySelection({});
+      setPicked({});
+      // Giáo viên công ty: phường/trường lấy từ hồ sơ giáo viên, giữ nguyên.
+      if (!teacherFinanceWorkspace) {
+        setWards([]);
+        setSchools([]);
+      }
+    }
+    setError("");
+  };
 
   // Đề xuất phường/xã: khu vực → phường/xã.
   // Đề xuất trường: chọn trực tiếp trong danh sách trường được phụ trách.
@@ -837,30 +871,20 @@ export default function ExpenseRequestForm() {
           <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
             <div>
               <label className="text-sm text-gray-600">Hình thức đề xuất</label>
-              <div className="mt-1 grid grid-cols-2 gap-1 rounded-xl border border-gray-100 bg-gray-50 p-1">
+              <div className="mt-1 grid grid-cols-3 gap-1 rounded-xl border border-gray-100 bg-gray-50 p-1">
                 {(
                   [
-                    { value: false, label: "Đề xuất chi Năm" },
-                    { value: true, label: "Đề xuất chi tháng" },
-                  ] as { value: boolean; label: string }[]
+                    { value: "YEAR", label: "Đề xuất chi Năm" },
+                    { value: "MONTHLY", label: "Đề xuất chi tháng" },
+                    { value: "WARD", label: "Đề xuất xã/phường" },
+                  ] as { value: FormKind; label: string }[]
                 ).map((tab) => (
                   <button
-                    key={String(tab.value)}
+                    key={tab.value}
                     type="button"
-                    onClick={() => {
-                      if (tab.value === isMonthlyExpense) return;
-                      setIsMonthlyExpense(tab.value);
-                      setDeductPolicy(!tab.value);
-                      if (tab.value) {
-                        setProposalTarget("SCHOOL");
-                        setSelectedRegion(null);
-                        setSelectedWard(null);
-                        if (!teacherFinanceWorkspace) setWards([]);
-                      }
-                      setError("");
-                    }}
+                    onClick={() => selectFormKind(tab.value)}
                     className={`rounded-lg px-2 py-2 text-xs font-medium leading-tight transition ${
-                      isMonthlyExpense === tab.value
+                      formKind === tab.value
                         ? "bg-blue-500 text-white shadow-sm"
                         : "text-gray-500"
                     }`}
@@ -875,57 +899,15 @@ export default function ExpenseRequestForm() {
                   Chi giáo viên rồi chọn khoản cần chi ở bảng QL thu chi.
                 </p>
               )}
+              {isEdit && (
+                <p className="mt-1 text-xs text-gray-400">
+                  Đổi hình thức sẽ chuyển đề xuất sang trường hoặc phường/xã mới
+                  đã chọn.
+                </p>
+              )}
             </div>
 
             <ExpenseFlowSteps source={null} salesPick={isMonthlyExpense} />
-
-            {!isMonthlyExpense && (
-              <div>
-                <label className="text-sm text-gray-600">
-                  Đối tượng đề xuất
-                </label>
-                <div className="mt-1 grid grid-cols-2 gap-1 rounded-xl border border-gray-100 bg-gray-50 p-1">
-                  {(
-                    [
-                      { value: "WARD", label: "Đề xuất phường/xã" },
-                      { value: "SCHOOL", label: "Đề xuất ngoài chính sách" },
-                    ] as { value: ProposalTarget; label: string }[]
-                  ).map((tab) => (
-                    <button
-                      key={tab.value}
-                      type="button"
-                      onClick={() => {
-                        if (tab.value === proposalTarget) return;
-                        setProposalTarget(tab.value);
-                        setSelectedRegion(null);
-                        setSelectedWard(null);
-                        setSelectedSchool(null);
-                        setSelectedSchoolYear(null);
-                        // Giáo viên công ty: phường/trường lấy từ hồ sơ giáo viên, giữ nguyên.
-                        if (!teacherFinanceWorkspace) {
-                          setWards([]);
-                          setSchools([]);
-                        }
-                        setError("");
-                      }}
-                      className={`rounded-lg px-2 py-2 text-xs font-medium transition ${
-                        proposalTarget === tab.value
-                          ? "bg-blue-500 text-white shadow-sm"
-                          : "text-gray-500"
-                      }`}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
-                {isEdit && (
-                  <p className="mt-1 text-xs text-gray-400">
-                    Đổi đối tượng sẽ chuyển đề xuất sang phường/xã hoặc trường
-                    mới đã chọn.
-                  </p>
-                )}
-              </div>
-            )}
 
             {!isMonthlyExpense && (
               <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">

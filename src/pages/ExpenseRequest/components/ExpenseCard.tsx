@@ -112,11 +112,11 @@ export default function ExpenseCard({
             </span>
           ) : item.schoolId ? (
             <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-purple-100 text-purple-700">
-              🏫 Đề xuất ngoài chính sách
+              🏫 Đề xuất chi Năm
             </span>
           ) : item.wardId ? (
             <span className="text-[10px] px-2 py-[2px] rounded-full font-medium bg-teal-100 text-teal-700">
-              🏘️ Đề xuất cho phường/xã
+              🏘️ Đề xuất xã/phường
             </span>
           ) : null}
           {item.isOverdue && (

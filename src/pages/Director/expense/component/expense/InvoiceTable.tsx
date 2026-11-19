@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Loader2, Send } from "lucide-react";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
 import CashAccountSelect from "./CashAccountSelect";
-import DecimalInput from "@/components/DecimalInput";
 import type {
   RevenueEInvoice,
   RevenueEInvoiceLine,
@@ -10,6 +9,7 @@ import type {
 import { calculateRevenueQuantity, companyPaymentOf } from "@/utils/revenueAmount";
 import { rowTeacherUnitPrice } from "../../utils/policyOtherCosts";
 import OptionalAmountInput from "./OptionalAmountInput";
+import MoneyInput from "./MoneyInput";
 
 type Props = {
   inputRows: InputExpenseRow[];
@@ -195,6 +195,18 @@ export default function InvoiceTable({
       ? rowAmountOf(row, idx)
       : Number(row.companyPaymentTotal);
 
+  // Dòng "Thu" có Số tiền thu lớn hơn Tổng thanh toán công ty (thường do gõ nhầm).
+  const overCollectedRows = inputRows
+    .map((row, idx) =>
+      row.invoiceCashDirection === "IN" &&
+      row.invoiceCashAmount !== null &&
+      row.invoiceCashAmount !== undefined &&
+      Number(row.invoiceCashAmount) > companyTotalOf(row, idx) + 0.005
+        ? idx + 1
+        : null,
+    )
+    .filter((value): value is number => value !== null);
+
   const totalCompanyPayment = inputRows.reduce(
     (sum, row, idx) => sum + companyTotalOf(row, idx),
     0,
@@ -315,6 +327,13 @@ export default function InvoiceTable({
             </div>
           )}
 
+          {overCollectedRows.length > 0 && (
+            <div className="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-red-600 shadow-sm">
+              ⚠️ Dòng {overCollectedRows.join(", ")}: Số tiền thu vượt Tổng thanh
+              toán công ty
+            </div>
+          )}
+
           <div className="text-right">
             <div className="text-xs text-amber-50">Tổng thanh toán công ty</div>
             <div className="font-bold text-2xl">
@@ -391,6 +410,12 @@ export default function InvoiceTable({
                 policyData,
               );
               const invoiceQuantity = calculateRevenueQuantity(row);
+              const rowCompanyTotal = companyTotalOf(row, idx);
+              const overCollected =
+                row.invoiceCashDirection === "IN" &&
+                row.invoiceCashAmount !== null &&
+                row.invoiceCashAmount !== undefined &&
+                Number(row.invoiceCashAmount) > rowCompanyTotal + 0.005;
 
               return (
                 <tr key={idx} className="hover:bg-slate-50 transition">
@@ -536,18 +561,28 @@ export default function InvoiceTable({
                     </select>
                   </td>
 
-                  {/* Số tiền thực thu/chi — báo cáo thu chi lấy đúng số này */}
-                  <td className="border p-2">
-                    <DecimalInput
+                  {/* Số tiền thực thu/chi — báo cáo thu chi lấy đúng số này.
+                      Nhận 2 số lẻ (VD 59.843,52); Thu vượt Tổng thanh toán
+                      công ty của dòng thì báo đỏ (19/11/2026). */}
+                  <td className="border p-2 align-top">
+                    <MoneyInput
                       value={row.invoiceCashAmount}
                       disabled={fullyLocked}
-                      onValueChange={(value) =>
+                      onChange={(value) =>
                         updateInputRow(idx, "invoiceCashAmount", value)
                       }
-                      placeholder="0"
-                      allowDecimal={false}
-                      className="w-full min-w-[150px] h-14 text-center font-bold border rounded-lg text-sm disabled:bg-slate-100 disabled:text-slate-400"
+                      className={`w-full min-w-[150px] h-14 text-center font-bold border rounded-lg text-sm disabled:bg-slate-100 disabled:text-slate-400 ${
+                        overCollected
+                          ? "border-red-500 bg-red-50 text-red-700 ring-2 ring-red-200"
+                          : ""
+                      }`}
                     />
+                    {overCollected && (
+                      <div className="mt-1 max-w-[180px] text-[11px] font-semibold leading-tight text-red-600">
+                        ⚠️ Thu vượt Tổng thanh toán công ty ({formatVND(rowCompanyTotal)}) —
+                        kiểm tra lại số
+                      </div>
+                    )}
                   </td>
 
                   <td className="border p-2">

@@ -37,6 +37,7 @@ import {
   getOtherCostTax,
   getPolicyOtherCosts,
   getPolicyTeacherUnitPrice,
+  rowTeacherUnitPrice,
 } from "../utils/policyOtherCosts";
 import {
   getManagementRowInput,
@@ -1250,7 +1251,7 @@ export default function RealExpenseDetail({
               id: r.id,
               subjectId: r.subjectId || subId,
               invoiceAmount: r.schoolExpenseAmount || 0,
-              teacherUnitPrice: policyTeacherUnitPrice,
+              teacherUnitPrice: r.teacherUnitPrice ?? r.giaovien ?? policyTeacherUnitPrice,
               taxUnitPrice:
                 r.taxUnitPrice ??
                 r.thue ??
@@ -1442,9 +1443,8 @@ export default function RealExpenseDetail({
           totalPeriods: Number(inputRow.totalPeriods || 0),
           studentCount: Number(inputRow.studentCount || 0),
           monthsCount: Number(inputRow.monthsCount ?? 0),
-          // Luôn lưu đúng ĐG giáo viên trong Thông tin cơ sở vật chất. Backend
-          // tự loại phần tiền giáo viên khỏi tổng Chi Trường khi bảng riêng áp dụng.
-          teacherUnitPrice: getPolicyTeacherUnitPrice(policyData),
+          // ĐG giáo viên nhập/sửa như ĐG CSVC; bỏ trống thì theo chính sách.
+          teacherUnitPrice: rowTeacherUnitPrice(row, policyData),
           taxUnitPrice: Number(
             row.taxUnitPrice ?? policyData.thue ?? policyData.tax ?? 0,
           ),

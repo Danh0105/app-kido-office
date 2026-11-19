@@ -5,7 +5,7 @@ import { useMemo } from "react";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
 import { formatDecimal, roundDecimal } from "@/utils/decimal";
 import DecimalInput from "@/components/DecimalInput";
-import { getPolicyTeacherUnitPrice } from "../../utils/policyOtherCosts";
+import { rowTeacherUnitPrice } from "../../utils/policyOtherCosts";
 import CashAccountSelect from "./CashAccountSelect";
 
 type Props = {
@@ -42,7 +42,8 @@ export default function RevenueExpenseRow({
   const months = Number(inputData.monthsCount || 0);
 
   const policyData = subjects?.policies?.[0]?.data || {};
-  const teacherUnitPrice = getPolicyTeacherUnitPrice(policyData);
+  // 19/11/2026: ĐG giáo viên nhập/sửa như ĐG CSVC (bỏ trống = theo chính sách).
+  const teacherUnitPrice = rowTeacherUnitPrice(row, policyData);
   const taxUnitPrice = Number(
     row.taxUnitPrice ??
       row.thue ??
@@ -59,9 +60,8 @@ export default function RevenueExpenseRow({
 
   const calculations = useMemo(() => {
     const invoiceAmount = students * months * unitPrice;
-    const teacherAmount = teacherSplit
-      ? 0
-      : students * months * teacherUnitPrice;
+    // Tính cả khi môn có bảng Giáo viên trường (user chọn 19/11/2026).
+    const teacherAmount = students * months * teacherUnitPrice;
     const csvcAmount = csvcUnitPrice * months * students;
     const taxAmount = students * months * taxUnitPrice;
 
@@ -226,15 +226,15 @@ export default function RevenueExpenseRow({
           {calculations.csvcAmount.toLocaleString("vi-VN")}
         </span>
       </div>
-      {/* ĐƠN GIÁ GIÁO VIÊN — lấy từ Thông tin cơ sở vật chất */}
-      <div
-        className="p-2 border-r border-slate-200"
-        title={teacherSplit ? "Đơn giá theo Thông tin cơ sở vật chất; tiền giáo viên được theo dõi ở bảng riêng" : undefined}
-      >
+      {/* ĐƠN GIÁ GIÁO VIÊN — mặc định theo Thông tin cơ sở vật chất, sửa được như ĐG CSVC */}
+      <div className="p-2 border-r border-slate-200">
         <DecimalInput
           value={teacherUnitPrice}
-          disabled
-          onValueChange={() => undefined}
+          disabled={locked}
+          onValueChange={(value) =>
+            updateRow(index, "teacherUnitPrice", value)
+          }
+          placeholder="0"
           fractionDigits={2}
           commitOnBlur
           className={`${metricInputClass} text-amber-700`}

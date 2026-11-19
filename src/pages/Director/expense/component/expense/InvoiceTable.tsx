@@ -8,7 +8,7 @@ import type {
   RevenueEInvoiceLine,
 } from "@/service/schoolExpense";
 import { calculateRevenueQuantity, companyPaymentOf } from "@/utils/revenueAmount";
-import { getPolicyTeacherUnitPrice } from "../../utils/policyOtherCosts";
+import { rowTeacherUnitPrice } from "../../utils/policyOtherCosts";
 
 type Props = {
   inputRows: InputExpenseRow[];
@@ -167,9 +167,8 @@ export default function InvoiceTable({
 
   const schoolRowOf = (idx: number) => ({
     ...(revenueRows[idx] || {}),
-    teacherUnitPrice: teacherSplit
-      ? 0
-      : getPolicyTeacherUnitPrice(policyData),
+    // ĐG giáo viên của dòng Chi Trường (tính cả khi môn có bảng Giáo viên trường).
+    teacherUnitPrice: rowTeacherUnitPrice(revenueRows[idx], policyData),
   });
 
   const rowAmountOf = (row: InputExpenseRow, idx: number) =>

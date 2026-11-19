@@ -72,6 +72,19 @@ export const getPolicyTeacherUnitPrice = (policyData: any) => {
 };
 
 /**
+ * ĐG giáo viên của một dòng Chi Trường (từ 19/11/2026 nhập/sửa như ĐG CSVC):
+ * số đã nhập/lưu của dòng, bỏ trống thì lấy theo Thông tin cơ sở vật chất.
+ */
+export const rowTeacherUnitPrice = (row: any, policyData: any) => {
+  const raw = row?.teacherUnitPrice ?? row?.giaovien;
+  if (raw === undefined || raw === null || raw === "") {
+    return getPolicyTeacherUnitPrice(policyData);
+  }
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 ? value : 0;
+};
+
+/**
  * Thành tiền thực chi của một nguồn Chi khác.
  * `quantity` đã bao gồm số tháng và ưu tiên số HS, nếu không có
  * số HS thì dùng số tiết, giống QL1/QL2 và backend.

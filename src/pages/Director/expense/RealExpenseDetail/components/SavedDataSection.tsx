@@ -306,10 +306,10 @@ export default function SavedDataSection({
   const schoolRows = savedSchoolItems.map((r: any) => {
     const students = Number(r.studentCount || 0);
     const months = Number(r.monthsCount || 0);
-    const teacherUP = policyTeacherUnitPrice;
+    const teacherUP = Number(r.teacherUnitPrice ?? r.giaovien ?? policyTeacherUnitPrice);
     const taxUP = Number(r.taxUnitPrice ?? r.thue ?? r.tax ?? 0);
     const csvcUP = Number(r.csvcUnitPrice ?? r.csvc ?? 0);
-    const teacherAmt = teacherSplit ? 0 : students * months * teacherUP;
+    const teacherAmt = students * months * teacherUP;
     const taxAmt = students * months * taxUP;
     const csvcAmt = students * months * csvcUP;
     const totalSchool = teacherAmt + taxAmt + csvcAmt;

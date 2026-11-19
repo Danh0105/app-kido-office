@@ -456,7 +456,11 @@ export default function SavedDataSection({
       ...r,
       quantity,
       companyUnitPrice: unitPrice,
-      total: quantity * unitPrice,
+      // "Tổng thanh toán công ty" nhập tay (nếu có) thay số tự tính.
+      total:
+        r.companyPaymentTotal === null || r.companyPaymentTotal === undefined
+          ? quantity * unitPrice
+          : Number(r.companyPaymentTotal),
     };
   });
   type InvoiceView = (typeof invoiceRows)[number];

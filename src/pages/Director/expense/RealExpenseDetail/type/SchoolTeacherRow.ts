@@ -10,6 +10,8 @@ export type SchoolTeacherRow = {
   monthsCount?: number;
   /** Chưa nhập → Đơn giá "Giáo viên trường" của chính sách. */
   unitPrice?: number | string;
+  /** Thuế TNCN nhập tay; trống ("" / undefined) = tự tính theo ngưỡng 5 triệu. */
+  pitAmount?: number | string;
   /** Giáo viên nhận (danh sách giáo viên của trường); chưa chọn = null. */
   schoolTeacherId?: number | null;
   expenseDate: string;
@@ -17,4 +19,6 @@ export type SchoolTeacherRow = {
   note: string;
   /** Đã trả theo Đề xuất Chi GV trường — Ngày chi / Nguồn chi khoá, không xoá dòng. */
   suggestCodes?: string;
+  /** Đề xuất chi trả từ nhiều nguồn chi: số tiền từng nguồn. */
+  suggestSources?: { cashAccount: string | null; amount: number }[];
 };

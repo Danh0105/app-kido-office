@@ -54,7 +54,12 @@ export const calculateSchoolTeacherAmount = (
  * từ ngưỡng thì 10% mỗi dòng; dòng chưa chọn giáo viên xét riêng.
  */
 export const calculateSchoolTeacherTax = (
-  rows: { schoolTeacherId?: number | null; amount: number }[],
+  rows: {
+    schoolTeacherId?: number | null;
+    amount: number;
+    /** Thuế nhập tay (19/11/2026); trống = tự tính. */
+    manualPit?: number | string | null;
+  }[],
   otherSubjectGross: Record<number, number> = {},
 ) => {
   const gross = new Map<number, number>();
@@ -67,9 +72,27 @@ export const calculateSchoolTeacherTax = (
       ? (gross.get(row.schoolTeacherId) ?? 0) +
         Number(otherSubjectGross[row.schoolTeacherId] || 0)
       : row.amount;
-    const pitRate =
+    const autoRate =
       teacherGross >= SCHOOL_TEACHER_PIT_THRESHOLD ? SCHOOL_TEACHER_PIT_RATE : 0;
-    const pitAmount = Math.round((row.amount * pitRate) / 100);
-    return { teacherGross, pitRate, pitAmount, netAmount: round2(row.amount - pitAmount) };
+    const autoPit = Math.round((row.amount * autoRate) / 100);
+    const manual =
+      row.manualPit === undefined || row.manualPit === null || row.manualPit === ""
+        ? null
+        : Math.max(0, Math.round(Number(row.manualPit) || 0));
+    const pitAmount = manual ?? autoPit;
+    const pitRate =
+      manual === null
+        ? autoRate
+        : row.amount > 0
+          ? round2((manual / row.amount) * 100)
+          : 0;
+    return {
+      teacherGross,
+      pitRate,
+      pitAmount,
+      autoPit,
+      manual: manual !== null,
+      netAmount: round2(row.amount - pitAmount),
+    };
   });
 };

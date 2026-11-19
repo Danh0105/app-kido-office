@@ -27,4 +27,6 @@ export type ManagementRow = {
   suggestCodes?: string;
   /** Phần Đã chi do đề xuất chi ghi vào. */
   suggestPaidAmount?: number;
+  /** Đề xuất chi trả từ nhiều nguồn chi: số tiền từng nguồn. */
+  suggestSources?: { cashAccount: string | null; amount: number }[];
 };

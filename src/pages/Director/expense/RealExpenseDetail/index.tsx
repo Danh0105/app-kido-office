@@ -48,6 +48,7 @@ import { revenueQuantityDefaultsFromPolicy } from "@/utils/revenueAmount";
 import { COLLABORATOR_PAY_ROLES } from "@/service/collaboratorPayroll";
 import SchoolTeacherPayrollReport from "../components/SchoolTeacherPayroll/SchoolTeacherPayrollReport";
 import SchoolTeacherTable from "../component/expense/SchoolTeacherTable";
+import { isAllInvoiceLocked } from "../component/expense/InvoiceTable";
 import type { SchoolTeacherRow } from "./type/SchoolTeacherRow";
 import type {
   SchoolTeacher,
@@ -1004,11 +1005,13 @@ export default function RealExpenseDetail({
       studentCount: Number(item.studentCount || 0),
       monthsCount: Number(item.monthsCount ?? 1),
       unitPrice: Number(item.unitPrice || 0),
+      pitAmount: item.pitManual ? Number(item.pitAmount || 0) : "",
       schoolTeacherId: item.schoolTeacherId ?? null,
       expenseDate: item.expenseDate ?? "",
       cashAccount: item.cashAccount ?? "",
       note: item.note ?? "",
       suggestCodes: item.suggestCodes || undefined,
+      suggestSources: (item as any).suggestSources || undefined,
     });
     const rows = [
       ...Array.from({ length: inputCount }, (_, index) => {
@@ -1021,16 +1024,9 @@ export default function RealExpenseDetail({
         .map(toRow),
     ];
     setSchoolTeacherApplies(Boolean(data?.applies));
-    // showTeacherTable là điều kiện hiển thị; applies chỉ phản ánh bảng đã có
-    // số tiền lương dương và điều khiển phép tính Chi Trường.
-    const visibility = (
-      data as
-        | (SchoolTeacherItemsResponse & { showTeacherTable?: boolean })
-        | null
-    )?.showTeacherTable;
-    setShowTeacherTable(
-      canViewSchoolTeacher && Boolean(visibility ?? data?.applies),
-    );
+    // 19/11/2026 (user): bảng Giáo viên trường hiện ở mọi trường, mọi kỳ —
+    // chỉ ẩn khi không có quyền xem hoặc tải bảng lỗi.
+    setShowTeacherTable(canViewSchoolTeacher && !!data);
     setSchoolTeacherApproval(data?.approval ?? null);
     setSchoolTeachers(data?.teachers ?? []);
     setSchoolTeacherOtherGross(data?.otherSubjectGross ?? {});
@@ -1229,6 +1225,11 @@ export default function RealExpenseDetail({
                     : Number(r.invoiceCashAmount),
                 invoiceNote: r.invoiceNote || "",
                 invoiceLocked: !!r.invoiceLocked,
+                companyPaymentTotal:
+                  r.companyPaymentTotal === null ||
+                  r.companyPaymentTotal === undefined
+                    ? null
+                    : Number(r.companyPaymentTotal),
                 paidAmount: r.paidAmount || 0,
                 paymentMethod: r.paymentMethod || "",
                 paymentDate: r.paymentDate || "",
@@ -1269,6 +1270,7 @@ export default function RealExpenseDetail({
               note: r.note || "",
               suggestCodes: r.suggestCodes || undefined,
               suggestPaidAmount: Number(r.suggestPaidAmount || 0),
+              suggestSources: r.suggestSources || undefined,
             })),
             nextInputRows.length,
             initialRevenueRow,
@@ -1353,6 +1355,7 @@ export default function RealExpenseDetail({
                 note: r.note || "",
                 suggestCodes: r.suggestCodes || undefined,
                 suggestPaidAmount: Number(r.suggestPaidAmount || 0),
+                suggestSources: r.suggestSources || undefined,
               };
             }),
             nextInputRows.length,
@@ -1428,6 +1431,11 @@ export default function RealExpenseDetail({
           row.invoiceCashAmount === null ? undefined : row.invoiceCashAmount,
         invoiceNote: (row.invoiceNote || "").slice(0, 500) || undefined,
         invoiceLocked: !!row.invoiceLocked,
+        companyPaymentTotal:
+          row.companyPaymentTotal === null ||
+          row.companyPaymentTotal === undefined
+            ? null
+            : Number(row.companyPaymentTotal),
         paidAmount: Number(row.paidAmount || 0),
         paymentMethod: row.paymentMethod || undefined,
         paymentDate: row.paymentDate || undefined,
@@ -1525,6 +1533,14 @@ export default function RealExpenseDetail({
                 unitPrice: row.schoolTeacherId
                   ? Number(row.unitPrice ?? policyData.giaovien ?? 0)
                   : 0,
+                // Thuế TNCN nhập tay; trống = server tự tính.
+                pitAmount:
+                  row.schoolTeacherId &&
+                  row.pitAmount !== "" &&
+                  row.pitAmount !== undefined &&
+                  row.pitAmount !== null
+                    ? Number(row.pitAmount)
+                    : null,
                 expenseDate: row.expenseDate || undefined,
                 cashAccount: row.cashAccount || undefined,
                 note: row.note || "",
@@ -2065,9 +2081,12 @@ export default function RealExpenseDetail({
 
             <div className="space-y-5">
               {/* Sales admin xem đủ bảng thông tin chung nhưng không được sửa.
-                  Đã "Kết thúc" → fieldset disabled khoá mọi ô nhập/nút. */}
+                  Đã "Kết thúc" / đã "Xuất hóa đơn tất cả" → fieldset disabled
+                  khoá mọi ô nhập/nút. */}
               <fieldset
-                disabled={finalized || isSalesAdmin}
+                disabled={
+                  finalized || isSalesAdmin || isAllInvoiceLocked(inputRows)
+                }
                 className="m-0 min-w-0 border-0 p-0"
               >
                 <InputExpenseTable
@@ -2156,6 +2175,7 @@ export default function RealExpenseDetail({
                         addRow={addSchoolTeacherRow}
                         removeRow={removeSchoolTeacherRow}
                         dateSourceOnly={finalized}
+                        locked={isAllInvoiceLocked(inputRows)}
                         approval={schoolTeacherApproval}
                         canApprove={canApproveSchoolTeacher}
                         approving={approvingSchoolTeacher}

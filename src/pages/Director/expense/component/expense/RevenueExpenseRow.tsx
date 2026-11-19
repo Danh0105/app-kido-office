@@ -7,6 +7,7 @@ import { formatDecimal, roundDecimal } from "@/utils/decimal";
 import DecimalInput from "@/components/DecimalInput";
 import { rowTeacherUnitPrice } from "../../utils/policyOtherCosts";
 import CashAccountSelect from "./CashAccountSelect";
+import SuggestSourcesNote from "./SuggestSourcesNote";
 
 type Props = {
   row: any;
@@ -340,6 +341,7 @@ export default function RevenueExpenseRow({
           onChange={(value) => updateRow(index, "cashAccount", value)}
           className={inputClass}
         />
+        <SuggestSourcesNote sources={row?.suggestSources} />
       </div>
 
       {/* ĐÃ CHI */}

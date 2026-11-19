@@ -23,6 +23,8 @@ export type RevenueItemPayload = {
   invoiceNote?: string;
   /** Đã bấm "Xuất hóa đơn" — khóa dòng */
   invoiceLocked?: boolean;
+  /** "Tổng thanh toán công ty" nhập tay; null = tự tính. */
+  companyPaymentTotal?: number | null;
   paidAmount: number;
   paymentMethod?: string;
   paymentDate?: string;
@@ -82,6 +84,8 @@ export type SchoolTeacherItemPayload = {
   studentCount?: number;
   monthsCount?: number;
   unitPrice: number;
+  /** Thuế TNCN nhập tay; null = server tự tính. */
+  pitAmount?: number | null;
   expenseDate?: string;
   cashAccount?: string;
   note?: string;
@@ -130,6 +134,8 @@ export type SchoolTeacherItem = {
   amount: number;
   pitRate: number;
   pitAmount: number;
+  /** Thuế TNCN kế toán nhập tay (giữ đúng pitAmount); false = tự tính. */
+  pitManual?: boolean;
   netAmount: number;
   expenseDate: string | null;
   cashAccount: string | null;

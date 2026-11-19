@@ -375,7 +375,13 @@ export const expenseRequestApi = {
   // ---- THỦ QUỸ: cash released / fund returned ----
   cashReleased: async (
     id: number,
-    data: { cashAccount: string; note?: string; files?: File[] }
+    data: {
+      cashAccount?: string;
+      /** Nhiều nguồn chi: `[{ cashAccount, amount }]`, tổng = lệnh chi. */
+      cashSplits?: { cashAccount: string; amount: number }[];
+      note?: string;
+      files?: File[];
+    }
   ): Promise<ExpenseRequest> => {
     const res = await api.post(
       `${BASE}/${id}/cash-released`,

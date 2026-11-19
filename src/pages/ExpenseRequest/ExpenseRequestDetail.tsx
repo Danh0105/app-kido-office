@@ -456,7 +456,10 @@ export default function ExpenseRequestDetail({
         run(
           () =>
             expenseRequestApi.cashReleased(reqId, {
-              cashAccount: payload.cashAccount!,
+              // Nhiều nguồn chi: gửi từng nguồn + số tiền (tổng = lệnh chi).
+              ...(payload.cashSplits && payload.cashSplits.length > 1
+                ? { cashSplits: payload.cashSplits }
+                : { cashAccount: payload.cashAccount! }),
               note: payload.note,
               files: payload.files,
             }),
@@ -1030,7 +1033,24 @@ export default function ExpenseRequestDetail({
                     : PAYMENT_METHOD_LABEL[po.paymentMethod] || po.paymentMethod
                 }
               />
-              {po.cashAccount ? (
+              {po.cashSplits && po.cashSplits.length > 1 ? (
+                <div className="col-span-2">
+                  <div className="text-xs text-gray-500">Nguồn chi</div>
+                  <ul className="mt-0.5 space-y-0.5">
+                    {po.cashSplits.map((split) => (
+                      <li
+                        key={split.cashAccount}
+                        className="flex justify-between gap-2 font-medium"
+                      >
+                        <span>{invoiceCashAccountLabel(split.cashAccount)}</span>
+                        <span className="tabular-nums">
+                          {formatVnd(split.amount)} đ
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : po.cashAccount ? (
                 <Field
                   label="Nguồn chi"
                   value={invoiceCashAccountLabel(po.cashAccount)}
@@ -1363,6 +1383,7 @@ export default function ExpenseRequestDetail({
           submitLabel="Xuất tiền"
           submitColor="bg-orange-500"
           showCashAccount
+          cashSplitTotal={Number(po?.amount ?? data.amount ?? 0)}
           showNote
           showFiles
           existingAttachments={releasedAttachments}
@@ -1430,9 +1451,11 @@ export default function ExpenseRequestDetail({
             <div className="rounded-xl border border-teal-100 bg-teal-50 p-3 text-sm text-teal-800">
               Kinh doanh đã chi một phần. Nhận lại phần dư{" "}
               <b>{formatVnd(monthlyRemainder(data) ?? 0) || "0"} đ</b>
-              {po?.cashAccount
-                ? ` về ${invoiceCashAccountLabel(po.cashAccount)}`
-                : ""}
+              {po?.cashSplits && po.cashSplits.length > 1
+                ? " về các nguồn sau cùng (trừ ngược từ nguồn cuối)"
+                : po?.cashAccount
+                  ? ` về ${invoiceCashAccountLabel(po.cashAccount)}`
+                  : ""}
               .
             </div>
           }

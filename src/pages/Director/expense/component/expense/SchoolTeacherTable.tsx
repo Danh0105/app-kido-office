@@ -15,6 +15,8 @@ import type {
   SchoolTeacherApproval,
 } from "@/service/schoolExpense";
 import CashAccountSelect from "./CashAccountSelect";
+import OptionalAmountInput from "./OptionalAmountInput";
+import SuggestSourcesNote from "./SuggestSourcesNote";
 import SchoolTeacherFormModal from "../../components/SchoolTeacherPayroll/SchoolTeacherFormModal";
 import type { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
 import type { SchoolTeacherRow } from "../../RealExpenseDetail/type/SchoolTeacherRow";
@@ -44,6 +46,8 @@ type Props = {
   removeRow: (index: number) => void;
   /** Kỳ đã "Kết thúc": chỉ còn Ngày chi + Nguồn chi. */
   dateSourceOnly?: boolean;
+  /** Đã "Xuất hóa đơn tất cả": khoá cả bảng (Duyệt lương vẫn bấm được). */
+  locked?: boolean;
   approval: SchoolTeacherApproval | null;
   canApprove: boolean;
   approving: boolean;
@@ -124,6 +128,7 @@ export default function SchoolTeacherTable({
   addRow,
   removeRow,
   dateSourceOnly = false,
+  locked = false,
   approval,
   canApprove,
   approving,
@@ -136,10 +141,14 @@ export default function SchoolTeacherTable({
     const input = schoolTeacherRowInput(row, index, inputRows);
     return { input, ...calculateSchoolTeacherAmount(input, row.unitPrice ?? defaultUnitPrice) };
   });
+  // Ô số tiền khoá khi kỳ kết thúc hoặc đã xuất hóa đơn tất cả.
+  const moneyLocked = dateSourceOnly || locked;
   const taxes = calculateSchoolTeacherTax(
     amounts.map((item, index) => ({
       schoolTeacherId: rows[index].schoolTeacherId ?? null,
       amount: item.amount,
+      // Chưa chọn giáo viên thì dòng không phát sinh tiền — bỏ thuế nhập tay.
+      manualPit: rows[index].schoolTeacherId ? rows[index].pitAmount : null,
     })),
     otherSubjectGross,
   );
@@ -171,11 +180,11 @@ export default function SchoolTeacherTable({
             Giáo viên trường
           </div>
           <div className="text-xs text-amber-800">
-            Lương trả thẳng cho giáo viên của trường. Thuế TNCN{" "}
+            Lương trả thẳng cho giáo viên của trường. Thuế TNCN tự tính{" "}
             {SCHOOL_TEACHER_PIT_RATE}% khi tổng thù lao tháng của giáo viên (mọi
-            môn) từ {formatDecimal(SCHOOL_TEACHER_PIT_THRESHOLD)}đ. Từ kỳ tháng
-            11/2026 không còn tính trong Chi Trường. Đủ Ngày chi + Nguồn chi là đã
-            trả "Còn lại phải chi".
+            môn) từ {formatDecimal(SCHOOL_TEACHER_PIT_THRESHOLD)}đ — sửa tay được,
+            xoá trống để về tự tính. Đủ Ngày chi + Nguồn chi là đã trả "Còn lại
+            phải chi".
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 text-right text-xs sm:grid-cols-4">
@@ -229,7 +238,7 @@ export default function SchoolTeacherTable({
           {/* BODY */}
           {rows.map((row, index) => {
             const item = computed[index];
-            const sharedLocked = !item.standalone || dateSourceOnly;
+            const sharedLocked = !item.standalone || moneyLocked;
             // Đã trả theo Đề xuất Chi GV trường: Ngày chi / Nguồn chi lấy từ đề xuất.
             const suggestTitle = row.suggestCodes
               ? `Lấy từ đề xuất chi ${row.suggestCodes} — không sửa tay được`
@@ -253,7 +262,7 @@ export default function SchoolTeacherTable({
                 <div className="border-r border-slate-100 p-2">
                   <select
                     value={row.schoolTeacherId ? String(row.schoolTeacherId) : ""}
-                    disabled={dateSourceOnly}
+                    disabled={moneyLocked}
                     onChange={(e) => {
                       if (e.target.value === ADD_TEACHER) {
                         setAddingForRow(index);
@@ -288,7 +297,7 @@ export default function SchoolTeacherTable({
                 <div className="border-r border-slate-100 p-2">
                   <DecimalInput
                     value={row.unitPrice ?? defaultUnitPrice}
-                    disabled={dateSourceOnly}
+                    disabled={moneyLocked}
                     onValueChange={(value) => updateRow(index, "unitPrice", value)}
                     placeholder="0"
                     fractionDigits={2}
@@ -299,23 +308,33 @@ export default function SchoolTeacherTable({
                 <div className="border-r border-slate-100 p-2">
                   <div className={`${readCellClass} text-slate-800`}>{money(item.amount)}</div>
                 </div>
-                <div className="border-r border-slate-100 p-2">
-                  <div
-                    className="flex h-11 items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3"
-                    title={
-                      row.schoolTeacherId
-                        ? `Tổng thù lao tháng của giáo viên (mọi môn): ${money(item.teacherGross)}đ`
-                        : "Chưa chọn giáo viên — xét riêng dòng này"
-                    }
-                  >
+                <div
+                  className="border-r border-slate-100 p-2"
+                  title={
+                    row.schoolTeacherId
+                      ? `Tổng thù lao tháng của giáo viên (mọi môn): ${money(item.teacherGross)}đ — tự tính ${money(item.autoPit)}đ. Xoá trống để về tự tính.`
+                      : "Chưa chọn giáo viên — xét riêng dòng này"
+                  }
+                >
+                  <div className="flex items-center gap-1.5">
                     <span
-                      className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                        item.pitRate ? "bg-rose-100 text-rose-700" : "bg-slate-200 text-slate-500"
+                      className={`shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-bold ${
+                        item.manual
+                          ? "bg-amber-100 text-amber-700"
+                          : item.pitRate
+                            ? "bg-rose-100 text-rose-700"
+                            : "bg-slate-200 text-slate-500"
                       }`}
                     >
-                      {item.pitRate}%
+                      {item.manual ? "Tay" : `${item.pitRate}%`}
                     </span>
-                    <span className="text-sm font-semibold text-rose-600">{money(item.pitAmount)}</span>
+                    <OptionalAmountInput
+                      value={item.manual ? row.pitAmount : ""}
+                      autoValue={item.autoPit}
+                      disabled={moneyLocked || !row.schoolTeacherId || !!row.suggestCodes}
+                      onChange={(value) => updateRow(index, "pitAmount", value)}
+                      className={`${metricInputClass} text-rose-600 placeholder:text-rose-300`}
+                    />
                   </div>
                 </div>
                 <div className="border-r border-slate-100 p-2">
@@ -325,7 +344,7 @@ export default function SchoolTeacherTable({
                   <input
                     type="date"
                     value={row.expenseDate || ""}
-                    disabled={!!row.suggestCodes}
+                    disabled={!!row.suggestCodes || locked}
                     onChange={(e) => updateRow(index, "expenseDate", e.target.value)}
                     className={`${inputClass} text-center`}
                   />
@@ -338,22 +357,23 @@ export default function SchoolTeacherTable({
                 <div className="border-r border-slate-100 p-2" title={suggestTitle}>
                   <CashAccountSelect
                     value={row.cashAccount}
-                    disabled={!!row.suggestCodes}
+                    disabled={!!row.suggestCodes || locked}
                     onChange={(value) => updateRow(index, "cashAccount", value)}
                     className={`${inputClass} px-2`}
                   />
+                  <SuggestSourcesNote sources={row.suggestSources} />
                 </div>
                 <div className="border-r border-slate-100 p-2">
                   <input
                     value={row.note || ""}
-                    disabled={dateSourceOnly}
+                    disabled={moneyLocked}
                     onChange={(e) => updateRow(index, "note", e.target.value)}
                     placeholder="Ghi chú..."
                     className={inputClass}
                   />
                 </div>
                 <div className="flex items-center justify-center">
-                  {item.standalone && !dateSourceOnly && !row.suggestCodes && (
+                  {item.standalone && !moneyLocked && !row.suggestCodes && (
                     <button
                       type="button"
                       onClick={() => removeRow(index)}
@@ -389,7 +409,7 @@ export default function SchoolTeacherTable({
             <div className="border-r border-slate-200" />
             <div className="border-r border-slate-200" />
             <div className="flex items-center justify-center">
-              {addRow && !dateSourceOnly && (
+              {addRow && !moneyLocked && (
                 <button
                   type="button"
                   onClick={addRow}

@@ -3,6 +3,7 @@
 import { Trash2 } from "lucide-react";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
 import CashAccountSelect from "./CashAccountSelect";
+import SuggestSourcesNote from "./SuggestSourcesNote";
 import {
   calculateOtherCostExpense,
   getOtherCostGrossPrice,
@@ -392,6 +393,7 @@ export default function ManagementExpenseRow({
             disabled:bg-slate-100 disabled:text-slate-400
           "
         />
+        <SuggestSourcesNote sources={row?.suggestSources} />
       </div>
 
       {/* PAID */}

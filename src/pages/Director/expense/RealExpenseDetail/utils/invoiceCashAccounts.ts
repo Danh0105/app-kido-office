@@ -31,6 +31,20 @@ export const invoiceCashAccountGroups = [
   },
 ];
 
+/** Một nguồn chi + số tiền (Thủ quỹ xuất từ nhiều nguồn, 19/11/2026). */
+export type CashAccountAmount = { cashAccount: string | null; amount: number };
+
+/** "1121 - TK… 3.000.000 đ + 1111 - … 2.000.000 đ" — mỗi nguồn kèm số tiền. */
+export const cashAccountAmountsLabel = (parts?: CashAccountAmount[] | null) =>
+  (parts ?? [])
+    .map(
+      (part) =>
+        `${invoiceCashAccountLabel(part.cashAccount) || "(chưa có nguồn)"}: ${Number(
+          part.amount || 0,
+        ).toLocaleString("vi-VN")} đ`,
+    )
+    .join(" + ");
+
 /** "1121 - TK Techcombank - ICHI"; mã không có trong danh mục thì trả nguyên mã. */
 export const invoiceCashAccountLabel = (code?: string | null) => {
   if (!code) return "";

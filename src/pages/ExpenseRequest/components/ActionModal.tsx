@@ -2,6 +2,8 @@ import { useState, type ReactNode } from "react";
 import type { ExpenseAttachment } from "@/types/expenseRequest";
 import { resolveFileUrl } from "@/service/expenseRequest";
 import CashAccountSelect from "@/pages/Director/expense/component/expense/CashAccountSelect";
+import DecimalInput from "@/components/DecimalInput";
+import { formatVnd } from "@/utils/decimal";
 
 export type ActionPayload = {
   note?: string;
@@ -9,6 +11,8 @@ export type ActionPayload = {
   files?: File[];
   /** Nguồn chi — số hiệu tài khoản trong danh mục Nguồn thu chi */
   cashAccount?: string;
+  /** Nhiều nguồn chi (19/11/2026): từng nguồn + số tiền, tổng = lệnh chi. */
+  cashSplits?: { cashAccount: string; amount: number }[];
 };
 
 type Props = {
@@ -28,6 +32,11 @@ type Props = {
   reasonLabel?: string;
   /** Thủ quỹ chọn nguồn chi (tài khoản) đã dùng để chi khi xác nhận xuất tiền */
   showCashAccount?: boolean;
+  /**
+   * Số tiền lệnh chi: có thì Thủ quỹ chọn được nhiều nguồn chi, mỗi nguồn
+   * một ô số tiền, tổng phải bằng đúng số này.
+   */
+  cashSplitTotal?: number;
   loading?: boolean;
   onClose: () => void;
   onSubmit: (payload: ActionPayload) => void;
@@ -49,10 +58,32 @@ export default function ActionModal({
   requireReason,
   reasonLabel = "Lý do",
   showCashAccount,
+  cashSplitTotal,
   loading,
   onClose,
   onSubmit,
 }: Props) {
+  const splitEnabled = !!showCashAccount && Number(cashSplitTotal) > 0;
+  const orderTotal = Math.round(Number(cashSplitTotal || 0) * 100) / 100;
+  const [splits, setSplits] = useState<{ cashAccount: string; amount: number }[]>([
+    { cashAccount: "", amount: orderTotal },
+  ]);
+  const splitSum =
+    Math.round(splits.reduce((sum, row) => sum + Number(row.amount || 0), 0) * 100) / 100;
+  const splitDiff = Math.round((orderTotal - splitSum) * 100) / 100;
+  const updateSplit = (index: number, patch: Partial<{ cashAccount: string; amount: number }>) =>
+    setSplits((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  const addSplit = () =>
+    setSplits((prev) => {
+      const used = prev.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+      return [...prev, { cashAccount: "", amount: Math.max(0, Math.round((orderTotal - used) * 100) / 100) }];
+    });
+  const removeSplit = (index: number) =>
+    setSplits((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      // Còn một nguồn thì nguồn đó chi cả lệnh chi.
+      return next.length === 1 ? [{ ...next[0], amount: orderTotal }] : next;
+    });
   const [note, setNote] = useState("");
   const [reason, setReason] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -88,6 +119,34 @@ export default function ActionModal({
   const handleSubmit = () => {
     if (requireReason && !reason.trim()) {
       setError("Vui lòng nhập lý do");
+      return;
+    }
+    if (splitEnabled) {
+      if (splits.some((row) => !row.cashAccount)) {
+        setError("Vui lòng chọn nguồn chi");
+        return;
+      }
+      if (new Set(splits.map((row) => row.cashAccount)).size !== splits.length) {
+        setError("Nguồn chi bị chọn trùng");
+        return;
+      }
+      if (splits.length > 1 && splits.some((row) => !(Number(row.amount) > 0))) {
+        setError("Nhập số tiền cho từng nguồn chi");
+        return;
+      }
+      if (Math.abs(splitDiff) > 0.005) {
+        setError(
+          `Tổng các nguồn (${formatVnd(splitSum) || "0"} đ) phải bằng đúng lệnh chi (${formatVnd(orderTotal)} đ)`,
+        );
+        return;
+      }
+      onSubmit({
+        note: showNote ? note.trim() || undefined : undefined,
+        reason: requireReason ? reason.trim() : undefined,
+        files: showFiles ? files : undefined,
+        cashAccount: splits[0].cashAccount,
+        cashSplits: splits.length > 1 ? splits : undefined,
+      });
       return;
     }
     if (showCashAccount && !cashAccount) {
@@ -139,7 +198,67 @@ export default function ActionModal({
             </div>
           )}
 
-          {showCashAccount && (
+          {splitEnabled && (
+            <div>
+              <div className="flex items-center justify-between">
+                <label className="text-sm text-gray-600">
+                  Nguồn chi <span className="text-red-500">*</span>
+                </label>
+                <span className="text-xs text-gray-500">
+                  Lệnh chi: <b>{formatVnd(orderTotal)} đ</b>
+                </span>
+              </div>
+              <div className="mt-1 space-y-2">
+                {splits.map((row, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <CashAccountSelect
+                      value={row.cashAccount}
+                      onChange={(value) => updateSplit(index, { cashAccount: value })}
+                      className="min-w-0 flex-1 px-2 py-2 border rounded-lg text-sm bg-white"
+                    />
+                    <DecimalInput
+                      value={row.amount}
+                      onValueChange={(value) => updateSplit(index, { amount: value })}
+                      disabled={splits.length === 1}
+                      allowDecimal={false}
+                      keepZero
+                      className="w-32 shrink-0 px-2 py-2 border rounded-lg text-sm text-right font-semibold disabled:bg-gray-50 disabled:text-gray-600"
+                    />
+                    {splits.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeSplit(index)}
+                        className="h-8 w-8 shrink-0 rounded-full text-red-500 hover:bg-red-50"
+                        title="Bỏ nguồn này"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="mt-2 flex items-center justify-between text-xs">
+                <button
+                  type="button"
+                  onClick={addSplit}
+                  disabled={splits.length >= 10}
+                  className="font-semibold text-blue-600 hover:underline disabled:text-gray-400"
+                >
+                  + Thêm nguồn chi
+                </button>
+                {splits.length > 1 && (
+                  <span className={Math.abs(splitDiff) > 0.005 ? "text-red-600" : "text-green-700"}>
+                    Tổng {formatVnd(splitSum) || "0"} đ
+                    {Math.abs(splitDiff) > 0.005
+                      ? ` · ${splitDiff > 0 ? "còn thiếu" : "thừa"} ${formatVnd(Math.abs(splitDiff))} đ`
+                      : " · khớp lệnh chi"}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {showCashAccount && !splitEnabled && (
             <div>
               <label className="text-sm text-gray-600">
                 Nguồn chi <span className="text-red-500">*</span>

@@ -117,8 +117,12 @@ export default function ExpenseSummaryTable({ data, subjects }: Props) {
               toNumber(revenue?.monthsCount)
         );
         // Số tiền hóa đơn phải khớp cột Thành tiền của bảng Hóa Đơn.
+        // "Tổng thanh toán công ty" nhập tay (nếu có) thay số tự tính.
         const invoiceAmount = revenue
-          ? invoiceAmountOfSavedRow(
+          ? revenue.companyPaymentTotal !== null &&
+            revenue.companyPaymentTotal !== undefined
+            ? toNumber(revenue.companyPaymentTotal)
+            : invoiceAmountOfSavedRow(
               revenue,
               schoolItem,
               subjects.find((item: any) => toNumber(item.id) === subjectId),

@@ -12,7 +12,7 @@ import {
 
 import RevenueExpenseTable from "./RevenueExpenseTable";
 import ManagementExpenseTable from "./ManagementExpenseTable";
-import InvoiceTable from "./InvoiceTable";
+import InvoiceTable, { isAllInvoiceLocked } from "./InvoiceTable";
 import ExpensePrintButton from "./ExpensePrintButton";
 import { InputExpenseRow } from "../../RealExpenseDetail/type/InputExpenseRow";
 import type { RevenueEInvoice } from "@/service/schoolExpense";
@@ -188,6 +188,9 @@ export default function ExpenseFormTable({
 
   // Đã xuất hóa đơn thì không được thêm dòng (kế toán trưởng mở khóa lại mới thêm được).
   const invoiceExported = inputRows.some((row) => row.invoiceLocked);
+  // Đã "Xuất hóa đơn tất cả" (mọi dòng khoá hóa đơn): khoá toàn bộ các bảng,
+  // chỉ còn "Tổng thanh toán công ty" sửa được (19/11/2026).
+  const allInvoiceLocked = isAllInvoiceLocked(inputRows);
   return (
     <div className="bg-white rounded-3xl shadow-sm border border-slate-200">
       <div className="border-b border-slate-200 px-5 py-4">
@@ -206,7 +209,7 @@ export default function ExpenseFormTable({
           <>
             {/* DOANH THU */}
             <fieldset
-              disabled={readOnly}
+              disabled={readOnly || allInvoiceLocked}
               className="m-0 min-w-0 space-y-3 border-0 p-0"
             >
               <RevenueExpenseTable
@@ -239,6 +242,7 @@ export default function ExpenseFormTable({
                 onUnlinkEInvoice={onUnlinkEInvoice}
                 unlinkingEInvoiceId={unlinkingEInvoiceId}
                 teacherSplit={teacherSplit}
+                fullyLocked={allInvoiceLocked}
               />
             </fieldset>
           </>
@@ -256,7 +260,7 @@ export default function ExpenseFormTable({
             addRow={addManagementRow}
             showActions={!managementOnly}
             isConfirmed={managementConfirmed}
-            readOnly={managementReadOnly || readOnly}
+            readOnly={managementReadOnly || readOnly || allInvoiceLocked}
             canConfirm={canConfirmManagement}
             confirming={confirmingManagement}
             onConfirm={onConfirmManagement}
@@ -271,6 +275,16 @@ export default function ExpenseFormTable({
       </fieldset>
 
       <div className="border-t border-slate-200 bg-slate-50 px-5 py-5">
+        {allInvoiceLocked && !managementOnly && (
+          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <Lock size={16} className="text-amber-600" />
+            <span className="font-bold">Đã xuất hóa đơn tất cả</span>
+            <span>
+              — mọi bảng đã khoá, chỉ sửa được 🏢 Tổng thanh toán công ty (nhớ
+              bấm "Lưu tất cả"). Kế toán trưởng bấm "Mở khóa tất cả" để sửa lại.
+            </span>
+          </div>
+        )}
         {finalized && (
           <div className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-300 bg-slate-100 px-4 py-3 text-sm text-slate-700">
             <Lock size={16} className="text-slate-600" />
@@ -316,7 +330,7 @@ export default function ExpenseFormTable({
           {!managementOnly && !readOnly && !finalized && (
             <button
               onClick={lockAllInvoices}
-              disabled={exportingInvoices}
+              disabled={exportingInvoices || allInvoiceLocked}
               className="
                 h-12 px-5 rounded-2xl
                 border border-amber-200

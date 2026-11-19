@@ -294,7 +294,12 @@ export function sheetGroupBlockReason(
     return `Đang trong ${group.openRequest.code || `#${group.openRequest.id}`}`;
   }
   if (group.bbcsConfirmed === false) return "Chưa xác nhận BBCS";
-  if (!(group.remainingAmount > 0)) return "Không còn tiền phải chi";
+  if (!(group.remainingAmount > 0)) {
+    return sheet.source === "SCHOOL_EXPENSE" &&
+      Number(group.unsetPaymentTypeAmount || 0) > 0
+      ? 'Hình thức chi chưa là "Không có trong HĐ"'
+      : "Không còn tiền phải chi";
+  }
   return null;
 }
 
@@ -381,8 +386,8 @@ export default function CashflowSheetPreview({
       {sheet.hasData && !(sheet.proposableTotal > 0) && !sheet.openSheetRequest && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
           Bảng {sheet.table} không còn khoản nào cần đề xuất
-          {sheet.inContractTotal > 0
-            ? ' (dòng Hình thức chi "Có trong HĐ" đã tính là đã chi).'
+          {sheet.source === "SCHOOL_EXPENSE"
+            ? ' (chỉ dòng Hình thức chi "Không có trong HĐ" mới đề xuất được).'
             : " (đã chi đủ hoặc đang nằm trong đề xuất khác)."}
         </p>
       )}
@@ -443,6 +448,11 @@ export default function CashflowSheetPreview({
                   {group.inContractAmount > 0 && (
                     <span className="rounded-full bg-emerald-50 px-1.5 py-[1px] text-[10px] text-emerald-700">
                       Có trong HĐ {money(group.inContractAmount)}
+                    </span>
+                  )}
+                  {Number(group.unsetPaymentTypeAmount || 0) > 0 && (
+                    <span className="rounded-full bg-slate-100 px-1.5 py-[1px] text-[10px] text-slate-600">
+                      Chưa chọn Hình thức chi {money(Number(group.unsetPaymentTypeAmount))}
                     </span>
                   )}
                 </span>

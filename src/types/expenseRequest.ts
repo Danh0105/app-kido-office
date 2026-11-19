@@ -385,6 +385,11 @@ export type CashflowSheetResponse = {
   openSheetRequest: { id: number; code: string | null } | null;
   groups: (CashflowItem & {
     inContractAmount: number;
+    /**
+     * Chi Trường: phần chưa chi của dòng chưa chọn Hình thức chi — chỉ dòng
+     * "Không có trong HĐ" mới đề xuất được (server từ 19/11/2026).
+     */
+    unsetPaymentTypeAmount?: number;
     /** Chi Trường / Chi Ngoài: môn đã "Xác nhận đúng BBCS" (null với Giáo viên trường). */
     bbcsConfirmed?: boolean | null;
   })[];
@@ -532,6 +537,8 @@ export type CashflowPaymentLog = {
   skipped?: string;
   paidDate?: string;
   cashAccount?: string | null;
+  /** Nhiều nguồn chi: số tiền đã ghi theo từng tài khoản. */
+  cashAccounts?: { cashAccount: string | null; amount: number }[];
   items?: {
     monthlyItemId: number;
     label: string;
@@ -614,6 +621,10 @@ export type ExpenseLogDetails = {
   fundSource?: FundSource | null;
   /** Nguồn chi — số hiệu tài khoản Nguồn thu chi (log từ 23/10/2026). */
   cashAccount?: string | null;
+  /** Thủ quỹ xuất từ nhiều nguồn chi (19/11/2026). */
+  cashSplits?: { cashAccount: string; amount: number }[];
+  /** Phần dư trả về từng nguồn (trừ ngược từ nguồn cuối). */
+  returnSplits?: { cashAccount: string; amount: number }[];
   // CREATE_STOCK_ISSUE_ORDER
   stockIssueOrder?: {
     code?: string | null;
@@ -671,6 +682,8 @@ export type PaymentOrder = {
   fundSource?: FundSource;
   /** Nguồn chi thủ quỹ chọn khi xuất tiền — số hiệu tài khoản Nguồn thu chi. */
   cashAccount?: string | null;
+  /** Xuất từ nhiều nguồn chi: số tiền từng nguồn (tổng = lệnh chi); null = một nguồn. */
+  cashSplits?: { cashAccount: string; amount: number }[] | null;
   note?: string | null;
   createdBy?: number;
   creator?: { id: number; name?: string };

@@ -29,6 +29,8 @@ export type InputExpenseRow = {
     invoiceCashDirection: "" | "IN" | "OUT";
     /** Số tiền thực thu/chi qua tài khoản đó (kế toán nhập); null = chưa nhập */
     invoiceCashAmount: number | null;
+    /** "Tổng thanh toán công ty" nhập tay; null/không có = tự tính (Số lượng × đơn giá công ty). */
+    companyPaymentTotal?: number | null;
 
     paidAmount: number;
     paymentMethod: "" | "cash" | "bank_transfer";

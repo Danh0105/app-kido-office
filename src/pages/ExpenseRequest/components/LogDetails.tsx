@@ -10,7 +10,10 @@ import {
   type ExpenseLogPerson,
 } from "@/types/expenseRequest";
 import { formatVnd } from "@/utils/decimal";
-import { invoiceCashAccountLabel } from "@/pages/Director/expense/RealExpenseDetail/utils/invoiceCashAccounts";
+import {
+  cashAccountAmountsLabel,
+  invoiceCashAccountLabel,
+} from "@/pages/Director/expense/RealExpenseDetail/utils/invoiceCashAccounts";
 import { formatDate, mainAssigneeLabel } from "../lib";
 import type { ExpenseRequestKind } from "@/types/expenseRequest";
 
@@ -48,7 +51,11 @@ function CashflowSync({ log }: { log?: CashflowPaymentLog | null }) {
     <div className="mt-1 text-xs text-gray-700">
       Đã ghi {money(total)} vào {rows.length} dòng {table}
       {log.paidDate ? ` · ngày chi ${formatDate(log.paidDate)}` : ""}
-      {log.cashAccount ? ` · nguồn ${invoiceCashAccountLabel(log.cashAccount)}` : ""}
+      {log.cashAccounts && log.cashAccounts.length > 1
+        ? ` · nguồn ${cashAccountAmountsLabel(log.cashAccounts)}`
+        : log.cashAccount
+          ? ` · nguồn ${invoiceCashAccountLabel(log.cashAccount)}`
+          : ""}
       {unallocated > 0 && (
         <span className="text-amber-700">
           {" "}
@@ -386,13 +393,25 @@ function StepDetails({ log, kind: requestKind }: { log: ExpenseLog; kind?: Expen
       return d.returnAmount != null ? (
         <Box tone="border-green-100 bg-green-50">
           <Row label="Phần dư nhận lại">{money(d.returnAmount)}</Row>
-          {d.cashAccount && (
-            <Row label="Về tài khoản">{invoiceCashAccountLabel(d.cashAccount)}</Row>
+          {d.returnSplits && d.returnSplits.length > 0 ? (
+            <Row label="Về các nguồn">{cashAccountAmountsLabel(d.returnSplits)}</Row>
+          ) : (
+            d.cashAccount && (
+              <Row label="Về tài khoản">{invoiceCashAccountLabel(d.cashAccount)}</Row>
+            )
           )}
         </Box>
       ) : null;
 
     case "CONFIRM_CASH_RELEASED":
+      // Nhiều nguồn chi: từng nguồn + số tiền.
+      if (d.cashSplits && d.cashSplits.length > 1) {
+        return (
+          <Box tone="border-orange-100 bg-orange-50">
+            <Row label="Nguồn chi">{cashAccountAmountsLabel(d.cashSplits)}</Row>
+          </Box>
+        );
+      }
       // Log mới lưu tài khoản (Nguồn chi); log cũ chỉ có nhóm (Nguồn tiền).
       if (d.cashAccount) {
         return (

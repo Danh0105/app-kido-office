@@ -9,6 +9,7 @@ import type {
 } from "@/service/schoolExpense";
 import { calculateRevenueQuantity, companyPaymentOf } from "@/utils/revenueAmount";
 import { rowTeacherUnitPrice } from "../../utils/policyOtherCosts";
+import OptionalAmountInput from "./OptionalAmountInput";
 
 type Props = {
   inputRows: InputExpenseRow[];
@@ -36,7 +37,19 @@ type Props = {
   unlinkingEInvoiceId?: number | null;
   /** Môn đã có tiền ở bảng Giáo viên trường thì Chi Trường không tính lại GV. */
   teacherSplit?: boolean;
+  /**
+   * Đã "Xuất hóa đơn tất cả" (mọi dòng khoá hóa đơn): khoá mọi ô, chỉ còn
+   * "Tổng thanh toán công ty" sửa được (19/11/2026).
+   */
+  fullyLocked?: boolean;
 };
+
+/**
+ * Đã "Xuất hóa đơn tất cả": mọi dòng Doanh Thu đã khoá hóa đơn → khoá toàn bộ
+ * các bảng, chỉ còn "Tổng thanh toán công ty" sửa được (server cũng chặn).
+ */
+export const isAllInvoiceLocked = (rows: Pick<InputExpenseRow, "invoiceLocked">[]) =>
+  rows.length > 0 && rows.every((row) => !!row.invoiceLocked);
 
 const invoiceTypeOf = (row: InputExpenseRow) =>
   row.invoiceType || (row.invoiced ? "company" : "");
@@ -160,6 +173,7 @@ export default function InvoiceTable({
   onUnlinkEInvoice,
   unlinkingEInvoiceId = null,
   teacherSplit = false,
+  fullyLocked = false,
 }: Props) {
   const [confirmExport, setConfirmExport] = useState(false);
   const policyData = subjects?.policies?.[0]?.data || {};
@@ -175,8 +189,14 @@ export default function InvoiceTable({
     calculateRevenueQuantity(row) *
     companyPaymentOf(Number(row.unitPrice || 0), schoolRowOf(idx), policyData);
 
+  // "Tổng thanh toán công ty" của dòng: số nhập tay, chưa nhập thì tự tính.
+  const companyTotalOf = (row: InputExpenseRow, idx: number) =>
+    row.companyPaymentTotal === null || row.companyPaymentTotal === undefined
+      ? rowAmountOf(row, idx)
+      : Number(row.companyPaymentTotal);
+
   const totalCompanyPayment = inputRows.reduce(
-    (sum, row, idx) => sum + rowAmountOf(row, idx),
+    (sum, row, idx) => sum + companyTotalOf(row, idx),
     0,
   );
 
@@ -360,8 +380,9 @@ export default function InvoiceTable({
               const invoiceType = invoiceTypeOf(row);
               const rowEInvoice = einvoiceByRow.get(idx);
               // Đã bấm "Xuất hóa đơn" → khoá thông tin hóa đơn (Ngày chi,
-              // Khoản thu/chi và Ghi chú vẫn sửa được).
-              const locked = !!row.invoiceLocked;
+              // Khoản thu/chi và Ghi chú vẫn sửa được). Đã "Xuất hóa đơn tất
+              // cả" → khoá hết, chỉ còn Tổng thanh toán công ty.
+              const locked = !!row.invoiceLocked || fullyLocked;
               // Đơn giá trên doanh thu - Đơn giá Chi trường của cùng dòng
               const revenueUnitPrice = Number(row.unitPrice || 0);
               const companyPayment = companyPaymentOf(
@@ -450,11 +471,25 @@ export default function InvoiceTable({
                     />
                   </td>
 
+                  {/* Tổng thanh toán công ty: trống = tự tính, nhập tay được (kể cả khi đã khoá) */}
                   <td className="border p-2 bg-violet-50">
-                    <input
-                      readOnly
-                      value={formatVND(invoiceQuantity * companyPayment)}
-                      className="w-full h-14 text-center font-bold text-violet-700 border rounded-lg text-sm"
+                    <OptionalAmountInput
+                      value={row.companyPaymentTotal}
+                      autoValue={invoiceQuantity * companyPayment}
+                      title={`Tự tính: ${formatVND(invoiceQuantity * companyPayment)} — xoá trống để về tự tính`}
+                      onChange={(value) =>
+                        updateInputRow(
+                          idx,
+                          "companyPaymentTotal",
+                          value === "" ? null : value,
+                        )
+                      }
+                      className={`w-full min-w-[150px] h-14 text-center font-bold border rounded-lg text-sm placeholder:text-violet-400 ${
+                        row.companyPaymentTotal === null ||
+                        row.companyPaymentTotal === undefined
+                          ? "text-violet-700"
+                          : "text-amber-700 border-amber-300 bg-amber-50"
+                      }`}
                     />
                   </td>
 
@@ -462,20 +497,22 @@ export default function InvoiceTable({
                     <input
                       type="date"
                       value={row.invoicePaymentDate || ""}
+                      disabled={fullyLocked}
                       onChange={(e) =>
                         updateInputRow(idx, "invoicePaymentDate", e.target.value)
                       }
-                      className="w-full h-14 border rounded-lg px-2 text-sm"
+                      className="w-full h-14 border rounded-lg px-2 text-sm disabled:bg-slate-100 disabled:text-slate-400"
                     />
                   </td>
 
                   <td className="border p-2">
                     <CashAccountSelect
                       value={row.invoiceCashAccount}
+                      disabled={fullyLocked}
                       onChange={(value) =>
                         updateInputRow(idx, "invoiceCashAccount", value)
                       }
-                      className="w-full min-w-[230px] h-14 border rounded-lg px-2 text-sm bg-white"
+                      className="w-full min-w-[230px] h-14 border rounded-lg px-2 text-sm bg-white disabled:bg-slate-100 disabled:text-slate-400"
                     />
                   </td>
 
@@ -483,6 +520,7 @@ export default function InvoiceTable({
                   <td className="border p-2">
                     <select
                       value={row.invoiceCashDirection || ""}
+                      disabled={fullyLocked}
                       onChange={(e) =>
                         updateInputRow(
                           idx,
@@ -490,7 +528,7 @@ export default function InvoiceTable({
                           e.target.value as InputExpenseRow["invoiceCashDirection"],
                         )
                       }
-                      className="w-full min-w-[100px] h-14 border rounded-lg px-2 text-sm bg-white"
+                      className="w-full min-w-[100px] h-14 border rounded-lg px-2 text-sm bg-white disabled:bg-slate-100 disabled:text-slate-400"
                     >
                       <option value="">Chọn</option>
                       <option value="IN">Thu</option>
@@ -502,12 +540,13 @@ export default function InvoiceTable({
                   <td className="border p-2">
                     <DecimalInput
                       value={row.invoiceCashAmount}
+                      disabled={fullyLocked}
                       onValueChange={(value) =>
                         updateInputRow(idx, "invoiceCashAmount", value)
                       }
                       placeholder="0"
                       allowDecimal={false}
-                      className="w-full min-w-[150px] h-14 text-center font-bold border rounded-lg text-sm"
+                      className="w-full min-w-[150px] h-14 text-center font-bold border rounded-lg text-sm disabled:bg-slate-100 disabled:text-slate-400"
                     />
                   </td>
 
@@ -577,6 +616,7 @@ export default function InvoiceTable({
                     <input
                       value={row.invoiceNote || ""}
                       maxLength={500}
+                      disabled={fullyLocked}
                       onChange={(e) =>
                         updateInputRow(
                           idx,
@@ -585,7 +625,7 @@ export default function InvoiceTable({
                         )
                       }
                       placeholder="Ghi chú..."
-                      className="w-full h-14 border rounded-lg px-2 text-sm"
+                      className="w-full h-14 border rounded-lg px-2 text-sm disabled:bg-slate-100 disabled:text-slate-400"
                     />
                   </td>
                 </tr>

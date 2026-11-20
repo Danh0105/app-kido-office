@@ -67,8 +67,8 @@ export const monthlyRemainder = (req: ExpenseRequest): number | null => {
  */
 /**
  * Quy trình Kế toán (Chi Ngoài / Chi Trường / Chi GV trường từ 16/11/2026):
- * Kế toán nhập số liệu → Kế toán trưởng → Giám đốc → Kế toán công nợ lập lệnh
- * chi → Thủ quỹ → kinh doanh.
+ * Kế toán nhập số liệu → Kế toán trưởng → Giám đốc (hệ thống tự lập lệnh chi
+ * từ 20/11/2026) → Thủ quỹ → kinh doanh.
  */
 export const isAccountantChain = (
   req: Pick<ExpenseRequest, "isMonthlyExpense" | "approvalFlow">
@@ -77,13 +77,13 @@ export const isAccountantChain = (
 /**
  * "Đề xuất chi tháng" tích chọn (từ 19/11/2026): kinh doanh tích Chi trường /
  * Chi Ban quản lí / Chi giáo viên → Kế toán hoặc Kế toán công nợ nhập số tiền
- * từng khoản → Giám đốc → Kế toán công nợ lập lệnh chi → Thủ quỹ → kinh doanh.
+ * từng khoản → Giám đốc (hệ thống tự lập lệnh chi) → Thủ quỹ → kinh doanh.
  */
 export const isSalesPick = (
   req: Pick<ExpenseRequest, "isMonthlyExpense" | "approvalFlow">
 ) => Boolean(req.isMonthlyExpense) && req.approvalFlow === "SALES_PICK";
 
-/** Chi tháng mà Kế toán công nợ lập lệnh chi sau khi Giám đốc duyệt từng khoản. */
+/** Chi tháng Giám đốc duyệt từng khoản; lệnh chi tự lập theo số duyệt (từ 20/11/2026). */
 export const isMonthlyChain = (
   req: Pick<ExpenseRequest, "isMonthlyExpense" | "approvalFlow">
 ) => isAccountantChain(req) || isSalesPick(req);

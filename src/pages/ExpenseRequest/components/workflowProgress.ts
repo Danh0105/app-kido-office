@@ -82,6 +82,13 @@ const withStates = (
 export function getExpenseWorkflowSteps(request: ExpenseRequest): WorkflowStep[] {
   const { status, isMonthlyExpense } = request;
   const kind: ExpenseRequestKind = request.requestKind || "CASH";
+  // Chi tháng quy trình Kế toán (từ 20/11/2026): Giám đốc duyệt là hệ thống tự
+  // lập lệnh chi, không còn bước Kế toán công nợ lập lệnh chi (trừ lần chi lại
+  // sau hoàn quỹ). Đơn duyệt trước đó còn ở APPROVED thì vẫn hiện bước này.
+  const autoOrder =
+    !!isMonthlyExpense &&
+    (request.approvalFlow === "ACCOUNTANT_CHAIN" || request.approvalFlow === "SALES_PICK") &&
+    status !== "APPROVED";
   const definitions: StepDefinition[] = [
     COMMON.created,
     ...(isMonthlyExpense ? [COMMON.accounting] : []),
@@ -103,7 +110,9 @@ export function getExpenseWorkflowSteps(request: ExpenseRequest): WorkflowStep[]
   } else if (kind === "EQUIPMENT") {
     definitions.push(...(request.equipmentSource === "SUPPLIER" ? SUPPLIER_STEPS : STOCK_STEPS));
   } else {
-    definitions.push(...CASH_STEPS);
+    definitions.push(
+      ...(autoOrder ? CASH_STEPS.filter((step) => step.id !== "payment") : CASH_STEPS)
+    );
   }
 
   if (status === "REJECTED" || status === "WITHDRAWN") {
@@ -150,7 +159,8 @@ export function getExpenseWorkflowSteps(request: ExpenseRequest): WorkflowStep[]
     return withStates(definitions, isMonthlyExpense ? 1 : 0);
   }
 
-  const completedId = completedIds[status];
+  const completedId =
+    autoOrder && status === "PAYMENT_ORDERED" ? "approved" : completedIds[status];
   const completedIndex = completedId
     ? definitions.findIndex((step) => step.id === completedId)
     : -1;

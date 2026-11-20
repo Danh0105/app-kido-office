@@ -281,6 +281,9 @@ function StepDetails({ log, kind: requestKind }: { log: ExpenseLog; kind?: Expen
               {submit && d.cashflowTable && ` (Còn lại bảng ${d.cashflowTable})`}
             </Row>
           )}
+          {!submit && d.paymentOrder?.code && (
+            <Row label="Lệnh chi tự lập">{d.paymentOrder.code}</Row>
+          )}
           {!!d.items?.length && (
             <ul className="mt-1 space-y-0.5">
               {d.items.map((item, index) => (

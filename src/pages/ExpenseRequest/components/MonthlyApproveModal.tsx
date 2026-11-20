@@ -26,8 +26,8 @@ export default function MonthlyApproveModal({
   chain = false,
 }: {
   /**
-   * Quy trình Kế toán: số tiền là số Kế toán chốt lúc gửi; duyệt xong chuyển
-   * Kế toán công nợ lập lệnh chi (không lập lệnh chi ngay).
+   * Quy trình Kế toán: số tiền là số Kế toán chốt lúc gửi; duyệt xong hệ thống
+   * tự lập lệnh chi đúng số duyệt và chuyển Thủ quỹ (từ 20/11/2026).
    */
   chain?: boolean;
   /** Bảng nguồn ở QL thu chi: Chi Ngoài / Chi Trường / Giáo viên trường. */
@@ -190,7 +190,7 @@ export default function MonthlyApproveModal({
                       : tableLabel
                         ? ` của bảng ${tableLabel}`
                         : ` của ${items.length} ${unit}`}
-                    ), chuyển Kế toán công nợ lập lệnh chi.
+                    ), hệ thống tự lập lệnh chi đúng số này và chuyển Thủ quỹ xuất tiền.
                   </>
                 ) : (
                   <>
@@ -246,8 +246,6 @@ export default function MonthlyApproveModal({
               ? "Đang duyệt…"
               : excluded > 0
               ? `Duyệt ${checked.size}/${items.length} ${unit}`
-              : chain
-              ? "Duyệt và chuyển Kế toán công nợ"
               : "Duyệt và chuyển Thủ quỹ"}
           </button>
         </div>

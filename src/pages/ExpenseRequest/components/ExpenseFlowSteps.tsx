@@ -44,8 +44,7 @@ function monthlySteps(source: CashflowSource): Step[] {
       what: `nhập số liệu bảng ${table} ở QL thu chi rồi gửi Kế toán trưởng.`,
     },
     { who: "Kế toán trưởng", what: "duyệt (hoặc từ chối)." },
-    { who: "Giám đốc", what: "duyệt (hoặc từ chối)." },
-    { who: "Kế toán công nợ", what: "lập lệnh chi." },
+    { who: "Giám đốc", what: "duyệt (hoặc từ chối) — hệ thống tự lập lệnh chi đúng số duyệt." },
     { who: "Thủ quỹ", what: "xuất tiền." },
     {
       who: "Bạn",
@@ -64,8 +63,7 @@ const SALES_PICK_STEPS: Step[] = [
     who: "Kế toán / Kế toán công nợ",
     what: "nhập số tiền từng khoản rồi gửi Giám đốc.",
   },
-  { who: "Giám đốc", what: "duyệt (hoặc từ chối)." },
-  { who: "Kế toán công nợ", what: "lập lệnh chi." },
+  { who: "Giám đốc", what: "duyệt (hoặc từ chối) — hệ thống tự lập lệnh chi đúng số duyệt." },
   { who: "Thủ quỹ", what: "xuất tiền." },
   {
     who: "Bạn",

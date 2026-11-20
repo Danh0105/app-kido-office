@@ -94,6 +94,11 @@ type Props = {
    * có hóa đơn thành 1 hóa đơn nháp Viettel. Không truyền thì ẩn nút.
    */
   onExportInvoices?: () => void;
+  /**
+   * "Xuất hóa đơn tất cả" / "Mở khóa tất cả": khoá (mở) mọi dòng rồi LƯU NGAY
+   * (20/11/2026 — trước đây chỉ khoá trên màn hình, quên Lưu là mất).
+   */
+  onSetAllInvoiceLock?: (locked: boolean) => void | Promise<void>;
   exportingInvoices?: boolean;
   /** Trạng thái hóa đơn điện tử theo rowIndex — hiển thị ở bảng Hóa Đơn. */
   einvoices?: RevenueEInvoice[];
@@ -167,6 +172,7 @@ export default function ExpenseFormTable({
   onReopen,
   lockActionLoading = false,
   onExportInvoices,
+  onSetAllInvoiceLock,
   exportingInvoices = false,
   einvoices = [],
   onUnlinkEInvoice,
@@ -178,11 +184,20 @@ export default function ExpenseFormTable({
   schoolTeacherSection,
 }: Props) {
   const [confirmFinalize, setConfirmFinalize] = useState(false);
+  const [confirmLockAll, setConfirmLockAll] = useState(false);
   const lockAllInvoices = () => {
+    if (onSetAllInvoiceLock) {
+      void onSetAllInvoiceLock(true);
+      return;
+    }
     inputRows.forEach((_, idx) => updateInputRow(idx, "invoiceLocked", true));
   };
 
   const unlockAllInvoices = () => {
+    if (onSetAllInvoiceLock) {
+      void onSetAllInvoiceLock(false);
+      return;
+    }
     inputRows.forEach((_, idx) => updateInputRow(idx, "invoiceLocked", false));
   };
 
@@ -327,10 +342,34 @@ export default function ExpenseFormTable({
             </button>
           )}
 
-          {!managementOnly && !readOnly && !finalized && (
+          {!managementOnly && !readOnly && !finalized && confirmLockAll && !allInvoiceLocked && (
+            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-amber-300 bg-white px-3 py-2">
+              <span className="text-sm text-slate-600">
+                Lưu dữ liệu đang nhập và khoá toàn bộ — chỉ còn sửa Tổng thanh toán công ty.
+              </span>
+              <button
+                onClick={() => {
+                  setConfirmLockAll(false);
+                  lockAllInvoices();
+                }}
+                disabled={loading || exportingInvoices}
+                className="h-9 px-4 rounded-xl bg-amber-600 text-white text-sm font-bold hover:bg-amber-700 disabled:opacity-60"
+              >
+                Xác nhận xuất hóa đơn tất cả
+              </button>
+              <button
+                onClick={() => setConfirmLockAll(false)}
+                className="h-9 px-3 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Huỷ
+              </button>
+            </div>
+          )}
+
+          {!managementOnly && !readOnly && !finalized && !(confirmLockAll && !allInvoiceLocked) && (
             <button
-              onClick={lockAllInvoices}
-              disabled={exportingInvoices || allInvoiceLocked}
+              onClick={() => (onSetAllInvoiceLock ? setConfirmLockAll(true) : lockAllInvoices())}
+              disabled={loading || exportingInvoices || allInvoiceLocked}
               className="
                 h-12 px-5 rounded-2xl
                 border border-amber-200
@@ -350,6 +389,7 @@ export default function ExpenseFormTable({
           {!managementOnly && !readOnly && isChief && !finalized && (
             <button
               onClick={unlockAllInvoices}
+              disabled={loading}
               className="
                 h-12 px-5 rounded-2xl
                 border border-emerald-200

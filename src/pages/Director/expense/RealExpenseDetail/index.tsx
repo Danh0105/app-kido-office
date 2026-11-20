@@ -1570,6 +1570,47 @@ export default function RealExpenseDetail({
   };
 
   /**
+   * "Xuất hóa đơn tất cả" (khoá) / "Mở khóa tất cả" (KTT): đổi cờ khoá của mọi
+   * dòng rồi lưu NGAY cùng dữ liệu đang nhập (20/11/2026 — trước đây chỉ khoá
+   * trên màn hình, chưa bấm "Lưu tất cả" mà thoát ra là mất).
+   */
+  const handleSetAllInvoiceLock = async (locked: boolean) => {
+    if (!resolvedSchoolExpenseId || !activeSubjectId) {
+      toast.error("Vui lòng chọn môn học");
+      return;
+    }
+    const previous = inputRows;
+    const nextRows = inputRows.map((row) => ({ ...row, invoiceLocked: locked }));
+    setInputRows(nextRows);
+    try {
+      setLoading(true);
+      await saveExpense(resolvedSchoolExpenseId, activeSubjectId, nextRows);
+      toast.success(
+        locked
+          ? "Đã xuất hóa đơn tất cả — đã lưu và khoá toàn bộ"
+          : "Đã mở khoá tất cả và lưu",
+      );
+      await loadExpenseData(activeSubjectId);
+    } catch (error: any) {
+      // Lưu không được thì trả lại trạng thái khoá cũ, giữ dữ liệu đang nhập.
+      setInputRows(
+        previous.map((row, index) => ({
+          ...(nextRows[index] ?? row),
+          invoiceLocked: row.invoiceLocked,
+        })),
+      );
+      toast.error(
+        getApiErrorMessage(
+          error,
+          locked ? "Không lưu được — chưa xuất hóa đơn tất cả" : "Không lưu được — chưa mở khoá",
+        ),
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
    * "Đẩy hóa đơn": lưu dữ liệu đang nhập rồi gộp các dòng "Xuất HĐ Cty" chưa
    * có hóa đơn thành 1 hóa đơn nháp trên Viettel — bên mua là trường. Server
    * khóa các dòng đã lên hóa đơn.
@@ -2141,6 +2182,7 @@ export default function RealExpenseDetail({
                   onFinalize={handleFinalize}
                   onReopen={handleReopen}
                   onExportInvoices={handleExportInvoices}
+                  onSetAllInvoiceLock={handleSetAllInvoiceLock}
                   exportingInvoices={exportingInvoices}
                   einvoices={einvoices}
                   onUnlinkEInvoice={isChief ? handleUnlinkEInvoice : undefined}

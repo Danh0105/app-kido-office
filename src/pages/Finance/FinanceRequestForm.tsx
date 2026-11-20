@@ -255,6 +255,14 @@ export default function FinanceRequestForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [managersQuery.data]);
 
+  // Điều chuyển: nguồn lấy từ Tổng hợp thu chi kèm số dư hiện tại.
+  const balancesQuery = useQuery({
+    queryKey: ["finance-cash-balances"],
+    queryFn: () => financeApi.cashBalances(),
+    enabled: type === "INTERNAL_TRANSFER",
+    staleTime: 30_000,
+  });
+
   const advancesQuery = useQuery({
     queryKey: ["finance-available-advances", companyId, requestId],
     queryFn: () => financeApi.availableAdvances(Number(companyId), requestId ?? undefined),
@@ -392,6 +400,11 @@ export default function FinanceRequestForm() {
       if (form.transferFromAccountCode === form.transferToAccountCode)
         return "Nguồn chuyển và nguồn nhận phải khác nhau";
       if (!(Number(form.requestedAmount) > 0)) return "Nhập số tiền điều chuyển";
+      const source = balancesQuery.data?.accounts.find((a) => a.code === form.transferFromAccountCode);
+      if (source && source.balance === null)
+        return `${source.code} chưa nhập số dư đầu kỳ ở Tổng hợp thu chi — chưa điều chuyển được`;
+      if (source && source.balance !== null && Number(form.requestedAmount) > source.balance)
+        return `Số tiền vượt số dư của ${source.code} (${formatMoney(source.balance)} đ)`;
     }
     if (!singleAmount) {
       const rows = rowsToSave();
@@ -881,8 +894,22 @@ export default function FinanceRequestForm() {
         </Card>
       )}
 
-      {isTransfer && (
+      {isTransfer && (() => {
+        const accounts = (balancesQuery.data?.accounts ?? []).filter((a) => a.isActive);
+        const balanceText = (balance: number | null) =>
+          balance === null ? "chưa có số dư đầu kỳ" : `số dư ${formatMoney(balance)} đ`;
+        const source = accounts.find((a) => a.code === form.transferFromAccountCode);
+        const target = accounts.find((a) => a.code === form.transferToAccountCode);
+        const amount = Number(form.requestedAmount || 0);
+        const over = !!source && source.balance !== null && amount > source.balance;
+        return (
         <Card title="Điều chuyển tiền nội bộ" icon={<ArrowLeftRight size={16} />}>
+          {balancesQuery.isLoading && <LoadingState text="Đang tải số dư từ Tổng hợp thu chi…" />}
+          {balancesQuery.isError && (
+            <p className="mb-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              {getApiErrorMessage(balancesQuery.error, "Không tải được số dư tài khoản từ Tổng hợp thu chi.")}
+            </p>
+          )}
           <div className="grid gap-3 md:grid-cols-3">
             <label className={labelClass}>
               Nguồn chuyển (tiền đi ra) *
@@ -892,12 +919,19 @@ export default function FinanceRequestForm() {
                 onChange={(e) => set("transferFromAccountCode", e.target.value || null)}
               >
                 <option value="">— Chọn nguồn —</option>
-                {meta.cashAccounts.map((account) => (
-                  <option key={account.code} value={account.code}>
-                    {account.code} - {account.name}
+                {accounts.map((account) => (
+                  <option key={account.code} value={account.code} disabled={account.balance === null || account.balance <= 0}>
+                    {account.code} - {account.name} · {balanceText(account.balance)}
                   </option>
                 ))}
               </select>
+              {source && (
+                <span className={`mt-1 block text-xs ${source.balance === null ? "text-rose-600" : "text-emerald-700"}`}>
+                  {source.balance === null
+                    ? "Chưa nhập số dư đầu kỳ ở Tổng hợp thu chi — chưa điều chuyển được"
+                    : `Số dư hiện tại: ${formatMoney(source.balance)} đ`}
+                </span>
+              )}
             </label>
             <label className={labelClass}>
               Nguồn nhận (tiền đi vào) *
@@ -907,14 +941,19 @@ export default function FinanceRequestForm() {
                 onChange={(e) => set("transferToAccountCode", e.target.value || null)}
               >
                 <option value="">— Chọn nguồn —</option>
-                {meta.cashAccounts
+                {accounts
                   .filter((account) => account.code !== form.transferFromAccountCode)
                   .map((account) => (
                     <option key={account.code} value={account.code}>
-                      {account.code} - {account.name}
+                      {account.code} - {account.name} · {balanceText(account.balance)}
                     </option>
                   ))}
               </select>
+              {target && target.balance !== null && amount > 0 && (
+                <span className="mt-1 block text-xs text-slate-500">
+                  Sau khi chuyển: {formatMoney(target.balance + amount)} đ
+                </span>
+              )}
             </label>
             <label className={labelClass}>
               Số tiền điều chuyển (đ) *
@@ -922,16 +961,23 @@ export default function FinanceRequestForm() {
                 allowDecimal={false}
                 value={form.requestedAmount ?? 0}
                 onValueChange={(value) => set("requestedAmount", value || undefined)}
-                className={inputClass}
+                className={`${inputClass} ${over ? "border-rose-500 bg-rose-50 text-rose-700" : ""}`}
               />
+              {over && source && (
+                <span className="mt-1 block text-xs font-semibold text-rose-600">
+                  Vượt số dư {source.code} ({formatMoney(source.balance!)} đ)
+                </span>
+              )}
             </label>
           </div>
           <p className="mt-2 text-xs text-slate-500">
-            Duyệt xong, Thủ quỹ ghi nhận điều chuyển: sổ quỹ ghi chi ở nguồn chuyển và thu ở nguồn nhận
-            (điều chuyển nội bộ — không tính vào thu/chi).
+            Nguồn và số dư lấy từ Tổng hợp thu chi{balancesQuery.data ? ` (đến ${formatDate(balancesQuery.data.asOf)})` : ""}. Duyệt xong,
+            Thủ quỹ ghi nhận điều chuyển: Tổng hợp thu chi ghi chi ở nguồn chuyển và thu ở nguồn nhận (điều chuyển
+            nội bộ — không tính vào thu/chi).
           </p>
         </Card>
-      )}
+        );
+      })()}
 
       {type === "SETTLEMENT" && (
         <Card title="Phiếu tạm ứng được đối trừ" icon={<Banknote size={16} />}>

@@ -44,8 +44,18 @@ export type MoneyMovementPayload = {
   note?: string;
   idempotencyKey: string;
 };
+/** Số dư tài khoản tiền theo Tổng hợp thu chi; balance null = chưa nhập số dư đầu kỳ. */
+export type FinanceCashBalances = {
+  asOf: string;
+  accounts: { code: string; name: string; groupCode: string; isActive: boolean; balance: number | null }[];
+};
+
 export const financeApi = {
   meta: async () => (await api.get<FinanceMeta>(`${BASE}/meta`)).data,
+
+  /** Điều chuyển tiền nội bộ: số dư từng tài khoản theo Tổng hợp thu chi (hôm nay). */
+  cashBalances: async () =>
+    (await api.get<FinanceCashBalances>(`${BASE}/cash-balances`)).data,
 
   /** Lưu thông tin nhận tiền của chính mình để điền sẵn cho đề nghị sau. */
   savePayeeProfile: async (payload: Omit<FinancePayeeProfile, "updatedAt">) =>

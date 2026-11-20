@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import DecimalInput from "@/components/DecimalInput";
-import { newIdempotencyKey, type MoneyMovementPayload } from "@/service/finance";
+import { financeApi, newIdempotencyKey, type MoneyMovementPayload } from "@/service/finance";
+import { useQuery } from "@tanstack/react-query";
 import type { FinanceDeduction, FinanceDetail, FinanceRecipient, PaymentMethod } from "@/types/finance";
 import { useFinanceMeta } from "../FinanceRoutes";
 import {
@@ -260,6 +261,16 @@ export function MoneyModal({
   const defaultAccount = meta.cashAccounts.find(
     (a) => a.code === (transfer?.from ?? defaultCashAccountCode),
   );
+  // Điều chuyển: số dư nguồn chuyển theo Tổng hợp thu chi.
+  const balancesQuery = useQuery({
+    queryKey: ["finance-cash-balances"],
+    queryFn: () => financeApi.cashBalances(),
+    enabled: !!transfer,
+    staleTime: 10_000,
+  });
+  const sourceBalance = transfer
+    ? (balancesQuery.data?.accounts.find((a) => a.code === transfer.from)?.balance ?? undefined)
+    : undefined;
   const accountLabel = (code?: string | null) => {
     const account = meta.cashAccounts.find((a) => a.code === code);
     return account ? `${account.code} — ${account.name}` : (code ?? "");
@@ -277,7 +288,9 @@ export function MoneyModal({
   const accounts = meta.cashAccounts.filter((a) => (method === "CASH" ? a.groupCode === "111" : a.groupCode === "112"));
   // Chi tiền là bước cuối: thủ quỹ bắt buộc chọn tài khoản thanh toán.
   const accountRequired = kind === "payment";
-  const invalid = amount <= 0 || amount > remaining || (accountRequired && !cashAccountCode);
+  const overBalance =
+    !!transfer && (sourceBalance === null || (typeof sourceBalance === "number" && amount > sourceBalance));
+  const invalid = amount <= 0 || amount > remaining || (accountRequired && !cashAccountCode) || overBalance;
 
   return (
     <Modal
@@ -362,8 +375,19 @@ export function MoneyModal({
           <div className="sm:col-span-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800" data-testid="transfer-route">
             Từ <b>{accountLabel(transfer.from)}</b> sang <b>{accountLabel(transfer.to)}</b>
             <div className="text-xs text-emerald-700">
-              Sổ quỹ ghi chi ở nguồn chuyển và thu ở nguồn nhận (điều chuyển nội bộ).
+              Tổng hợp thu chi ghi chi ở nguồn chuyển và thu ở nguồn nhận (điều chuyển nội bộ).
             </div>
+            {sourceBalance === null && (
+              <div className="mt-1 text-xs font-semibold text-rose-600">
+                Nguồn chuyển chưa có số dư đầu kỳ ở Tổng hợp thu chi — chưa điều chuyển được.
+              </div>
+            )}
+            {typeof sourceBalance === "number" && (
+              <div className={`mt-1 text-xs font-semibold ${amount > sourceBalance ? "text-rose-600" : "text-emerald-800"}`}>
+                Số dư nguồn chuyển: {formatMoney(sourceBalance)} đ
+                {amount > sourceBalance ? " — số tiền vượt số dư" : ""}
+              </div>
+            )}
           </div>
         )}
         <label className={`${labelClass} sm:col-span-2`}>

@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
+  ArrowLeftRight,
   Banknote,
   ClipboardList,
   Loader2,
@@ -104,7 +105,7 @@ const newRow = (): ItemRow => ({
   note: null,
 });
 
-const TYPES: FinanceRequestType[] = ["ADVANCE", "SALARY_ADVANCE", "SETTLEMENT", "EXPENSE_PAYMENT"];
+const TYPES: FinanceRequestType[] = ["ADVANCE", "SALARY_ADVANCE", "SETTLEMENT", "EXPENSE_PAYMENT", "INTERNAL_TRANSFER"];
 
 const currentPeriod = () => {
   const [y, m] = todayVN().split("-");
@@ -199,7 +200,10 @@ export default function FinanceRequestForm() {
           directManagerId: detail.directManagerId,
           salaryYear: detail.salaryYear ?? undefined,
           salaryMonth: detail.salaryMonth ?? undefined,
-          requestedAmount: detail.type === "SALARY_ADVANCE" ? detail.totalAmount : undefined,
+          requestedAmount:
+            detail.type === "SALARY_ADVANCE" || detail.type === "INTERNAL_TRANSFER" ? detail.totalAmount : undefined,
+          transferFromAccountCode: detail.transferFromAccountCode ?? null,
+          transferToAccountCode: detail.transferToAccountCode ?? null,
           deductionStartYear: detail.deductionStartYear ?? undefined,
           deductionStartMonth: detail.deductionStartMonth ?? undefined,
           deductionPeriods: detail.deductionPeriods ?? 1,
@@ -285,8 +289,11 @@ export default function FinanceRequestForm() {
     () => items.map((item) => previewLineAmount(item.quantity, item.unitPrice)),
     [items],
   );
+  // Ứng lương / điều chuyển nội bộ: một số tiền, không có bảng chi tiết.
+  const singleAmount = type === "SALARY_ADVANCE" || type === "INTERNAL_TRANSFER";
+  const isTransfer = type === "INTERNAL_TRANSFER";
   const total =
-    type === "SALARY_ADVANCE"
+    singleAmount
       ? Number(form.requestedAmount || 0)
       : lineAmounts.reduce((sum, value) => sum + value, 0);
   const offset = Object.values(allocations).reduce((sum, value) => sum + (value || 0), 0);
@@ -329,7 +336,7 @@ export default function FinanceRequestForm() {
       companyId: Number(companyId),
       title: form.title?.trim(),
     };
-    if (type === "SALARY_ADVANCE") {
+    if (singleAmount) {
       delete body.items;
     } else {
       body.items = rows.map(({ key: _key, attachmentCount: _count, supplierKey: _supplier, ...item }) => {
@@ -361,6 +368,16 @@ export default function FinanceRequestForm() {
         .filter(([, amount]) => amount > 0)
         .map(([advanceId, amount]) => ({ advanceId: Number(advanceId), amount }));
     }
+    if (isTransfer) {
+      // Không có người nhận tiền — bỏ thông tin chuyển khoản cá nhân.
+      body.payeeName = null;
+      body.bankAccountHolder = null;
+      body.bankName = null;
+      body.bankAccountNumber = null;
+    } else {
+      delete body.transferFromAccountCode;
+      delete body.transferToAccountCode;
+    }
     if (!requestId) body.type = type!;
     return body;
   };
@@ -369,7 +386,14 @@ export default function FinanceRequestForm() {
     if (!companyId) return "Chọn công ty";
     if (!form.title?.trim()) return "Nhập nội dung đề nghị";
     if (type === "SALARY_ADVANCE" && !(Number(form.requestedAmount) > 0)) return "Nhập số tiền đề nghị ứng";
-    if (type !== "SALARY_ADVANCE") {
+    if (isTransfer) {
+      if (!form.transferFromAccountCode) return "Chọn nguồn chuyển";
+      if (!form.transferToAccountCode) return "Chọn nguồn nhận";
+      if (form.transferFromAccountCode === form.transferToAccountCode)
+        return "Nguồn chuyển và nguồn nhận phải khác nhau";
+      if (!(Number(form.requestedAmount) > 0)) return "Nhập số tiền điều chuyển";
+    }
+    if (!singleAmount) {
       const rows = rowsToSave();
       if (!rows.length) return "Thêm ít nhất một khoản tiền";
       if (rows.some((item) => !item.description.trim())) return "Mỗi dòng phải có nội dung";
@@ -619,7 +643,7 @@ export default function FinanceRequestForm() {
       <div className="space-y-4">
         <h2 className="text-lg font-bold text-slate-900">Chọn loại đề nghị</h2>
         <div className="grid gap-3 sm:grid-cols-2">
-          {TYPES.map((value) => (
+          {TYPES.filter((value) => value !== "INTERNAL_TRANSFER" || meta.capabilities.canCreateTransfer).map((value) => (
             <button
               key={value}
               type="button"
@@ -627,7 +651,7 @@ export default function FinanceRequestForm() {
               className="rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-blue-300 hover:shadow-md"
             >
               <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
-                {value === "SALARY_ADVANCE" ? <Wallet size={20} /> : value === "SETTLEMENT" ? <ClipboardList size={20} /> : <Banknote size={20} />}
+                {value === "SALARY_ADVANCE" ? <Wallet size={20} /> : value === "SETTLEMENT" ? <ClipboardList size={20} /> : value === "INTERNAL_TRANSFER" ? <ArrowLeftRight size={20} /> : <Banknote size={20} />}
               </span>
               <p className="font-bold text-slate-900">{TYPE_TITLES[value]}</p>
               <p className="mt-1 text-sm text-slate-500">{TYPE_DESCRIPTIONS[value]}</p>
@@ -857,6 +881,58 @@ export default function FinanceRequestForm() {
         </Card>
       )}
 
+      {isTransfer && (
+        <Card title="Điều chuyển tiền nội bộ" icon={<ArrowLeftRight size={16} />}>
+          <div className="grid gap-3 md:grid-cols-3">
+            <label className={labelClass}>
+              Nguồn chuyển (tiền đi ra) *
+              <select
+                className={inputClass}
+                value={form.transferFromAccountCode ?? ""}
+                onChange={(e) => set("transferFromAccountCode", e.target.value || null)}
+              >
+                <option value="">— Chọn nguồn —</option>
+                {meta.cashAccounts.map((account) => (
+                  <option key={account.code} value={account.code}>
+                    {account.code} - {account.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={labelClass}>
+              Nguồn nhận (tiền đi vào) *
+              <select
+                className={inputClass}
+                value={form.transferToAccountCode ?? ""}
+                onChange={(e) => set("transferToAccountCode", e.target.value || null)}
+              >
+                <option value="">— Chọn nguồn —</option>
+                {meta.cashAccounts
+                  .filter((account) => account.code !== form.transferFromAccountCode)
+                  .map((account) => (
+                    <option key={account.code} value={account.code}>
+                      {account.code} - {account.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label className={labelClass}>
+              Số tiền điều chuyển (đ) *
+              <DecimalInput
+                allowDecimal={false}
+                value={form.requestedAmount ?? 0}
+                onValueChange={(value) => set("requestedAmount", value || undefined)}
+                className={inputClass}
+              />
+            </label>
+          </div>
+          <p className="mt-2 text-xs text-slate-500">
+            Duyệt xong, Thủ quỹ ghi nhận điều chuyển: sổ quỹ ghi chi ở nguồn chuyển và thu ở nguồn nhận
+            (điều chuyển nội bộ — không tính vào thu/chi).
+          </p>
+        </Card>
+      )}
+
       {type === "SETTLEMENT" && (
         <Card title="Phiếu tạm ứng được đối trừ" icon={<Banknote size={16} />}>
           {!companyId && <p className="text-sm text-slate-500">Chọn công ty để xem các khoản tạm ứng đã chi.</p>}
@@ -926,7 +1002,7 @@ export default function FinanceRequestForm() {
         </Card>
       )}
 
-      {type !== "SALARY_ADVANCE" && (
+      {!singleAmount && (
         <Card
           title={type === "SETTLEMENT" ? "Bảng chi phí thực tế" : "Bảng chi tiết"}
           icon={<ClipboardList size={16} />}
@@ -1215,6 +1291,7 @@ export default function FinanceRequestForm() {
         </Card>
       )}
 
+      {!isTransfer && (
       <Card title="Thông tin nhận tiền" icon={<Banknote size={16} />}
         action={
           editingPayee ? (
@@ -1303,6 +1380,7 @@ export default function FinanceRequestForm() {
           </label>
         </div>
       </Card>
+      )}
 
       {/* sticky trong cột nội dung: không đè sidebar brand trên desktop */}
       <div className="sticky bottom-16 z-30 lg:bottom-4">

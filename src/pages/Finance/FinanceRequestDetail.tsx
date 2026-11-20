@@ -446,6 +446,18 @@ export default function FinanceRequestDetail() {
                 )}
               </dl>
             </Card>
+            {detail.type === "INTERNAL_TRANSFER" ? (
+              <Card title="Điều chuyển tiền nội bộ">
+                <dl>
+                  <InfoRow label="Nguồn chuyển">{detail.transferFromAccountCode}</InfoRow>
+                  <InfoRow label="Nguồn nhận">{detail.transferToAccountCode}</InfoRow>
+                  <InfoRow label="Ghi chú">{detail.paymentNote}</InfoRow>
+                </dl>
+                <p className="mt-2 text-xs text-slate-500">
+                  Thủ quỹ ghi nhận điều chuyển sau khi duyệt: sổ quỹ ghi chi ở nguồn chuyển, thu ở nguồn nhận.
+                </p>
+              </Card>
+            ) : (
             <Card title="Thông tin nhận tiền">
               <dl>
                 <InfoRow label="Tài khoản thanh toán">
@@ -502,6 +514,7 @@ export default function FinanceRequestDetail() {
                 </ul>
               )}
             </Card>
+            )}
           </div>
 
           {detail.type !== "SALARY_ADVANCE" && (
@@ -890,6 +903,11 @@ export default function FinanceRequestDetail() {
           defaultMethod={dialog.kind === "payment" ? detail.paymentMethod : undefined}
           defaultCashAccountCode={dialog.kind === "payment" ? detail.paymentAccountCode : undefined}
           recipients={dialog.kind === "payment" && (detail.suppliers?.length ?? 0) > 0 ? detail.recipients : undefined}
+          transfer={
+            detail.type === "INTERNAL_TRANSFER"
+              ? { from: detail.transferFromAccountCode ?? null, to: detail.transferToAccountCode ?? null }
+              : null
+          }
           onClose={() => setDialog(null)}
           onSubmit={({ payload, proofs }) =>
             safe(() =>

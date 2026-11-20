@@ -54,6 +54,7 @@ const TYPE_CHIPS: (FinanceRequestType | "")[] = [
   "SALARY_ADVANCE",
   "SETTLEMENT",
   "EXPENSE_PAYMENT",
+  "INTERNAL_TRANSFER",
 ];
 
 const LIMIT = 20;

@@ -246,6 +246,11 @@ export default function FinancePayments() {
           defaultMethod={moneyTarget.detail?.paymentMethod}
           defaultCashAccountCode={moneyTarget.detail?.paymentAccountCode}
           recipients={(moneyTarget.detail?.suppliers?.length ?? 0) > 0 ? moneyTarget.detail?.recipients : undefined}
+          transfer={
+            moneyTarget.detail?.type === "INTERNAL_TRANSFER"
+              ? { from: moneyTarget.detail.transferFromAccountCode ?? null, to: moneyTarget.detail.transferToAccountCode ?? null }
+              : null
+          }
           onClose={() => setMoneyTarget(null)}
           onSubmit={async ({ payload, proofs }) => {
             try {

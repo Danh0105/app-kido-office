@@ -2,7 +2,9 @@ export type FinanceRequestType =
   | "ADVANCE"
   | "SALARY_ADVANCE"
   | "SETTLEMENT"
-  | "EXPENSE_PAYMENT";
+  | "EXPENSE_PAYMENT"
+  /** Điều chuyển tiền nội bộ: từ nguồn (TK 111/112) này sang nguồn khác. */
+  | "INTERNAL_TRANSFER";
 
 export type ApprovalStatus =
   | "DRAFT"
@@ -97,6 +99,8 @@ export type FinanceMeta = {
     canViewAll: boolean;
     canApprove: boolean;
     canManagePayments: boolean;
+    /** Lập phiếu Điều chuyển tiền nội bộ: Kế toán, Thủ quỹ, KTT, Giám đốc. */
+    canCreateTransfer?: boolean;
     canViewReports: boolean;
     canConfirmDeductions: boolean;
     roles: FinanceRole[];
@@ -369,6 +373,9 @@ export type FinanceDetail = {
   paymentMethod: PaymentMethod | null;
   paymentAccountCode: string | null;
   paymentAccountName: string | null;
+  /** Điều chuyển tiền nội bộ: nguồn chuyển / nguồn nhận. */
+  transferFromAccountCode?: string | null;
+  transferToAccountCode?: string | null;
   paymentNote: string | null;
   suppliers: FinanceSupplier[];
   recipients: FinanceRecipient[];
@@ -477,6 +484,9 @@ export type FinanceRequestInput = {
   salaryYear?: number;
   salaryMonth?: number;
   requestedAmount?: number;
+  /** Điều chuyển tiền nội bộ: nguồn chuyển / nguồn nhận (số hiệu TK 111/112). */
+  transferFromAccountCode?: string | null;
+  transferToAccountCode?: string | null;
   deductionStartYear?: number;
   deductionStartMonth?: number;
   deductionPeriods?: number;

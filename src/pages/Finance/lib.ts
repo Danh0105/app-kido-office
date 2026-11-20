@@ -33,6 +33,7 @@ export const TYPE_LABELS: Record<FinanceRequestType, string> = {
   SALARY_ADVANCE: "Tạm ứng lương",
   SETTLEMENT: "Hoàn ứng",
   EXPENSE_PAYMENT: "Thanh toán chi phí",
+  INTERNAL_TRANSFER: "Điều chuyển tiền nội bộ",
 };
 
 export const TYPE_TITLES: Record<FinanceRequestType, string> = {
@@ -40,6 +41,7 @@ export const TYPE_TITLES: Record<FinanceRequestType, string> = {
   SALARY_ADVANCE: "Giấy đề nghị tạm ứng lương",
   SETTLEMENT: "Giấy đề nghị hoàn ứng",
   EXPENSE_PAYMENT: "Giấy đề nghị thanh toán chi phí / công tác phí",
+  INTERNAL_TRANSFER: "Giấy đề nghị điều chuyển tiền nội bộ",
 };
 
 export const TYPE_DESCRIPTIONS: Record<FinanceRequestType, string> = {
@@ -47,6 +49,7 @@ export const TYPE_DESCRIPTIONS: Record<FinanceRequestType, string> = {
   SALARY_ADVANCE: "Ứng trước một phần lương, khấu trừ vào kỳ lương.",
   SETTLEMENT: "Quyết toán khoản đã tạm ứng bằng chi phí thực tế.",
   EXPENSE_PAYMENT: "Thanh toán chi phí đã tự chi, công tác phí.",
+  INTERNAL_TRANSFER: "Chuyển tiền từ nguồn này sang nguồn khác (tiền mặt ↔ ngân hàng, giữa các tài khoản).",
 };
 
 export const TYPE_TONES: Record<FinanceRequestType, Tone> = {
@@ -54,6 +57,7 @@ export const TYPE_TONES: Record<FinanceRequestType, Tone> = {
   SALARY_ADVANCE: "violet",
   SETTLEMENT: "amber",
   EXPENSE_PAYMENT: "sky",
+  INTERNAL_TRANSFER: "emerald",
 };
 
 export const APPROVAL_LABELS: Record<ApprovalStatus, [string, Tone]> = {

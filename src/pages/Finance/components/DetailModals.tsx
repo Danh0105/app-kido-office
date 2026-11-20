@@ -229,10 +229,16 @@ export function MoneyModal({
   defaultMethod,
   defaultCashAccountCode,
   recipients = [],
+  transfer,
   onClose,
   onSubmit,
 }: {
   kind: "payment" | "refund";
+  /**
+   * Phiếu Điều chuyển tiền nội bộ: tiền đi ra đúng nguồn chuyển (khoá ô tài
+   * khoản + hình thức), sổ quỹ tự ghi thu ở nguồn nhận.
+   */
+  transfer?: { from: string | null; to: string | null } | null;
   remaining: number;
   defaultMethod?: PaymentMethod | null;
   defaultCashAccountCode?: string | null;
@@ -251,7 +257,13 @@ export function MoneyModal({
   const recipient = choices.find((r) => recipientKey(r) === chosenKey);
   const remaining = recipient ? Math.min(recipient.remaining, totalRemaining) : totalRemaining;
   // Gợi ý tài khoản lần chi trước (hoặc kiểm soát đã chọn ở phiếu cũ); thủ quỹ được đổi.
-  const defaultAccount = meta.cashAccounts.find((a) => a.code === defaultCashAccountCode);
+  const defaultAccount = meta.cashAccounts.find(
+    (a) => a.code === (transfer?.from ?? defaultCashAccountCode),
+  );
+  const accountLabel = (code?: string | null) => {
+    const account = meta.cashAccounts.find((a) => a.code === code);
+    return account ? `${account.code} — ${account.name}` : (code ?? "");
+  };
   const [amount, setAmount] = useState(remaining);
   const [date, setDate] = useState(todayVN());
   const [method, setMethod] = useState<PaymentMethod>(
@@ -270,7 +282,7 @@ export function MoneyModal({
   return (
     <Modal
       open
-      title={kind === "payment" ? "Ghi nhận chi tiền" : "Ghi nhận nhân viên hoàn trả"}
+      title={transfer ? "Ghi nhận điều chuyển tiền nội bộ" : kind === "payment" ? "Ghi nhận chi tiền" : "Ghi nhận nhân viên hoàn trả"}
       onClose={onClose}
       footer={
         <>
@@ -346,13 +358,21 @@ export function MoneyModal({
             )}
           </div>
         )}
+        {transfer && (
+          <div className="sm:col-span-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800" data-testid="transfer-route">
+            Từ <b>{accountLabel(transfer.from)}</b> sang <b>{accountLabel(transfer.to)}</b>
+            <div className="text-xs text-emerald-700">
+              Sổ quỹ ghi chi ở nguồn chuyển và thu ở nguồn nhận (điều chuyển nội bộ).
+            </div>
+          </div>
+        )}
         <label className={`${labelClass} sm:col-span-2`}>
-          Số tiền (đ) — còn {kind === "payment" ? "phải chi" : "phải thu"}
+          Số tiền (đ) — còn {transfer ? "phải chuyển" : kind === "payment" ? "phải chi" : "phải thu"}
           {recipient ? ` cho ${recipient.name}` : ""} {formatMoney(remaining)} đ
           <DecimalInput allowDecimal={false} value={amount} max={remaining} onValueChange={setAmount} className={inputClass} />
         </label>
         <label className={labelClass}>
-          {kind === "payment" ? "Ngày chi" : "Ngày thu"}
+          {transfer ? "Ngày chuyển" : kind === "payment" ? "Ngày chi" : "Ngày thu"}
           <input type="date" className={inputClass} value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
         <label className={labelClass}>
@@ -360,6 +380,7 @@ export function MoneyModal({
           <select
             className={inputClass}
             value={method}
+            disabled={!!transfer}
             onChange={(e) => { setMethod(e.target.value as PaymentMethod); setCashAccountCode(""); }}
           >
             {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
@@ -370,10 +391,11 @@ export function MoneyModal({
           </select>
         </label>
         <label className={labelClass}>
-          {accountRequired ? "Tài khoản thanh toán *" : "Tài khoản tiền"}
+          {transfer ? "Nguồn chuyển" : accountRequired ? "Tài khoản thanh toán *" : "Tài khoản tiền"}
           <select
             className={inputClass}
             value={cashAccountCode}
+            disabled={!!transfer}
             onChange={(e) => setCashAccountCode(e.target.value)}
           >
             <option value="">{accountRequired ? "Chọn tài khoản" : "Không chọn"}</option>

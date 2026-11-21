@@ -16,9 +16,11 @@ import {
   HandCoins,
   Landmark,
   ReceiptText,
+  ScanFace,
   UserRoundSearch,
   type LucideIcon,
 } from "lucide-react";
+import { canViewAttendance } from "@/pages/Attendance/lib";
 
 export type DirectorMenu = {
   title: string;
@@ -74,6 +76,13 @@ const CASHFLOW_REPORT_ROLES = [
   "troly_gd",
   "director",
 ];
+
+const ATTENDANCE_MENU: DirectorMenu = {
+  title: "Máy chấm công",
+  lucideIcon: ScanFace,
+  path: "attendance",
+  from: "attendance",
+};
 
 const ALL_MENUS = [
   { title: "Chính sách", icon: policy, path: "nhan-vien", from: "policy" },
@@ -231,6 +240,8 @@ export const directorBaseMenus = (): DirectorMenu[] => {
     ...(hasRole(...CASHFLOW_REPORT_ROLES) ? [CASHFLOW_REPORT_MENU] : []),
     ...(hasRole("thuquy", "ketoan_congno") ? [OTHER_CASHFLOW_MENU] : []),
     ...(canViewRecruitment ? [RECRUITMENT_MENU] : []),
+    // Phải khớp AttendanceGuard trong routes/Director.tsx.
+    ...(canViewAttendance() ? [ATTENDANCE_MENU] : []),
     PAYROLL_MENU,
     // Đề nghị tạm ứng/thanh toán: ai cũng lập được; quyền duyệt/chi do backend quyết định.
     FINANCE_MENU,
